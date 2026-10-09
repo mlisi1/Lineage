@@ -5,7 +5,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | ID | Milestone | Status | Report |
 |---|---|---|---|
 | M0 | Repository and tooling | done | — |
-| M1 | Core: clock, RNG, world loop, state, saves, migrations | not started | — |
+| M1 | Core: clock, RNG, world loop, state, saves, migrations | done | — (not statistical) |
 | M2 | Terrain generation and dynamics | not started | — |
 | M3 | Flora | not started | — |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | not started | — |
