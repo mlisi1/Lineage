@@ -1,0 +1,57 @@
+# uv workspace root. Not a package itself; see CLAUDE.md §5.
+[project]
+name = "lineage"
+version = "0.0.0"
+description = "Idle desk gadget: an island where life evolves over years of real time."
+requires-python = ">=3.11,<3.12"
+dependencies = ["lineage-sim", "lineage-server", "lineage-device", "lineage-tools"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "hypothesis>=6.112",
+    "pytest-benchmark>=4.0",
+    "ruff>=0.7",
+    "pyright>=1.1.385",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["sim", "server", "device", "tools"]
+
+[tool.uv.sources]
+lineage-sim = { workspace = true }
+lineage-server = { workspace = true }
+lineage-device = { workspace = true }
+lineage-tools = { workspace = true }
+
+[tool.pytest.ini_options]
+# importlib mode: test files with the same basename can live in several packages.
+addopts = "--import-mode=importlib --strict-markers -ra"
+testpaths = ["sim/tests", "server/tests", "device/tests", "tools/tests"]
+# `tools` is a plain directory package run with `python -m tools.<x>` from the repo root.
+pythonpath = ["."]
+markers = [
+    "slow: long statistical tests, run nightly (`pytest -m slow`)",
+]
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["renderer", "app", "runs", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "NPY", "PT"]
+# Typographic characters used deliberately in user-facing report text.
+allowed-confusables = ["–", "—", "×"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["sim", "server", "device", "tools"]
+strict = ["sim"]
+venvPath = "."
+venv = ".venv"

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.benchmarks/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+renderer/dist/
+renderer/test-results/
+renderer/playwright-report/
+
+# Raw fast-forward output (only reports/ is committed, see CLAUDE.md §7)
+runs/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,14 @@
+# Lineage default configuration.
+#
+# Every tunable of the simulation lives here (CLAUDE.md §4.5). Each key carries a comment
+# with its units and intent. Code reads these values only through `lineage_sim.config`.
+# The file is hashed into every run manifest and milestone report, so changing a value
+# changes the config hash.
+
+[meta]
+# Config format version; bump when keys are renamed or removed.
+config_version = 1
+
+[schedule]
+# Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
+# Filled in as subsystems arrive (creatures in M4, flora in M3, terrain in M2).
