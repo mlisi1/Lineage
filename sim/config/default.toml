@@ -1,14 +1,28 @@
 # Lineage default configuration.
 #
 # Every tunable of the simulation lives here (CLAUDE.md §4.5). Each key carries a comment
-# with its units and intent. Code reads these values only through `lineage_sim.config`.
-# The file is hashed into every run manifest and milestone report, so changing a value
-# changes the config hash.
+# with its units and intent. Code reads these values only through `lineage_sim.config`,
+# which rejects unknown sections and keys. The file is hashed into every run manifest and
+# milestone report, so changing a value changes the config hash.
 
 [meta]
 # Config format version; bump when keys are renamed or removed.
 config_version = 1
 
+[calendar]
+# Hemisphere the seasons follow: "north" or "south" (south swaps spring/autumn and
+# summer/winter for the same dates).
+hemisphere = "north"
+# Astronomical season starts for the northern hemisphere, "MM-DD", evaluated in UTC.
+# Fixed approximations of the equinoxes and solstices; the real dates drift by about a
+# day from year to year, which is irrelevant at this time scale.
+spring_start = "03-20"
+summer_start = "06-21"
+autumn_start = "09-22"
+winter_start = "12-21"
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
-# Filled in as subsystems arrive (creatures in M4, flora in M3, terrain in M2).
+# Ticks fire at whole multiples of the period since world creation, so results do not
+# depend on how a caller chunks World.step(dt). Keys are subsystem names; filled in as
+# subsystems arrive (terrain in M2, flora in M3, creatures in M4).
