@@ -87,7 +87,9 @@ MILESTONES: dict[str, Milestone] = {
 CRITERIA: dict[str, list[Criterion]] = {}
 
 # Display names and units of recorded series; every series a milestone records goes here.
-SERIES_LABELS: dict[str, SeriesLabel] = {}
+SERIES_LABELS: dict[str, SeriesLabel] = {
+    "save_kib": SeriesLabel("Save size", "KiB"),
+}
 
 
 def series_label(name: str) -> SeriesLabel:

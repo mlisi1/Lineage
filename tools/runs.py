@@ -5,7 +5,8 @@ Layout::
     runs/<id>/
     ├── manifest.json        # what was run: seeds, sim-years, config hash, commit, wall time
     ├── config.toml          # exact config text used
-    └── seeds/<seed>.npz     # per-seed time series; key "t_years" is the shared time axis
+    ├── seeds/<seed>.npz     # per-seed time series; key "t_years" is the shared time axis
+    └── saves/<seed>.lzma    # latest world save per seed
 """
 
 from __future__ import annotations
@@ -36,6 +37,8 @@ class Manifest:
     created_utc: str
     format_version: int = RUN_FORMAT_VERSION
     notes: str = ""
+    # seed (as a string, JSON keys) -> SHA-256 of the final world state
+    final_state_hashes: dict[str, str] = field(default_factory=dict[str, str])
 
 
 @dataclass
@@ -71,6 +74,17 @@ def git_commit(repo: Path = REPO_ROOT) -> str:
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
     return f"{sha}-dirty" if dirty else sha
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    """Replace ``path`` with ``data`` so readers see the old or the new file, never half.
+
+    No fsync: fast-forward runs are disposable. The device server (S1) adds fsync.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
 
 
 def write_run(run: Run, out_dir: Path) -> None:

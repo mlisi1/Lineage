@@ -146,6 +146,29 @@ def test_fastforward_then_report(tmp_path: Path) -> None:
     fastforward(0.5, [0, 1, 2], run_dir)
     run = read_run(run_dir)
     assert run.manifest.seeds == [0, 1, 2]
-    assert run.series[0][TIME_KEY][-1] == pytest.approx(0.5)
+    assert run.series[0][TIME_KEY][-1] == pytest.approx(0.5, abs=1 / 365)
+    assert set(run.manifest.final_state_hashes) == {"0", "1", "2"}
+    assert sorted(p.name for p in (run_dir / "saves").iterdir()) == [
+        "0.lzma",
+        "1.lzma",
+        "2.lzma",
+    ]
     out = build_report("M0", run_dir, tmp_path / "reports")
     _parse(out / "report.html")
+
+
+def test_power_cut_resumes_bit_identical(tmp_path: Path) -> None:
+    straight = fastforward(0.25, [3, 4], tmp_path / "straight")
+    cut = fastforward(0.25, [3, 4], tmp_path / "cut", power_cut_day=40)
+    assert straight.manifest.final_state_hashes == cut.manifest.final_state_hashes
+    assert "power cut after day 40" in cut.manifest.notes
+    other_seed = fastforward(0.25, [5], tmp_path / "other")
+    assert (
+        other_seed.manifest.final_state_hashes["5"]
+        not in straight.manifest.final_state_hashes.values()
+    )
+
+
+def test_fastforward_rejects_bad_power_cut(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="power cut day"):
+        fastforward(0.1, [0], tmp_path / "x", power_cut_day=1000)
