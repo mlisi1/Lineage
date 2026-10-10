@@ -9,3 +9,6 @@ Milestones measured on the device (R0) are built the same way from the file the 
 benchmark wrote (`--runs <directory holding kiosk-bench.json>`). That file is kept in the
 report directory in place of `config.toml`: it is the evidence, and a PC cannot
 regenerate it. To rebuild such a report, point `--runs` at the report directory itself.
+
+`R0-look-sheet/` is not a measurement but a picture book: how the renderer spike draws
+terrain, plants and creatures, written by `cd renderer && npm run look`.

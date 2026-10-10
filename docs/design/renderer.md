@@ -35,13 +35,47 @@ hard edges, no smoothing.
    - *Flat map*: one coloured pixel per cell, the picture the reports show. In a wide shot
      a cell is 4 screen pixels across and an 8-pixel sprite has nowhere to go, so wide
      shots use the map and sprites are for close-ups.
-3. **Creatures**: a chain of circles. The head moves; every segment follows the one in
-   front at a fixed distance, which gives the body its bend for free. Segment count and
-   size follow body mass, legs follow the limb-pairs gene and are placed by two-bone
-   inverse kinematics, colour follows the hue gene. R2 replaces this with the full
-   phenotype shared with `fauna/phenotype.py`.
+3. **Creatures**: a chain of circles seen from above. The head moves; every segment
+   follows the one in front at a fixed distance, which gives the body its bend for free.
+   Legs are placed by two-bone inverse kinematics: a foot stays planted until the body
+   has left it behind. What the genes add to the chain is listed below.
 4. **Tint**: one full-screen colour multiplied over everything: day, dusk, night, dawn.
    R4 drives it from presence.
+
+## How the genes show on a creature
+
+A first pass, in `renderer/src/spike/body.ts`, made so the range of bodies can be judged.
+The derived values (mass, leg pairs, speeds) come from `fauna/phenotype.py` through the
+fixture; R2 ports that function and replaces these drawings.
+
+| Gene | Shows as |
+|---|---|
+| `SIZE` | length, by the cube root of mass (0.7 to 2.8 cells); 5 to 9 segments |
+| `LIMBS` | 0 to 4 leg pairs, spread from chest to hips |
+| `SPEED` | build: slimmer body and longer legs; a quicker walk |
+| `ARMOUR` | from 0.15, a dark shell around the whole outline, thicker with the gene |
+| `SENSE` | eye size |
+| `AQUATIC` | from 0.3, side fins and a tail fluke; from 0.6 the animal lives in the water |
+| `JAW` | from 0.2, mandibles, longer with the gene |
+| `DIET` | colour of the mandibles: dark on a grazer, ivory on a hunter |
+| `HUE` | body colour, at one saturation and lightness |
+| `PATTERN` | plain below ⅓, banded below ⅔, spotted above |
+| `BROOD` | nothing |
+
+Every part is a tinted disc or a stretched square of one atlas, so a body costs no
+geometry, only transforms: 7 to about 50 sprites each.
+
+## The look sheet
+
+`renderer/look.html` shows all of the above in one page, drawn by the same code as the
+benchmark: the island from afar, the plant drawings and two habitats, the fifteen
+specimen genomes of `phenotypes.json` each followed by its own camera, every gene with a
+look swept from 0 to 1 on an otherwise plain animal, and one staged shot of a shore at
+art scales 1, 2 and 4 and in the four lights. Live, the creatures walk
+(`npm run dev`, then `/look.html`). `npm run look` writes a still, self-contained copy
+to [`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md): creatures walk
+for a fixed, seeded 8 s and every picture is saved inline. It is a view of the look, not
+a measurement.
 
 ## The R0 spike
 
@@ -103,12 +137,13 @@ the best profile reaches 30 fps median in `spec-1x`.
 
 Trial runs on a development PC, headless, with WebGL drawn in software:
 
-- **The page's own work is small.** Script time is 0.5 ms a frame for the spec scene and
-  1.1 ms for 216 creatures; with the page's thread throttled tenfold both still hold
-  30 fps. Moving creatures in JavaScript is not the risk.
-- **The 2D canvas cannot draw a sprite per cell.** 16 504 sprites take 67 ms a frame on
-  a fast PC (12 fps); the flat map, close-ups and the crowd run at 60 fps there. A canvas
-  fallback would have to live without wide-shot sprites, which the design already does.
+- **The page's own work is small.** Script time is 0.7 ms a frame for the spec scene and
+  1.5 ms for 216 creatures (4 740 sprites); with the page's thread throttled tenfold
+  both still hold 30 fps. Moving creatures in JavaScript is not the risk.
+- **The 2D canvas cannot draw a sprite per cell.** 16 504 sprites take 70–80 ms a frame
+  on a fast PC (10–12 fps); the flat map, close-ups and the crowd run at 60 fps there. A
+  canvas fallback would have to live without wide-shot sprites, which the design
+  already does.
 - **Software WebGL is not a fallback for the device.** It holds 60 fps on the PC by
   spending nine of its cores. The board has four slower ones and the simulation needs
   part of one.
@@ -119,10 +154,12 @@ image draws WebGL with the GPU.
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
-  (`lineage-spike-fixture/1`). R1 replaces it with the protocol generated from the
+  (`lineage-spike-fixture/2`): the world of a save, plus casts for the look sheet (the
+  specimens and the gene sweeps). R1 replaces it with the protocol generated from the
   server's schema; nothing else should depend on the fixture's shape.
-- **Creature bodies and motion.** Bodies are the simplest chain that exercises the
-  drawing cost; the wandering is cosmetic and seeded, not the simulation's.
+- **Creature bodies and motion.** Bodies are circles and stretched squares; the
+  wandering is cosmetic and seeded, not the simulation's. Walkers keep to land and
+  swimmers to water only because the spike says so.
 
 ## Open
 
@@ -132,5 +169,13 @@ image draws WebGL with the GPU.
   hour and ticks every ten minutes. Watched in real time that is stillness, so the
   renderer needs cosmetic life of its own (idling, breathing, small local wandering
   around the true position) without contradicting the simulation. Belongs to R2/R3.
+- **How close the camera gets.** At the spike's close-up (16 screen pixels per cell) a
+  mid-sized animal is about 20 pixels long and the smallest about 11. The look sheet's
+  portraits are that picture enlarged three times; a camera that close is R3's call.
+- **The ground in close-ups** is one flat square per cell. Softer shorelines or detail
+  inside a cell would be new work in R1.
+- **Reading a creature against the ground.** A green animal on grass nearly disappears,
+  and diet shows only in the colour of small jaws. Camouflage may be right; an outline
+  or a stronger cue for hunters may be needed.
 - **Depth order** of plants and creatures in close-ups (a creature behind a tree).
 - **Plant art**: the spike's drawings are placeholders for cost, not the final look.
