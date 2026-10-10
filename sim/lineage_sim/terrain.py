@@ -570,6 +570,10 @@ class Terrain:
         """Rows of (x, y, vx, vy, radius, rate per year, remaining years)."""
         return self._hotspots
 
+    def adjust_fertility(self, change: Grid) -> None:
+        """Hook for flora: add ``change`` to the fertility grid (soil building, fire)."""
+        self._fertility = np.clip(self._fertility + change, 0.0, 1.0).astype(_F)
+
     def set_vegetation_cover(self, cover: Grid | None) -> None:
         """Erosion hook for flora: cover in [0, 1] per cell, or None for bare ground."""
         self._cover = cover

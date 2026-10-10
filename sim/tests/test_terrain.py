@@ -29,8 +29,8 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 YEAR_DAYS = 365
-# Final state of the default world, seed 42, after 30 daily ticks.
-GOLDEN_TERRAIN_SEED_42 = "a66b20d29f432f0897fdfd14eb3baa2e5f89edfc65d211729e1897f830d096e3"
+# Final state of the default world (terrain, flora, fire), seed 42, after 30 days.
+GOLDEN_TERRAIN_SEED_42 = "cfbd4fed143f4a7020e0d4161f2e0e68879cc528a9f3335fad64a54b1d7ff25f"
 
 Grid = NDArray[np.float32]
 

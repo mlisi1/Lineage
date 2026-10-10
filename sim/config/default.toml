@@ -152,10 +152,182 @@ crater_fertility_factor = 0.2
 # landmass count and for split/rejoin events.
 landmass_min_cells = 100
 
+[flora]
+# Plants live on the terrain grid: each occupied cell holds one plant population with a
+# biomass in [0, 1], an 8-gene genome (each gene in [0, 1]) and a set of rare genes.
+# Rates are per sim-year unless stated. "Temperature" is a dimensionless index: about 1 in
+# a lowland summer, lower in winter and with altitude.
+
+# --- Land-cover classes ---
+# Biomass below which a cell counts as bare (or burnt) rather than vegetated.
+cover_min_biomass = 0.08
+# Biomass from which a tree cell counts as closed-canopy forest.
+closed_canopy_biomass = 0.55
+# Height-gene thresholds between forms: up to the first is grass (or lichen), up to the
+# second shrub, above it tree.
+form_grass_max_height = 0.3
+form_shrub_max_height = 0.6
+# Lichen/moss: very low and very frugal pioneers.
+form_lichen_max_height = 0.15
+form_lichen_min_frugality = 0.65
+# Trees at or above this evergreen-gene value are conifers, below it broadleaf.
+form_conifer_min_evergreen = 0.5
+
+# --- Climate ---
+# Lowland temperature index: annual mean and seasonal swing (warmest in mid-summer).
+temperature_mean = 0.65
+temperature_season_amplitude = 0.30
+# Cooling per height unit above the sea (altitudinal zonation).
+temperature_lapse_per_height = 1.3
+# Optimum temperature of a fully warm-adapted (cold gene 0) and a fully cold-adapted
+# (cold gene 1) plant, and the tolerance (standard deviation) around the optimum.
+optimum_warm = 0.92
+optimum_cold = 0.35
+temperature_tolerance = 0.22
+
+# --- Growth ---
+# Logistic growth rate of the fastest plant in ideal conditions, and the share of it a
+# plant with growth gene 0 still reaches.
+growth_rate_max_per_year = 90.0
+growth_rate_min_share = 0.25
+# Tall plants grow slower: rate is divided by (1 + stature_slowdown × height gene).
+stature_slowdown = 2.0
+# Trade-offs: share of the growth rate given up at gene value 1.
+cost_frugality = 0.35
+cost_shade = 0.30
+cost_defence = 0.30
+cost_evergreen = 0.25
+# Mortality: base rate, extra for fast growers (live fast, die young), and the share of
+# it that tall plants escape (trees are long-lived).
+mortality_base_per_year = 0.5
+mortality_growth_per_year = 1.0
+mortality_stature_relief = 0.8
+# Wind exposure breaks tall plants: extra mortality = exposure_per_year × height gene ×
+# exposure, where exposure is 1 at the waterline falling to 0 at shore_span above the
+# sea, and 0 at treeline_height rising to 1 at treeline_span above it. This sorts the
+# forms into belts: forest in sheltered ground, then shrub, grass, and lichen on the
+# shore and the summits.
+shore_span = 0.03
+treeline_height = 0.18
+treeline_span = 0.12
+exposure_per_year = 40.0
+# Winter dieback of low, non-evergreen plants when it is colder than optimum minus
+# tolerance: rate at full cold stress for a grass with evergreen gene 0.
+winter_dieback_per_year = 10.0
+# Biomass that survives dieback as roots and dormant shoots.
+winter_reserve_biomass = 0.12
+
+# --- Fertility needs ---
+# Fertility a plant needs to grow at full rate: base + height share − frugality relief,
+# never below the floor. Growth and establishment scale with (fertility / need)^sharpness.
+need_base = 0.10
+need_height = 0.40
+need_frugality = 0.10
+need_floor = 0.02
+need_sharpness = 2.0
+
+# --- Soil building ---
+# Plants raise the fertility of their cell toward a cap that depends on their stature
+# (cap = base + height share × height gene), at this rate times biomass.
+soil_build_rate_per_year = 4.5
+soil_cap_base = 0.15
+soil_cap_height = 0.50
+
+# --- Dispersal and establishment ---
+# Seeding attempts per year into one neighbouring cell by a full-grown plant.
+seed_rate_per_year = 160.0
+# Plants below this biomass do not seed yet.
+seed_min_biomass = 0.2
+# Seed type (seed gene): 0 is light wind-borne seed, 1 is heavy fruit. Wind seed reaches
+# far cells; fruit mostly lands next to the parent but establishes better.
+near_weight_wind = 0.3
+far_offsets_per_tick = 3
+wind_range_cells = 14.0
+fruit_establishment_bonus = 0.5
+# Biomass of a newly established plant; an established invader keeps this share of the
+# resident's biomass when it takes over an occupied cell.
+seedling_biomass = 0.04
+takeover_keep = 0.3
+# Establishment probability scales with (suitability × viability)^sharpness, where
+# viability is the biomass the plant would reach at the site.
+establishment_sharpness = 2.0
+# Shading: a resident's canopy density is biomass × (canopy_base + rest × height gene);
+# seedlings under it get only the remaining light unless shade-tolerant.
+canopy_base = 0.2
+# Competition for an occupied cell: an invader wins with probability
+# sigmoid((its score − resident's score − margin) / softness), with
+# score = suitability × viability × (base + height). The margin protects residents from being
+# replaced by their equals.
+competition_base = 0.4
+competition_softness = 0.025
+competition_margin = 0.12
+# Standard deviation of the mutation applied to each gene at establishment.
+mutation_sigma = 0.03
+# Seed rain: seeds with random genomes arriving from outside per year, on the whole map.
+# Colonises bare rock and brings back forms that went extinct.
+seed_rain_per_year = 40000.0
+
+# --- Rare genes (starter set; the full table arrives in M7) ---
+# Probability that an establishing plant gains each rare gene, and loses one it carries.
+rare_gain_probability = 0.0002
+rare_loss_probability = 0.01
+# Fire-pine: keeps this share of its biomass through a fire; costs growth.
+fire_pine_survival = 0.6
+fire_pine_growth_cost = 0.15
+# Nitrogen-fixer: needs this much less fertility and builds soil this many times faster;
+# costs growth.
+nitrogen_fixer_need_relief = 0.6
+nitrogen_fixer_soil_boost = 3.0
+nitrogen_fixer_growth_cost = 0.25
+# Mangrove: lives in water up to this depth (height units); costs growth.
+mangrove_max_depth = 0.015
+mangrove_growth_cost = 0.30
+
+# --- Grazing (hook for fauna, M4) ---
+# Share of a bite refused at defence gene 1.
+defence_strength = 0.8
+
+# --- Fire ---
+# Lightning ignitions per year at full dryness, on the whole map.
+fire_ignitions_per_year = 30.0
+# Dryness is 0 below this lowland temperature and 1 at fire_dry_span above it: fires are
+# a warm-season event.
+fire_dry_temperature = 0.68
+fire_dry_span = 0.2
+# Probability per hour that a burning cell ignites one neighbour with full fuel and
+# flammability 1 at full dryness; share of it that remains when it is not dry.
+fire_spread_per_hour = 0.18
+fire_wet_spread = 0.25
+# Hours a cell burns.
+fire_burn_hours = 8.0
+# Least biomass that carries fire.
+fire_min_fuel = 0.15
+# Flammability by form.
+flammability_lichen = 0.2
+flammability_grass = 1.0
+flammability_shrub = 0.8
+flammability_broadleaf = 0.35
+flammability_conifer = 0.9
+# Share of biomass lost in a fire: low plants resprout from the roots, trees mostly die.
+fire_loss_low = 0.85
+fire_loss_tree = 0.97
+# Share of fertility lost from a burnt cell, and days a cell stays scorched (cannot burn
+# again; shown as burnt ground while bare).
+fire_fertility_loss = 0.15
+scorch_days = 60.0
+
+# --- Bookkeeping ---
+# Cells a genome cluster must occupy to count as a plant species.
+species_min_cells = 30
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
 # depend on how a caller chunks World.step(dt). Keys are subsystem names; filled in as
-# subsystems arrive (flora in M3, creatures in M4).
+# subsystems arrive (creatures in M4).
 # Terrain: once per sim-day (tectonics, erosion, sea level, landmass count).
 terrain = 86400
+# Flora: growth, dispersal, succession, soil building, once per sim-day.
+flora = 86400
+# Fire: ignition and spread, once per sim-hour, so a fire burns visibly over hours.
+fire = 3600

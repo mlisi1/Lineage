@@ -112,3 +112,19 @@ class LandmassesRejoined(OutputEvent):
 
     parts: int
     landmasses: int  # total landmasses afterwards
+
+
+@dataclass(frozen=True)
+class FireStarted(OutputEvent):
+    """Lightning set vegetation alight at cell (x, y)."""
+
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
+class FireEnded(OutputEvent):
+    """A fire went out after burning ``cells`` cells over ``hours`` sim-hours."""
+
+    cells: int
+    hours: float

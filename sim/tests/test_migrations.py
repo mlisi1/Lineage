@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import pytest
 from lineage_sim.config import Config
 from lineage_sim.state import io
@@ -76,6 +77,26 @@ def test_v2_fixture_values(config: Config) -> None:
         config.terrain.hotspot_count,
         7,
     )
+
+
+def test_v2_world_wakes_up_bare_and_is_colonised(config: Config) -> None:
+    world = World.restore(config, io.loads(_fixture(2)))
+    assert float(world.flora.biomass.max()) == 0.0
+    assert not world.wildfire.burning.any()
+    world.step(150 * 86_400)
+    assert float(world.flora.biomass.max()) > 0.2
+
+
+def test_v3_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(3))
+    assert state.seed == 42
+    assert state.t_ms == 200 * 86_400_000
+    assert sorted(state.subsystems) == ["fire", "flora", "terrain"]
+    world = World.restore(config, state)
+    shares = world.flora.cover_shares()
+    assert sum(shares.values()) == pytest.approx(1.0)
+    assert world.flora.genome.shape == (8, 150, 256)
+    assert world.flora.genome.dtype == np.uint8
 
 
 def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None:

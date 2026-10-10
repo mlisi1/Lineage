@@ -18,7 +18,8 @@ from collections.abc import Sequence
 from lineage_sim import clock
 from lineage_sim.config import Config
 from lineage_sim.events import DayStarted, InputEvent, OutputEvent, SeasonStarted
-from lineage_sim.rng import TERRAIN, Streams
+from lineage_sim.flora import Flora, Wildfire
+from lineage_sim.rng import FIRE, FLORA, TERRAIN, Streams
 from lineage_sim.state import io
 from lineage_sim.state.schema import StateError, WorldState
 from lineage_sim.subsystem import Context, Subsystem
@@ -29,7 +30,9 @@ __all__ = ["Context", "Subsystem", "World", "default_subsystems"]
 
 def default_subsystems(config: Config) -> list[Subsystem]:
     """The subsystems of a real world, in tick order."""
-    return [Terrain(config.terrain)]
+    terrain = Terrain(config.terrain)
+    flora = Flora(config.flora, terrain)
+    return [terrain, flora, Wildfire(config.flora, flora, terrain)]
 
 
 class World:
@@ -119,6 +122,20 @@ class World:
         if not isinstance(terrain, Terrain):
             raise TypeError("the terrain subsystem was replaced")
         return terrain
+
+    @property
+    def flora(self) -> Flora:
+        flora = self.subsystem(FLORA)
+        if not isinstance(flora, Flora):
+            raise TypeError("the flora subsystem was replaced")
+        return flora
+
+    @property
+    def wildfire(self) -> Wildfire:
+        fire = self.subsystem(FIRE)
+        if not isinstance(fire, Wildfire):
+            raise TypeError("the fire subsystem was replaced")
+        return fire
 
     @property
     def instant(self) -> clock.Instant:

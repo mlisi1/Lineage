@@ -25,6 +25,8 @@ own history.
   that ever lived is recorded.
 - **Outputs**: one continuous scene on a 7" screen (documentary camera + captions), a phone
   web app, push notifications for major events, and a daily public journal (static site).
+- **Look**: pixel art everywhere (flat palettes, stepped shading, hard pixel edges); see
+  `docs/design/concept.md`.
 
 Design references live in `docs/design/` and `mockups/`. They are the spec; keep them in
 sync when behaviour changes.

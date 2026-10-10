@@ -69,6 +69,14 @@ generated with a new seed. Worlds are numbered.
 - Push notifications for major events.
 - A daily public journal (static site) that also backs up the save off-device.
 
+## Visual style
+
+Everything drawn is pixel art: flat limited palettes, stepped shading instead of
+gradients, hard pixel edges, whole-number scaling. One terrain cell is 4×4 screen pixels
+on the desk display. The reference palette and rules live in `tools/viz/pixelmap.py`
+(used by the reports) and the renderer follows them. Charts in reports are ordinary
+plots.
+
 ## Open
 
 - Collapse criteria for ending a world (M10).

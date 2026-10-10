@@ -16,6 +16,7 @@ from numpy.random import PCG64, Generator, SeedSequence
 # Stream names. Every subsystem draws only from its own stream.
 TERRAIN = "terrain"
 FLORA = "flora"
+FIRE = "fire"
 FAUNA = "fauna"
 SPECIES = "species"
 PRESENCE = "presence"

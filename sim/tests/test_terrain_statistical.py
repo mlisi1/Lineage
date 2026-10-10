@@ -1,9 +1,13 @@
-"""M2 acceptance on many seeds and sim-years (nightly). See reports/M2-terrain/."""
+"""M2 acceptance on many seeds and sim-years (nightly). See reports/M2-terrain/.
+
+These worlds have terrain only: the criteria are about bare ground.
+"""
 
 import numpy as np
 import pytest
 from lineage_sim.config import Config
 from lineage_sim.events import LandmassesRejoined, LandmassSplit
+from lineage_sim.terrain import Terrain
 from lineage_sim.world import World
 
 EPOCH_UNIX_MS = 1_767_225_600_000  # 2026-01-01 00:00 UTC
@@ -22,7 +26,7 @@ def test_terrain_acceptance_over_ten_years(config: Config) -> None:
     highest: list[float] = []
     changes: list[int] = []
     for seed in SEEDS:
-        world, _ = World.create(config, seed, EPOCH_UNIX_MS)
+        world, _ = World.create(config, seed, EPOCH_UNIX_MS, [Terrain(config.terrain)])
         fractions = [world.terrain.land_fraction]
         count = 0
         for _ in range(round(YEARS * 365.25 / 7)):
@@ -56,7 +60,7 @@ def test_land_fertility_settles_and_keeps_poor_ground(config: Config) -> None:
     means: list[list[float]] = []
     poor: list[float] = []
     for seed in FERTILITY_SEEDS:
-        world, _ = World.create(config, seed, EPOCH_UNIX_MS)
+        world, _ = World.create(config, seed, EPOCH_UNIX_MS, [Terrain(config.terrain)])
         row: list[float] = []
         done = 0
         for year in FERTILITY_YEARS:
