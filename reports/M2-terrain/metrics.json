@@ -1,7 +1,7 @@
 {
   "milestone": "M2",
   "run_id": "m2-terrain",
-  "git_commit": "36fb9eb0d8b1-dirty",
+  "git_commit": "1c73eacd343d",
   "config_hash": "6f75c35e27ee71d4",
   "seeds": [
     0,
@@ -26,7 +26,7 @@
     19
   ],
   "sim_years": 10.0,
-  "wall_time_s": 71.795,
+  "wall_time_s": 71.118,
   "acceptance": [
     {
       "id": "M2.1",
@@ -64,7 +64,7 @@
       "id": "M2.5",
       "description": "Step of the whole world (terrain and everything on it), median ms per sim-day",
       "metric": "step_ms.median",
-      "value": 11.754877357101837,
+      "value": 11.620652285663319,
       "target": "\u2264 25",
       "status": "PASS"
     }
@@ -205,11 +205,11 @@
     "splits.final.p90": 16.1,
     "splits.final.min": 6.0,
     "splits.final.max": 18.0,
-    "step_ms.final.median": 9.417554599804134,
-    "step_ms.final.p10": 8.188832699906925,
-    "step_ms.final.p90": 10.313894740011165,
-    "step_ms.final.min": 7.843991200024902,
-    "step_ms.final.max": 10.547431799932383,
+    "step_ms.final.median": 9.665955300079077,
+    "step_ms.final.p10": 8.463872399916,
+    "step_ms.final.p90": 10.358372840000811,
+    "step_ms.final.min": 7.841996399838536,
+    "step_ms.final.max": 10.80386499997985,
     "volcanoes.final.median": 4.0,
     "volcanoes.final.p10": 2.0,
     "volcanoes.final.p90": 5.100000000000001,
@@ -226,7 +226,7 @@
     "landmass_count.median": 2.0,
     "landmass_count.max": 6.0,
     "shore_change.median": 0.06638020833333333,
-    "step_ms.median": 11.754877357101837,
+    "step_ms.median": 11.620652285663319,
     "mean_height.drift.max_abs": 0.02410602569580078,
     "mean_fertility.start.median": 0.18883872032165527,
     "mean_fertility.end.median": 0.5635231733322144,
