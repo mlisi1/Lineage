@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3
+from tools.milestones import m2, m3, m4
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -60,10 +60,14 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3}
+MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4}
 
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
-CRITERIA: dict[str, list[Criterion]] = {"M2": m2.CRITERIA, "M3": m3.CRITERIA}
+CRITERIA: dict[str, list[Criterion]] = {
+    "M2": m2.CRITERIA,
+    "M3": m3.CRITERIA,
+    "M4": m4.CRITERIA,
+}
 
 # Display names and units of recorded series; every series a milestone records goes here.
 SERIES_LABELS: dict[str, SeriesLabel] = {
@@ -71,6 +75,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     "step_ms": SeriesLabel("Step time", "ms per sim-day"),
     **m2.SERIES_LABELS,
     **m3.SERIES_LABELS,
+    **m4.SERIES_LABELS,
 }
 
 
@@ -272,9 +277,9 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
         ) from None
     run = read_run(run_dir)
     module = MODULES.get(milestone.mid)
-    metrics = compute_metrics(run)
-    if module is not None:
-        metrics |= module.metrics(run)
+    # A milestone module reports its own, curated numbers; the generic per-series spread
+    # is for milestones without one.
+    metrics = compute_metrics(run) if module is None else module.metrics(run)
     acceptance: list[dict[str, Any]] = []
     for c in CRITERIA.get(milestone.mid, []):
         value, status = c.evaluate(metrics)

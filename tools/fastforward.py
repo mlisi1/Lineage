@@ -30,14 +30,17 @@ import numpy as np
 from lineage_sim.config import Config, parse_config
 from lineage_sim.events import (
     CraterFormed,
+    CreaturesArrived,
     EarthquakeStruck,
     FireEnded,
     LandmassesRejoined,
     LandmassSplit,
     OutputEvent,
+    PopulationExtinct,
     VolcanoErupted,
 )
-from lineage_sim.flora import Rare
+from lineage_sim.fauna.genome import Gene
+from lineage_sim.flora import Cover, Rare
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -64,6 +67,8 @@ EVENT_SERIES: dict[str, type[OutputEvent]] = {
     "splits": LandmassSplit,
     "rejoins": LandmassesRejoined,
     "fires": FireEnded,
+    "extinctions": PopulationExtinct,
+    "arrivals": CreaturesArrived,
 }
 # Arrays that are not sampled series (their length differs from the time axis) carry
 # this prefix; reports read them by name.
@@ -144,15 +149,55 @@ class Probes:
         for gene in Rare:
             name = (gene.name or "").lower()
             row[f"rare_{name}"] = float(np.count_nonzero(alive & ((flora.rare & gene) != 0)))
+        row |= self._fauna_row(world)
         row |= {name: float(count) for name, count in self.counts.items()}
         for name, value in row.items():
             self.rows.setdefault(name, []).append(value)
         self._step_s, self._steps = 0.0, 0
 
+    @staticmethod
+    def _fauna_row(world: World) -> dict[str, float]:
+        fauna, flora = world.fauna, world.flora
+        n = fauna.count
+        herbivores, omnivores, predators = fauna.diet_counts()
+        tally = fauna.tally
+        row: dict[str, float] = {
+            "population": float(n),
+            "herbivores": float(herbivores),
+            "omnivores": float(omnivores),
+            "predators": float(predators),
+            "births": float(tally.births),
+            "clones": float(tally.clones),
+            "deaths": float(tally.deaths),
+            "deaths_starved": float(tally.starved),
+            "deaths_old_age": float(tally.old_age),
+            "deaths_killed": float(tally.killed),
+            "deaths_drowned": float(tally.drowned),
+            "genetic_distance": float(fauna.distance_from_ancestors().mean()) if n else np.nan,
+            "energy_share": float((fauna.energy / fauna.body.capacity).mean()) if n else np.nan,
+        }
+        for gene in Gene:
+            mean = float(fauna.genes[:, gene].mean()) if n else np.nan
+            row[f"gene_{gene.name.lower()}"] = mean
+        # Habitat: share of creatures standing on each land-cover class.
+        if n:
+            xs = np.clip(np.rint(fauna.positions[:, 0]), 0, flora.biomass.shape[1] - 1)
+            ys = np.clip(np.rint(fauna.positions[:, 1]), 0, flora.biomass.shape[0] - 1)
+            under = flora.cover()[ys.astype(np.intp), xs.astype(np.intp)]
+            counts = np.bincount(under, minlength=len(Cover))
+        else:
+            counts = np.zeros(len(Cover))
+        for cover in Cover:
+            row[f"habitat_{cover.name.lower()}"] = float(counts[cover]) / n if n else np.nan
+        return row
+
     def series(self) -> dict[str, np.ndarray]:
         series = {name: np.array(values) for name, values in self.rows.items()}
         series[EXTRA_PREFIX + "fire_sizes"] = np.array(self.fire_sizes, dtype=np.int64)
         return series
+
+    def final_genes(self, world: World) -> np.ndarray:
+        return world.fauna.genes.copy()
 
 
 def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
@@ -165,6 +210,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     snapshots: list[np.ndarray] = []
     snapshot_cover: list[np.ndarray] = []
     snapshot_biomass: list[np.ndarray] = []
+    snapshot_creatures: list[np.ndarray] = []
+    cap = config.fauna.population_cap + config.fauna.predator_cap
     snapshot_sea: list[float] = []
     snapshot_days: list[int] = []
 
@@ -180,6 +227,13 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             snapshots.append(np.round(world.terrain.height * 255).astype(np.uint8))
             snapshot_cover.append(world.flora.cover())
             snapshot_biomass.append(np.round(world.flora.biomass * 255).astype(np.uint8))
+            # x, y, diet gene, size gene per creature; NaN rows pad up to the cap.
+            who = np.full((cap, 4), np.nan, dtype=np.float32)
+            fauna = world.fauna
+            who[: fauna.count, :2] = fauna.positions
+            who[: fauna.count, 2] = fauna.genes[:, Gene.DIET]
+            who[: fauna.count, 3] = fauna.genes[:, Gene.SIZE]
+            snapshot_creatures.append(who)
             snapshot_sea.append(world.terrain.sea_level)
             snapshot_days.append(day)
 
@@ -209,10 +263,13 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             height_u8=np.stack(snapshots),
             cover_u8=np.stack(snapshot_cover),
             biomass_u8=np.stack(snapshot_biomass),
+            creatures=np.stack(snapshot_creatures),
             sea_level=np.array(snapshot_sea),
             day=np.array(snapshot_days),
         )
-    return probes.series(), world.state_hash()
+    series = probes.series()
+    series[EXTRA_PREFIX + "final_genes"] = probes.final_genes(world)
+    return series, world.state_hash()
 
 
 def fastforward(

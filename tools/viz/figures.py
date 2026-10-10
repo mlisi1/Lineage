@@ -181,6 +181,36 @@ def log_histogram(values: Sequence[float] | np.ndarray, *, title: str, xlabel: s
     return fig
 
 
+def histogram_panels(
+    panels: dict[str, np.ndarray],
+    *,
+    xlabel: str,
+    ylabel: str,
+    columns: int = 3,
+    bins: int = 20,
+    value_range: tuple[float, float] = (0.0, 1.0),
+) -> Figure:
+    """Small multiples: one histogram per panel over a shared value range."""
+    rows = math.ceil(len(panels) / columns)
+    fig, axes = plt.subplots(
+        rows, columns, figsize=(7.0, 1.9 * rows + 0.5), sharex=True, squeeze=False
+    )
+    flat = [ax for row in axes for ax in row]
+    for ax, (label, values) in zip(flat, panels.items(), strict=False):
+        ax.hist(
+            values, bins=bins, range=value_range, color=style.SERIES, edgecolor=style.SURFACE,
+            linewidth=0.6,
+        )  # fmt: skip
+        ax.set_title(label, fontsize=9)
+        ax.set_yticks([])
+    for ax in flat[len(panels) :]:
+        ax.set_visible(False)
+    fig.supxlabel(xlabel, fontsize=9, color=style.TEXT_SECONDARY)
+    fig.supylabel(ylabel, fontsize=9, color=style.TEXT_SECONDARY)
+    fig.tight_layout()
+    return fig
+
+
 def distribution(
     per_seed: Sequence[float] | np.ndarray,
     *,

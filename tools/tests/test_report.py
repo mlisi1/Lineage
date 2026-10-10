@@ -226,7 +226,7 @@ def test_m2_report_has_acceptance_maps_and_animation(tmp_path: Path) -> None:
 
 def test_m3_report_has_acceptance_pixel_maps_and_animation(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "m3"
-    fastforward(1.5, [0, 1], run_dir, save_days=1000, snapshot_days=45)
+    fastforward(1.0, [0, 1], run_dir, save_days=1000, snapshot_days=45, jobs=2)
     out = build_report("M3", run_dir, tmp_path / "reports")
     assert out.name == "M3-flora"
 
@@ -279,3 +279,45 @@ def test_tile_grid_keeps_tiles_pixel_exact() -> None:
     grid = pixelmap.tile_grid([[tile, tile], [tile, tile]], ["a", "b"], ["x", "y"])
     assert grid.dtype == np.uint8
     assert int((grid == 200).all(axis=-1).sum()) >= 4 * tile.shape[0] * tile.shape[1]
+
+
+def test_m4_report_has_acceptance_and_creature_maps(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "m4"
+    run = fastforward(1.25, [0, 1], run_dir, save_days=1000, snapshot_days=60, jobs=2)
+    assert max(float(s["population"].max()) for s in run.series.values()) > 0, "no founders"
+    assert run.series[0]["_final_genes"].shape[1] == 11
+    out = build_report("M4", run_dir, tmp_path / "reports")
+    assert out.name == "M4-fauna-evolution"
+
+    doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert [a["id"] for a in doc["acceptance"]] == ["M4.1", "M4.2", "M4.3", "M4.4"]
+    assert all(a["status"] in {"PASS", "FAIL"} for a in doc["acceptance"])
+    metrics = doc["metrics"]
+    assert 0.0 <= metrics["extinct_seed_years.share"] <= 1.0
+    assert 0.0 <= metrics["both_diets.share_of_seeds"] <= 1.0
+    assert metrics["first_arrival.months.median"] > 3
+
+    html_text = (out / "report.html").read_text(encoding="utf-8")
+    page = _parse(out / "report.html")
+    assert page.external == []
+    assert html_text.count('<figure class="pixel">') == 2  # creature maps and animation
+    kinds = [src.split(";")[0] for src in page.img_srcs]
+    assert kinds.count("data:image/webp") == 1
+
+
+def test_creatures_are_drawn_by_diet() -> None:
+    from tools.viz import pixelmap
+
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    creatures = np.array(
+        [[2.0, 3.0, 0.1, 0.5], [5.0, 5.0, 0.9, 0.5], [np.nan, np.nan, np.nan, np.nan]],
+        dtype=np.float32,
+    )
+    pixelmap.draw_creatures(image, creatures, 0.35, 0.65)
+    assert image[3, 2].tolist() == [255, 255, 255]  # herbivore: white, at row y, column x
+    assert image[5, 5].tolist() == [226, 59, 59]  # predator: red
+    assert int((image.sum(axis=-1) > 0).sum()) == 2  # the padding row draws nothing
+    big = pixelmap.draw_creatures(np.zeros((30, 30, 3), dtype=np.uint8), creatures, 0.35, 0.65,
+                                  scale=3)  # fmt: skip
+    assert big[10, 7].tolist() == [255, 255, 255]  # centre of the 3×3 block
+    assert big[9, 6].tolist() == [27, 27, 27]  # its outline

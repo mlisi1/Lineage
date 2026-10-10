@@ -205,3 +205,47 @@ def animation_data_uri(frames: Sequence[np.ndarray], frame_ms: int) -> str:
         method=4,
     )
     return "data:image/webp;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+# --- Creatures --------------------------------------------------------------------------
+
+# One flat colour per diet class, bright against every land cover.
+DIET_COLOURS: dict[str, str] = {
+    "herbivore": "#ffffff",
+    "omnivore": "#ffd23f",
+    "predator": "#e23b3b",
+}
+_CREATURE_OUTLINE = "#1b1b1b"
+
+
+def draw_creatures(
+    image: np.ndarray,
+    creatures: np.ndarray,
+    herbivore_max_diet: float,
+    predator_min_diet: float,
+    *,
+    scale: int = 1,
+) -> np.ndarray:
+    """Draw creatures on a rendered map (in place) and return it.
+
+    ``creatures`` has rows of (x, y, diet gene, size gene); NaN rows are ignored. Each is
+    one cell in its diet colour; at ``scale`` ≥ 3 it gets a dark one-pixel outline so it
+    reads on any ground.
+    """
+    rows = creatures[np.isfinite(creatures[:, 0])]
+    height, width = image.shape[0] // scale, image.shape[1] // scale
+    xs = np.clip(np.rint(rows[:, 0]), 0, width - 1).astype(np.intp)
+    ys = np.clip(np.rint(rows[:, 1]), 0, height - 1).astype(np.intp)
+    diet = rows[:, 2]
+    kinds = np.where(diet >= predator_min_diet, 2, np.where(diet <= herbivore_max_diet, 0, 1))
+    colours = np.stack([_rgb8(c) for c in DIET_COLOURS.values()])
+    outline = _rgb8(_CREATURE_OUTLINE)
+    # Predators last, so they stay visible in a crowd.
+    for index in np.argsort(kinds, kind="stable"):
+        y0, x0 = int(ys[index]) * scale, int(xs[index]) * scale
+        if scale >= 3:
+            image[y0 : y0 + scale, x0 : x0 + scale] = outline
+            image[y0 + 1 : y0 + scale - 1, x0 + 1 : x0 + scale - 1] = colours[kinds[index]]
+        else:
+            image[y0 : y0 + scale, x0 : x0 + scale] = colours[kinds[index]]
+    return image
