@@ -17,6 +17,8 @@ from lineage_sim.config import CalendarConfig, Hemisphere, MonthDay
 
 MS_PER_SECOND = 1000
 MS_PER_DAY = 86_400 * MS_PER_SECOND
+# Julian year: the unit behind every "per year" rate in the config.
+SECONDS_PER_YEAR = 365.25 * 86_400
 _UNIX_EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 _SATURDAY = 5
 

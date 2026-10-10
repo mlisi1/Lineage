@@ -21,8 +21,137 @@ summer_start = "06-21"
 autumn_start = "09-22"
 winter_start = "12-21"
 
+[terrain]
+# Heights are dimensionless in [0, 1]; the sea surface sits near sea_base. Lengths are in
+# grid cells, rates per sim-year. One cell is 4 px on the 1024×600 desk display.
+
+# Grid size in cells (width × height). Changing it invalidates existing saves.
+grid_width = 256
+grid_height = 150
+# Width of the border band, in cells, over which tectonics fade to zero so the map edge
+# stays ocean; events are centred inside it.
+edge_margin_cells = 14.0
+# Extra depth (height units) of the sea floor at the very border, fading to zero across
+# the margin: guarantees open water all around the map.
+edge_depth = 0.25
+
+# --- Sea level ---
+# Mean sea level (height units).
+sea_base = 0.42
+# Main sea-level cycle: period (years) and amplitude (height units). Drives the visible
+# coastline breathing and most landmass splits/rejoins.
+sea_cycle_period_years = 1.7
+sea_cycle_amplitude = 0.030
+# Slow second cycle, so no two main cycles look the same.
+sea_slow_period_years = 6.5
+sea_slow_amplitude = 0.020
+
+# --- Island generation ---
+# Share of cells above mean sea level in a new world.
+initial_land_fraction = 0.42
+# The island is fractal noise (sums of randomly oriented waves) minus a radial falloff. The large scales (continent
+# shape) and the fine scales (detail) are generated separately.
+# Wavelength of the largest features (cells) and amplitude ratio between octaves.
+noise_wavelength_cells = 80.0
+noise_persistence = 0.5
+# Octaves in the continent shape, and in the detail on top of it.
+noise_large_octaves = 2
+noise_detail_octaves = 3
+# Weight of the detail relative to the continent shape, in [0, 1].
+noise_detail_share = 0.3
+# Radial falloff subtracted from the noise: strength × distance^exponent, where distance
+# is 0 at the map centre and 1 at the middle of each edge. Keeps land away from borders.
+falloff_strength = 0.4
+falloff_exponent = 3.0
+# Height units per unit of (noise − falloff): overall relief of the island.
+relief_scale = 0.85
+
+# --- Fertility (mineral richness of the ground, [0, 1]) ---
+# Range of initial fertility; lowlands start richer than peaks.
+fertility_min = 0.05
+fertility_max = 0.45
+# Wavelength (cells) of the fertility noise.
+fertility_wavelength_cells = 40.0
+# How quickly initial fertility falls with height above the sea (per height unit).
+fertility_elevation_decay = 3.0
+
+# --- Tectonics: moving uplift/subsidence hotspots ---
+# Number of hotspots; even indices lift, odd ones sink, and the field is zero-sum.
+hotspot_count = 6
+# Gaussian radius of a hotspot (cells).
+hotspot_radius_min_cells = 10.0
+hotspot_radius_max_cells = 24.0
+# Peak vertical rate at a hotspot centre (height units per year).
+hotspot_rate_max_per_year = 0.06
+# Drift speed (cells per year): the "plate drift".
+hotspot_speed_max_cells_per_year = 10.0
+# Lifetime before a hotspot dies and a new one appears elsewhere (years).
+hotspot_lifetime_min_years = 2.0
+hotspot_lifetime_max_years = 6.0
+# Spatial roughness of uplift in [0, 1]: 0 raises smooth domes, 1 very rugged ranges.
+hotspot_ruggedness = 0.6
+# Plate drift: the continent shape is a mix of three noise fields whose weights rotate
+# with this period (years); a quarter period turns the continent into a different one.
+drift_period_years = 30.0
+# The large-scale shape of the land (heights blurred over relax_blur_cells, applied
+# twice) follows the drifting continent with this time constant (years). Bounds relief
+# over decades without smoothing small-scale detail.
+relax_time_years = 3.0
+relax_blur_cells = 8
+
+# --- Erosion (mass-conserving exchange between neighbouring cells) ---
+# Slow creep: diffusion coefficient (cells² per year).
+creep_rate_per_year = 0.08
+# Landslides: share of the slope excess above talus_slope moved per year.
+thermal_rate_per_year = 40.0
+# Steepest stable slope (height units per cell).
+talus_slope = 0.045
+# Share of erosion suppressed under full vegetation cover, in [0, 1] (hook used by flora).
+vegetation_protection = 0.8
+# Fertility moved with sediment: deposits enrich, stripped slopes lose soil. Fraction per
+# talus_slope of height change.
+erosion_fertility_exchange = 0.3
+# Rate (per year) at which submerged ground gains fertility toward fertility_max.
+marine_sediment_rate_per_year = 0.08
+
+# --- Events ---
+# Volcano: mean eruptions per year; cone radius (cells) and height (height units); lava
+# resets fertility at the centre to volcano_lava_fertility, ash adds up to
+# volcano_ash_fertility around it.
+volcano_rate_per_year = 0.4
+volcano_radius_min_cells = 5.0
+volcano_radius_max_cells = 11.0
+volcano_height_min = 0.08
+volcano_height_max = 0.22
+volcano_lava_fertility = 0.02
+volcano_ash_fertility = 0.35
+# Earthquake: mean per year; radius of the affected area (cells); vertical throw across
+# the fault (height units), one side up and the other down.
+earthquake_rate_per_year = 1.0
+earthquake_radius_min_cells = 10.0
+earthquake_radius_max_cells = 26.0
+earthquake_throw_min = 0.010
+earthquake_throw_max = 0.045
+# Natural meteor crater: mean per year (the meteor god power arrives in M8); bowl radius
+# (cells) and depth (height units); rim height as a fraction of depth; fertility inside
+# the bowl is multiplied by crater_fertility_factor.
+crater_rate_per_year = 0.08
+crater_radius_min_cells = 4.0
+crater_radius_max_cells = 9.0
+crater_depth_min = 0.08
+crater_depth_max = 0.20
+crater_rim_fraction = 0.3
+crater_fertility_factor = 0.2
+
+# --- Landmasses ---
+# Smallest connected land area (cells, 4-neighbour) counted as a landmass for the
+# landmass count and for split/rejoin events.
+landmass_min_cells = 100
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
 # depend on how a caller chunks World.step(dt). Keys are subsystem names; filled in as
-# subsystems arrive (terrain in M2, flora in M3, creatures in M4).
+# subsystems arrive (flora in M3, creatures in M4).
+# Terrain: once per sim-day (tectonics, erosion, sea level, landmass count).
+terrain = 86400

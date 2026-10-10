@@ -20,8 +20,9 @@ SCHEDULE: list[tuple[float, InputEvent]] = [
 ]
 
 # Golden hashes. Change only with an explanation in the commit message (CLAUDE.md §6).
-GOLDEN_TOY_SEED_42 = "ebcc338f4f2acfe80ddb6bbaef11afa0dbe490cf22b51052fafb3f72b9d2e3ab"
-GOLDEN_EMPTY_SEED_42 = "12681134ec87fc15e9cbcc1f6a08b8dbdcad00a0af646b840f0f804d21169736"
+# M2: both changed because the hashed state includes schema_version (1 -> 2).
+GOLDEN_TOY_SEED_42 = "fee2d66e6cf88e80660b2578f255adf087ce73e8efe90f319ffdc90cdd4b994f"
+GOLDEN_EMPTY_SEED_42 = "c2be9ca3affc2685255d75edb9b21d1d9bb129c0f93c4dcb184c7c4b1cd34425"
 
 
 def _run(world: World, days: float = 3) -> World:
@@ -53,7 +54,7 @@ def test_golden_hash_toy(make_toy_world: Callable[[int], World]) -> None:
 
 
 def test_golden_hash_empty(config: Config) -> None:
-    world, _ = World.create(config, 42, EPOCH_UNIX_MS)
+    world, _ = World.create(config, 42, EPOCH_UNIX_MS, [])
     assert _run(world).state_hash() == GOLDEN_EMPTY_SEED_42
 
 

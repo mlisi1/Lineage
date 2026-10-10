@@ -14,53 +14,22 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Protocol
-
-from numpy.random import Generator
 
 from lineage_sim import clock
 from lineage_sim.config import Config
 from lineage_sim.events import DayStarted, InputEvent, OutputEvent, SeasonStarted
-from lineage_sim.rng import Streams
+from lineage_sim.rng import TERRAIN, Streams
 from lineage_sim.state import io
-from lineage_sim.state.schema import StateError, Tree, WorldState
+from lineage_sim.state.schema import StateError, WorldState
+from lineage_sim.subsystem import Context, Subsystem
+from lineage_sim.terrain import Terrain
 
-
-@dataclass(frozen=True)
-class Context:
-    """What a subsystem sees when it runs."""
-
-    t_ms: int
-    dt_s: float  # time covered by this tick (its period); 0 outside ticks
-    instant: clock.Instant
-    rng: Generator  # the subsystem's own stream
-
-
-class Subsystem(Protocol):
-    """A part of the world (terrain, flora, fauna…) that runs on its own schedule.
-
-    ``name`` is also its random-stream name and its ``[schedule]`` key.
-    """
-
-    @property
-    def name(self) -> str: ...
-
-    def initialize(self, ctx: Context) -> list[OutputEvent]: ...
-
-    def tick(self, ctx: Context) -> list[OutputEvent]: ...
-
-    def handle(self, event: InputEvent, ctx: Context) -> list[OutputEvent]: ...
-
-    def get_state(self) -> Tree: ...
-
-    def set_state(self, tree: Tree) -> None: ...
+__all__ = ["Context", "Subsystem", "World", "default_subsystems"]
 
 
 def default_subsystems(config: Config) -> list[Subsystem]:
-    """The subsystems of a real world, in tick order. Empty until M2 adds terrain."""
-    del config
-    return []
+    """The subsystems of a real world, in tick order."""
+    return [Terrain(config.terrain)]
 
 
 class World:
@@ -103,14 +72,23 @@ class World:
         state: WorldState,
         subsystems: Sequence[Subsystem] | None = None,
     ) -> World:
-        """A world continuing exactly from ``state``."""
+        """A world continuing exactly from ``state``.
+
+        A subsystem the save does not know (it was added after the save was written) is
+        initialised fresh at the save's sim time, from its own random stream.
+        """
         subs = default_subsystems(config) if subsystems is None else list(subsystems)
-        expected, saved = sorted(s.name for s in subs), sorted(state.subsystems)
-        if expected != saved:
-            raise StateError(f"save has subsystems {saved}, world expects {expected}")
-        for subsystem in subs:
-            subsystem.set_state(state.subsystems[subsystem.name])
-        return cls(config, state, subs)
+        unknown = sorted(set(state.subsystems) - {s.name for s in subs})
+        if unknown:
+            raise StateError(f"save has subsystems {unknown} that this world does not")
+        world = cls(config, state, subs)
+        for subsystem in world._subsystems:
+            saved = state.subsystems.get(subsystem.name)
+            if saved is None:
+                subsystem.initialize(world._context(subsystem, 0.0))
+            else:
+                subsystem.set_state(saved)
+        return world
 
     @property
     def config(self) -> Config:
@@ -127,6 +105,20 @@ class World:
     @property
     def t_ms(self) -> int:
         return self._t_ms
+
+    def subsystem(self, name: str) -> Subsystem:
+        """The subsystem called ``name`` (for read-only inspection by callers)."""
+        for subsystem in self._subsystems:
+            if subsystem.name == name:
+                return subsystem
+        raise KeyError(name)
+
+    @property
+    def terrain(self) -> Terrain:
+        terrain = self.subsystem(TERRAIN)
+        if not isinstance(terrain, Terrain):
+            raise TypeError("the terrain subsystem was replaced")
+        return terrain
 
     @property
     def instant(self) -> clock.Instant:

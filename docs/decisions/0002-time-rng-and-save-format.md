@@ -36,6 +36,6 @@ years (CLAUDE.md §4.4). Choices made here are expensive to change later.
 
 - Subsystems must keep all persistent state in their `get_state()` tree, using only JSON
   values and NumPy arrays.
-- `World.restore` needs the same subsystem set as the save; adding a subsystem is a schema
-  change with a migration that creates its initial state.
+- Adding a subsystem is a schema change. (Superseded in part by ADR 0003: the migration
+  only bumps the version and `World.restore` initialises the missing subsystem.)
 - 128-bit PCG64 state is stored as hex strings so any JSON reader keeps it exact.

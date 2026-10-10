@@ -66,3 +66,49 @@ class SeasonStarted(OutputEvent):
     """A season began (always at the start of a UTC day)."""
 
     season: Season
+
+
+@dataclass(frozen=True)
+class VolcanoErupted(OutputEvent):
+    """A volcano built a cone centred on cell (x, y)."""
+
+    x: float
+    y: float
+    radius_cells: float
+    height: float
+
+
+@dataclass(frozen=True)
+class EarthquakeStruck(OutputEvent):
+    """A fault through cell (x, y) slipped by ``throw`` height units."""
+
+    x: float
+    y: float
+    radius_cells: float
+    throw: float
+
+
+@dataclass(frozen=True)
+class CraterFormed(OutputEvent):
+    """A meteor dug a crater centred on cell (x, y)."""
+
+    x: float
+    y: float
+    radius_cells: float
+    depth: float
+
+
+@dataclass(frozen=True)
+class LandmassSplit(OutputEvent):
+    """One landmass became ``parts`` separate landmasses (sea rose or land sank)."""
+
+    parts: int
+    landmasses: int  # total landmasses afterwards
+
+
+@dataclass(frozen=True)
+class LandmassesRejoined(OutputEvent):
+    """``parts`` landmasses merged into one (a strait closed)."""
+
+    parts: int
+    landmasses: int  # total landmasses afterwards

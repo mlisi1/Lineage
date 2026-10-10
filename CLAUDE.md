@@ -54,6 +54,7 @@ lineage/
 │   │   ├── rng.py            # seeded streams per subsystem
 │   │   ├── config.py         # typed config loaded from TOML
 │   │   ├── world.py          # World: owns subsystems, step(dt), apply(event)
+│   │   ├── subsystem.py      # Context + Subsystem protocol (what the World drives)
 │   │   ├── terrain.py
 │   │   ├── flora.py
 │   │   ├── fauna/            # genome.py, phenotype.py, brain.py, creature.py, population.py
@@ -72,6 +73,8 @@ lineage/
 ├── tools/                    # dev-only CLIs (not deployed)
 │   ├── fastforward.py        # run N sim-years headless for M seeds → runs/<id>/
 │   ├── report.py             # build a milestone report from runs → reports/<milestone>/
+│   ├── runs.py               # on-disk format of runs/<id>/
+│   ├── milestones/           # per-milestone metrics, acceptance criteria, report sections
 │   ├── viz/                  # shared plotting style + figure helpers
 │   └── replay.py             # load a save from the device, inspect, render stills
 ├── renderer/                 # TypeScript + PixiJS (WebGL). One renderer for desk and phone.
@@ -142,6 +145,7 @@ Do not create directories outside this layout without updating this file.
   - `uv run pytest -m "not slow"` — fast suite (CI on every push)
   - `uv run pytest -m slow` — long statistical tests (nightly)
   - `uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>`
+    (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
   - `cd renderer && npm test && npx playwright test`
   - `cd renderer && npm run typecheck && npm run lint`

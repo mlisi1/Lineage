@@ -37,7 +37,13 @@ def test_fixture_loads_and_runs(config: Config, version: int) -> None:
     _check_invariants(state)
     world = World.restore(config, state)
     world.step(3 * 86_400)
-    _check_invariants(world.snapshot())
+    after = world.snapshot()
+    _check_invariants(after)
+    height = after.subsystems["terrain"]["height"]
+    assert height.shape == (config.terrain.grid_height, config.terrain.grid_width)
+    assert float(height.min()) >= 0.0
+    assert float(height.max()) <= 1.0
+    assert 0.0 < world.terrain.land_fraction < 1.0
 
 
 def test_v0_to_v1_values(config: Config) -> None:
@@ -49,11 +55,27 @@ def test_v0_to_v1_values(config: Config) -> None:
     assert World.restore(config, state).instant.date.isoformat() == "2026-03-02"
 
 
-def test_v1_fixture_values() -> None:
+def test_v1_to_v2_keeps_values_and_grows_terrain(config: Config) -> None:
     state = io.loads(_fixture(1))
     assert state.seed == 42
     assert state.t_ms == 865_234_567
-    assert state.subsystems == {}
+    assert state.subsystems == {}  # v1 had no terrain; restore generates it
+    first, second = World.restore(config, state), World.restore(config, state)
+    assert first.t_ms == 865_234_567
+    assert first.state_hash() == second.state_hash()
+    assert "terrain" in first.snapshot().subsystems
+
+
+def test_v2_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(2))
+    assert state.seed == 42
+    assert state.t_ms == 30 * 86_400_000
+    world = World.restore(config, state)
+    assert world.terrain.landmass_count >= 1
+    assert world.snapshot().subsystems["terrain"]["hotspots"].shape == (
+        config.terrain.hotspot_count,
+        7,
+    )
 
 
 def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None:

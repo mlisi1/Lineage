@@ -8,7 +8,8 @@ def test_default_config(config: Config) -> None:
     assert config.calendar.hemisphere is Hemisphere.NORTH
     assert config.calendar.spring_start == MonthDay(3, 20)
     assert config.calendar.winter_start == MonthDay(12, 21)
-    assert dict(config.schedule) == {}
+    assert dict(config.schedule) == {"terrain": 86_400.0}
+    assert (config.terrain.grid_width, config.terrain.grid_height) == (256, 150)
 
 
 def test_schedule_periods(default_config_text: str) -> None:
@@ -16,7 +17,7 @@ def test_schedule_periods(default_config_text: str) -> None:
     assert config.period_ms("flora") == 900_000
     assert config.period_ms("fauna") == 250
     with pytest.raises(ConfigError, match="no \\[schedule\\] period"):
-        config.period_ms("terrain")
+        config.period_ms("species")
 
 
 def test_schedule_is_read_only(config: Config) -> None:

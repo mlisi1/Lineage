@@ -2,6 +2,7 @@
 
 import datetime as dt
 from collections.abc import Callable
+from dataclasses import replace
 
 import pytest
 from hypothesis import given, settings
@@ -45,7 +46,7 @@ class Recorder:
 
 
 def test_new_world_starts_at_zero(config: Config) -> None:
-    world, outputs = World.create(config, 1, EPOCH_UNIX_MS)
+    world, outputs = World.create(config, 1, EPOCH_UNIX_MS, [])
     assert world.t_ms == 0
     assert outputs == []
     assert world.instant.date == dt.date(2026, 3, 1)
@@ -53,7 +54,7 @@ def test_new_world_starts_at_zero(config: Config) -> None:
 
 def test_day_started_at_each_utc_midnight(config: Config) -> None:
     epoch = EPOCH_UNIX_MS + 22 * HOUR_MS  # created at 22:00
-    world, _ = World.create(config, 1, epoch)
+    world, _ = World.create(config, 1, epoch, [])
     outputs = world.step(3 * 86_400)
     assert outputs == [
         DayStarted(2 * HOUR_MS, dt.date(2026, 3, 2)),
@@ -63,7 +64,7 @@ def test_day_started_at_each_utc_midnight(config: Config) -> None:
 
 
 def test_season_started_on_equinox(config: Config) -> None:
-    world, _ = World.create(config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(config, 1, EPOCH_UNIX_MS, [])
     outputs = world.step(30 * 86_400)
     seasons = [o for o in outputs if isinstance(o, SeasonStarted)]
     assert seasons == [SeasonStarted(19 * MS_PER_DAY, Season.SPRING)]  # 2026-03-20
@@ -75,7 +76,7 @@ def test_season_started_on_equinox(config: Config) -> None:
 
 
 def test_ticks_fire_at_period_multiples_in_registration_order(config: Config) -> None:
-    schedule_config = Config(config.config_version, config.calendar, {"a": 3600.0, "b": 5400.0})
+    schedule_config = replace(config, schedule={"a": 3600.0, "b": 5400.0})
     log: list[tuple[str, int]] = []
     world, _ = World.create(
         schedule_config, 1, EPOCH_UNIX_MS, [Recorder("b", log), Recorder("a", log)]
@@ -118,20 +119,20 @@ def test_presence_event_reaches_subsystems(make_toy_world: Callable[[int], World
 
 @pytest.mark.parametrize("dt_s", [-1.0, float("nan"), float("inf")])
 def test_invalid_step_is_rejected(config: Config, dt_s: float) -> None:
-    world, _ = World.create(config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(config, 1, EPOCH_UNIX_MS, [])
     with pytest.raises(ValueError, match="finite non-negative"):
         world.step(dt_s)
 
 
 def test_time_never_goes_back(config: Config) -> None:
-    world, _ = World.create(config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(config, 1, EPOCH_UNIX_MS, [])
     world.step(10)
     with pytest.raises(ValueError, match="cannot go back"):
         world.advance_to(5)
 
 
 def test_step_rounds_to_milliseconds(config: Config) -> None:
-    world, _ = World.create(config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(config, 1, EPOCH_UNIX_MS, [])
     world.step(0.0004)
     world.step(1.2346)
     assert world.t_ms == 1235
@@ -147,9 +148,31 @@ def test_duplicate_subsystems_are_rejected(toy_config: Config) -> None:
         World.create(toy_config, 1, EPOCH_UNIX_MS, [Recorder("walker", [])] * 2)
 
 
-def test_restore_requires_matching_subsystems(
+def test_restore_rejects_subsystems_the_world_lacks(
     toy_config: Config, make_toy_world: Callable[[int], World]
 ) -> None:
     state = make_toy_world(1).snapshot()
-    with pytest.raises(StateError, match="world expects"):
+    with pytest.raises(StateError, match="that this world does not"):
         World.restore(toy_config, state, [Recorder("walker", [])])
+
+
+def test_restore_initialises_subsystems_the_save_lacks(
+    toy_config: Config, toy_factory: Callable[[], list[Subsystem]]
+) -> None:
+    walker_only, _ = World.create(toy_config, 1, EPOCH_UNIX_MS, toy_factory()[:1])
+    walker_only.step(5 * 3600)
+    state = walker_only.snapshot()
+    grown = World.restore(toy_config, state, toy_factory())
+    again = World.restore(toy_config, state, toy_factory())
+    saved = grown.snapshot().subsystems
+    assert saved["walker"]["ticks"] == 5  # kept from the save
+    assert saved["grazer"]["ticks"] == 0  # initialised fresh, from its own stream
+    assert saved["grazer"]["position"] != 0.0
+    assert grown.state_hash() == again.state_hash()
+
+
+def test_subsystem_lookup(make_toy_world: Callable[[int], World]) -> None:
+    world = make_toy_world(1)
+    assert world.subsystem("walker").name == "walker"
+    with pytest.raises(KeyError):
+        world.subsystem("nope")
