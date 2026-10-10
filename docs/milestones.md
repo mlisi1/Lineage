@@ -16,7 +16,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started | — |
-| R0 | Renderer spike on the device | not started | — |
+| R0 | Renderer spike on the device | in progress: spike, benchmark and report tooling built; the measurement on the device is pending | — (built from the device's `kiosk-bench.json`) |
 | R1 | Terrain and plants from the state stream | not started | — |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |

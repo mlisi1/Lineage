@@ -11,6 +11,7 @@ how the world behaves updates the relevant page in the same commit.
 | [creatures.md](creatures.md) | Genome, body, brain, learning, reproduction, species | M4–M7 |
 | [presence.md](presence.md) | Owner presence as the sun, calendar, god powers | M8 |
 | [chronicle.md](chronicle.md) | Event detection, chronicle text, bestiary | M9 |
+| [renderer.md](renderer.md) | Pixel-art scene, layers, the device spike and what it measures | R0–R4 |
 
 The M0 versions were written from the summary in CLAUDE.md §1 and §8. Items marked
 **Open** are not yet decided; resolve them (and record bigger choices in
