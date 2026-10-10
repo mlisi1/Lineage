@@ -1,26 +1,15 @@
 /** The spike's scene: terrain bitmap, plants, creatures and a full-screen tint. */
-import { Application, Assets, Container, Sprite, type Texture, type WebGLRenderer } from "pixi.js";
+import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
-import { buildAtlas } from "./atlas";
 import { viewAt } from "./camera";
 import { CreatureLayer } from "./creatures";
 import type { WorldFixture } from "./fixture";
+import { PIXEL_ART, loadWorldLayers } from "./layers";
+import { cycleTint } from "./light";
 import type { Backend } from "./params";
-import { PlantLayer } from "./plants";
+import type { PlantLayer } from "./plants";
 import { mulberry32 } from "./rng";
 import type { Scenario } from "./scenarios";
-
-/** The deepest sea colour of the palette: what shows before the terrain loads. */
-const BACKGROUND = "#1f437a";
-/** Seconds for the tint to go through day, dusk, night and dawn. */
-const DAY_CYCLE_S = 16;
-/** Tint colours (multiplied over the scene) at four points of the cycle. */
-const TINTS: readonly (readonly [number, number, number])[] = [
-  [1.0, 1.0, 1.0], // day
-  [1.0, 0.76, 0.56], // dusk
-  [0.36, 0.44, 0.72], // night
-  [0.92, 0.72, 0.78], // dawn
-];
 
 export interface GpuInfo {
   /** "webgl", "webgpu" or "canvas": what PixiJS ended up using. */
@@ -71,42 +60,17 @@ export class SpikeScene {
   ): Promise<SpikeScene> {
     const app = new Application();
     await app.init({
+      ...PIXEL_ART,
       width: DESIGN_WIDTH,
       height: DESIGN_HEIGHT,
       preference: backend,
-      background: BACKGROUND,
-      // Pixel art: no smoothing anywhere, positions snapped to whole pixels.
-      antialias: false,
-      roundPixels: true,
-      resolution: 1,
-      autoDensity: false,
       powerPreference: "high-performance",
-      // The benchmark drives the frames itself.
-      autoStart: false,
-      sharedTicker: false,
     });
     app.canvas.dataset["testid"] = "spike-stage";
     host.appendChild(app.canvas);
 
-    const bitmap = async (name: string): Promise<Sprite> => {
-      const texture = await Assets.load<Texture>(`${folder}/${name}`);
-      texture.source.scaleMode = "nearest";
-      return new Sprite(texture);
-    };
-    const ground = await bitmap("terrain.png");
-    const map = await bitmap("map.png");
-    const atlas = buildAtlas(fixture);
-    const plants = new PlantLayer(fixture, atlas);
-    const water = fixture.coverClasses.indexOf("WATER");
-    const walkable = (x: number, y: number): boolean => {
-      const column = Math.round(x);
-      const row = Math.round(y);
-      if (column < 1 || row < 1 || column >= fixture.width - 1 || row >= fixture.height - 1) {
-        return false;
-      }
-      return fixture.cover[row * fixture.width + column] !== water;
-    };
-    const creatures = new CreatureLayer(atlas, fixture.creatures, walkable, mulberry32(seed));
+    const { ground, map, atlas, plants, passable } = await loadWorldLayers(fixture, folder);
+    const creatures = new CreatureLayer(atlas, fixture.creatures, passable, mulberry32(seed));
     const tint = new Sprite({ texture: atlas.white, blendMode: "multiply" });
 
     const scene = new SpikeScene(app, fixture, ground, map, plants, creatures, tint);
@@ -159,7 +123,7 @@ export class SpikeScene {
     this.world.position.set(Math.round(view.x), Math.round(view.y));
     this.drawnPlants = this.plants.container.visible ? this.plants.cull(view.cells) : 0;
     this.creatures.update(dtS);
-    if (this.tint.visible) this.tint.tint = this.tintAt(this.timeS);
+    if (this.tint.visible) this.tint.tint = cycleTint(this.timeS);
     this.app.render();
   }
 
@@ -202,14 +166,5 @@ export class SpikeScene {
     style.width = `${DESIGN_WIDTH * fit.scale}px`;
     style.height = `${DESIGN_HEIGHT * fit.scale}px`;
     style.imageRendering = "pixelated";
-  }
-
-  private tintAt(timeS: number): number {
-    const phase = ((timeS / DAY_CYCLE_S) % 1) * TINTS.length;
-    const from = TINTS[Math.floor(phase) % TINTS.length] ?? [1, 1, 1];
-    const to = TINTS[(Math.floor(phase) + 1) % TINTS.length] ?? [1, 1, 1];
-    const mix = phase - Math.floor(phase);
-    const channel = (i: 0 | 1 | 2): number => Math.round((from[i] + (to[i] - from[i]) * mix) * 255);
-    return (channel(0) << 16) | (channel(1) << 8) | channel(2);
   }
 }

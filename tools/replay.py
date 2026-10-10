@@ -9,8 +9,10 @@ Prints a summary of the save. ``--still`` writes a pixel-art picture of the worl
 its plants and creatures. ``--renderer-fixture`` writes the files the renderer spike
 draws (R0): ``terrain.png`` (the bare ground, one pixel per cell), ``map.png`` (the same
 with plants as flat colours, for wide shots) and ``world.json`` (plants cell by cell,
-creatures and the palette). The fixture is a stand-in until the state stream and its
-protocol exist (R1).
+creatures and the palette). Besides the world's own creatures, ``world.json`` carries
+casts for the look sheet: the specimen genomes of ``phenotypes.json`` and, gene by gene,
+a plain animal with that one gene swept from 0 to 1. The fixture is a stand-in until the
+state stream and its protocol exist (R1).
 """
 
 from __future__ import annotations
@@ -22,29 +24,64 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from lineage_sim.config import parse_config
-from lineage_sim.fauna.genome import Gene
+from lineage_sim.config import FaunaConfig, parse_config
+from lineage_sim.fauna.genome import GENE_COUNT, Gene
+from lineage_sim.fauna.phenotype import Phenotype, phenotype
 from lineage_sim.flora import Cover
 from lineage_sim.state import io
 from lineage_sim.world import World
 from PIL import Image
 
-from tools.runs import DEFAULT_CONFIG
+from tools.runs import DEFAULT_CONFIG, REPO_ROOT
 from tools.viz import pixelmap
 
-FIXTURE_FORMAT = "lineage-spike-fixture/1"
+FIXTURE_FORMAT = "lineage-spike-fixture/2"
 MS_PER_DAY = 86_400_000
-# One row per creature in ``world.json``, in this order.
-CREATURE_FIELDS = (
-    "x",
-    "y",
-    "mass",
-    "limb_pairs",
-    "land_speed",
-    "diet",
-    "armour",
-    "hue",
-    "pattern",
+# One row per creature in ``world.json``: where it is, the body the phenotype function
+# derives, then the genes that show on it.
+BODY_FIELDS = ("mass", "limb_pairs", "land_speed", "swim_speed")
+SHOWN_GENES = (
+    Gene.DIET,
+    Gene.SPEED,
+    Gene.ARMOUR,
+    Gene.SENSE,
+    Gene.AQUATIC,
+    Gene.JAW,
+    Gene.HUE,
+    Gene.PATTERN,
+)
+CREATURE_FIELDS = ("x", "y", *BODY_FIELDS, *(gene.name.lower() for gene in SHOWN_GENES))
+
+# The specimen genomes shared with the renderer's phenotype check (R2).
+SPECIMENS = REPO_ROOT / "sim" / "tests" / "fixtures" / "phenotypes.json"
+# Gene sweeps start from a plain animal: mid-sized, two leg pairs, nothing that shows
+# switched on, in a colour that stands out on every ground.
+SWEEP_BASE = {
+    Gene.SIZE: 0.5,
+    Gene.DIET: 0.2,
+    Gene.LIMBS: 0.5,
+    Gene.SPEED: 0.5,
+    Gene.ARMOUR: 0.0,
+    Gene.SENSE: 0.4,
+    Gene.AQUATIC: 0.0,
+    Gene.JAW: 0.5,
+    Gene.BROOD: 0.0,
+    Gene.HUE: 0.92,
+    Gene.PATTERN: 0.0,
+}
+SWEEP_STEPS = (0.0, 0.25, 0.5, 0.75, 1.0)
+# Every gene with a look, in the order the sheet shows them. BROOD has none.
+SWEEP_GENES = (
+    Gene.SIZE,
+    Gene.LIMBS,
+    Gene.SPEED,
+    Gene.ARMOUR,
+    Gene.SENSE,
+    Gene.AQUATIC,
+    Gene.JAW,
+    Gene.DIET,
+    Gene.HUE,
+    Gene.PATTERN,
 )
 
 
@@ -91,6 +128,56 @@ def render_still(world: World, scale: int = 1) -> np.ndarray:
     )
 
 
+def creature_rows(
+    body: Phenotype, genes: np.ndarray, positions: np.ndarray | None = None
+) -> list[list[float]]:
+    """One row of ``CREATURE_FIELDS`` per creature; without positions they are all at 0, 0."""
+    if positions is None:
+        positions = np.zeros((len(genes), 2), dtype=np.float32)
+    columns = [
+        positions[:, 0],
+        positions[:, 1],
+        *(getattr(body, name) for name in BODY_FIELDS),
+        *(genes[:, gene] for gene in SHOWN_GENES),
+    ]
+    return np.round(np.column_stack(columns).astype(np.float64), 3).tolist()
+
+
+def _cast(cfg: FaunaConfig, name: str, members: list[str], genomes: np.ndarray) -> dict[str, Any]:
+    genes = genomes.astype(np.float32)
+    return {
+        "name": name,
+        "members": members,
+        "creatures": creature_rows(phenotype(cfg, genes), genes),
+    }
+
+
+def casts(cfg: FaunaConfig) -> list[dict[str, Any]]:
+    """Creatures chosen to show the range of bodies, for the renderer's look sheet.
+
+    ``specimens`` are the genomes of ``phenotypes.json``. Each ``sweep-<gene>`` is the
+    plain animal of ``SWEEP_BASE`` with that one gene at each of ``SWEEP_STEPS``.
+    """
+    specimens = json.loads(SPECIMENS.read_text(encoding="utf-8"))["specimens"]
+    out = [
+        _cast(
+            cfg,
+            "specimens",
+            [specimen["name"] for specimen in specimens],
+            np.array([specimen["genome"] for specimen in specimens]),
+        )
+    ]
+    base = np.zeros(GENE_COUNT)
+    for gene, value in SWEEP_BASE.items():
+        base[gene] = value
+    for gene in SWEEP_GENES:
+        genomes = np.tile(base, (len(SWEEP_STEPS), 1))
+        genomes[:, gene] = SWEEP_STEPS
+        members = [f"{step:g}" for step in SWEEP_STEPS]
+        out.append(_cast(cfg, f"sweep-{gene.name.lower()}", members, genomes))
+    return out
+
+
 def _b64(grid: np.ndarray) -> str:
     return base64.b64encode(np.ascontiguousarray(grid, dtype=np.uint8).tobytes()).decode("ascii")
 
@@ -106,20 +193,7 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
     rows, columns = terrain.height.shape
     ground = pixelmap.render(terrain.height, terrain.sea_level)
     vegetated = pixelmap.render(terrain.height, terrain.sea_level, flora.cover(), flora.biomass)
-    body, genes = fauna.body, fauna.genes
-    creatures = np.column_stack(
-        [
-            fauna.positions[:, 0],
-            fauna.positions[:, 1],
-            body.mass,
-            body.limb_pairs,
-            body.land_speed,
-            genes[:, Gene.DIET],
-            genes[:, Gene.ARMOUR],
-            genes[:, Gene.HUE],
-            genes[:, Gene.PATTERN],
-        ]
-    )
+    creatures = creature_rows(fauna.body, fauna.genes, fauna.positions)
     palette = {cover.name: list(ramp) for cover, ramp in pixelmap.LAND_RAMPS.items()}
     palette["DORMANT"] = list(pixelmap.DORMANT)
     document = {
@@ -133,8 +207,15 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
         "dormant_below_biomass": pixelmap.DORMANT_BELOW,
         "dormant_classes": [cover.name for cover in pixelmap.DORMANT_CLASSES],
         "palette": palette,
+        # Shallowest first: the colours of the sea in the ground image.
+        "sea": [colour for _, colour in pixelmap.SEA_BANDS],
+        "diet_classes": {
+            "herbivore_max": fauna.config.herbivore_max_diet,
+            "predator_min": fauna.config.predator_min_diet,
+        },
         "creature_fields": list(CREATURE_FIELDS),
-        "creatures": np.round(creatures.astype(np.float64), 3).tolist(),
+        "creatures": creatures,
+        "casts": casts(fauna.config),
     }
     return ground, vegetated, document
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from lineage_sim.fauna.genome import Gene
 from lineage_sim.flora import Cover
 from PIL import Image
 
@@ -72,9 +73,68 @@ def test_renderer_fixture_describes_the_world(world: replay.World) -> None:
     assert ((x >= 0) & (x < 256) & (y >= 0) & (y < 150)).all()
     assert (rows[:, replay.CREATURE_FIELDS.index("mass")] > 0).all()
 
+    # The genes that show come with every creature, each in [0, 1].
+    assert replay.CREATURE_FIELDS[:6] == (
+        "x",
+        "y",
+        "mass",
+        "limb_pairs",
+        "land_speed",
+        "swim_speed",
+    )
+    shown = rows[:, len(("x", "y", *replay.BODY_FIELDS)) :]
+    assert shown.shape[1] == len(replay.SHOWN_GENES)
+    assert ((shown >= 0) & (shown <= 1)).all()
+    hue = rows[:, replay.CREATURE_FIELDS.index("hue")]
+    assert np.allclose(hue, world.fauna.genes[:, Gene.HUE], atol=1e-3)
+
     for name, ramp in document["palette"].items():
         assert name == "DORMANT" or name in Cover.__members__
-        assert all(len(colour) == 3 for colour in ramp) or len(ramp) == 3
+        assert len(ramp) == 3
+    assert document["sea"] == [colour for _, colour in pixelmap.SEA_BANDS]
+    classes = document["diet_classes"]
+    assert 0 < classes["herbivore_max"] < classes["predator_min"] < 1
+
+
+def test_casts_show_the_range_of_bodies(world: replay.World) -> None:
+    cfg = world.fauna.config
+    specimens, *sweeps = replay.casts(cfg)
+    field = replay.CREATURE_FIELDS.index
+
+    reference = json.loads(replay.SPECIMENS.read_text(encoding="utf-8"))["specimens"]
+    assert specimens["name"] == "specimens"
+    assert specimens["members"] == [specimen["name"] for specimen in reference]
+    assert len(specimens["creatures"]) == 15
+    # The bodies are the ones the phenotype fixture promises the renderer.
+    for row, specimen in zip(specimens["creatures"], reference, strict=True):
+        assert len(row) == len(replay.CREATURE_FIELDS)
+        assert row[field("x")] == row[field("y")] == 0.0  # the renderer places them
+        for name in replay.BODY_FIELDS:
+            assert row[field(name)] == pytest.approx(specimen["phenotype"][name], abs=1e-3)
+        assert row[field("hue")] == pytest.approx(specimen["genome"][Gene.HUE], abs=1e-3)
+
+    assert [sweep["name"] for sweep in sweeps] == [
+        f"sweep-{gene.name.lower()}" for gene in replay.SWEEP_GENES
+    ]
+    assert Gene.BROOD not in replay.SWEEP_GENES  # it has no look
+    assert set(replay.SWEEP_BASE) == set(Gene)
+    for sweep, gene in zip(sweeps, replay.SWEEP_GENES, strict=True):
+        assert sweep["members"] == ["0", "0.25", "0.5", "0.75", "1"]
+        rows = np.array(sweep["creatures"])
+        # Only what the swept gene drives changes from one step to the next.
+        for other in replay.SHOWN_GENES:
+            column = rows[:, field(other.name.lower())]
+            if other is gene:
+                assert column.tolist() == list(replay.SWEEP_STEPS)
+            else:
+                assert np.ptp(column) == 0.0
+    by_name = {sweep["name"]: np.array(sweep["creatures"]) for sweep in sweeps}
+    assert by_name["sweep-size"][:, field("mass")].tolist() == pytest.approx(
+        [cfg.mass_min * (cfg.mass_max / cfg.mass_min) ** step for step in replay.SWEEP_STEPS],
+        abs=1e-3,
+    )
+    assert by_name["sweep-limbs"][:, field("limb_pairs")].tolist() == [0, 1, 2, 3, 4]
+    assert np.ptp(by_name["sweep-hue"][:, field("mass")]) == 0.0
 
 
 def test_committed_spike_fixture_is_what_the_tool_writes(

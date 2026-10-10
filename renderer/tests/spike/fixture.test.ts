@@ -47,6 +47,56 @@ describe("the committed fixture", () => {
     }
   });
 
+  it("carries the genes that show, in range", () => {
+    for (const creature of fixture.creatures) {
+      const genes = [
+        creature.diet,
+        creature.speed,
+        creature.armour,
+        creature.sense,
+        creature.aquatic,
+        creature.jaw,
+        creature.pattern,
+      ];
+      for (const gene of genes) {
+        expect(gene).toBeGreaterThanOrEqual(0);
+        expect(gene).toBeLessThanOrEqual(1);
+      }
+      expect(creature.landSpeed).toBeGreaterThan(0);
+      expect(creature.swimSpeed).toBeGreaterThan(0);
+    }
+    expect(fixture.herbivoreMaxDiet).toBeLessThan(fixture.predatorMinDiet);
+    for (const colour of fixture.sea) expect(colour).toMatch(/^#[0-9a-f]{6}$/);
+    expect(fixture.sea.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("brings fifteen specimens and a five-step sweep of every gene with a look", () => {
+    const [specimens, ...sweeps] = fixture.casts;
+    expect(specimens?.name).toBe("specimens");
+    expect(specimens?.members).toHaveLength(15);
+    expect(specimens?.members).toContain("giant");
+    expect(new Set(specimens?.members).size).toBe(15);
+    expect(sweeps.map((cast) => cast.name)).toEqual(
+      ["size", "limbs", "speed", "armour", "sense", "aquatic", "jaw", "diet", "hue", "pattern"].map(
+        (gene) => `sweep-${gene}`,
+      ),
+    );
+    for (const sweep of sweeps) {
+      expect(sweep.members).toEqual(["0", "0.25", "0.5", "0.75", "1"]);
+      expect(sweep.creatures).toHaveLength(5);
+    }
+    // A sweep changes its own gene and nothing else that shows.
+    const armour = sweeps.find((cast) => cast.name === "sweep-armour")?.creatures ?? [];
+    expect(armour.map((creature) => creature.armour)).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(new Set(armour.map((creature) => creature.mass)).size).toBe(1);
+    expect(new Set(armour.map((creature) => creature.hue)).size).toBe(1);
+    const size = sweeps.find((cast) => cast.name === "sweep-size")?.creatures ?? [];
+    expect(size[0]?.mass).toBeCloseTo(0.25);
+    expect(size[4]?.mass).toBeCloseTo(16);
+    const limbs = sweeps.find((cast) => cast.name === "sweep-limbs")?.creatures ?? [];
+    expect(limbs.map((creature) => creature.limbPairs)).toEqual([0, 1, 2, 3, 4]);
+  });
+
   it("has thousands of cells to draw as plant sprites", () => {
     let plants = 0;
     for (let index = 0; index < fixture.cover.length; index++) {
@@ -71,6 +121,13 @@ describe("parseFixture", () => {
     expect(() => parseFixture(null)).toThrow("not an object");
     const broken = { ...(document as Record<string, unknown>), width: 10 };
     expect(() => parseFixture(broken)).toThrow("does not match");
+    const short = { ...(document as Record<string, unknown>), creature_fields: ["x", "y"] };
+    expect(() => parseFixture(short)).toThrow('no creature field "mass"');
+    const lopsided = {
+      ...(document as Record<string, unknown>),
+      casts: [{ name: "odd", members: ["a", "b"], creatures: [] }],
+    };
+    expect(() => parseFixture(lopsided)).toThrow("cast members and rows differ");
   });
 
   it("decodes base64", () => {

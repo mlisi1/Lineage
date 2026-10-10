@@ -4,20 +4,36 @@
  * A stand-in until the state stream and its protocol exist (R1).
  */
 
-export const FIXTURE_FORMAT = "lineage-spike-fixture/1";
+export const FIXTURE_FORMAT = "lineage-spike-fixture/2";
 
 export type Ramp = readonly [string, string, string];
 
+/** A creature as the sim describes it: where it is, its derived body, the genes that show. */
 export interface CreatureSeed {
   x: number;
   y: number;
   mass: number;
   limbPairs: number;
+  /** Cells per hour, on land and in water. */
   landSpeed: number;
+  swimSpeed: number;
+  // Genes, each 0–1.
   diet: number;
+  speed: number;
   armour: number;
+  sense: number;
+  aquatic: number;
+  jaw: number;
   hue: number;
   pattern: number;
+}
+
+/** Creatures chosen to show the range of bodies; the look sheet places them itself. */
+export interface Cast {
+  name: string;
+  /** What each creature is called: a specimen's name, or the value of the swept gene. */
+  members: readonly string[];
+  creatures: readonly CreatureSeed[];
 }
 
 export interface WorldFixture {
@@ -30,10 +46,16 @@ export interface WorldFixture {
   coverClasses: readonly string[];
   /** Dark, mid and light tone per class name (and "DORMANT"). */
   palette: Readonly<Record<string, Ramp>>;
+  /** The colours of the sea in the ground image, shallowest first. */
+  sea: readonly string[];
   /** Low plants below this biomass (0–255) are drawn dry. */
   dormantBelow: number;
   dormantClasses: readonly string[];
   creatures: readonly CreatureSeed[];
+  casts: readonly Cast[];
+  /** Diet gene at or below which a creature is a herbivore, at or above which a predator. */
+  herbivoreMaxDiet: number;
+  predatorMinDiet: number;
   description: string;
 }
 
@@ -94,22 +116,41 @@ export function parseFixture(raw: unknown): WorldFixture {
     mass: column("mass"),
     limbPairs: column("limb_pairs"),
     landSpeed: column("land_speed"),
+    swimSpeed: column("swim_speed"),
     diet: column("diet"),
+    speed: column("speed"),
     armour: column("armour"),
+    sense: column("sense"),
+    aquatic: column("aquatic"),
+    jaw: column("jaw"),
     hue: column("hue"),
     pattern: column("pattern"),
   };
-  const creatures = field(raw, "creatures", isRows).map((row) => ({
+  const seed = (row: readonly number[]): CreatureSeed => ({
     x: row[at.x] ?? 0,
     y: row[at.y] ?? 0,
     mass: row[at.mass] ?? 1,
     limbPairs: row[at.limbPairs] ?? 2,
     landSpeed: row[at.landSpeed] ?? 1,
+    swimSpeed: row[at.swimSpeed] ?? 0,
     diet: row[at.diet] ?? 0,
+    speed: row[at.speed] ?? 0.5,
     armour: row[at.armour] ?? 0,
+    sense: row[at.sense] ?? 0.5,
+    aquatic: row[at.aquatic] ?? 0,
+    jaw: row[at.jaw] ?? 0,
     hue: row[at.hue] ?? 0,
     pattern: row[at.pattern] ?? 0,
-  }));
+  });
+  const creatures = field(raw, "creatures", isRows).map(seed);
+  const casts = field(raw, "casts", Array.isArray).map((cast: unknown): Cast => {
+    if (!isObject(cast)) throw new Error("fixture: a cast is not an object");
+    const members = field(cast, "members", isStrings);
+    const rows = field(cast, "creatures", isRows);
+    if (members.length !== rows.length) throw new Error("fixture: cast members and rows differ");
+    return { name: field(cast, "name", isString), members, creatures: rows.map(seed) };
+  });
+  const diet = field(raw, "diet_classes", isObject);
 
   const source = field(raw, "source", isObject);
   return {
@@ -119,9 +160,13 @@ export function parseFixture(raw: unknown): WorldFixture {
     biomass,
     coverClasses: field(raw, "cover_classes", isStrings),
     palette,
+    sea: field(raw, "sea", isStrings),
     dormantBelow: Math.round(field(raw, "dormant_below_biomass", isNumber) * 255),
     dormantClasses: field(raw, "dormant_classes", isStrings),
     creatures,
+    casts,
+    herbivoreMaxDiet: field(diet, "herbivore_max", isNumber),
+    predatorMinDiet: field(diet, "predator_min", isNumber),
     description: `seed ${String(source["seed"])}, ${String(source["date"])} (${String(source["season"])})`,
   };
 }
