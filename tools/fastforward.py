@@ -81,6 +81,10 @@ def epoch_unix_ms(start: dt.date) -> int:
     return round(dt.datetime(start.year, start.month, start.day, tzinfo=dt.UTC).timestamp() * 1000)
 
 
+def _quantile(values: np.ndarray, q: float) -> float:
+    return float(np.quantile(values, q)) if values.size else np.nan
+
+
 class Probes:
     """Records one sample of every series each time `sample` is called."""
 
@@ -108,6 +112,8 @@ class Probes:
             "landmass_count": float(terrain.landmass_count),
             "mean_height": float(terrain.height.mean()),
             "mean_fertility": float(terrain.fertility[land].mean()) if land.any() else np.nan,
+            "fertility_p10": _quantile(terrain.fertility[land], 0.1),
+            "fertility_p90": _quantile(terrain.fertility[land], 0.9),
             "step_ms": 1000 * self._step_s / max(1, self._steps),
         }
         # Share of cells whose land/sea state differs from one year earlier.

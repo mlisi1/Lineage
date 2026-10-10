@@ -66,6 +66,41 @@ def time_series_band(
     return fig
 
 
+def median_lines(
+    times: np.ndarray,
+    series: dict[str, np.ndarray],
+    *,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+) -> Figure:
+    """Median across seeds of several related series on one axis, labelled at the line end.
+
+    ``series`` maps a label to a (seeds, times) array; colours follow the fixed
+    categorical order.
+    """
+    fig, ax = plt.subplots()
+    for slot, (label, values) in enumerate(series.items()):
+        median, _, _ = band_over_seeds(values)
+        ax.plot(times, median, color=style.categorical(slot), label=label)
+        ax.annotate(
+            label,
+            (times[-1], median[-1]),
+            xytext=(6, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=8,
+            color=style.TEXT_SECONDARY,
+        )
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.margins(x=0)
+    ax.legend(loc="best")
+    fig.tight_layout(rect=(0, 0, 0.93, 1))
+    return fig
+
+
 def distribution(
     per_seed: Sequence[float] | np.ndarray,
     *,

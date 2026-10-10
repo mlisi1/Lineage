@@ -33,6 +33,8 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     "shore_change": SeriesLabel("Coastline change over one year", "share of cells"),
     "mean_height": SeriesLabel("Mean height of the whole map", "height units"),
     "mean_fertility": SeriesLabel("Mean fertility of land", "fertility, 0–1"),
+    "fertility_p10": SeriesLabel("Fertility of the poorest tenth of land", "fertility, 0–1"),
+    "fertility_p90": SeriesLabel("Fertility of the richest tenth of land", "fertility, 0–1"),
     "volcanoes": SeriesLabel("Volcanoes", "cumulative count"),
     "earthquakes": SeriesLabel("Earthquakes", "cumulative count"),
     "craters": SeriesLabel("Craters", "cumulative count"),
@@ -50,7 +52,8 @@ EXPLANATIONS: dict[str, str] = {
     "or the reverse; it starts after the first year.",
     "mean_height": "Mass balance of the ground: tectonics and erosion are zero-sum, so "
     "this should stay nearly flat.",
-    "mean_fertility": "Mean fertility over land cells, with no plants yet.",
+    "mean_fertility": "Mean fertility over land cells, with no plants yet: sediment, ash "
+    "and deposits add fertility, leaching removes it, so it should settle.",
 }
 
 CRITERIA: list[Criterion] = [
@@ -118,6 +121,18 @@ def metrics(run: Run) -> dict[str, float]:
         "mean_height.drift.max_abs": float(
             np.abs(_stack(run, "mean_height")[:, -1] - _stack(run, "mean_height")[:, 0]).max()
         ),
+    }
+    fertility = _stack(run, "mean_fertility")
+    half = fertility.shape[1] // 2
+    out |= {
+        "mean_fertility.start.median": float(np.median(fertility[:, 0])),
+        "mean_fertility.end.median": float(np.median(fertility[:, -1])),
+        # Change of the median over the second half of the run: near zero when settled.
+        "mean_fertility.second_half_change": float(
+            np.median(fertility[:, -1]) - np.median(fertility[:, half])
+        ),
+        "fertility_p10.end.median": float(np.median(_stack(run, "fertility_p10")[:, -1])),
+        "fertility_p90.end.median": float(np.median(_stack(run, "fertility_p90")[:, -1])),
     }
     for name in ("volcanoes", "earthquakes", "craters"):
         out[f"{name}.per_decade.mean"] = float(_stack(run, name)[:, -1].mean() / decades)
@@ -239,6 +254,25 @@ def sections(run: Run, run_dir: Path) -> list[Section]:
     )
 
     extra = "".join(_band_figure(run, name) for name in ("mean_height", "mean_fertility"))
+    fig = figures.median_lines(
+        run.series[run.manifest.seeds[0]][TIME_KEY],
+        {
+            "richest tenth": _stack(run, "fertility_p90"),
+            "mean": _stack(run, "mean_fertility"),
+            "poorest tenth": _stack(run, "fertility_p10"),
+        },
+        title="Spread of land fertility",
+        xlabel="sim time (years)",
+        ylabel="fertility, 0–1",
+    )
+    extra += figure_html(
+        html.escape(
+            f"Spread of land fertility within a world, median across {seeds} seeds: the "
+            "90th percentile, the mean and the 10th percentile of land cells. Poor and "
+            "rich ground should both persist."
+        ),
+        figures.to_data_uri(fig),
+    )
     out = [Section("Over time", over_time)]
     maps = _map_section(run, run_dir)
     if maps is not None:
