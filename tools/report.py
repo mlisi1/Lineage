@@ -10,6 +10,11 @@ Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metric
 Milestones with statistical behaviour have a module in ``tools/milestones/`` providing
 their metrics, acceptance criteria and figures; the others get a generic report with
 every recorded series.
+
+Milestones measured on the device (R0) are built from the file the device benchmark
+wrote instead of a run: ``--runs`` is that file or the directory holding it. The file is
+copied into the report directory in place of ``config.toml``, since a PC cannot
+regenerate it.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4
+from tools.milestones import m2, m3, m4, r0
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -56,17 +61,23 @@ MILESTONES: dict[str, Milestone] = {
         Milestone("M9", "chronicle", "Chronicle and bestiary"),
         Milestone("M10", "apocalypse", "Apocalypse and worlds"),
         Milestone("M11", "long-run", "Long-run tuning and stability"),
+        Milestone("R0", "renderer-spike", "Renderer spike on the device"),
     )
 }
 
 # Milestones with their own metrics and report sections.
 MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4}
 
+# Milestones measured on the device rather than by fast-forward: the module reads its
+# own evidence file and provides the header, metrics and sections from it.
+DEVICE_MODULES: dict[str, ModuleType] = {"R0": r0}
+
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
 CRITERIA: dict[str, list[Criterion]] = {
     "M2": m2.CRITERIA,
     "M3": m3.CRITERIA,
     "M4": m4.CRITERIA,
+    "R0": r0.CRITERIA,
 }
 
 # Display names and units of recorded series; every series a milestone records goes here.
@@ -169,6 +180,8 @@ figure.pixel figcaption { color:#c9d3dc; }
 figcaption { color:#52514e; font-size:.85rem; padding:4px 4px 0; }
 .empty { color:var(--muted); font-style:italic; }
 .wrap { overflow-x:auto; }
+pre { overflow-x:auto; font-size:.8rem; color:var(--muted); }
+small { color:var(--muted); }
 """
 
 
@@ -176,17 +189,10 @@ def _row(cells: list[str], tag: str = "td") -> str:
     return "<tr>" + "".join(f"<{tag}>{c}</{tag}>" for c in cells) + "</tr>"
 
 
-def render_html(
-    milestone: Milestone,
-    run: Run,
-    acceptance: list[dict[str, Any]],
-    metrics: dict[str, float],
-    sections: list[Section],
-) -> str:
+def run_header(run: Run) -> list[tuple[str, str]]:
+    """Header rows of a report built from a fast-forward run."""
     m = run.manifest
-    e = html.escape
-    header = [
-        ("Milestone", f"{milestone.mid} — {milestone.title}"),
+    return [
         ("Git commit", m.git_commit),
         ("Config hash", m.config_hash),
         ("Seeds", f"{len(m.seeds)} ({', '.join(map(str, m.seeds))})"),
@@ -194,6 +200,26 @@ def render_html(
         ("Wall time", f"{m.wall_time_s:g} s"),
         ("Run", f"{m.run_id} (created {m.created_utc}; {m.notes})"),
     ]
+
+
+def run_summary(run: Run) -> str:
+    """What was run, in one line, for the report's README."""
+    m = run.manifest
+    return (
+        f"Run `{m.run_id}`: {len(m.seeds)} seeds × {m.sim_years:g} sim-years, "
+        f"commit `{m.git_commit}`, config `{m.config_hash}`, wall time {m.wall_time_s:g} s."
+    )
+
+
+def render_html(
+    milestone: Milestone,
+    header: list[tuple[str, str]],
+    acceptance: list[dict[str, Any]],
+    metrics: dict[str, float],
+    sections: list[Section],
+) -> str:
+    e = html.escape
+    header = [("Milestone", f"{milestone.mid} — {milestone.title}"), *header]
     header_rows = "".join(_row([e(k), e(v)]) for k, v in header)
 
     if acceptance:
@@ -246,15 +272,8 @@ def render_html(
 """
 
 
-def render_readme(milestone: Milestone, run: Run, acceptance: list[dict[str, Any]]) -> str:
-    m = run.manifest
-    lines = [
-        f"# {milestone.mid} — {milestone.title}",
-        "",
-        f"Run `{m.run_id}`: {len(m.seeds)} seeds × {m.sim_years:g} sim-years, "
-        f"commit `{m.git_commit}`, config `{m.config_hash}`, wall time {m.wall_time_s:g} s.",
-        "",
-    ]
+def render_readme(milestone: Milestone, summary: str, acceptance: list[dict[str, Any]]) -> str:
+    lines = [f"# {milestone.mid} — {milestone.title}", "", summary, ""]
     if acceptance:
         for a in acceptance:
             measured = "—" if a["value"] is None else f"{a['value']:.4g}"
@@ -268,20 +287,10 @@ def render_readme(milestone: Milestone, run: Run, acceptance: list[dict[str, Any
     return "\n".join(lines) + "\n"
 
 
-def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT) -> Path:
-    try:
-        milestone = MILESTONES[milestone_id]
-    except KeyError:
-        raise ValueError(
-            f"unknown milestone {milestone_id!r}; known: {', '.join(MILESTONES)}"
-        ) from None
-    run = read_run(run_dir)
-    module = MODULES.get(milestone.mid)
-    # A milestone module reports its own, curated numbers; the generic per-series spread
-    # is for milestones without one.
-    metrics = compute_metrics(run) if module is None else module.metrics(run)
+def evaluate(milestone_id: str, metrics: dict[str, float]) -> list[dict[str, Any]]:
+    """The milestone's acceptance criteria measured against ``metrics``."""
     acceptance: list[dict[str, Any]] = []
-    for c in CRITERIA.get(milestone.mid, []):
+    for c in CRITERIA.get(milestone_id, []):
         value, status = c.evaluate(metrics)
         acceptance.append(
             {
@@ -293,40 +302,102 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
                 "status": status,
             }
         )
-    if module is not None:
-        sections: list[Section] = module.sections(run, run_dir)
-    else:
-        sections = generic_sections(run)
+    return acceptance
 
-    out_dir = out_root / f"{milestone.mid}-{milestone.slug}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    m = run.manifest
+
+def _write_report(
+    out_dir: Path,
+    milestone: Milestone,
+    header: list[tuple[str, str]],
+    summary: str,
+    provenance: dict[str, Any],
+    metrics: dict[str, float],
+    sections: list[Section],
+) -> None:
+    acceptance = evaluate(milestone.mid, metrics)
     metrics_doc = {
         "milestone": milestone.mid,
-        "run_id": m.run_id,
-        "git_commit": m.git_commit,
-        "config_hash": m.config_hash,
-        "seeds": m.seeds,
-        "sim_years": m.sim_years,
-        "wall_time_s": m.wall_time_s,
+        **provenance,
         "acceptance": acceptance,
         "metrics": metrics,
     }
     (out_dir / "metrics.json").write_text(
         json.dumps(metrics_doc, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
-    (out_dir / "config.toml").write_text(run.config_text, encoding="utf-8")
     (out_dir / "report.html").write_text(
-        render_html(milestone, run, acceptance, metrics, sections), encoding="utf-8"
+        render_html(milestone, header, acceptance, metrics, sections), encoding="utf-8"
     )
-    (out_dir / "README.md").write_text(render_readme(milestone, run, acceptance), encoding="utf-8")
+    (out_dir / "README.md").write_text(
+        render_readme(milestone, summary, acceptance), encoding="utf-8"
+    )
+
+
+def _build_device_report(milestone: Milestone, source: Path, out_dir: Path) -> None:
+    module = DEVICE_MODULES[milestone.mid]
+    evidence = module.load(source)
+    _write_report(
+        out_dir,
+        milestone,
+        module.header(evidence),
+        module.summary(evidence),
+        module.provenance(evidence),
+        module.metrics(evidence),
+        module.sections(evidence),
+    )
+    # The evidence stays with the report: it is what a rebuild starts from.
+    (out_dir / module.EVIDENCE).write_text(json.dumps(evidence, indent=1) + "\n", encoding="utf-8")
+
+
+def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT) -> Path:
+    try:
+        milestone = MILESTONES[milestone_id]
+    except KeyError:
+        raise ValueError(
+            f"unknown milestone {milestone_id!r}; known: {', '.join(MILESTONES)}"
+        ) from None
+    out_dir = out_root / f"{milestone.mid}-{milestone.slug}"
+    if milestone.mid in DEVICE_MODULES:
+        # Read before creating anything, so a missing evidence file leaves no empty report.
+        DEVICE_MODULES[milestone.mid].load(run_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        _build_device_report(milestone, run_dir, out_dir)
+        return out_dir
+    run = read_run(run_dir)
+    module = MODULES.get(milestone.mid)
+    # A milestone module reports its own, curated numbers; the generic per-series spread
+    # is for milestones without one.
+    metrics = compute_metrics(run) if module is None else module.metrics(run)
+    if module is not None:
+        sections: list[Section] = module.sections(run, run_dir)
+    else:
+        sections = generic_sections(run)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    m = run.manifest
+    provenance = {
+        "run_id": m.run_id,
+        "git_commit": m.git_commit,
+        "config_hash": m.config_hash,
+        "seeds": m.seeds,
+        "sim_years": m.sim_years,
+        "wall_time_s": m.wall_time_s,
+    }
+    _write_report(
+        out_dir, milestone, run_header(run), run_summary(run), provenance, metrics, sections
+    )
+    (out_dir / "config.toml").write_text(run.config_text, encoding="utf-8")
     return out_dir
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Build a milestone report from a run.")
     parser.add_argument("milestone", help="milestone id, e.g. M3")
-    parser.add_argument("--runs", type=Path, required=True, help="run directory, runs/<id>")
+    parser.add_argument(
+        "--runs",
+        type=Path,
+        required=True,
+        help="run directory, runs/<id>; for R0 the device benchmark file or its directory",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")
     args = parser.parse_args(argv)
     out_dir = build_report(args.milestone, args.runs, args.out)
