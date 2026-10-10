@@ -346,6 +346,36 @@ export function plantLook(
   };
 }
 
+/** A number in [0, 1) that depends only on the cell (and on `salt`, to draw several). */
+export function cellHash(x: number, y: number, salt: number): number {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(salt, 1274126177)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Share of the cells of grown grass that carry a tuft of their own in the scattered style. */
+const TUFT_SHARE = 1 / 3;
+
+/**
+ * In the scattered style the ground itself is painted with what grows low; only some
+ * plants stand on it as drawings of their own: every tree, every shrub in leaf, and a
+ * tuft of grown grass here and there.
+ */
+export function standsAlone(look: PlantLook, x: number, y: number): boolean {
+  // What has died back to its roots is ground, not a plant to look at.
+  if (look.form === "LICHEN" || look.dormant) return false;
+  if (look.form !== "GRASS") return true;
+  return look.stage === "mature" && cellHash(x, y, 11) < TUFT_SHARE;
+}
+
+/**
+ * How far a plant that stands alone is from the middle of its cell, in art pixels
+ * (eighths of a cell): up to two either side, up to two back and one forward.
+ */
+export function plantOffset(x: number, y: number): [number, number] {
+  return [Math.floor(cellHash(x, y, 12) * 5) - 2, Math.floor(cellHash(x, y, 13) * 4) - 2];
+}
+
 /** Name of a look in the atlas. */
 export function lookKey(look: PlantLook): string {
   return `${look.form}/${look.stage}/${look.variant}${look.dormant ? "/dormant" : ""}`;

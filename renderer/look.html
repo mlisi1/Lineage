@@ -295,6 +295,59 @@
       </div>
       <p class="note">Half size: the 512×300 drawing shown without stretching.</p>
 
+      <h2>5. Plants on the ground: three ways</h2>
+      <p>
+        In the close-ups above the plants sit badly on the map: the ground under them keeps the
+        colour of bare soil though the wide shot shows the same land green, every cell carries one
+        drawing dead in its middle, and a square of ground is eight times the size of a plant's
+        pixel. Here are the same two places drawn three ways, all with art pixels of 2 screen
+        pixels, where a plant's drawing is shown at its own size.
+      </p>
+      <h3>A. As now</h3>
+      <figure class="screen">
+        <canvas data-picture="style-wood-now" aria-label="The wood, as now"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="style-shore-now" aria-label="The shore, as now"></canvas>
+        <figcaption>
+          Bare ground, one flat square per cell, and a drawing in every vegetated cell (<span
+            id="count-icons"
+            >…</span
+          >
+          in this world).
+        </figcaption>
+      </figure>
+      <h3>B. Green ground</h3>
+      <figure class="screen">
+        <canvas data-picture="style-wood-green" aria-label="The wood on green ground"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="style-shore-green" aria-label="The shore on green ground"></canvas>
+        <figcaption>
+          The same drawings on the wide shot's colours: each cell in the tone of what grows on it.
+          Costs nothing; a close-up and a wide shot now agree on what is green. The grid and the
+          squares stay.
+        </figcaption>
+      </figure>
+      <h3>C. Painted ground</h3>
+      <figure class="screen">
+        <canvas data-picture="style-wood-painted" aria-label="The wood on painted ground"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas
+          data-picture="style-shore-painted"
+          aria-label="The shore on painted ground"
+        ></canvas>
+        <figcaption>
+          The ground is painted at the plants' pixel size. Borders between cells wander instead of
+          running straight; grass, lichen and the floor of a wood are patches on the soil, thicker
+          where biomass is higher; the shore keeps the map's dark outline, one pixel wide, with foam
+          beyond it. Only shrubs, trees and a tuft of grown grass here and there stand as drawings
+          (<span id="count-scattered">…</span>), off the middle of their cells and with a shadow.
+          The ground is one picture, repainted when the plants change (once a sim-day).
+        </figcaption>
+      </figure>
+
       <h2>What is not settled</h2>
       <ul>
         <li><b>The size of an art pixel</b>: 1, 2 or 4 screen pixels (section 4).</li>
@@ -303,10 +356,7 @@
           screen pixels long and a mouse about 11. Portraits like those of section 3 need a camera
           three times closer.
         </li>
-        <li>
-          <b>The ground in close-ups</b> is one flat square per cell. Softer shorelines or detail
-          inside a cell would be new work in R1.
-        </li>
+        <li><b>How plants sit on the ground</b>: A, B or C of section 5.</li>
         <li>
           <b>Creature bodies</b> are circles and stretched squares. Heads, shells and fins drawn as
           pixel art, and depth (an animal behind a tree), belong to R2.

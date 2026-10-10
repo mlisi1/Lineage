@@ -1,9 +1,13 @@
-/** The plant layer: one sprite per vegetated cell, in chunks that are skipped off screen. */
+/**
+ * The plant layer, in chunks that are skipped off screen. Two styles: a drawing in the
+ * middle of every vegetated cell, or (scattered) only the plants that stand alone, each
+ * a little off the middle of its cell, for a ground that is itself painted with growth.
+ */
 import { Container, Sprite } from "pixi.js";
 import type { Atlas } from "./atlas";
 import { chunkVisible, type CellRect } from "./camera";
 import type { WorldFixture } from "./fixture";
-import { SPRITE_WIDTH, lookKey, plantLook } from "./pixelart";
+import { SPRITE_WIDTH, lookKey, plantLook, plantOffset, standsAlone } from "./pixelart";
 
 /** Cells per side of a chunk; whole chunks are skipped when off screen. */
 const CHUNK_CELLS = 16;
@@ -24,7 +28,7 @@ export class PlantLayer {
   readonly count: number;
   private readonly chunks: Chunk[] = [];
 
-  constructor(fixture: WorldFixture, atlas: Atlas) {
+  constructor(fixture: WorldFixture, atlas: Atlas, scattered = false) {
     let count = 0;
     // Chunks and their sprites are added top to bottom, so nearer plants cover farther.
     for (let chunkY = 0; chunkY < fixture.height; chunkY += CHUNK_CELLS) {
@@ -43,13 +47,14 @@ export class PlantLayer {
               fixture.dormantBelow,
               fixture.dormantClasses,
             );
-            if (look === null) continue;
+            if (look === null || (scattered && !standsAlone(look, x, y))) continue;
+            const [dx, dy] = scattered ? plantOffset(x, y) : [0, 0];
             const texture = atlas.plants.get(lookKey(look));
             if (texture === undefined) throw new Error(`no texture for ${lookKey(look)}`);
             // Anchored at the foot of the cell: one cell wide, tall art overlaps upward.
             const sprite = new Sprite({ texture, anchor: { x: 0.5, y: 1 } });
             sprite.scale.set(1 / SPRITE_WIDTH);
-            sprite.position.set(x + 0.5, y + 1);
+            sprite.position.set(x + 0.5 + dx / SPRITE_WIDTH, y + 1 + dy / SPRITE_WIDTH);
             container.addChild(sprite);
           }
         }

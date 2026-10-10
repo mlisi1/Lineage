@@ -244,7 +244,7 @@ async function main(): Promise<void> {
   };
   const base = {
     backdrop: "ground",
-    plants: true,
+    plants: "icons",
     light: "day",
     cast: null,
     follow: null,
@@ -253,10 +253,10 @@ async function main(): Promise<void> {
   // 1. The island from afar: the whole world on the screen.
   const wide = { ...base, width: DESIGN_WIDTH, height: DESIGN_HEIGHT, zoom: WIDE_ZOOM };
   const herd = stage.cast(fixture.creatures, 1);
-  place("wide-ground", { ...wide, plants: false, centre: middle(island) }, 1);
+  place("wide-ground", { ...wide, plants: null, centre: middle(island) }, 1);
   place(
     "wide-map",
-    { ...wide, backdrop: "map", plants: false, cast: herd, centre: middle(island) },
+    { ...wide, backdrop: "map", plants: null, cast: herd, centre: middle(island) },
     1,
   );
 
@@ -308,7 +308,7 @@ async function main(): Promise<void> {
     sweep.creatures.forEach((seed, index) => {
       const value = sweep.members[index] ?? "";
       const backdrop = bodyPlan(seed).swims ? sea : sand;
-      const picture = { ...portrait(layer, index), plants: false, backdrop };
+      const picture = { ...portrait(layer, index), plants: null, backdrop };
       steps.append(tile(value, "", picture, SWEEP_ENLARGED));
     });
     row.append(label, steps);
@@ -339,6 +339,26 @@ async function main(): Promise<void> {
     if (artScale !== 2) continue;
     for (const light of LIGHT_ORDER) place(`light-${light}`, { ...picture, light }, 1);
   }
+
+  // 5. Three ways to put plants on the ground, in the wood and on the staged shore.
+  const styles = {
+    now: { backdrop: "ground", plants: "icons" },
+    green: { backdrop: "map", plants: "icons" },
+    painted: { backdrop: "painted", plants: "scattered" },
+  } as const;
+  const half = {
+    ...base,
+    width: DESIGN_WIDTH / 2,
+    height: DESIGN_HEIGHT / 2,
+    zoom: CLOSE_ZOOM / 2,
+  };
+  const wood = middle(findSite(fixture, ...window64, forest));
+  for (const [name, style] of Object.entries(styles)) {
+    place(`style-wood-${name}`, { ...half, ...style, centre: wood }, 2);
+    place(`style-shore-${name}`, { ...half, ...style, cast: troupe, centre: middle(beach) }, 2);
+  }
+  element("count-icons").textContent = stage.layers.plants.count.toLocaleString("en");
+  element("count-scattered").textContent = stage.paintedLayers.scattered.count.toLocaleString("en");
 
   const drawAll = (): void => {
     for (const { picture, context } of drawn) stage.draw(picture, context);

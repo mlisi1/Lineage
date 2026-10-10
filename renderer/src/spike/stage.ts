@@ -6,7 +6,13 @@ import { Application, Container, Sprite } from "pixi.js";
 import type { Point } from "./chain";
 import { CreatureLayer } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
-import { PIXEL_ART, loadWorldLayers, type WorldLayers } from "./layers";
+import {
+  PIXEL_ART,
+  loadWorldLayers,
+  paintLayers,
+  type PaintedLayers,
+  type WorldLayers,
+} from "./layers";
 import { lightTint, type Light } from "./light";
 import { mulberry32 } from "./rng";
 
@@ -16,10 +22,13 @@ export interface Picture {
   height: number;
   /** Art pixels per cell. */
   zoom: number;
-  /** The bare ground, the ground with plants as flat colours, or one colour (0xRRGGBB). */
-  backdrop: "ground" | "map" | number;
-  /** A sprite per vegetated cell. */
-  plants: boolean;
+  /**
+   * The bare ground or the ground with plants as flat colours (both one square per
+   * cell), the ground painted at the plants' pixel size, or one colour (0xRRGGBB).
+   */
+  backdrop: "ground" | "map" | "painted" | number;
+  /** A drawing in every vegetated cell, only the plants that stand alone, or none. */
+  plants: "icons" | "scattered" | null;
   light: Light;
   cast: CreatureLayer | null;
   /** Draw only this member of the cast and keep it in the middle. */
@@ -37,6 +46,7 @@ export class Stage {
   private constructor(
     private readonly app: Application,
     readonly layers: WorldLayers,
+    readonly paintedLayers: PaintedLayers,
   ) {
     this.tint = new Sprite({ texture: layers.atlas.white, blendMode: "multiply" });
     this.flat = new Sprite(layers.atlas.white);
@@ -46,7 +56,13 @@ export class Stage {
         app.renderer.height / cover.texture.height,
       );
     }
-    this.world.addChild(layers.ground, layers.map, layers.plants.container);
+    this.world.addChild(
+      layers.ground,
+      layers.map,
+      paintedLayers.painted,
+      layers.plants.container,
+      paintedLayers.scattered.container,
+    );
     app.stage.addChild(this.flat, this.world, this.tint);
   }
 
@@ -59,7 +75,8 @@ export class Stage {
   ): Promise<Stage> {
     const app = new Application();
     await app.init({ ...PIXEL_ART, width, height });
-    return new Stage(app, await loadWorldLayers(fixture, folder));
+    const layers = await loadWorldLayers(fixture, folder);
+    return new Stage(app, layers, paintLayers(fixture, layers));
   }
 
   /** What PixiJS draws with: "webgl", or "canvas" where WebGL is missing. */
@@ -102,12 +119,16 @@ export class Stage {
     this.world.position.set(Math.round(-cells.x0 * zoom), Math.round(-cells.y0 * zoom));
 
     const { ground, map, plants } = this.layers;
+    const { painted, scattered } = this.paintedLayers;
     ground.visible = picture.backdrop === "ground";
     map.visible = picture.backdrop === "map";
+    painted.visible = picture.backdrop === "painted";
     this.flat.visible = typeof picture.backdrop === "number";
     if (typeof picture.backdrop === "number") this.flat.tint = picture.backdrop;
-    plants.container.visible = picture.plants;
-    if (picture.plants) plants.cull(cells);
+    plants.container.visible = picture.plants === "icons";
+    if (plants.container.visible) plants.cull(cells);
+    scattered.container.visible = picture.plants === "scattered";
+    if (scattered.container.visible) scattered.cull(cells);
     for (const layer of this.casts) layer.container.visible = layer === cast;
     cast?.solo(picture.follow);
     this.tint.visible = picture.light !== "day";

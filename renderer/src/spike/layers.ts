@@ -1,7 +1,8 @@
 /** What every view of the world is built from: the two bitmaps, the atlas, the plants. */
-import { Assets, Sprite, type ApplicationOptions, type Texture } from "pixi.js";
+import { Assets, CanvasSource, Sprite, Texture, type ApplicationOptions } from "pixi.js";
 import { buildAtlas, type Atlas } from "./atlas";
 import type { WorldFixture } from "./fixture";
+import { TILE, paintGround } from "./ground";
 import { passableIn, type Passable } from "./habitat";
 import { PlantLayer } from "./plants";
 
@@ -43,4 +44,43 @@ export async function loadWorldLayers(fixture: WorldFixture, folder: string): Pr
     plants: new PlantLayer(fixture, atlas),
     passable: passableIn(fixture),
   };
+}
+
+export interface PaintedLayers {
+  /** The ground painted at the plants' pixel size, scaled to one cell per TILE texels. */
+  painted: Sprite;
+  /** Only the plants that stand alone on it. */
+  scattered: PlantLayer;
+}
+
+function canvasOf(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (context === null) throw new Error("no 2D canvas");
+  return [canvas, context];
+}
+
+/** The pixels of one of the map bitmaps, one per cell. */
+function pixelsOf(bitmap: Sprite, fixture: WorldFixture): Uint8ClampedArray {
+  const [, context] = canvasOf(fixture.width, fixture.height);
+  context.drawImage(bitmap.texture.source.resource as CanvasImageSource, 0, 0);
+  return context.getImageData(0, 0, fixture.width, fixture.height).data;
+}
+
+/** The layers of the painted style, made from those every style shares. */
+export function paintLayers(fixture: WorldFixture, layers: WorldLayers): PaintedLayers {
+  const ground = paintGround(
+    fixture,
+    pixelsOf(layers.ground, fixture),
+    pixelsOf(layers.map, fixture),
+  );
+  const [canvas, context] = canvasOf(ground.width, ground.height);
+  context.putImageData(new ImageData(ground.rgba, ground.width, ground.height), 0, 0);
+  const painted = new Sprite(
+    new Texture({ source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) }),
+  );
+  painted.scale.set(1 / TILE);
+  return { painted, scattered: new PlantLayer(fixture, layers.atlas, true) };
 }

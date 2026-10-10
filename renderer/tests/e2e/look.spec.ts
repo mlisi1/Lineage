@@ -71,6 +71,20 @@ test("the look sheet draws every picture", async ({ page }) => {
   expect(await png(page, "light-day")).toBe(await png(page, "together-2x"));
   expect(await png(page, "light-night")).not.toBe(await png(page, "light-day"));
   expect(await png(page, "wide-map")).not.toBe(await png(page, "wide-ground"));
+
+  // Three ways to put plants on the ground: three different pictures of one place,
+  // the painted one with far fewer drawings standing on it.
+  for (const place of ["wood", "shore"]) {
+    const pictures = await Promise.all(
+      ["now", "green", "painted"].map((style) => png(page, `style-${place}-${style}`)),
+    );
+    expect(new Set(pictures).size).toBe(3);
+  }
+  const count = async (id: string): Promise<number> =>
+    Number((await page.locator(id).textContent())?.replaceAll(",", ""));
+  expect(await count("#count-icons")).toBeGreaterThan(10_000);
+  expect(await count("#count-scattered")).toBeGreaterThan(1000);
+  expect(await count("#count-scattered")).toBeLessThan((await count("#count-icons")) / 2);
 });
 
 test("the look sheet saves itself as one self-contained page", async ({ page }) => {
