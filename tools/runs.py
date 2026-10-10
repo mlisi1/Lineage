@@ -55,7 +55,8 @@ def config_hash(config_text: str) -> str:
 
 
 def git_commit(repo: Path = REPO_ROOT) -> str:
-    """Current commit, suffixed ``-dirty`` with uncommitted changes; ``unknown`` outside git."""
+    """Current commit, suffixed ``-dirty`` with uncommitted changes outside ``reports/``;
+    ``unknown`` outside git."""
     try:
         sha = subprocess.run(
             ["git", "rev-parse", "--short=12", "HEAD"],
@@ -65,7 +66,8 @@ def git_commit(repo: Path = REPO_ROOT) -> str:
             check=True,
         ).stdout.strip()
         dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
+            # Generated reports do not make the code dirty.
+            ["git", "status", "--porcelain", "--", ".", ":(exclude)reports"],
             cwd=repo,
             capture_output=True,
             text=True,
