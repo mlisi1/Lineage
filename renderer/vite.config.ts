@@ -23,8 +23,9 @@ export default defineConfig({
   define: { __BUILD_COMMIT__: JSON.stringify(buildCommit()) },
   build: {
     rolldownOptions: {
-      // index.html is the scene (R1+); spike.html is the R0 benchmark.
-      input: { index: page("index.html"), spike: page("spike.html") },
+      // index.html is the scene (R1+); spike.html is the R0 benchmark; look.html shows
+      // how the spike draws everything.
+      input: { index: page("index.html"), spike: page("spike.html"), look: page("look.html") },
     },
   },
   test: {
