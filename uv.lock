@@ -241,6 +241,7 @@ dependencies = [
     { name = "lineage-sim" },
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "pillow" },
 ]
 
 [package.metadata]
@@ -248,6 +249,7 @@ requires-dist = [
     { name = "lineage-sim", editable = "sim" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "numpy", specifier = ">=1.26" },
+    { name = "pillow", specifier = ">=10" },
 ]
 
 [[package]]

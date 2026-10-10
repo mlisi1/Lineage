@@ -6,6 +6,10 @@ Usage::
 
 Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metrics.json``,
 ``config.toml`` and ``README.md``. Reports are regenerated, never hand-edited.
+
+Milestones with statistical behaviour have a module in ``tools/milestones/`` providing
+their metrics, acceptance criteria and figures; the others get a generic report with
+every recorded series.
 """
 
 from __future__ import annotations
@@ -13,15 +17,19 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import numpy as np
 
+from tools.milestones import m2
+from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
+
+__all__ = ["CRITERIA", "MILESTONES", "Criterion", "Section", "SeriesLabel", "build_report"]
 
 DEFAULT_OUT = REPO_ROOT / "reports"
 
@@ -31,38 +39,6 @@ class Milestone:
     mid: str
     slug: str
     title: str
-
-
-@dataclass(frozen=True)
-class Criterion:
-    """An acceptance criterion from CLAUDE.md §8: ``low <= metrics[metric] <= high``."""
-
-    cid: str
-    description: str
-    metric: str
-    low: float = -math.inf
-    high: float = math.inf
-
-    def evaluate(self, metrics: dict[str, float]) -> tuple[float | None, str]:
-        value = metrics.get(self.metric)
-        if value is None or math.isnan(value):
-            return None, "MISSING"
-        return value, "PASS" if self.low <= value <= self.high else "FAIL"
-
-    def band(self) -> str:
-        if math.isinf(self.low) and math.isinf(self.high):
-            return "any"
-        if math.isinf(self.high):
-            return f"≥ {self.low:g}"
-        if math.isinf(self.low):
-            return f"≤ {self.high:g}"
-        return f"[{self.low:g}, {self.high:g}]"
-
-
-@dataclass(frozen=True)
-class SeriesLabel:
-    title: str
-    unit: str
 
 
 MILESTONES: dict[str, Milestone] = {
@@ -83,12 +59,17 @@ MILESTONES: dict[str, Milestone] = {
     )
 }
 
+# Milestones with their own metrics and report sections.
+MODULES: dict[str, ModuleType] = {"M2": m2}
+
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
-CRITERIA: dict[str, list[Criterion]] = {}
+CRITERIA: dict[str, list[Criterion]] = {"M2": m2.CRITERIA}
 
 # Display names and units of recorded series; every series a milestone records goes here.
 SERIES_LABELS: dict[str, SeriesLabel] = {
     "save_kib": SeriesLabel("Save size", "KiB"),
+    "step_ms": SeriesLabel("Step time", "ms per sim-day"),
+    **m2.SERIES_LABELS,
 }
 
 
@@ -102,6 +83,9 @@ def compute_metrics(run: Run) -> dict[str, float]:
     metrics: dict[str, float] = {}
     for name in names:
         finals = np.array([s[name][-1] for s in run.series.values() if name in s], dtype=float)
+        finals = finals[np.isfinite(finals)]
+        if finals.size == 0:
+            continue
         p10, median, p90 = np.percentile(finals, [10, 50, 90])
         metrics |= {
             f"{name}.final.median": float(median),
@@ -113,28 +97,39 @@ def compute_metrics(run: Run) -> dict[str, float]:
     return metrics
 
 
-def _figures(run: Run) -> list[tuple[str, str]]:
-    """(caption, data URI) for each recorded series: time series band + final distribution."""
+def series_figures(run: Run, names: list[str], *, finals: bool = True) -> list[tuple[str, str]]:
+    """(caption, data URI) per named series: time series band, then final distribution."""
     style.apply_style()
     out: list[tuple[str, str]] = []
-    names = sorted({n for s in run.series.values() for n in s if n != TIME_KEY})
     for name in names:
         rows = [s for s in run.series.values() if name in s]
+        if not rows:
+            continue
         times = rows[0][TIME_KEY]
         values = np.stack([r[name] for r in rows])
+        if not np.isfinite(values).any():
+            continue  # nothing measured in this run (e.g. shorter than the metric's lag)
         label = series_label(name)
         ylabel = f"{label.title} ({label.unit})"
         fig = figures.time_series_band(
             times, values, title=label.title, xlabel="sim time (years)", ylabel=ylabel
         )
-        out.append(
-            (f"{label.title}: median and 10–90 % band across seeds", figures.to_data_uri(fig))
-        )
-        fig = figures.distribution(
-            values[:, -1], title=f"{label.title} at end of run", xlabel=ylabel
-        )
-        out.append((f"{label.title}: final value per seed", figures.to_data_uri(fig)))
+        caption = f"{label.title}: median and 10–90 % band across {len(rows)} seeds"
+        out.append((caption, figures.to_data_uri(fig)))
+        if finals:
+            last = values[:, -1]
+            fig = figures.distribution(
+                last[np.isfinite(last)], title=f"{label.title} at end of run", xlabel=ylabel
+            )
+            out.append((f"{label.title}: final value per seed", figures.to_data_uri(fig)))
     return out
+
+
+def generic_sections(run: Run) -> list[Section]:
+    """Fallback for milestones without their own module: every recorded series."""
+    names = sorted({n for s in run.series.values() for n in s if n != TIME_KEY})
+    body = "".join(figure_html(html.escape(c), u) for c, u in series_figures(run, names))
+    return [Section("Figures", body or '<p class="empty">This run recorded no series.</p>')]
 
 
 _CSS = """
@@ -150,6 +145,7 @@ body { margin:0; background:var(--surface); color:var(--text);
 main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
 h1 { font-size:1.5rem; margin:0 0 4px; } h2 { font-size:1.1rem; margin:32px 0 8px; }
 .sub { color:var(--muted); margin:0 0 16px; }
+.note { color:var(--muted); font-size:.9rem; max-width:75ch; }
 table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
 th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); }
 th { color:var(--muted); font-weight:600; font-size:.85rem; }
@@ -172,6 +168,7 @@ def render_html(
     run: Run,
     acceptance: list[dict[str, Any]],
     metrics: dict[str, float],
+    sections: list[Section],
 ) -> str:
     m = run.manifest
     e = html.escape
@@ -182,7 +179,7 @@ def render_html(
         ("Seeds", f"{len(m.seeds)} ({', '.join(map(str, m.seeds))})"),
         ("Sim-years per seed", f"{m.sim_years:g}"),
         ("Wall time", f"{m.wall_time_s:g} s"),
-        ("Run", f"{m.run_id} (created {m.created_utc})"),
+        ("Run", f"{m.run_id} (created {m.created_utc}; {m.notes})"),
     ]
     header_rows = "".join(_row([e(k), e(v)]) for k, v in header)
 
@@ -202,13 +199,7 @@ def render_html(
     else:
         acc = '<p class="empty">No acceptance criteria defined for this milestone.</p>'
 
-    figs = (
-        "".join(
-            f'<figure><img src="{uri}" alt="{e(cap)}"><figcaption>{e(cap)}</figcaption></figure>'
-            for cap, uri in _figures(run)
-        )
-        or '<p class="empty">This run recorded no series.</p>'
-    )
+    body = "".join(f"<h2>{e(section.title)}</h2>\n{section.html}\n" for section in sections)
 
     if metrics:
         metric_rows = _row(["Metric", "Value"], "th") + "".join(
@@ -234,9 +225,7 @@ def render_html(
 <table>{header_rows}</table>
 <h2>Acceptance</h2>
 {acc}
-<h2>Figures</h2>
-{figs}
-<h2>Metrics</h2>
+{body}<h2>Metrics</h2>
 {metric_table}
 </main>
 </body>
@@ -274,7 +263,10 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
             f"unknown milestone {milestone_id!r}; known: {', '.join(MILESTONES)}"
         ) from None
     run = read_run(run_dir)
+    module = MODULES.get(milestone.mid)
     metrics = compute_metrics(run)
+    if module is not None:
+        metrics |= module.metrics(run)
     acceptance: list[dict[str, Any]] = []
     for c in CRITERIA.get(milestone.mid, []):
         value, status = c.evaluate(metrics)
@@ -288,6 +280,10 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
                 "status": status,
             }
         )
+    if module is not None:
+        sections: list[Section] = module.sections(run, run_dir)
+    else:
+        sections = generic_sections(run)
 
     out_dir = out_root / f"{milestone.mid}-{milestone.slug}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -308,16 +304,14 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
     )
     (out_dir / "config.toml").write_text(run.config_text, encoding="utf-8")
     (out_dir / "report.html").write_text(
-        render_html(milestone, run, acceptance, metrics), encoding="utf-8"
+        render_html(milestone, run, acceptance, metrics, sections), encoding="utf-8"
     )
     (out_dir / "README.md").write_text(render_readme(milestone, run, acceptance), encoding="utf-8")
     return out_dir
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        description="Build a milestone report from a fast-forward run."
-    )
+    parser = argparse.ArgumentParser(description="Build a milestone report from a run.")
     parser.add_argument("milestone", help="milestone id, e.g. M3")
     parser.add_argument("--runs", type=Path, required=True, help="run directory, runs/<id>")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")

@@ -143,32 +143,82 @@ def test_unknown_milestone_is_rejected(tmp_path: Path) -> None:
 
 def test_fastforward_then_report(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "ff"
-    fastforward(0.5, [0, 1, 2], run_dir)
+    fastforward(0.1, [0, 1, 2], run_dir, save_days=10, snapshot_days=0)
     run = read_run(run_dir)
     assert run.manifest.seeds == [0, 1, 2]
-    assert run.series[0][TIME_KEY][-1] == pytest.approx(0.5, abs=1 / 365)
+    assert run.series[0][TIME_KEY][-1] == pytest.approx(0.1, abs=1 / 365)
     assert set(run.manifest.final_state_hashes) == {"0", "1", "2"}
     assert sorted(p.name for p in (run_dir / "saves").iterdir()) == [
         "0.lzma",
         "1.lzma",
         "2.lzma",
     ]
+    assert not (run_dir / "snapshots").exists()
+    land = run.series[0]["land_fraction"]
+    assert ((land > 0.2) & (land < 0.7)).all()
     out = build_report("M0", run_dir, tmp_path / "reports")
     _parse(out / "report.html")
 
 
-def test_power_cut_resumes_bit_identical(tmp_path: Path) -> None:
-    straight = fastforward(0.25, [3, 4], tmp_path / "straight")
-    cut = fastforward(0.25, [3, 4], tmp_path / "cut", power_cut_day=40)
+def test_parallel_jobs_give_the_same_worlds(tmp_path: Path) -> None:
+    serial = fastforward(0.05, [0, 1], tmp_path / "serial", save_days=30, snapshot_days=0)
+    parallel = fastforward(
+        0.05, [0, 1], tmp_path / "parallel", save_days=30, snapshot_days=0, jobs=2
+    )
+    assert serial.manifest.final_state_hashes == parallel.manifest.final_state_hashes
+
+
+@pytest.mark.parametrize("save_days", [1, 7])
+def test_power_cut_resumes_bit_identical(tmp_path: Path, save_days: int) -> None:
+    def run(name: str, seeds: list[int], power_cut_day: int | None = None) -> Run:
+        return fastforward(
+            0.1,
+            seeds,
+            tmp_path / name,
+            power_cut_day=power_cut_day,
+            save_days=save_days,
+            snapshot_days=0,
+        )
+
+    straight = run("straight", [3, 4])
+    cut = run("cut", [3, 4], power_cut_day=20)
     assert straight.manifest.final_state_hashes == cut.manifest.final_state_hashes
-    assert "power cut after day 40" in cut.manifest.notes
-    other_seed = fastforward(0.25, [5], tmp_path / "other")
-    assert (
-        other_seed.manifest.final_state_hashes["5"]
-        not in straight.manifest.final_state_hashes.values()
+    assert "power cut after day 20" in cut.manifest.notes
+    # The recorded series are the same too: the replayed days are not sampled twice.
+    for seed in (3, 4):
+        assert np.array_equal(
+            straight.series[seed]["land_fraction"], cut.series[seed]["land_fraction"]
+        )
+    other = run("other", [5])
+    assert other.manifest.final_state_hashes["5"] not in set(
+        straight.manifest.final_state_hashes.values()
     )
 
 
-def test_fastforward_rejects_bad_power_cut(tmp_path: Path) -> None:
+def test_fastforward_rejects_bad_arguments(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="power cut day"):
         fastforward(0.1, [0], tmp_path / "x", power_cut_day=1000)
+    with pytest.raises(ValueError, match="at least one day"):
+        fastforward(0.1, [0], tmp_path / "x", save_days=0)
+
+
+def test_m2_report_has_acceptance_maps_and_animation(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "m2"
+    fastforward(1.2, [0, 1], run_dir, save_days=500, snapshot_days=60)
+    out = build_report("M2", run_dir, tmp_path / "reports")
+    assert out.name == "M2-terrain"
+
+    doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert [a["id"] for a in doc["acceptance"]] == ["M2.1", "M2.2", "M2.3", "M2.4", "M2.5"]
+    assert all(a["status"] in {"PASS", "FAIL"} for a in doc["acceptance"])
+    assert doc["metrics"]["seeds_without_land"] == 0
+    assert 0.25 <= doc["metrics"]["land_fraction.min"] <= doc["metrics"]["land_fraction.max"]
+
+    page = _parse(out / "report.html")
+    assert page.external == []
+    kinds = [src.split(";")[0] for src in page.img_srcs]
+    assert kinds.count("data:image/png") == 1  # the map grid
+    assert kinds.count("data:image/webp") == 1  # the animation
+    assert kinds.count("data:image/svg+xml") >= 6
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "M2.1" in readme
