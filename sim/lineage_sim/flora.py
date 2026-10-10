@@ -355,19 +355,28 @@ class Flora:
         """Grazers ask for ``demand`` biomass at cells (ys, xs); returns what each gets.
 
         Defended plants refuse part of every bite; several grazers on one cell share what
-        is there in proportion to their demand.
+        is there in proportion to their demand. Roots are out of reach: biomass up to
+        ``grazing_reserve_biomass`` is never eaten, so grazed plants regrow. Only the
+        grazed cells are touched.
         """
         cfg = self._cfg
         defence = self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
         wanted = demand.astype(_F) * (_F(1.0) - _F(cfg.defence_strength) * defence)
-        total = np.zeros_like(self._biomass)
-        np.add.at(total, (ys, xs), wanted)
-        share = np.minimum(_F(1.0), self._biomass / np.maximum(total, _F(1e-12)))
-        eaten = (wanted * share[ys, xs]).astype(_F)
-        np.subtract.at(self._biomass, (ys, xs), eaten)
-        np.maximum(self._biomass, _F(0.0), out=self._biomass)
-        self._clear_dead()
+        width = self._biomass.shape[1]
+        cells, group = np.unique(ys * width + xs, return_inverse=True)
+        cell_y, cell_x = cells // width, cells % width
+        asked = np.bincount(group, weights=wanted, minlength=cells.size)
+        there = self._biomass[cell_y, cell_x].astype(np.float64)
+        reachable = np.maximum(there - cfg.grazing_reserve_biomass, 0.0)
+        share = np.minimum(1.0, reachable / np.maximum(asked, 1e-12))
+        eaten = (wanted * share[group]).astype(_F)
+        left = there - np.bincount(group, weights=eaten, minlength=cells.size)
+        self._biomass[cell_y, cell_x] = np.maximum(left, 0.0).astype(_F)
         return eaten
+
+    def grazeable(self) -> Grid:
+        """Biomass grazers can reach in each cell (what they see as food)."""
+        return np.maximum(self._biomass - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
 
     def burn(self, ys: Index, xs: Index) -> None:
         """Cells (ys, xs) have burnt out: remove biomass, scorch the ground."""

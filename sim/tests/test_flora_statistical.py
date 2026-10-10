@@ -3,10 +3,21 @@
 import numpy as np
 import pytest
 from lineage_sim.config import Config
-from lineage_sim.flora import PLANT_FORMS, Cover
+from lineage_sim.flora import PLANT_FORMS, Cover, Flora, Wildfire
+from lineage_sim.subsystem import Subsystem
+from lineage_sim.terrain import Terrain
 from lineage_sim.world import World
 
 EPOCH_UNIX_MS = 1_767_225_600_000  # 2026-01-01 00:00 UTC
+
+
+def _plants_only(config: Config) -> list[Subsystem]:
+    """Terrain, flora and fire without animals: these criteria are about plants."""
+    terrain = Terrain(config.terrain)
+    flora = Flora(config.flora, terrain)
+    return [terrain, flora, Wildfire(config.flora, flora, terrain)]
+
+
 SEEDS = range(20)
 WEEK_S = 7 * 86_400
 WEEKS = 157  # three sim-years
@@ -27,7 +38,7 @@ def test_succession_from_bare_rock(config: Config) -> None:
     forest_months: list[float] = []
     forms: list[int] = []
     for seed in SEEDS:
-        world, _ = World.create(config, seed, EPOCH_UNIX_MS)
+        world, _ = World.create(config, seed, EPOCH_UNIX_MS, _plants_only(config))
         first_grass = first_forest = float("nan")
         for week in range(1, WEEKS + 1):
             world.step(WEEK_S)

@@ -91,12 +91,30 @@ def test_v3_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(3))
     assert state.seed == 42
     assert state.t_ms == 200 * 86_400_000
-    assert sorted(state.subsystems) == ["fire", "flora", "terrain"]
+    assert sorted(state.subsystems) == ["fire", "flora", "terrain"]  # no fauna in v3
     world = World.restore(config, state)
     shares = world.flora.cover_shares()
     assert sum(shares.values()) == pytest.approx(1.0)
     assert world.flora.genome.shape == (8, 150, 256)
     assert world.flora.genome.dtype == np.uint8
+
+
+def test_v3_world_wakes_up_without_creatures(config: Config) -> None:
+    world = World.restore(config, io.loads(_fixture(3)))
+    assert world.fauna.count == 0
+    assert float(world.flora.biomass.max()) > 0.2  # the plants of the save are kept
+
+
+def test_v4_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(4))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    assert sorted(state.subsystems) == ["fauna", "fire", "flora", "terrain"]
+    world = World.restore(config, state)
+    fauna = world.fauna
+    assert fauna.count > 50
+    assert fauna.genes.shape == (fauna.count, 11)
+    assert len(set(fauna.ids.tolist())) == fauna.count
 
 
 def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None:

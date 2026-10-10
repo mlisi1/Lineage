@@ -25,8 +25,8 @@ from numpy.typing import NDArray
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
-# Final state of the default world, seed 42, after 200 days (same as fixture v3).
-GOLDEN_FLORA_SEED_42 = "b0aad3a35aeebb80d2726f249402f1ce9c9fb39403dba4dca2a5a7dee8f67991"
+# Final state of the default world, seed 42, after 200 days (no creatures yet).
+GOLDEN_FLORA_SEED_42 = "4e674339c448e1351897f6e1a68ce681b3177ff4a8d3d6a11edecfcaa7b92d51"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -492,9 +492,13 @@ def test_grazing_respects_defence_and_shares_what_is_there(config: Config) -> No
     palatable = 1 - site.cfg.defence_strength * (GRASS[Gene.DEFENCE])
     assert float(eaten[1]) == pytest.approx(0.2 * palatable, rel=0.02)
     assert float(eaten[0]) < 0.5 * float(eaten[1])  # thorns
-    # Three grazers on one cell want more than it holds: they split all of it evenly.
-    assert float(eaten[2:].sum()) == pytest.approx(0.5, rel=0.02)
+    # Three grazers on one cell want more than it holds: they split evenly everything
+    # above the roots, which nobody can eat.
+    reachable = 0.5 - site.cfg.grazing_reserve_biomass
+    assert float(eaten[2:].sum()) == pytest.approx(reachable, rel=0.02)
     assert float(eaten[2]) == pytest.approx(float(eaten[4]))
+    assert float(site.flora.biomass[9, 9]) == pytest.approx(site.cfg.grazing_reserve_biomass)
+    assert float(site.flora.grazeable()[9, 9]) == pytest.approx(0.0, abs=1e-6)
     after = float(site.flora.biomass.sum(dtype=np.float64))
     assert before - after == pytest.approx(float(eaten.sum()), rel=1e-4)
     assert float(site.flora.biomass.min()) >= 0.0
@@ -619,7 +623,7 @@ def test_golden_hash_and_two_runs(config: Config) -> None:
 def test_streams_are_per_subsystem(config: Config) -> None:
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(3 * DAY_S)
-    assert sorted(world.snapshot().rng) == ["fire", "flora", "terrain"]
+    assert sorted(world.snapshot().rng) == ["fauna", "fire", "flora", "terrain"]
 
 
 def test_save_load_continue_and_chunking(config: Config) -> None:

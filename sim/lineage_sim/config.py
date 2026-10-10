@@ -226,6 +226,7 @@ class FloraConfig:
     mangrove_max_depth: float
     mangrove_growth_cost: float
     defence_strength: float
+    grazing_reserve_biomass: float
     fire_ignitions_per_year: float
     fire_dry_temperature: float
     fire_dry_span: float
@@ -281,6 +282,7 @@ class FloraConfig:
             "nitrogen_fixer_growth_cost",
             "mangrove_growth_cost",
             "defence_strength",
+            "grazing_reserve_biomass",
             "fire_wet_spread",
             "fire_min_fuel",
             "flammability_lichen",
@@ -319,11 +321,161 @@ class FloraConfig:
 
 
 @dataclass(frozen=True)
+class FaunaConfig:
+    """``[fauna]``; units and intent of every key are documented in default.toml."""
+
+    population_cap: int
+    predator_cap: int
+    founder_min_plant_cover: float
+    arrival_delay_days: float
+    founder_count: int
+    founder_diet_max: float
+    founder_size_max: float
+    founder_spread: float
+    founder_radius_cells: float
+    immigrant_groups_per_year: float
+    immigrant_group_size: int
+    immigrant_hunter_share: float
+    mass_min: float
+    mass_max: float
+    limb_pairs_max: int
+    speed_base: float
+    speed_floor: float
+    speed_mass_exponent: float
+    limbless_speed: float
+    extra_limb_drag: float
+    armour_slowdown: float
+    armour_limb_relief: float
+    aquatic_land_slowdown: float
+    swim_speed: float
+    swim_floor: float
+    swim_limb_drag: float
+    sense_base: float
+    sense_gain: float
+    lifespan_base: float
+    lifespan_mass_exponent: float
+    maturity_share: float
+    basal_rate: float
+    metabolic_exponent: float
+    cost_speed: float
+    cost_sense: float
+    cost_armour: float
+    cost_jaw: float
+    cost_limb_pair: float
+    cost_aquatic: float
+    move_cost: float
+    capacity_per_mass: float
+    founder_energy_share: float
+    water_stress: float
+    graze_rate: float
+    graze_jaw_floor: float
+    plant_energy: float
+    meat_energy: float
+    diet_exponent: float
+    attack_min_diet: float
+    hunt_below_energy_share: float
+    reach_cells: float
+    attack_rate: float
+    attack_jaw_floor: float
+    armour_strength: float
+    attack_softness: float
+    attack_cost: float
+    compat_distance: float
+    repro_energy_share: float
+    repro_cooldown_days: float
+    repro_investment_share: float
+    birth_efficiency: float
+    brood_max: int
+    asexual_after_days: float
+    asexual_cost_factor: float
+    mutation_sigma_body: float
+    mutation_sigma_brain: float
+    rare_gain_probability: float
+    rare_loss_probability: float
+    rare_slots: int
+    wander_noise: float
+    wander_turn: float
+    instinct_food: float
+    instinct_prey: float
+    instinct_flee: float
+    instinct_mate: float
+    instinct_land: float
+    instinct_space: float
+    founder_brain_sigma: float
+    herbivore_max_diet: float
+    predator_min_diet: float
+
+    def __post_init__(self) -> None:
+        def check(ok: bool, message: str) -> None:
+            if not ok:
+                raise ConfigError(f"[fauna] {message}")
+
+        for key, value in vars(self).items():
+            check(value >= 0, f"{key} must not be negative")
+        positive = (
+            "population_cap",
+            "founder_count",
+            "mass_min",
+            "limb_pairs_max",
+            "speed_base",
+            "sense_base",
+            "lifespan_base",
+            "basal_rate",
+            "capacity_per_mass",
+            "plant_energy",
+            "meat_energy",
+            "diet_exponent",
+            "reach_cells",
+            "attack_softness",
+            "compat_distance",
+            "brood_max",
+            "rare_slots",
+            "immigrant_group_size",
+        )
+        for key in positive:
+            check(getattr(self, key) > 0, f"{key} must be positive")
+        unit = (
+            "founder_min_plant_cover",
+            "immigrant_hunter_share",
+            "founder_diet_max",
+            "founder_size_max",
+            "speed_floor",
+            "limbless_speed",
+            "armour_slowdown",
+            "aquatic_land_slowdown",
+            "swim_floor",
+            "swim_limb_drag",
+            "maturity_share",
+            "founder_energy_share",
+            "graze_jaw_floor",
+            "attack_min_diet",
+            "hunt_below_energy_share",
+            "repro_energy_share",
+            "birth_efficiency",
+            "rare_gain_probability",
+            "rare_loss_probability",
+            "herbivore_max_diet",
+            "predator_min_diet",
+        )
+        for key in unit:
+            check(getattr(self, key) <= 1.0, f"{key} must be within [0, 1]")
+        check(self.mass_min < self.mass_max, "mass_min must be below mass_max")
+        check(self.rare_slots <= 16, "rare_slots must fit in 16 bits")
+        check(self.herbivore_max_diet < self.predator_min_diet, "diet classes overlap")
+        check(
+            self.repro_investment_share < self.repro_energy_share,
+            "breeding would starve the parent",
+        )
+        check(self.founder_count <= self.population_cap, "more founders than the cap")
+
+
+@dataclass(frozen=True)
 class Config:
     config_version: int
     calendar: CalendarConfig
     terrain: TerrainConfig
     flora: FloraConfig
+    fauna: FaunaConfig
     # Subsystem name -> tick period in sim seconds.
     schedule: Mapping[str, float]
 
@@ -402,7 +554,7 @@ def parse_config(text: str) -> Config:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"invalid TOML: {exc}") from None
-    unknown = set(raw) - {"meta", "calendar", "schedule", "terrain", "flora"}
+    unknown = set(raw) - {"meta", "calendar", "schedule", "terrain", "flora", "fauna"}
     if unknown:
         raise ConfigError(f"unknown sections: {sorted(unknown)}")
     meta = _section(raw, "meta", frozenset({"config_version"}))
@@ -413,5 +565,6 @@ def parse_config(text: str) -> Config:
         _calendar(raw),
         _numeric_section(raw, "terrain", TerrainConfig),
         _numeric_section(raw, "flora", FloraConfig),
+        _numeric_section(raw, "fauna", FaunaConfig),
         _schedule(raw),
     )

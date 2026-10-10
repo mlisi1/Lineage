@@ -128,3 +128,20 @@ class FireEnded(OutputEvent):
 
     cells: int
     hours: float
+
+
+@dataclass(frozen=True)
+class CreaturesArrived(OutputEvent):
+    """A group of one new species landed near cell (x, y): the founders of an empty
+    world, or strangers joining an inhabited one. Their ids start at ``first_id``."""
+
+    count: int
+    founders: bool
+    x: float
+    y: float
+    first_id: int
+
+
+@dataclass(frozen=True)
+class PopulationExtinct(OutputEvent):
+    """The last creature died."""

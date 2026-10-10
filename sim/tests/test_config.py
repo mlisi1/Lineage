@@ -8,16 +8,21 @@ def test_default_config(config: Config) -> None:
     assert config.calendar.hemisphere is Hemisphere.NORTH
     assert config.calendar.spring_start == MonthDay(3, 20)
     assert config.calendar.winter_start == MonthDay(12, 21)
-    assert dict(config.schedule) == {"terrain": 86_400.0, "flora": 86_400.0, "fire": 3600.0}
+    assert dict(config.schedule) == {
+        "terrain": 86_400.0,
+        "flora": 86_400.0,
+        "fire": 3600.0,
+        "fauna": 600.0,
+    }
     assert (config.terrain.grid_width, config.terrain.grid_height) == (256, 150)
 
 
 def test_schedule_periods(default_config_text: str) -> None:
-    config = parse_config(default_config_text + "chronicle = 900\nfauna = 0.25\n")
+    config = parse_config(default_config_text + "chronicle = 900\nspecies = 0.25\n")
     assert config.period_ms("chronicle") == 900_000
-    assert config.period_ms("fauna") == 250
+    assert config.period_ms("species") == 250
     with pytest.raises(ConfigError, match="no \\[schedule\\] period"):
-        config.period_ms("species")
+        config.period_ms("presence")
 
 
 def test_schedule_is_read_only(config: Config) -> None:
@@ -35,9 +40,9 @@ def test_schedule_is_read_only(config: Config) -> None:
         (('summer_start = "06-21"', 'summer_start = "02-01"'), "must be in order"),
         (('winter_start = "12-21"', ""), "missing keys in \\[calendar\\]"),
         (("config_version = 1", "config_version = 2"), "unsupported config_version"),
-        (("[schedule]", "[schedule]\nfauna = -5"), "positive number of seconds"),
-        (("[schedule]", "[schedule]\nfauna = true"), "positive number of seconds"),
-        (("[schedule]", "[schedule]\nfauna = 0.0001"), "shorter than 1 ms"),
+        (("[schedule]", "[schedule]\nspecies = -5"), "positive number of seconds"),
+        (("[schedule]", "[schedule]\nspecies = true"), "positive number of seconds"),
+        (("[schedule]", "[schedule]\nspecies = 0.0001"), "shorter than 1 ms"),
         (("[schedule]", "[schedul]"), "unknown sections"),
         (("[meta]", "[meta"), "invalid TOML"),
     ],

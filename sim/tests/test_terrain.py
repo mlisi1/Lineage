@@ -29,8 +29,8 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 YEAR_DAYS = 365
-# Final state of the default world (terrain, flora, fire), seed 42, after 30 days.
-GOLDEN_TERRAIN_SEED_42 = "cfbd4fed143f4a7020e0d4161f2e0e68879cc528a9f3335fad64a54b1d7ff25f"
+# Final state of the default world (every subsystem), seed 42, after 30 days.
+GOLDEN_TERRAIN_SEED_42 = "fbd4874194eef830ac11c3337a170daa5c131b0392c62847d434082badaad912"
 
 Grid = NDArray[np.float32]
 
@@ -514,7 +514,7 @@ def test_save_load_continue_equals_uninterrupted(config: Config) -> None:
 
 @pytest.mark.parametrize("seed", range(4))
 def test_two_years_keep_every_invariant(small_config: Config, seed: int) -> None:
-    world, _ = World.create(small_config, seed, EPOCH_UNIX_MS)
+    world, _ = World.create(small_config, seed, EPOCH_UNIX_MS, [tr.Terrain(small_config.terrain)])
     cfg = small_config.terrain
     swing = cfg.sea_cycle_amplitude + cfg.sea_slow_amplitude
     for _ in range(2 * YEAR_DAYS // 5):
@@ -553,7 +553,7 @@ def test_event_rates_and_outputs(small_config: Config) -> None:
             crater_rate_per_year=20.0,
         ),
     )
-    world, _ = World.create(busy, 3, EPOCH_UNIX_MS)
+    world, _ = World.create(busy, 3, EPOCH_UNIX_MS, [tr.Terrain(busy.terrain)])
     outputs = world.step(2 * 365.25 * DAY_S)
     cfg = busy.terrain
     counts = {
@@ -580,13 +580,13 @@ def test_quiet_world_has_no_events(small_config: Config) -> None:
             crater_rate_per_year=0.0,
         ),
     )
-    world, _ = World.create(quiet, 3, EPOCH_UNIX_MS)
+    world, _ = World.create(quiet, 3, EPOCH_UNIX_MS, [tr.Terrain(quiet.terrain)])
     outputs = world.step(365 * DAY_S)
     assert not any(isinstance(o, VolcanoErupted | EarthquakeStruck | CraterFormed) for o in outputs)
 
 
 def test_split_and_rejoin_outputs_match_the_landmass_count(small_config: Config) -> None:
-    world, _ = World.create(small_config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(small_config, 1, EPOCH_UNIX_MS, [tr.Terrain(small_config.terrain)])
     seen = 0
     for _ in range(6 * YEAR_DAYS):
         outputs = world.step(DAY_S)
@@ -612,7 +612,7 @@ def test_vegetation_cover_hook_slows_change(config: Config) -> None:
 
 
 def test_restoring_a_different_grid_is_rejected(config: Config, small_config: Config) -> None:
-    world, _ = World.create(small_config, 1, EPOCH_UNIX_MS)
+    world, _ = World.create(small_config, 1, EPOCH_UNIX_MS, [tr.Terrain(small_config.terrain)])
     with pytest.raises(ValueError, match="config expects"):
         World.restore(config, world.snapshot())
 

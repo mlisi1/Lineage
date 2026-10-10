@@ -1,4 +1,1 @@
-"""Creatures: genome, phenotype, brain, individuals, population.
-
-Skeleton; implemented in M4.
-"""
+"""Creatures: genome, phenotype, brain, individual life, and the population subsystem."""
