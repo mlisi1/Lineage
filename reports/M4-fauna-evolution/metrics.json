@@ -1,0 +1,91 @@
+{
+  "milestone": "M4",
+  "run_id": "m4-fauna",
+  "git_commit": "7eea6dc983ef",
+  "config_hash": "ed1bbe7e97ee432e",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "sim_years": 3.0,
+  "wall_time_s": 202.756,
+  "acceptance": [
+    {
+      "id": "M4.1",
+      "description": "Share of seed-years in which the population died out",
+      "metric": "extinct_seed_years.share",
+      "value": 0.05,
+      "target": "\u2264 0.2",
+      "status": "PASS"
+    },
+    {
+      "id": "M4.2",
+      "description": "Share of seeds whose genetic distance from the ancestors is still rising (end of run vs two thirds of it)",
+      "metric": "genetic_distance.share_of_seeds_rising",
+      "value": 0.85,
+      "target": "\u2265 0.8",
+      "status": "PASS"
+    },
+    {
+      "id": "M4.3",
+      "description": "Share of seeds with \u2265 3 herbivores and \u2265 3 predators at the end",
+      "metric": "both_diets.share_of_seeds",
+      "value": 0.7,
+      "target": "\u2265 0.6",
+      "status": "PASS"
+    },
+    {
+      "id": "M4.4",
+      "description": "Step of the whole world, median ms per sim-day",
+      "metric": "step_ms.median",
+      "value": 194.30546228574843,
+      "target": "\u2264 400",
+      "status": "PASS"
+    }
+  ],
+  "metrics": {
+    "extinct_seed_years.share": 0.05,
+    "extinct_seed_years.count": 3.0,
+    "extinctions.per_seed.max": 2.0,
+    "genetic_distance.share_of_seeds_rising": 0.85,
+    "genetic_distance.end.median": 0.11515198647975922,
+    "genetic_distance.two_thirds.median": 0.08829500898718834,
+    "both_diets.share_of_seeds": 0.7,
+    "both_diets.last_year.mean_share_of_seeds": 0.6226415094339622,
+    "both_diets.last_year.min_share_of_seeds": 0.45,
+    "population.end.median": 201.5,
+    "population.inhabited_share_of_time": 0.9485849056603773,
+    "predators.end.median": 6.0,
+    "first_arrival.months.median": 8.624229979466119,
+    "clones.share_of_births": 0.24870590412532181,
+    "step_ms.median": 194.30546228574843,
+    "deaths_starved.per_seed.median": 4614.0,
+    "deaths_killed.per_seed.median": 2668.5,
+    "deaths_old_age.per_seed.median": 1016.5,
+    "deaths_drowned.per_seed.median": 520.5,
+    "gene_size.end.median": 0.34176430106163025,
+    "gene_diet.end.median": 0.11009441316127777,
+    "gene_limbs.end.median": 0.5348918437957764,
+    "gene_speed.end.median": 0.6395182609558105,
+    "gene_armour.end.median": 0.36297881603240967,
+    "gene_sense.end.median": 0.48150020837783813
+  }
+}

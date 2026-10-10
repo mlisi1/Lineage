@@ -1,0 +1,491 @@
+# Lineage default configuration.
+#
+# Every tunable of the simulation lives here (CLAUDE.md §4.5). Each key carries a comment
+# with its units and intent. Code reads these values only through `lineage_sim.config`,
+# which rejects unknown sections and keys. The file is hashed into every run manifest and
+# milestone report, so changing a value changes the config hash.
+
+[meta]
+# Config format version; bump when keys are renamed or removed.
+config_version = 1
+
+[calendar]
+# Hemisphere the seasons follow: "north" or "south" (south swaps spring/autumn and
+# summer/winter for the same dates).
+hemisphere = "north"
+# Astronomical season starts for the northern hemisphere, "MM-DD", evaluated in UTC.
+# Fixed approximations of the equinoxes and solstices; the real dates drift by about a
+# day from year to year, which is irrelevant at this time scale.
+spring_start = "03-20"
+summer_start = "06-21"
+autumn_start = "09-22"
+winter_start = "12-21"
+
+[terrain]
+# Heights are dimensionless in [0, 1]; the sea surface sits near sea_base. Lengths are in
+# grid cells, rates per sim-year. One cell is 4 px on the 1024×600 desk display.
+
+# Grid size in cells (width × height). Changing it invalidates existing saves.
+grid_width = 256
+grid_height = 150
+# Width of the border band, in cells, over which tectonics fade to zero so the map edge
+# stays ocean; events are centred inside it.
+edge_margin_cells = 14.0
+# Extra depth (height units) of the sea floor at the very border, fading to zero across
+# the margin: guarantees open water all around the map.
+edge_depth = 0.25
+
+# --- Sea level ---
+# Mean sea level (height units).
+sea_base = 0.42
+# Main sea-level cycle: period (years) and amplitude (height units). Drives the visible
+# coastline breathing and most landmass splits/rejoins.
+sea_cycle_period_years = 1.7
+sea_cycle_amplitude = 0.030
+# Slow second cycle, so no two main cycles look the same.
+sea_slow_period_years = 6.5
+sea_slow_amplitude = 0.020
+
+# --- Island generation ---
+# Share of cells above mean sea level in a new world.
+initial_land_fraction = 0.42
+# The island is fractal noise (sums of randomly oriented waves) minus a radial falloff. The large scales (continent
+# shape) and the fine scales (detail) are generated separately.
+# Wavelength of the largest features (cells) and amplitude ratio between octaves.
+noise_wavelength_cells = 80.0
+noise_persistence = 0.5
+# Octaves in the continent shape, and in the detail on top of it.
+noise_large_octaves = 2
+noise_detail_octaves = 3
+# Weight of the detail relative to the continent shape, in [0, 1].
+noise_detail_share = 0.3
+# Radial falloff subtracted from the noise: strength × distance^exponent, where distance
+# is 0 at the map centre and 1 at the middle of each edge. Keeps land away from borders.
+falloff_strength = 0.4
+falloff_exponent = 3.0
+# Height units per unit of (noise − falloff): overall relief of the island.
+relief_scale = 0.85
+
+# --- Fertility (mineral richness of the ground, [0, 1]) ---
+# Range of initial fertility; lowlands start richer than peaks.
+fertility_min = 0.05
+fertility_max = 0.45
+# Wavelength (cells) of the fertility noise.
+fertility_wavelength_cells = 40.0
+# How quickly initial fertility falls with height above the sea (per height unit).
+fertility_elevation_decay = 3.0
+
+# --- Tectonics: moving uplift/subsidence hotspots ---
+# Number of hotspots; even indices lift, odd ones sink, and the field is zero-sum.
+hotspot_count = 6
+# Gaussian radius of a hotspot (cells).
+hotspot_radius_min_cells = 10.0
+hotspot_radius_max_cells = 24.0
+# Peak vertical rate at a hotspot centre (height units per year).
+hotspot_rate_max_per_year = 0.06
+# Drift speed (cells per year): the "plate drift".
+hotspot_speed_max_cells_per_year = 10.0
+# Lifetime before a hotspot dies and a new one appears elsewhere (years).
+hotspot_lifetime_min_years = 2.0
+hotspot_lifetime_max_years = 6.0
+# Spatial roughness of uplift in [0, 1]: 0 raises smooth domes, 1 very rugged ranges.
+hotspot_ruggedness = 0.6
+# Plate drift: the continent shape is a mix of three noise fields whose weights rotate
+# with this period (years); a quarter period turns the continent into a different one.
+drift_period_years = 30.0
+# The large-scale shape of the land (heights blurred over relax_blur_cells, applied
+# twice) follows the drifting continent with this time constant (years). Bounds relief
+# over decades without smoothing small-scale detail.
+relax_time_years = 3.0
+relax_blur_cells = 8
+
+# --- Erosion (mass-conserving exchange between neighbouring cells) ---
+# Slow creep: diffusion coefficient (cells² per year).
+creep_rate_per_year = 0.08
+# Landslides: share of the slope excess above talus_slope moved per year.
+thermal_rate_per_year = 40.0
+# Steepest stable slope (height units per cell).
+talus_slope = 0.045
+# Share of erosion suppressed under full vegetation cover, in [0, 1] (hook used by flora).
+vegetation_protection = 0.8
+# Fertility moved with sediment: deposits enrich, stripped slopes lose soil. Fraction per
+# talus_slope of height change.
+erosion_fertility_exchange = 0.3
+# Rate (per year) at which submerged ground gains fertility toward fertility_max.
+marine_sediment_rate_per_year = 0.08
+# Rate (per year) at which land loses fertility toward fertility_min as rain washes
+# minerals out. Balances sediment, ash and deposits so the world's fertility settles;
+# vegetation cover slows it by vegetation_protection.
+leaching_rate_per_year = 0.04
+
+# --- Events ---
+# Volcano: mean eruptions per year; cone radius (cells) and height (height units); lava
+# resets fertility at the centre to volcano_lava_fertility, ash adds up to
+# volcano_ash_fertility around it.
+volcano_rate_per_year = 0.4
+volcano_radius_min_cells = 5.0
+volcano_radius_max_cells = 11.0
+volcano_height_min = 0.08
+volcano_height_max = 0.22
+volcano_lava_fertility = 0.02
+volcano_ash_fertility = 0.35
+# Earthquake: mean per year; radius of the affected area (cells); vertical throw across
+# the fault (height units), one side up and the other down.
+earthquake_rate_per_year = 1.0
+earthquake_radius_min_cells = 10.0
+earthquake_radius_max_cells = 26.0
+earthquake_throw_min = 0.010
+earthquake_throw_max = 0.045
+# Natural meteor crater: mean per year (the meteor god power arrives in M8); bowl radius
+# (cells) and depth (height units); rim height as a fraction of depth; fertility inside
+# the bowl is multiplied by crater_fertility_factor.
+crater_rate_per_year = 0.08
+crater_radius_min_cells = 4.0
+crater_radius_max_cells = 9.0
+crater_depth_min = 0.08
+crater_depth_max = 0.20
+crater_rim_fraction = 0.3
+crater_fertility_factor = 0.2
+
+# --- Landmasses ---
+# Smallest connected land area (cells, 4-neighbour) counted as a landmass for the
+# landmass count and for split/rejoin events.
+landmass_min_cells = 100
+
+[flora]
+# Plants live on the terrain grid: each occupied cell holds one plant population with a
+# biomass in [0, 1], an 8-gene genome (each gene in [0, 1]) and a set of rare genes.
+# Rates are per sim-year unless stated. "Temperature" is a dimensionless index: about 1 in
+# a lowland summer, lower in winter and with altitude.
+
+# --- Land-cover classes ---
+# Biomass below which a cell counts as bare (or burnt) rather than vegetated.
+cover_min_biomass = 0.08
+# Biomass from which a tree cell counts as closed-canopy forest.
+closed_canopy_biomass = 0.55
+# Height-gene thresholds between forms: up to the first is grass (or lichen), up to the
+# second shrub, above it tree.
+form_grass_max_height = 0.3
+form_shrub_max_height = 0.6
+# Lichen/moss: very low and very frugal pioneers.
+form_lichen_max_height = 0.15
+form_lichen_min_frugality = 0.65
+# Trees at or above this evergreen-gene value are conifers, below it broadleaf.
+form_conifer_min_evergreen = 0.5
+
+# --- Climate ---
+# Lowland temperature index: annual mean and seasonal swing (warmest in mid-summer).
+temperature_mean = 0.65
+temperature_season_amplitude = 0.30
+# Cooling per height unit above the sea (altitudinal zonation).
+temperature_lapse_per_height = 1.3
+# Optimum temperature of a fully warm-adapted (cold gene 0) and a fully cold-adapted
+# (cold gene 1) plant, and the tolerance (standard deviation) around the optimum.
+optimum_warm = 0.92
+optimum_cold = 0.35
+temperature_tolerance = 0.22
+
+# --- Growth ---
+# Logistic growth rate of the fastest plant in ideal conditions, and the share of it a
+# plant with growth gene 0 still reaches.
+growth_rate_max_per_year = 90.0
+growth_rate_min_share = 0.25
+# Tall plants grow slower: rate is divided by (1 + stature_slowdown × height gene).
+stature_slowdown = 2.0
+# Trade-offs: share of the growth rate given up at gene value 1.
+cost_frugality = 0.35
+cost_shade = 0.30
+cost_defence = 0.30
+cost_evergreen = 0.25
+# Mortality: base rate, extra for fast growers (live fast, die young), and the share of
+# it that tall plants escape (trees are long-lived).
+mortality_base_per_year = 0.5
+mortality_growth_per_year = 1.0
+mortality_stature_relief = 0.8
+# Wind exposure breaks tall plants: extra mortality = exposure_per_year × height gene ×
+# exposure, where exposure is 1 at the waterline falling to 0 at shore_span above the
+# sea, and 0 at treeline_height rising to 1 at treeline_span above it. This sorts the
+# forms into belts: forest in sheltered ground, then shrub, grass, and lichen on the
+# shore and the summits.
+shore_span = 0.03
+treeline_height = 0.18
+treeline_span = 0.12
+exposure_per_year = 40.0
+# Winter dieback of low, non-evergreen plants when it is colder than optimum minus
+# tolerance: rate at full cold stress for a grass with evergreen gene 0.
+winter_dieback_per_year = 10.0
+# Biomass that survives dieback as roots and dormant shoots.
+winter_reserve_biomass = 0.12
+
+# --- Fertility needs ---
+# Fertility a plant needs to grow at full rate: base + height share − frugality relief,
+# never below the floor. Growth and establishment scale with (fertility / need)^sharpness.
+need_base = 0.10
+need_height = 0.40
+need_frugality = 0.10
+need_floor = 0.02
+need_sharpness = 2.0
+
+# --- Soil building ---
+# Plants raise the fertility of their cell toward a cap that depends on their stature
+# (cap = base + height share × height gene), at this rate times biomass.
+soil_build_rate_per_year = 4.5
+soil_cap_base = 0.15
+soil_cap_height = 0.50
+
+# --- Dispersal and establishment ---
+# Seeding attempts per year into one neighbouring cell by a full-grown plant.
+seed_rate_per_year = 160.0
+# Plants below this biomass do not seed yet.
+seed_min_biomass = 0.2
+# Seed type (seed gene): 0 is light wind-borne seed, 1 is heavy fruit. Wind seed reaches
+# far cells; fruit mostly lands next to the parent but establishes better.
+near_weight_wind = 0.3
+far_offsets_per_tick = 3
+wind_range_cells = 14.0
+fruit_establishment_bonus = 0.5
+# Biomass of a newly established plant; an established invader keeps this share of the
+# resident's biomass when it takes over an occupied cell.
+seedling_biomass = 0.04
+takeover_keep = 0.3
+# Establishment probability scales with (suitability × viability)^sharpness, where
+# viability is the biomass the plant would reach at the site.
+establishment_sharpness = 2.0
+# Shading: a resident's canopy density is biomass × (canopy_base + rest × height gene);
+# seedlings under it get only the remaining light unless shade-tolerant.
+canopy_base = 0.2
+# Competition for an occupied cell: an invader wins with probability
+# sigmoid((its score − resident's score − margin) / softness), with
+# score = suitability × viability × (base + height). The margin protects residents from being
+# replaced by their equals.
+competition_base = 0.4
+competition_softness = 0.025
+competition_margin = 0.12
+# Standard deviation of the mutation applied to each gene at establishment.
+mutation_sigma = 0.03
+# Seed rain: seeds with random genomes arriving from outside per year, on the whole map.
+# Colonises bare rock and brings back forms that went extinct.
+seed_rain_per_year = 40000.0
+
+# --- Rare genes (starter set; the full table arrives in M7) ---
+# Probability that an establishing plant gains each rare gene, and loses one it carries.
+rare_gain_probability = 0.0002
+rare_loss_probability = 0.01
+# Fire-pine: keeps this share of its biomass through a fire; costs growth.
+fire_pine_survival = 0.6
+fire_pine_growth_cost = 0.15
+# Nitrogen-fixer: needs this much less fertility and builds soil this many times faster;
+# costs growth.
+nitrogen_fixer_need_relief = 0.6
+nitrogen_fixer_soil_boost = 3.0
+nitrogen_fixer_growth_cost = 0.25
+# Mangrove: lives in water up to this depth (height units); costs growth.
+mangrove_max_depth = 0.015
+mangrove_growth_cost = 0.30
+
+# --- Grazing (hook for fauna, M4) ---
+# Share of a bite refused at defence gene 1.
+defence_strength = 0.8
+# Biomass grazers cannot reach (roots and stubble): grazed plants regrow from it.
+grazing_reserve_biomass = 0.08
+
+# --- Fire ---
+# Lightning ignitions per year at full dryness, on the whole map.
+fire_ignitions_per_year = 30.0
+# Dryness is 0 below this lowland temperature and 1 at fire_dry_span above it: fires are
+# a warm-season event.
+fire_dry_temperature = 0.68
+fire_dry_span = 0.2
+# Probability per hour that a burning cell ignites one neighbour with full fuel and
+# flammability 1 at full dryness; share of it that remains when it is not dry.
+fire_spread_per_hour = 0.18
+fire_wet_spread = 0.25
+# Hours a cell burns.
+fire_burn_hours = 8.0
+# Least biomass that carries fire.
+fire_min_fuel = 0.15
+# Flammability by form.
+flammability_lichen = 0.2
+flammability_grass = 1.0
+flammability_shrub = 0.8
+flammability_broadleaf = 0.35
+flammability_conifer = 0.9
+# Share of biomass lost in a fire: low plants resprout from the roots, trees mostly die.
+fire_loss_low = 0.85
+fire_loss_tree = 0.97
+# Share of fertility lost from a burnt cell, and days a cell stays scorched (cannot burn
+# again; shown as burnt ground while bare).
+fire_fertility_loss = 0.15
+scorch_days = 60.0
+
+# --- Bookkeeping ---
+# Cells a genome cluster must occupy to count as a plant species.
+species_min_cells = 30
+
+[fauna]
+# Creatures are individuals with a position (in cells), an energy reserve, an age, a body
+# genome of 11 genes in [0, 1], a brain (weights of a small neural net) and rare-gene
+# slots. Energy is in arbitrary units; rates are per sim-hour unless stated.
+
+# --- Population ---
+# Hard caps: no births while a kind is at or above its cap. Predators (diet gene at or
+# above predator_min_diet) are counted apart from everyone else, so a full herd cannot
+# crowd them out.
+population_cap = 200
+predator_cap = 16
+# Founders arrive when at least this share of the land carries well-grown plants and
+# nobody lives here, in spring or summer, after this delay (days). They are one species: a random genome that
+# leans herbivore (diet gene at most founder_diet_max) and small to medium (size gene at
+# most founder_size_max), with founder_spread of variation per gene, placed within
+# founder_radius_cells of a vegetated spot.
+founder_min_plant_cover = 0.5
+arrival_delay_days = 15.0
+founder_count = 40
+founder_diet_max = 0.25
+founder_size_max = 0.5
+founder_spread = 0.04
+founder_radius_cells = 16.0
+# Strangers: small groups of a new species that reach an inhabited island, all year.
+immigrant_groups_per_year = 6.0
+immigrant_group_size = 8
+# Share of stranger groups that are a hunter species (diet gene in the predator range);
+# the others have a fully random genome.
+immigrant_hunter_share = 0.5
+
+# --- Body (phenotype) ---
+# Mass grows geometrically with the size gene, from mass_min to mass_max.
+mass_min = 0.25
+mass_max = 16.0
+# Leg pairs = round(limbs gene × limb_pairs_max).
+limb_pairs_max = 4
+# Land speed (cells per hour) of a mass-1 creature with two leg pairs and no armour:
+# speed_base × (speed_floor + (1 − speed_floor) × speed gene); it scales with
+# mass^speed_mass_exponent.
+speed_base = 5.0
+speed_floor = 0.25
+speed_mass_exponent = 0.17
+# Share of that speed a limbless creature keeps on land; each leg pair beyond two costs
+# extra_limb_drag of it but carries armour better (armour_limb_relief per pair).
+limbless_speed = 0.3
+extra_limb_drag = 0.08
+# Share of speed lost at armour gene 1, and at swimming gene 1 (on land).
+armour_slowdown = 0.5
+armour_limb_relief = 0.12
+aquatic_land_slowdown = 0.6
+# Swim speed (cells per hour) at swimming gene 1; share kept at gene 0; share lost with
+# the maximum number of leg pairs.
+swim_speed = 4.0
+swim_floor = 0.15
+swim_limb_drag = 0.4
+# Sense range (cells) = sense_base + sense_gain × sense gene.
+sense_base = 3.0
+sense_gain = 9.0
+# Lifespan (days) = lifespan_base × mass^lifespan_mass_exponent; adults from
+# maturity_share of it.
+lifespan_base = 45.0
+lifespan_mass_exponent = 0.25
+maturity_share = 0.15
+
+# --- Energy ---
+# Basal burn per hour = basal_rate × mass^metabolic_exponent × (1 + the costs below × gene).
+basal_rate = 1.0
+metabolic_exponent = 0.75
+cost_speed = 0.5
+cost_sense = 0.3
+cost_armour = 0.4
+cost_jaw = 0.3
+cost_limb_pair = 0.06
+cost_aquatic = 0.15
+# Energy per cell travelled = move_cost × mass^metabolic_exponent.
+move_cost = 0.35
+# Reserve a creature can hold = capacity_per_mass × mass; newborn founders start at
+# founder_energy_share of it.
+capacity_per_mass = 220.0
+founder_energy_share = 0.9
+# Energy burnt per hour per unit mass by a creature in water, at swimming gene 0.
+water_stress = 2.5
+
+# --- Eating ---
+# Plant biomass (in full cells) grazed per hour = graze_rate × mass^metabolic_exponent ×
+# (graze_jaw_floor + (1 − graze_jaw_floor) × jaw gene).
+graze_rate = 0.05
+graze_jaw_floor = 0.5
+# Energy in one full cell of plant biomass, and per unit of prey mass.
+plant_energy = 300.0
+meat_energy = 900.0
+# Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
+diet_exponent = 1.0
+# Creatures with at least this diet gene hunt. Reach of a bite (cells). Attacks per hour
+# on a prey in reach. Attack power = mass × (jaw_floor + jaw gene); defence = mass ×
+# (1 + armour_strength × armour gene). A hit kills with probability
+# sigmoid(log(power / defence) / attack_softness) × min(1, hunter speed / prey speed).
+attack_min_diet = 0.15
+# A hunter only looks for prey and attacks while its reserve is below this share of its
+# capacity: fed predators leave the herd alone.
+hunt_below_energy_share = 0.8
+reach_cells = 1.2
+attack_rate = 2.5
+attack_jaw_floor = 0.4
+armour_strength = 2.5
+attack_softness = 0.35
+# Energy an attempt costs the hunter, per unit mass.
+attack_cost = 1.5
+
+# --- Reproduction ---
+# Two adults can breed when their body genomes differ by at most compat_distance (mean
+# absolute difference per gene), they are within reach, and each holds at least
+# repro_energy_share of its capacity and waited repro_cooldown_days since its last brood.
+compat_distance = 0.10
+repro_energy_share = 0.6
+repro_cooldown_days = 2.5
+# Each parent invests repro_investment_share of its capacity; birth_efficiency of the sum
+# is shared among 1 + round(brood gene × (brood_max − 1)) young.
+repro_investment_share = 0.25
+birth_efficiency = 0.8
+brood_max = 4
+# A ready adult that has not bred for this many days clones itself instead, investing
+# asexual_cost_factor times as much for a single young.
+asexual_after_days = 6.0
+asexual_cost_factor = 1.6
+# Mutation at birth: standard deviation per body gene and per brain weight.
+mutation_sigma_body = 0.025
+mutation_sigma_brain = 0.06
+# Rare-gene slots: probability a newborn gains each rare gene, or loses one it carries.
+# (The genes themselves and their effects arrive in M7.)
+rare_gain_probability = 0.0005
+rare_loss_probability = 0.02
+rare_slots = 8
+
+# --- Brain ---
+# Roaming: every creature keeps a heading that drifts by wander_turn radians per
+# square-root hour; wander_noise of full speed is added to its steering along it.
+wander_noise = 0.35
+wander_turn = 0.5
+# Ancestral instincts: weights of the direct sense → steering connections in a founder.
+instinct_food = 1.6
+instinct_prey = 1.6
+instinct_flee = 2.0
+instinct_mate = 2.5
+instinct_land = 1.5
+instinct_space = 1.2
+# Standard deviation of the other weights of a founder's brain.
+founder_brain_sigma = 0.1
+
+# --- Bookkeeping ---
+# Diet classes for statistics: herbivore up to the first, predator from the second.
+herbivore_max_diet = 0.35
+predator_min_diet = 0.65
+
+[schedule]
+# Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
+# Ticks fire at whole multiples of the period since world creation, so results do not
+# depend on how a caller chunks World.step(dt). Keys are subsystem names; filled in as
+# subsystems arrive (creatures in M4).
+# Terrain: once per sim-day (tectonics, erosion, sea level, landmass count).
+terrain = 86400
+# Flora: growth, dispersal, succession, soil building, once per sim-day.
+flora = 86400
+# Fire: ignition and spread, once per sim-hour, so a fire burns visibly over hours.
+fire = 3600
+# Fauna: sensing, steering, eating, breeding, every 10 sim-minutes.
+fauna = 600
