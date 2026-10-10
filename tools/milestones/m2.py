@@ -77,7 +77,7 @@ CRITERIA: list[Criterion] = [
     Criterion("M2.4", "Seeds that lost all their land at any time", "seeds_without_land", high=0),
     Criterion(
         "M2.5",
-        "Terrain step, median ms per sim-day on the reference machine",
+        "Step of the whole world (terrain and everything on it), median ms per sim-day",
         "step_ms.median",
         high=STEP_BUDGET_MS,
     ),
