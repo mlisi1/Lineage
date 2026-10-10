@@ -42,6 +42,37 @@ hard edges, no smoothing.
 4. **Tint**: one full-screen colour multiplied over everything: day, dusk, night, dawn.
    R4 drives it from presence.
 
+## Plants on the ground: three styles, not yet chosen
+
+The spike's first close-ups put plants badly on the map. The ground under them keeps the
+colour of bare soil while the wide shot shows the same land green; every cell carries one
+drawing dead in its middle; and a square of ground is eight times the size of a plant's
+pixel. The look sheet draws the same places three ways:
+
+- **A. As first built**: bare ground, one flat square per cell, a drawing in every
+  vegetated cell (16 504 in the fixture world).
+- **B. Green ground**: the same drawings on the wide shot's colours. Free, and close-up
+  and wide shot agree on what is green; the grid and the squares stay.
+- **C. Painted ground** (`ground.ts`): the ground is painted at the plants' pixel size,
+  eight art pixels per cell. Each pixel looks up its cell through a gentle warp, so
+  borders wander instead of running straight. Grass, lichen and the floor of a wood are
+  patches on the soil, thicker with biomass. The shore keeps the map's dark outline, one
+  pixel wide, with foam beyond it. Only trees, shrubs in leaf and a tuft of grown grass
+  in one cell of three stand as drawings (6 605), off the middle of their cells, each
+  with a shadow.
+
+What C costs and implies:
+
+- The ground is one picture of 2048×1200, repainted when the plants change (once a
+  sim-day): 0.2 s on a PC, 1.7 s with the processor throttled tenfold. It needs no
+  sprites, so the plant sprites of a full view drop by more than half.
+- It is coherent only where a plant's drawing is shown at its own size: a close-up of 8
+  art pixels per cell, which on this screen means **art pixels of 2 screen pixels**.
+- Wide shots keep the flat map. Between the two, the camera would have to move in whole
+  steps of zoom, or the painted pixels shimmer.
+- Should it be chosen, the benchmark's scenarios change with it, and R0's worst case
+  (a sprite in every cell) is no longer a shot the renderer would ever draw.
+
 ## How the genes show on a creature
 
 A first pass, in `renderer/src/spike/body.ts`, made so the range of bodies can be judged.
@@ -70,8 +101,9 @@ geometry, only transforms: 7 to about 50 sprites each.
 `renderer/look.html` shows all of the above in one page, drawn by the same code as the
 benchmark: the island from afar, the plant drawings and two habitats, the fifteen
 specimen genomes of `phenotypes.json` each followed by its own camera, every gene with a
-look swept from 0 to 1 on an otherwise plain animal, and one staged shot of a shore at
-art scales 1, 2 and 4 and in the four lights. Live, the creatures walk
+look swept from 0 to 1 on an otherwise plain animal, one staged shot of a shore at
+art scales 1, 2 and 4 and in the four lights, and two places in each of the three plant
+styles above. Live, the creatures walk
 (`npm run dev`, then `/look.html`). `npm run look` writes a still, self-contained copy
 to [`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md): creatures walk
 for a fixed, seeded 8 s and every picture is saved inline. It is a view of the look, not
@@ -163,8 +195,10 @@ image draws WebGL with the GPU.
 
 ## Open
 
+- **How plants sit on the ground**: style A, B or C above.
 - **Size of an art pixel** (1, 2 or 4 screen pixels): a matter of taste once the device
-  numbers say which are affordable. To be chosen by eye on the real screen.
+  numbers say which are affordable. To be chosen by eye on the real screen. Style C
+  settles it at 2.
 - **Creature motion between sim ticks.** The simulation moves a creature a few cells per
   hour and ticks every ten minutes. Watched in real time that is stillness, so the
   renderer needs cosmetic life of its own (idling, breathing, small local wandering
@@ -172,8 +206,8 @@ image draws WebGL with the GPU.
 - **How close the camera gets.** At the spike's close-up (16 screen pixels per cell) a
   mid-sized animal is about 20 pixels long and the smallest about 11. The look sheet's
   portraits are that picture enlarged three times; a camera that close is R3's call.
-- **The ground in close-ups** is one flat square per cell. Softer shorelines or detail
-  inside a cell would be new work in R1.
+- **The ground in close-ups** is one flat square per cell in styles A and B; style C is
+  the answer to that.
 - **Reading a creature against the ground.** A green animal on grass nearly disappears,
   and diet shows only in the colour of small jaws. Camouflage may be right; an outline
   or a stronger cue for hunters may be needed.
