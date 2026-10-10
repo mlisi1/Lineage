@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import io
+import math
 from collections.abc import Sequence
 
 import matplotlib
@@ -101,12 +102,91 @@ def median_lines(
     return fig
 
 
+def stacked_area(
+    times: np.ndarray,
+    layers: dict[str, tuple[np.ndarray, str]],
+    *,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+) -> Figure:
+    """Stacked medians across seeds, bottom layer first. ``layers`` maps a label to a
+    (seeds, times) array and its fixed colour."""
+    medians = [band_over_seeds(values)[0] for values, _ in layers.values()]
+    fig, ax = plt.subplots(figsize=(7.0, 3.6))
+    ax.stackplot(
+        times,
+        medians,
+        labels=list(layers),
+        colors=[colour for _, colour in layers.values()],
+        edgecolor=style.SURFACE,
+        linewidth=0.8,
+    )
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.margins(x=0, y=0)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[::-1], labels[::-1], loc="center left", bbox_to_anchor=(1.0, 0.5))
+    fig.tight_layout()
+    return fig
+
+
+def band_panels(
+    times: np.ndarray,
+    panels: dict[str, tuple[np.ndarray, str]],
+    *,
+    xlabel: str,
+    ylabel: str,
+    columns: int = 3,
+) -> Figure:
+    """Small multiples: one median + 10–90 % band per panel, shared axes."""
+    rows = math.ceil(len(panels) / columns)
+    fig, axes = plt.subplots(
+        rows, columns, figsize=(7.0, 1.9 * rows + 0.5), sharex=True, sharey=True, squeeze=False
+    )
+    flat = [ax for row in axes for ax in row]
+    for ax, (label, (values, colour)) in zip(flat, panels.items(), strict=False):
+        median, low, high = band_over_seeds(values)
+        ax.fill_between(times, low, high, color=colour, alpha=0.3, linewidth=0)
+        ax.plot(times, median, color=colour)
+        ax.set_title(label, fontsize=9)
+        ax.margins(x=0)
+    for ax in flat[len(panels) :]:
+        ax.set_visible(False)
+    fig.supxlabel(xlabel, fontsize=9, color=style.TEXT_SECONDARY)
+    fig.supylabel(ylabel, fontsize=9, color=style.TEXT_SECONDARY)
+    fig.tight_layout()
+    return fig
+
+
+def log_histogram(values: Sequence[float] | np.ndarray, *, title: str, xlabel: str) -> Figure:
+    """Histogram on logarithmic bins and a logarithmic count axis (heavy-tailed sizes)."""
+    data = np.asarray(values, dtype=float)
+    data = data[data > 0]
+    fig, ax = plt.subplots()
+    if data.size:
+        top = max(2.0, float(data.max()))
+        edges = np.unique(np.round(np.logspace(0, math.log10(top) + 1e-9, 16))) - 0.5
+        edges = np.append(edges, top + 0.5)
+        ax.hist(
+            data, bins=edges.tolist(), color=style.SERIES, edgecolor=style.SURFACE, linewidth=1.0
+        )
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("fires (count)")
+    fig.tight_layout()
+    return fig
+
+
 def distribution(
     per_seed: Sequence[float] | np.ndarray,
     *,
     title: str,
     xlabel: str,
-    bins: int = 20,
+    bins: int | Sequence[float] = 20,
     log: bool = False,
 ) -> Figure:
     """Histogram of a per-seed outcome (e.g. time to first forest)."""

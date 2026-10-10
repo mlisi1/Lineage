@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2
+from tools.milestones import m2, m3
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -60,16 +60,17 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2}
+MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3}
 
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
-CRITERIA: dict[str, list[Criterion]] = {"M2": m2.CRITERIA}
+CRITERIA: dict[str, list[Criterion]] = {"M2": m2.CRITERIA, "M3": m3.CRITERIA}
 
 # Display names and units of recorded series; every series a milestone records goes here.
 SERIES_LABELS: dict[str, SeriesLabel] = {
     "save_kib": SeriesLabel("Save size", "KiB"),
     "step_ms": SeriesLabel("Step time", "ms per sim-day"),
     **m2.SERIES_LABELS,
+    **m3.SERIES_LABELS,
 }
 
 
@@ -79,7 +80,9 @@ def series_label(name: str) -> SeriesLabel:
 
 def compute_metrics(run: Run) -> dict[str, float]:
     """Generic per-series metrics: spread of each series' final value across seeds."""
-    names = sorted({n for s in run.series.values() for n in s if n != TIME_KEY})
+    names = sorted(
+        {n for s in run.series.values() for n in s if n != TIME_KEY and not n.startswith("_")}
+    )
     metrics: dict[str, float] = {}
     for name in names:
         finals = np.array([s[name][-1] for s in run.series.values() if name in s], dtype=float)
@@ -127,7 +130,9 @@ def series_figures(run: Run, names: list[str], *, finals: bool = True) -> list[t
 
 def generic_sections(run: Run) -> list[Section]:
     """Fallback for milestones without their own module: every recorded series."""
-    names = sorted({n for s in run.series.values() for n in s if n != TIME_KEY})
+    names = sorted(
+        {n for s in run.series.values() for n in s if n != TIME_KEY and not n.startswith("_")}
+    )
     body = "".join(figure_html(html.escape(c), u) for c, u in series_figures(run, names))
     return [Section("Figures", body or '<p class="empty">This run recorded no series.</p>')]
 
@@ -153,6 +158,9 @@ th { color:var(--muted); font-weight:600; font-size:.85rem; }
 .MISSING { color:var(--missing); font-weight:600; }
 figure { margin:16px 0; background:#fcfcfb; border-radius:6px; padding:8px; }
 figure img { width:100%; height:auto; display:block; }
+figure.pixel { background:#14213d; }
+figure.pixel img { width:auto; max-width:100%; margin:0 auto; image-rendering:pixelated; }
+figure.pixel figcaption { color:#c9d3dc; }
 figcaption { color:#52514e; font-size:.85rem; padding:4px 4px 0; }
 .empty { color:var(--muted); font-style:italic; }
 .wrap { overflow-x:auto; }

@@ -222,3 +222,60 @@ def test_m2_report_has_acceptance_maps_and_animation(tmp_path: Path) -> None:
     assert kinds.count("data:image/svg+xml") >= 6
     readme = (out / "README.md").read_text(encoding="utf-8")
     assert "M2.1" in readme
+
+
+def test_m3_report_has_acceptance_pixel_maps_and_animation(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "m3"
+    fastforward(1.5, [0, 1], run_dir, save_days=1000, snapshot_days=45)
+    out = build_report("M3", run_dir, tmp_path / "reports")
+    assert out.name == "M3-flora"
+
+    doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert [a["id"] for a in doc["acceptance"]] == ["M3.1", "M3.2", "M3.3", "M3.4", "M3.5"]
+    metrics = doc["metrics"]
+    assert metrics["seeds_single_class"] == 0
+    assert 3 <= metrics["grass_half.months.median"] <= 12
+    assert 0 <= metrics["forms.median"] <= 5
+
+    html_text = (out / "report.html").read_text(encoding="utf-8")
+    page = _parse(out / "report.html")
+    assert page.external == []
+    kinds = [src.split(";")[0] for src in page.img_srcs]
+    assert kinds.count("data:image/png") == 2  # seasons and years, pixel art
+    assert kinds.count("data:image/webp") == 1  # the animation
+    assert html_text.count('<figure class="pixel">') == 3
+    assert "image-rendering:pixelated" in html_text
+
+
+def test_pixel_map_uses_flat_tones_and_whole_pixel_scaling() -> None:
+    from lineage_sim.flora import Cover
+
+    from tools.viz import pixelmap
+
+    rng = np.random.Generator(np.random.PCG64(5))
+    height = (0.3 + 0.4 * rng.random((20, 30))).astype(np.float32)
+    cover = np.where(height > 0.42, Cover.GRASS, Cover.WATER).astype(np.uint8)
+    cover[height > 0.6] = Cover.CONIFER
+    image = pixelmap.render(height, 0.42, cover)
+    assert image.shape == (20, 30, 3)
+    assert image.dtype == np.uint8
+    # A handful of flat colours, not a gradient.
+    assert len(np.unique(image.reshape(-1, 3), axis=0)) <= 5 + 3 * 2 + 1
+    big = pixelmap.render(height, 0.42, cover, scale=3)
+    assert big.shape == (60, 90, 3)
+    assert (big[::3, ::3] == image).all()
+    assert (big[1::3, 2::3] == image).all()
+    # Dormant low vegetation is drawn differently from growing vegetation.
+    dormant = pixelmap.render(height, 0.42, cover, np.zeros_like(height))
+    grass = cover == Cover.GRASS
+    assert (dormant[grass] != image[grass]).any()
+    assert (dormant[cover == Cover.CONIFER] == image[cover == Cover.CONIFER]).all()
+
+
+def test_tile_grid_keeps_tiles_pixel_exact() -> None:
+    from tools.viz import pixelmap
+
+    tile = np.full((10, 16, 3), 200, dtype=np.uint8)
+    grid = pixelmap.tile_grid([[tile, tile], [tile, tile]], ["a", "b"], ["x", "y"])
+    assert grid.dtype == np.uint8
+    assert int((grid == 200).all(axis=-1).sum()) >= 4 * tile.shape[0] * tile.shape[1]

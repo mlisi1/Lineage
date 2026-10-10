@@ -14,17 +14,16 @@ import numpy as np
 
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import TIME_KEY, Run
-from tools.viz import figures, style
-from tools.viz.terrain import terrain_rgb
+from tools.viz import figures, pixelmap, style
 
 LAND_FRACTION_BAND = (0.25, 0.6)
 # A terrain tick (one per sim-day) may take this long on the reference machine; the
 # device is roughly 10× slower and still far inside 25 % of a core (CLAUDE.md §4.8).
 STEP_BUDGET_MS = 25.0
-SNAPSHOT_YEARS = (0, 2, 4, 6, 8, 10)
+SNAPSHOT_YEARS = (0, 5, 10)
 REPRESENTATIVE_SEEDS = 3
 ANIMATION_FRAME_MS = 120
-ANIMATION_SCALE = 2
+ANIMATION_SCALE = 3
 
 SERIES_LABELS: dict[str, SeriesLabel] = {
     "land_fraction": SeriesLabel("Land fraction", "share of cells"),
@@ -166,6 +165,7 @@ def _snapshots(run_dir: Path, seed: int) -> tuple[np.ndarray, np.ndarray, np.nda
 
 
 def _map_section(run: Run, run_dir: Path) -> Section | None:
+    """Pixel-art maps of the bare terrain (plants are the subject of the M3 report)."""
     margin = _band_margin(run)
     seeds = run.manifest.seeds
     worst = seeds[int(np.argmin(margin))]
@@ -178,30 +178,23 @@ def _map_section(run: Run, run_dir: Path) -> Section | None:
             return None
         heights, sea, day = snaps
         picks = [int(np.argmin(np.abs(day - y * 365.25))) for y in years]
-        rows.append([terrain_rgb(heights[k], float(sea[k])) for k in picks])
-    labels = [f"seed {s}" + (" (worst)" if s == worst else "") for s in shown]
-    fig = figures.image_grid(rows, labels, [f"year {y}" for y in years])
+        rows.append([pixelmap.render(heights[k], float(sea[k])) for k in picks])
+    labels = [f"seed {s}" + (" (worst case)" if s == worst else "") for s in shown]
+    grid = pixelmap.tile_grid(rows, labels, [f"year {y}" for y in years])
     caption = (
-        f"Height maps at fixed sim-times. Seeds {', '.join(map(str, shown[:-1]))} are the "
-        f"first of the run; seed {worst} is the worst case: its land fraction comes closest "
-        f"to the edge of the accepted band (margin {margin.min():.3f}). Blue is sea "
-        "(darker is deeper); sand to grey to white is rising land; relief is hill-shaded."
+        f"The ground at fixed sim-times, drawn without plants. Seeds "
+        f"{', '.join(map(str, shown[:-1]))} are the first of the run; seed {worst} is the "
+        f"worst case: its land fraction comes closest to the edge of the accepted band "
+        f"(margin {margin.min():.3f}). Blue bands are sea depth; tan is lowland, grey is high "
+        "rock, white is snow. One pixel is one cell."
     )
-    body = figure_html(html.escape(caption), figures.to_data_uri(fig, "png"))
+    body = figure_html(html.escape(caption), pixelmap.png_data_uri(grid), pixel=True)
 
     snaps = _snapshots(run_dir, shown[0])
     if snaps is not None:
         heights, sea, day = snaps
         frames = [
-            np.repeat(
-                np.repeat(
-                    np.round(terrain_rgb(h, float(s)) * 255).astype(np.uint8),
-                    ANIMATION_SCALE,
-                    axis=0,
-                ),
-                ANIMATION_SCALE,
-                axis=1,
-            )
+            pixelmap.render(h, float(s), scale=ANIMATION_SCALE)
             for h, s in zip(heights, sea, strict=True)
         ]
         step_days = float(np.median(np.diff(day))) if len(day) > 1 else 0.0
@@ -211,7 +204,9 @@ def _map_section(run: Run, run_dir: Path) -> Section | None:
             "continent drifts."
         )
         body += figure_html(
-            html.escape(caption), figures.animation_data_uri(frames, ANIMATION_FRAME_MS)
+            html.escape(caption),
+            pixelmap.animation_data_uri(frames, ANIMATION_FRAME_MS),
+            pixel=True,
         )
     return Section("Maps", body)
 

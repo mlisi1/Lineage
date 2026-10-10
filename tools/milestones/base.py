@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import html
 import math
+import re
 from dataclasses import dataclass
 
 
@@ -46,6 +48,12 @@ class Section:
     html: str
 
 
-def figure_html(caption: str, uri: str) -> str:
-    """An inline figure; ``caption`` must already be HTML-safe."""
-    return f'<figure><img src="{uri}" alt="{caption}"><figcaption>{caption}</figcaption></figure>'
+def figure_html(caption: str, uri: str, *, pixel: bool = False) -> str:
+    """An inline figure; ``caption`` must already be HTML-safe.
+
+    ``pixel`` marks pixel-art imagery: shown at its natural size with hard pixel edges.
+    The caption may contain markup (a colour legend); the alt text drops it.
+    """
+    kind = ' class="pixel"' if pixel else ""
+    alt = html.escape(re.sub(r"<[^>]+>", "", caption), quote=True)
+    return f'<figure{kind}><img src="{uri}" alt="{alt}"><figcaption>{caption}</figcaption></figure>'

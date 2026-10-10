@@ -31,11 +31,13 @@ from lineage_sim.config import Config, parse_config
 from lineage_sim.events import (
     CraterFormed,
     EarthquakeStruck,
+    FireEnded,
     LandmassesRejoined,
     LandmassSplit,
     OutputEvent,
     VolcanoErupted,
 )
+from lineage_sim.flora import Rare
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -61,7 +63,11 @@ EVENT_SERIES: dict[str, type[OutputEvent]] = {
     "craters": CraterFormed,
     "splits": LandmassSplit,
     "rejoins": LandmassesRejoined,
+    "fires": FireEnded,
 }
+# Arrays that are not sampled series (their length differs from the time axis) carry
+# this prefix; reports read them by name.
+EXTRA_PREFIX = "_"
 
 
 @dataclass(frozen=True)
@@ -94,10 +100,16 @@ class Probes:
         self._land_history: list[np.ndarray] = []
         self._step_s = 0.0
         self._steps = 0
+        self.fire_sizes: list[int] = []
+        self.burnt_cells = 0
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
         for name, kind in EVENT_SERIES.items():
             self.counts[name] += sum(isinstance(o, kind) for o in outputs)
+        for output in outputs:
+            if isinstance(output, FireEnded):
+                self.fire_sizes.append(output.cells)
+                self.burnt_cells += output.cells
         self._step_s += step_s
         self._steps += 1
 
@@ -122,13 +134,25 @@ class Probes:
         else:
             row["shore_change"] = np.nan
         self._land_history.append(land)
+        flora = world.flora
+        shares = flora.cover_shares()
+        row |= {f"cover_{cover.name.lower()}": share for cover, share in shares.items()}
+        row["closed_forest"] = flora.closed_forest_share()
+        row["plant_species"] = float(flora.species_count())
+        row["burnt_cells"] = float(self.burnt_cells)
+        alive = flora.biomass > 0
+        for gene in Rare:
+            name = (gene.name or "").lower()
+            row[f"rare_{name}"] = float(np.count_nonzero(alive & ((flora.rare & gene) != 0)))
         row |= {name: float(count) for name, count in self.counts.items()}
         for name, value in row.items():
             self.rows.setdefault(name, []).append(value)
         self._step_s, self._steps = 0.0, 0
 
     def series(self) -> dict[str, np.ndarray]:
-        return {name: np.array(values) for name, values in self.rows.items()}
+        series = {name: np.array(values) for name, values in self.rows.items()}
+        series[EXTRA_PREFIX + "fire_sizes"] = np.array(self.fire_sizes, dtype=np.int64)
+        return series
 
 
 def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
@@ -139,6 +163,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     probes = Probes()
     samples_per_year = max(1, round(DAYS_PER_YEAR / job.sample_days))
     snapshots: list[np.ndarray] = []
+    snapshot_cover: list[np.ndarray] = []
+    snapshot_biomass: list[np.ndarray] = []
     snapshot_sea: list[float] = []
     snapshot_days: list[int] = []
 
@@ -152,6 +178,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             probes.sample(world, day, save_kib, samples_per_year)
         if job.snapshot_days and (day % job.snapshot_days == 0 or day == job.days):
             snapshots.append(np.round(world.terrain.height * 255).astype(np.uint8))
+            snapshot_cover.append(world.flora.cover())
+            snapshot_biomass.append(np.round(world.flora.biomass * 255).astype(np.uint8))
             snapshot_sea.append(world.terrain.sea_level)
             snapshot_days.append(day)
 
@@ -179,6 +207,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         np.savez_compressed(
             path,
             height_u8=np.stack(snapshots),
+            cover_u8=np.stack(snapshot_cover),
+            biomass_u8=np.stack(snapshot_biomass),
             sea_level=np.array(snapshot_sea),
             day=np.array(snapshot_days),
         )
