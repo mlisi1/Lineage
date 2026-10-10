@@ -113,6 +113,10 @@ vegetation_protection = 0.8
 erosion_fertility_exchange = 0.3
 # Rate (per year) at which submerged ground gains fertility toward fertility_max.
 marine_sediment_rate_per_year = 0.08
+# Rate (per year) at which land loses fertility toward fertility_min as rain washes
+# minerals out. Balances sediment, ash and deposits so the world's fertility settles;
+# vegetation cover slows it by vegetation_protection.
+leaching_rate_per_year = 0.04
 
 # --- Events ---
 # Volcano: mean eruptions per year; cone radius (cells) and height (height units); lava
