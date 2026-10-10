@@ -39,6 +39,14 @@ regular landmass splits and rejoins. The spec fixes none of the mechanisms.
   time and from its own stream. This supersedes the line in ADR 0002 that a migration
   creates the new subsystem's state. A save with a subsystem the code does not know is
   still rejected.
+- **Leaching balances fertility.** The first M2 report showed mean land fertility rising
+  steadily with no plants. A 40-year run confirmed it never settled (0.19 → 0.35) while
+  barren ground disappeared (30 % → 9 % of land). Ablations attributed the rise to marine
+  sediment (largest), volcanic ash, erosion deposits, and drift exposing richer sea
+  floor. Rather than weakening the sources, land now loses fertility toward
+  `fertility_min` at 0.04 per year: the mean settles near its initial value and the
+  spread between poor and rich ground widens instead of collapsing. Vegetation cover
+  slows leaching, giving plants a role in holding soil (M3).
 - **Report**: maps are stored per seed as 8-bit height snapshots in `runs/`; the report
   embeds a PNG grid and an animated WebP. Pillow (already installed as a matplotlib
   dependency) is now a declared dependency of `tools`. Per-milestone report code lives in
@@ -50,5 +58,5 @@ regular landmass splits and rejoins. The spec fixes none of the mechanisms.
   the continent into a different one.
 - Golden hashes of M1 changed because the hashed state includes `schema_version`.
 - Changing `grid_width`/`grid_height` invalidates saves (restore rejects the mismatch).
-- Emerged sea floor is fertile, so bare-land fertility rises over the years; M3 should
-  check this does not make succession trivial.
+- The stationary fertility level is set by `leaching_rate_per_year` against the source
+  rates; M3 must re-check it once plants build soil and slow leaching.

@@ -46,12 +46,24 @@ Initial fertility is low (0.05–0.45), patchy, and richer in the lowlands.
 5. **Sea level** — `sea_base` plus two cycles (1.7 and 6.5 years; amplitudes 0.03 and
    0.02) with phases drawn per world. Submerged ground slowly gains fertility, so land
    that emerges from the sea is richer than old rock.
-6. **Landmasses** — 4-connected land areas are labelled. Areas of at least
+6. **Leaching** — rain washes minerals out of land: fertility decays toward
+   `fertility_min` at `leaching_rate_per_year` (0.04). Vegetation cover slows it by
+   `vegetation_protection`, so plants hold the soil they grow on.
+7. **Landmasses** — 4-connected land areas are labelled. Areas of at least
    `landmass_min_cells` (100) count as landmasses; when one becomes several, or several
    become one, the world emits `LandmassSplit` / `LandmassesRejoined`.
 
 Output events: `VolcanoErupted`, `EarthquakeStruck`, `CraterFormed`, `LandmassSplit`,
 `LandmassesRejoined`.
+
+## Fertility balance
+
+Fertility has sources (marine sediment, volcanic ash, erosion deposits) and sinks
+(leaching, lava, craters, stripped slopes). Without leaching the mean fertility of land
+rose from 0.19 to 0.35 in 40 years and was still climbing, and barren ground (below 0.15)
+shrank from 30 % of the land to 9 %. With it the mean settles around 0.21–0.23 and about
+30 % of the land stays barren, so the ground under the ecosystem is stable on average
+and keeps its poor/rich patchwork. A nightly test checks both over 30 years.
 
 ## Invariants (tested)
 
@@ -68,6 +80,4 @@ See `reports/M2-terrain/`. Targets from CLAUDE.md §8:
 
 ## Open
 
-- Mean fertility of bare land rises by about a third over a decade because emerged sea
-  floor is fertile. Revisit with M3 if succession turns out too easy.
 - Whether hotspot and event sites should be shown to the owner (camera interest, R3).

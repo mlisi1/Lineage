@@ -29,8 +29,8 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 YEAR_DAYS = 365
-# Final state of the default world, seed 42, after 30 daily ticks (same as fixture v2).
-GOLDEN_TERRAIN_SEED_42 = "46b15569901c97eab06f15eb2216f6026d69664d7651c3b9f586f292781ec118"
+# Final state of the default world, seed 42, after 30 daily ticks.
+GOLDEN_TERRAIN_SEED_42 = "a66b20d29f432f0897fdfd14eb3baa2e5f89edfc65d211729e1897f830d096e3"
 
 Grid = NDArray[np.float32]
 
@@ -281,6 +281,61 @@ def test_sediment_carries_fertility(config: Config) -> None:
     assert float(moved[5, 5]) == pytest.approx(0.4)
     assert float(moved.min()) >= 0.0
     assert float(moved.max()) <= 1.0
+
+
+def test_leaching_decays_land_fertility_toward_the_floor(config: Config) -> None:
+    cfg = config.terrain
+    fertility = _flat(cfg, 0.45)
+    fertility[0, 0] = cfg.fertility_min / 2  # already below the floor
+    land = np.ones(fertility.shape, dtype=np.bool_)
+    land[:, :10] = False
+    land[0, 0] = True
+    span = 1.0 / cfg.leaching_rate_per_year  # one time constant
+    leached = tr.leach(cfg, fertility, land, None, span)
+    expected = cfg.fertility_min + (0.45 - cfg.fertility_min) * math.exp(-1)
+    assert float(leached[5, 50]) == pytest.approx(expected, abs=1e-6)
+    assert float(leached[5, 5]) == pytest.approx(0.45)  # under water: untouched
+    assert float(leached[0, 0]) == pytest.approx(cfg.fertility_min / 2)  # never raised
+    forever = tr.leach(cfg, fertility, land, None, 1e6)
+    assert float(forever[5, 50]) == pytest.approx(cfg.fertility_min, abs=1e-6)
+    assert float(forever.min()) >= cfg.fertility_min / 2 - 1e-7
+
+
+def test_leaching_is_the_same_in_one_span_or_many_ticks(config: Config) -> None:
+    cfg = config.terrain
+    _, fertility = _island(cfg, 2)
+    land = np.ones(fertility.shape, dtype=np.bool_)
+    once = tr.leach(cfg, fertility, land, None, 2.0)
+    stepped = fertility
+    for _ in range(200):
+        stepped = tr.leach(cfg, stepped, land, None, 0.01)
+    assert stepped == pytest.approx(once, abs=1e-4)
+
+
+def test_vegetation_cover_slows_leaching(config: Config) -> None:
+    cfg = config.terrain
+    fertility = _flat(cfg, 0.4)
+    land = np.ones(fertility.shape, dtype=np.bool_)
+    bare = 0.4 - float(tr.leach(cfg, fertility, land, None, 1.0)[3, 3])
+    covered = 0.4 - float(tr.leach(cfg, fertility, land, np.ones_like(fertility), 1.0)[3, 3])
+    assert bare > 0
+    assert covered == pytest.approx((1 - cfg.vegetation_protection) * bare, rel=1e-3)
+
+
+def test_sea_floor_gains_fertility_up_to_the_marine_level(config: Config) -> None:
+    cfg = config.terrain
+    fertility = _flat(cfg, 0.1)
+    fertility[0, 0] = 0.9  # ash-rich ground that drowned keeps what it has
+    underwater = np.ones(fertility.shape, dtype=np.bool_)
+    underwater[:, :10] = False
+    underwater[0, 0] = True
+    settled = tr.settle_sediment(cfg, fertility, underwater, 5.0)
+    assert 0.1 < float(settled[5, 50]) < cfg.fertility_max
+    assert float(settled[5, 5]) == pytest.approx(0.1)  # dry land: untouched
+    assert float(settled[0, 0]) == pytest.approx(0.9)
+    assert float(tr.settle_sediment(cfg, fertility, underwater, 1e6)[5, 50]) == pytest.approx(
+        cfg.fertility_max
+    )
 
 
 # --- Events -----------------------------------------------------------------------------

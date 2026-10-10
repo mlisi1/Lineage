@@ -9,7 +9,8 @@ Each tick, in order:
 3. **Events** — volcano, earthquake, crater, at low random rates.
 4. **Erosion** — mass-conserving creep and landslides between neighbouring cells,
    slowed by vegetation cover; sediment carries fertility.
-5. **Sea level** — two superposed cycles; submerged ground slowly gains fertility.
+5. **Sea level** — two superposed cycles; submerged ground slowly gains fertility,
+   while rain leaches it out of land.
 6. **Landmasses** — connected land is labelled; splits and rejoins become output events.
 
 Grids are ``float32`` arrays of shape (grid_height, grid_width), indexed ``[y, x]``.
@@ -356,6 +357,27 @@ def move_fertility(cfg: TerrainConfig, fertility: Grid, height_change: Grid) -> 
     return (fertility + gain * (1.0 - fertility) - loss * fertility).astype(_F)
 
 
+def settle_sediment(cfg: TerrainConfig, fertility: Grid, underwater: Mask, dt_years: float) -> Grid:
+    """Submerged ground gains fertility toward ``fertility_max``; richer ground keeps it."""
+    share = _F(1.0 - math.exp(-cfg.marine_sediment_rate_per_year * dt_years))
+    target = np.maximum(fertility, _F(cfg.fertility_max))
+    return np.where(underwater, fertility + share * (target - fertility), fertility).astype(_F)
+
+
+def leach(
+    cfg: TerrainConfig, fertility: Grid, land: Mask, cover: Grid | None, dt_years: float
+) -> Grid:
+    """Rain washes minerals out of land: fertility decays toward ``fertility_min``.
+
+    This is the sink that balances sediment, ash and deposits, so the fertility of the
+    world settles instead of rising forever. Vegetation cover holds the soil and slows it.
+    """
+    share = _F(1.0 - math.exp(-cfg.leaching_rate_per_year * dt_years))
+    keep = _F(1.0) if cover is None else (1.0 - cfg.vegetation_protection * cover).astype(_F)
+    surplus = np.maximum(fertility - _F(cfg.fertility_min), _F(0.0))
+    return np.where(land, fertility - share * keep * surplus, fertility).astype(_F)
+
+
 # --- Events -----------------------------------------------------------------------------
 
 
@@ -591,12 +613,11 @@ class Terrain:
         height = np.clip(eroded, 0.0, 1.0).astype(_F)
 
         self._sea_level = sea_level(cfg, _years(ctx.t_ms), self._sea_phases)
-        settle = _F(1.0 - math.exp(-cfg.marine_sediment_rate_per_year * dt_years))
         underwater = height <= self._sea_level
-        richer = np.maximum(fertility, _F(cfg.fertility_max))
-        fertility = np.where(underwater, fertility + settle * (richer - fertility), fertility)
+        fertility = settle_sediment(cfg, fertility, underwater, dt_years)
+        fertility = leach(cfg, fertility, ~underwater, self._cover, dt_years)
 
-        self._height, self._fertility = height, fertility.astype(_F)
+        self._height, self._fertility = height, fertility
         outputs += self._relabel(ctx.t_ms)
         return outputs
 

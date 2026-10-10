@@ -97,6 +97,7 @@ class TerrainConfig:
     vegetation_protection: float
     erosion_fertility_exchange: float
     marine_sediment_rate_per_year: float
+    leaching_rate_per_year: float
     volcano_rate_per_year: float
     volcano_radius_min_cells: float
     volcano_radius_max_cells: float
