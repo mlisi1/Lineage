@@ -240,6 +240,8 @@ function girth(width: number, stout: boolean): number {
  * shade on the right, flared into roots if thick. From four pixels thick it has bark:
  * `furrowed` in strokes that run down it, each column on its own rhythm, with a knot on
  * the stoutest; or `scaly`, in short plates staggered from one column to the next.
+ * With `taper` under 1 it narrows upward to that share of its thickness, which it
+ * reaches two thirds of the way up: a trunk that carries branches, not a crown.
  */
 function trunk(
   art: PlantArt,
@@ -249,18 +251,22 @@ function trunk(
   centre = width / 2,
   bark: "furrowed" | "scaly" = "furrowed",
   stout = false,
+  taper = 1,
 ): void {
   const thick = girth(width, stout);
-  const left = Math.floor(centre - thick / 2);
-  const shaded = Math.max(1, Math.round(thick * 0.35));
   for (let y = from; y < height; y++) {
+    // Narrowing over its lower two thirds; above that, as thick as where it ends.
+    const up = 1 - (y - from) / Math.max(height - from, 1);
+    const wide = Math.max(1, Math.round(thick * (1 - (1 - taper) * Math.min(up / 0.67, 1))));
+    const left = Math.floor(centre - wide / 2);
+    const shaded = Math.max(1, Math.round(wide * 0.35));
     // Roots: the last rows are a pixel or two wider on each side.
     const flare = thick >= 4 ? Math.max(0, y - (height - 3)) : 0;
-    for (let i = -flare; i < thick + flare; i++) {
-      const dark = thick > 1 && i >= thick - shaded;
+    for (let i = -flare; i < wide + flare; i++) {
+      const dark = wide > 1 && i >= wide - shaded;
       const lit = thick >= 4 && i <= 0;
       let ink: Ink = dark ? INK.trunkDark : lit ? INK.trunkLight : INK.trunk;
-      if (thick >= 4 && i >= 0 && i < thick) {
+      if (thick >= 4 && i >= 0 && i < wide) {
         if (bark === "furrowed") {
           // A stroke of shade three rows long in every stretch of five, or none.
           const offset = (i * 7) % 5;
@@ -280,6 +286,8 @@ function trunk(
       put(art, left + i, y, ink);
     }
   }
+  const left = Math.floor(centre - thick / 2);
+  const shaded = Math.max(1, Math.round(thick * 0.35));
   // A knot, on a trunk with room for one: a dark ring round a lighter middle.
   if (thick >= 7 && bark === "furrowed" && height - from >= 14) {
     const x = left + 2 + Math.floor(cellHash(left, from, 63) * (thick - shaded - 3));
@@ -417,9 +425,14 @@ function bundles(
   heap(art, clumps, salt);
 }
 
-/** A branch from one point to another, `thick` pixels wide, lit on its left. */
+/**
+ * A branch from one point to another, `thick` pixels across: measured sideways on one
+ * that rises and up and down on one that reaches out, so that it is as thick whichever
+ * way it runs. Lit on its left or its top, in shade on the other side.
+ */
 function limb(art: PlantArt, x0: number, y0: number, x1: number, y1: number, thick: number): void {
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+  const rising = Math.abs(x1 - x0) <= Math.abs(y1 - y0);
   for (let step = 0; step <= steps; step++) {
     const x = x0 + ((x1 - x0) * step) / steps;
     const y = y0 + ((y1 - y0) * step) / steps;
@@ -430,7 +443,9 @@ function limb(art: PlantArt, x0: number, y0: number, x1: number, y1: number, thi
           : thick > 2 && i === 0
             ? INK.trunkLight
             : INK.trunk;
-      put(art, x - thick / 2 + i + 0.5, y, ink);
+      const off = i - thick / 2 + 0.5;
+      if (rising) put(art, x + off, y, ink);
+      else put(art, x, y + off, ink);
     }
   }
 }
@@ -530,10 +545,22 @@ function blossom(art: PlantArt, width: number, height: number, random: Random): 
   }
 }
 
+/** A bare trunk narrows to this share of its thickness where it forks. */
+const BARE_TAPER = 0.72;
 /**
- * Bare branches: from `forkX`, `forkY` limbs part and fork again, each fork thinner,
- * down to twigs a pixel wide, kept inside the drawing above row `floor`. The first
- * limbs are under half as thick as the trunk (`thick`) and `reach` long.
+ * What carries on from a fork against what came to it: the leader, which is the trunk
+ * going on up; a bough leaving it; and each of two or of three branches a limb parts into.
+ */
+const LEADER = 0.82;
+const BOUGH = 0.68;
+const OF_TWO = 0.74;
+const OF_THREE = 0.62;
+
+/**
+ * Bare branches, in proportion to the trunk that carries them. Where the trunk forks,
+ * `thick` pixels wide there, its leader goes on up a little thinner and a bough leaves
+ * to each side; every limb then parts in two or three, each thinner than what it grew
+ * from, down to twigs a pixel across. Kept inside the drawing above row `floor`.
  */
 function branches(
   art: PlantArt,
@@ -546,6 +573,21 @@ function branches(
   forks: number,
   random: Random,
 ): void {
+  /**
+   * Where a limb from (x, y) ends, and how much of its length it got: it stops at the
+   * edge of the drawing rather than run along it.
+   */
+  const end = (x: number, y: number, angle: number, length: number): [number, number, number] => {
+    const dx = Math.sin(angle) * length;
+    const dy = -Math.cos(angle) * length;
+    let fit = 1;
+    if (x + dx < 1) fit = Math.min(fit, (1 - x) / dx);
+    if (x + dx > width - 2) fit = Math.min(fit, (width - 2 - x) / dx);
+    if (y + dy < 1) fit = Math.min(fit, (1 - y) / dy);
+    if (y + dy > floor) fit = Math.min(fit, (floor - y) / dy);
+    fit = Math.max(fit, 0);
+    return [x + dx * fit, y + dy * fit, fit];
+  };
   const grow = (
     x: number,
     y: number,
@@ -554,22 +596,16 @@ function branches(
     left: number,
     size: number,
   ): void => {
-    const ex = Math.min(Math.max(x + Math.sin(angle) * length, 1), width - 2);
-    const ey = Math.min(Math.max(y - Math.cos(angle) * length, 1), floor);
-    limb(art, x, y, ex, ey, size);
+    const [ex, ey, fit] = end(x, y, angle, length);
+    limb(art, x, y, ex, ey, Math.max(1, Math.round(size)));
+    // Cut short by the edge, it ends there.
+    if (fit < 0.6) return;
     if (left === 0) {
       // A twig or two at the very end.
       for (const side of [-1, 1]) {
         if (random() < 0.3) continue;
-        const twig = angle + side * (0.5 + 0.4 * random());
-        limb(
-          art,
-          ex,
-          ey,
-          Math.min(Math.max(ex + Math.sin(twig) * length * 0.5, 0), width - 1),
-          Math.max(ey - Math.cos(twig) * length * 0.5, 0),
-          1,
-        );
+        const [tx, ty] = end(ex, ey, angle + side * (0.5 + 0.4 * random()), length * 0.5);
+        limb(art, ex, ey, tx, ty, 1);
       }
       return;
     }
@@ -580,19 +616,24 @@ function branches(
         ex,
         ey,
         angle * 0.7 + side * (0.3 + 0.36 * random()),
-        length * (0.62 + 0.16 * random()),
+        length * (0.58 + 0.14 * random()),
         left - 1,
-        Math.max(1, size - 1),
+        size * (arms === 2 ? OF_TWO : OF_THREE),
       );
     }
   };
-  const first = Math.max(1, Math.round(thick * 0.42));
-  const arms = forks >= 3 ? 5 : 3;
-  for (let arm = 0; arm < arms; arm++) {
-    // A fan from the fork, the middle limb the leader: it stands and reaches highest.
-    const angle = ((arm + 0.5) / arms - 0.5) * 2.0 + (random() - 0.5) * 0.2;
-    const long = reach * (1.1 - 0.35 * Math.abs(Math.sin(angle))) * (0.9 + 0.2 * random());
-    grow(forkX, forkY, angle, long, forks - 1, first);
+  // The leader stands; the boughs lean out, one a little lower than the other.
+  grow(forkX, forkY, (random() - 0.5) * 0.2, reach * 1.15, forks - 1, thick * LEADER);
+  for (const side of [-1, 1]) {
+    const angle = side * (0.62 + 0.3 * random());
+    grow(forkX, forkY + thick * 0.4 * random(), angle, reach, forks - 1, thick * BOUGH);
+  }
+  if (forks < 3) return;
+  // On a large tree two lesser boughs lower on the trunk, where its first limbs were.
+  for (const side of [-1, 1]) {
+    const angle = side * (1.05 + 0.25 * random());
+    const y = forkY + reach * (0.35 + 0.3 * random());
+    grow(forkX, y, angle, reach * 0.8, forks - 2, thick * BOUGH * 0.7);
   }
 }
 
@@ -650,16 +691,16 @@ function broadleaf(size: Size, random: Random, salt: number, look: Standing): Pl
     const crown = height * 0.74;
     if (bare) {
       const forkY = height * 0.5;
-      trunk(art, width, Math.round(forkY), height, width / 2, "furrowed", old);
+      trunk(art, width, Math.round(forkY), height, width / 2, "furrowed", old, BARE_TAPER);
       branches(
         art,
         width,
         width / 2,
         forkY,
         crown,
-        height * 0.185,
-        girth(width, old),
-        width >= RICH_FROM ? 3 : 2,
+        height * 0.175,
+        girth(width, old) * BARE_TAPER,
+        width >= RICH_FROM ? 4 : 3,
         random,
       );
     } else {

@@ -160,6 +160,15 @@ drawn in any:
 | Grass | short, fresh | tall | yellowed, in seed | dried, pressed flat |
 | Small plants | daisies and bells; few mushrooms | all four flowers; reeds green | few flowers, ferns browned, mushrooms at their most | none but brown ferns, dry reeds |
 
+A bare tree keeps trunk and branches in proportion: the trunk narrows over its lower
+two thirds to seven tenths of its thickness; where it forks its leader carries on up a
+little thinner and a bough leaves to each side, two lesser ones lower down on a large
+tree; every limb then parts in two or three, each some three quarters or six tenths as
+thick as what it grew from, down to twigs. A limb is as thick across whichever way it
+runs, and stops at the edge of its drawing rather than run along it. (The first bare
+trees had limbs under half the trunk's thickness leaving a trunk cut off square, and
+drawn thinner still the more they leaned.)
+
 With `snow` (winter only) it lies on the crowns and limbs, on the shoulders of every
 tier of a conifer, on stones and wood. Changing from one season to the next over days
 rather than at once belongs to R1.

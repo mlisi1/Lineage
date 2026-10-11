@@ -313,6 +313,43 @@ describe("the seasons", () => {
       for (let x = 0; x < bare.width; x++) if (inkAt(bare, x, y) !== INK.none) filled += 1;
     }
     expect(filled / (rows * bare.width)).toBeLessThan(0.4);
+    // The trunk and its branches are in proportion: the trunk narrows as it rises, and
+    // where it forks its leader carries on a little thinner, not as a twig.
+    for (const growth of ["grown", "old"] as const) {
+      for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+        const tree = near("BROADLEAF", variant, growth, "winter");
+        /** How wide the wood is on row `y` where the tree's own axis crosses it. */
+        const across = (y: number): number => {
+          const axis = Math.round(tree.footX);
+          const at = [0, -1, 1, -2, 2]
+            .map((dx) => axis + dx)
+            .find((x) => WOOD.includes(inkAt(tree, x, y)));
+          if (at === undefined) return 0;
+          let left = at;
+          let right = at;
+          while (WOOD.includes(inkAt(tree, left - 1, y))) left -= 1;
+          while (WOOD.includes(inkAt(tree, right + 1, y))) right += 1;
+          return right - left + 1;
+        };
+        const tall = extent(tree).bottom - extent(tree).top;
+        const fork = Math.round(tree.footY - tall / 2);
+        const foot = across(tree.footY - 8);
+        // Below where the lowest boughs leave it, the row holds the trunk alone.
+        const under = across(fork + 14);
+        // Above the fork, past where the boughs have parted from it: the leader.
+        const leader = across(fork - 12);
+        expect(under, `${growth} ${variant}`).toBeLessThan(foot);
+        expect(under).toBeGreaterThanOrEqual(foot * 0.55);
+        expect(leader, `${growth} ${variant}`).toBeLessThanOrEqual(under);
+        expect(leader).toBeGreaterThanOrEqual(under * 0.5);
+        // No branch runs along the edge of the drawing: its top row holds only the tips
+        // of a few.
+        const top = extent(tree).top;
+        let tips = 0;
+        for (let x = 0; x < tree.width; x++) if (inkAt(tree, x, top) !== INK.none) tips += 1;
+        expect(tips).toBeLessThan(tree.width * 0.2);
+      }
+    }
     // A sapling and a bush are bare too; a conifer never is.
     expect(count(near("BROADLEAF", 0, "sprout", "winter"), FOLIAGE)).toBe(0);
     expect(count(near("SHRUB", 0, "grown", "winter"), FOLIAGE)).toBe(0);
