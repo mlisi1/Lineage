@@ -36,8 +36,15 @@ test("the look sheet draws every picture", async ({ page }) => {
   await expect(page.locator("#sweeps .sweep")).toHaveCount(10);
   await expect(page.locator("#sweeps figure.tile")).toHaveCount(50);
   await expect(page.locator("#sweeps .sweep").nth(1)).toContainText("spider");
-  // What stands in the local view, in one strip.
-  await expect(page.locator(".strip canvas")).toHaveCount(1);
+  await expect(page.locator("#sweeps .sweep").nth(5)).toContainText("flippers");
+  // The local view's parts: two sheets of trees and bushes per style, two of small
+  // plants, and a sample of every kind of ground.
+  for (const style of ["bundles", "dome", "limbs"]) {
+    await expect(page.locator(`#trees-${style} canvas`)).toHaveCount(2);
+  }
+  await expect(page.locator("#plants-small canvas")).toHaveCount(2);
+  await expect(page.locator("#ground-samples figure.tile")).toHaveCount(13);
+  await expect(page.locator("#ground-samples")).toContainText("lichen on rock");
 
   // Nothing is left blank: every canvas holds more than one colour.
   const blank = await page.evaluate(() =>
@@ -68,17 +75,19 @@ test("the look sheet draws every picture", async ({ page }) => {
       [canvas.width, canvas.height, canvas.getBoundingClientRect().width].join(),
     ),
   );
-  expect(sizes).toHaveLength(12);
-  expect(sizes.filter((size) => size === "512,300,1024")).toHaveLength(8);
+  expect(sizes).toHaveLength(17);
+  expect(sizes.filter((size) => size === "512,300,1024")).toHaveLength(13);
   expect(sizes.filter((size) => size === "512,300,512")).toHaveLength(4);
 
-  // The three views, the three distances of the local one, its places and its lights:
-  // each set is so many different pictures.
+  // The three views; the ground read over one, two and three cells; the wood in each
+  // style of tree; the animals at each size; the lights: each set is so many pictures.
   const sets = [
-    ["map", "mid-shore", "local-32"],
+    ["map", "mid-shore", "size-2"],
     ["mid-shore", "mid-wood"],
-    ["local-24", "local-32", "local-48"],
-    ["local-32", "local-wood", "local-shore"],
+    ["ground-1", "ground-2", "ground-3"],
+    ["wood-bundles", "wood-dome", "wood-limbs"],
+    ["size-1", "size-2", "size-3"],
+    ["size-2", "wood-bundles", "local-shore"],
     ["day", "dusk", "night", "dawn"].map((light) => `light-${light}`),
   ];
   for (const names of sets) {
@@ -131,11 +140,14 @@ test("the saved page can carry the animals moving, as loops that need no script"
       return [4, 5, 6, 7].reduce((count, i) => count * 256 + bytes.charCodeAt(at + i), 0);
     }, label);
   // Animals in the picture: a loop. None, or a light that is only a tint: a still.
-  expect(await frames("The local view, 32 art pixels to the cell")).toBe(2);
+  expect(await frames("The local view, animals at 0.5")).toBe(2);
+  expect(await frames("A wood of trees as domes")).toBe(2);
   expect(await frames("The map view")).toBe(2);
   expect(await frames("grazer: beast · herbivore · mass 0.9 · bands")).toBe(2);
   expect(await frames("eyespots")).toBe(2);
-  expect(await frames("What stands in the local view")).toBe(1);
+  expect(await frames("The ground read over two cells around")).toBe(1);
+  expect(await frames("bundles: broadleaf trees and conifers")).toBe(1);
+  expect(await frames("Ground: lichen on rock")).toBe(1);
   expect(await frames("The shore at night")).toBe(1);
   const broken = await page.evaluate(
     () =>
@@ -146,7 +158,8 @@ test("the saved page can carry the animals moving, as loops that need no script"
 
 test("the still pictures are the same every time", async ({ page }) => {
   await open(page, 1);
-  const first = [await png(page, "local-32"), await png(page, "map")];
+  const names = ["size-2", "wood-limbs", "ground-2", "map"];
+  const first = await Promise.all(names.map((name) => png(page, name)));
   await open(page, 1);
-  expect([await png(page, "local-32"), await png(page, "map")]).toEqual(first);
+  expect(await Promise.all(names.map((name) => png(page, name)))).toEqual(first);
 });

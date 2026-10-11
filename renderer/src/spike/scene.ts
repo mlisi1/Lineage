@@ -14,7 +14,7 @@ import { cycleTint } from "./light";
 import type { Backend } from "./params";
 import { PLANT_SCALES } from "./plantart";
 import { standingPlants, type PlantLayer } from "./plants";
-import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PLANTS, localBody } from "./proposal";
+import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PLANTS, TREES, localBody } from "./proposal";
 import { mulberry32 } from "./rng";
 import type { Scenario } from "./scenarios";
 
@@ -237,17 +237,21 @@ export class SpikeScene {
         mulberry32(this.seed),
         body,
       );
+    const nearPlants = standingPlants(this.fixture, scale, LOCAL_PIXELS, TREES);
     this.proposed = {
       mapGround,
       midGround,
       standing: standingPlants(this.fixture, scale, MID_TILE),
       creatures: cast(MID_BODY),
       paintMs,
-      pieces: new GroundPieces(this.fixture, LOCAL_PIXELS, GROUND),
-      nearPlants: standingPlants(this.fixture, scale, LOCAL_PIXELS, true),
+      // The ground of the local view carries the shadows of what stands on it.
+      pieces: new GroundPieces(this.fixture, LOCAL_PIXELS, GROUND, (cells) =>
+        nearPlants.shadows(cells),
+      ),
+      nearPlants,
       nearCreatures: cast(localBody(LOCAL_PIXELS)),
     };
-    const { standing, creatures, pieces, nearPlants, nearCreatures } = this.proposed;
+    const { standing, creatures, pieces, nearCreatures } = this.proposed;
     this.grounds.addChild(mapGround, midGround, pieces.container);
     this.plantLayers.addChild(standing.container, nearPlants.container);
     this.casts.addChild(creatures.container, nearCreatures.container);

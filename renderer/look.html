@@ -144,7 +144,11 @@
       .steps figure.tile figcaption,
       #patterns-beast figcaption,
       #patterns-beetle figcaption {
-        max-width: 160px;
+        max-width: 168px;
+      }
+      .strip canvas,
+      .strip img {
+        margin: 6px 0;
       }
       .sweep {
         display: flex;
@@ -154,7 +158,7 @@
         border-top: 1px solid var(--rule);
       }
       .gene {
-        flex: 0 0 200px;
+        flex: 0 0 104px;
         font-size: 0.88rem;
         color: var(--muted);
       }
@@ -227,8 +231,9 @@
       <p>
         A sixteenth of the continent, 8 art pixels to the cell. As you chose: the ground
         interpolated and dithered (G4), the large plants (P3), animals as outlined body plans (C3).
-        The animals are drawn a little smaller than before: 0.85 of the first size, so an animal of
-        mass 1 is 7 art pixels long here.
+        <b>The animals are smaller again</b>: 0.5 of the first size instead of 0.85, so an animal of
+        mass 1 is 4 to 5 art pixels long here and the heaviest about 11. That number is the same in
+        every view; section 3 has it at three values to choose from.
       </p>
       <figure class="screen">
         <canvas data-picture="mid-shore" aria-label="The middle view, a shore"></canvas>
@@ -239,86 +244,155 @@
       <figure class="screen">
         <canvas data-picture="mid-wood" aria-label="The middle view, a wood"></canvas>
         <figcaption>
-          <b>Full size.</b> The densest wood, with whoever of the herd is there.
+          <b>Full size.</b> The densest wood, with whoever of the herd is there. The trees here are
+          still the P3 ones; once a style is chosen below they are redrawn to match (each style's
+          row shows how it comes out at this size).
         </figcaption>
       </figure>
 
-      <h2>3. The local view <span class="pick new">new</span></h2>
+      <h2>3. The local view <span class="pick new">reworked</span></h2>
       <p>
-        One animal, from close to the ground. Nothing is rescaled between the views: the animal is
-        the same 0.85 of a cell long and the tree the same three cells tall as in the middle view.
-        The camera is simply much closer, so the animal is 20 to 45 art pixels long instead of 7
-        (larger on the screen than your S3 was), and a grown tree stands taller than the animal is
-        long, as it should.
+        One animal from close to the ground, 32 art pixels to the cell (your L2): 16 by 9 cells in
+        sight. Nothing is rescaled between the views: a tree is three cells tall and an animal half
+        a cell long in the middle view too. Four things changed since the last sheet, each with
+        proposals to choose from.
       </p>
-      <p>What is drawn for this distance:</p>
-      <ul>
-        <li>
-          <b>Ground</b>: the same painter, with the patches of the middle view shown larger and
-          given ragged edges, long blades, wet sand and a band of foam on the shore.
-        </li>
-        <li>
-          <b>Plants</b>: the trees and bushes of the middle view in the same places, drawn with many
-          clumps of foliage, single leaves, bark and roots; grass as tufts in every cell that grows
-          it, so an animal walks through it; flowers in grown grass; stones on bare ground.
-        </li>
-        <li>
-          <b>Animals</b>: outline, light, eyes with a glint, legs with an edge and feet, and the
-          markings of section 4. They amble instead of hurrying.
-        </li>
-        <li>
-          <b>What covers the animal goes see-through.</b> A tree in front of the one the picture is
-          about shows it through instead of hiding it.
-        </li>
-      </ul>
-      <div id="plants-local" class="strip"></div>
+
+      <h3>The ground: larger patches <span class="pick new">new</span></h3>
+      <p>
+        Why there were so many spots: the world's cells differ one from the next (grass, then a cell
+        of scrub, then bare), which reads as texture when a cell is 8 pixels and as a patchwork when
+        it is 32. On top of that the soil showed through the growth in blobs half a cell wide. Now a
+        close view reads what grows over a few cells around, so a kind of ground only shows where it
+        holds several cells together, and thin growth opens in gaps a cell or two across. The
+        blending is as it was. The same meadow, read over one, two and three cells around, without
+        plants or animals:
+      </p>
+      <figure class="screen">
+        <canvas data-picture="ground-1" aria-label="The ground read over one cell around"></canvas>
+        <figcaption>
+          <b>Full size. K1: one cell around.</b> Closest to what the cells say.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="ground-2" aria-label="The ground read over two cells around"></canvas>
+        <figcaption>
+          <b>Full size. K2: two cells around</b> <span class="pick">my pick</span> A patch is at
+          least two or three cells wide. The pictures further down use this one.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas
+          data-picture="ground-3"
+          aria-label="The ground read over three cells around"
+        ></canvas>
+        <figcaption>
+          <b>Full size. K3: three cells around.</b> The calmest; small woods and clearings merge
+          into their surroundings.
+        </figcaption>
+      </figure>
+      <p>
+        What the pixels are spent on instead is what the ground is made of. Each kind has its own
+        detail, drawn by rule: blades and a bloom in grass, pebbles, grit and cracks in soil,
+        ripples in sand, leaf litter under broadleaves and needles under conifers, ash where it
+        burnt. <b>Lichen</b> is no longer a colour of the ground but rosettes on it, grey-green,
+        mustard and chalk-white, thick where it grows thick, and scattered on any bare rock. A piece
+        of each, enlarged twice:
+      </p>
+      <div id="ground-samples" class="tiles"></div>
+
+      <h3>Trees and bushes: three proposals <span class="pick new">new</span></h3>
+      <p>
+        The old trees had two faults in the drawing itself: the crown was cut off flat along its
+        lower edge, and each tree carried its own see-through shadow, so that shadows darkened the
+        crowns behind them and each other. Shadows are now painted on the ground, once, however many
+        trees throw them, and crowns end where their leaves end.
+      </p>
+      <p>
+        For the style I looked at how pixel-art trees are usually built and wrote three rules after
+        what I found. Each draws every tree and bush at any size, in three builds (as the scale has
+        it, slender, broad) and with a different arrangement for every drawing. Rows: broadleaf
+        grown ×3 and young ×2, conifer the same; then bushes (the second in berry) and, last, the
+        three kinds at the middle view's size.
+      </p>
       <p class="note">
-        What stands in the local view, enlarged twice: broadleaf grown and young, conifer grown and
-        young, bush (plain, in berry) and young, grass grown and young, three flowers, two stones.
+        References: Slynyrd's Pixelblog 44 (top-down trees built from one bundle of leaves, layered
+        in tones) and 15 (how much leaf detail a crown bears); the usual construction of top-down
+        game trees, crown over a short trunk with the shadow apart; Gentree, which grows a tree by
+        forking branches and hangs a clump of leaves on each end.
       </p>
-      <h3>How close: three proposals</h3>
+      <div id="trees-bundles" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="wood-bundles" aria-label="A wood of trees in bundles"></canvas>
+        <figcaption>
+          <b>Full size. T1: bundles</b> <span class="pick">my pick</span> A crown is many small
+          bundles of leaves, each lit on its own and shading the ones behind it; conifers in
+          drooping boughs. The richest of the three, and the one that looks most grown.
+        </figcaption>
+      </figure>
+      <div id="trees-dome" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="wood-dome" aria-label="A wood of trees as domes"></canvas>
+        <figcaption>
+          <b>Full size. T2: domes.</b> A crown is one rounded mass with a bumpy rim, shaded as a
+          whole in five stepped tones; conifers in clean tiers. The calmest and the easiest to read
+          from a distance.
+        </figcaption>
+      </figure>
+      <div id="trees-limbs" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="wood-limbs" aria-label="A wood of trees on their limbs"></canvas>
+        <figcaption>
+          <b>Full size. T3: limbs.</b> A trunk that forks, a clump of leaves on each end and air
+          between them; conifers as whorls on a trunk that shows. The lightest: more ground and more
+          of the animals show through a wood.
+        </figcaption>
+      </figure>
+      <p class="note">
+        All three: a hunter in the densest wood, with company. Trees in front of the animal the
+        picture is about go see-through while it is behind them.
+      </p>
+
+      <h3>What grows and lies among them <span class="pick new">new</span></h3>
       <p>
-        The same meadow and the same giant beetle with its company, at three distances. The animal
-        the picture is about is kept near the middle.
+        Small plants, placed by what covers each cell. In grass: tufts to walk through, herbs, and
+        four kinds of flower in five colours, which come in drifts (one kind and colour over several
+        cells, thick in places, rare between). Under bushes and trees: ferns, mushrooms, fallen
+        logs. On bare ground: stones and boulders, some grown over with lichen or moss; reeds on the
+        shore; charred stumps where it burnt.
+      </p>
+      <div id="plants-small" class="strip"></div>
+
+      <h3>How large the animals are: three proposals <span class="pick new">new</span></h3>
+      <p>
+        You were right that the proportions were off: at 0.85 the heaviest animal was as long as a
+        grown tree is wide. The same meadow with a grazer (mass 0.9, the one the picture is about),
+        a mouse (0.3), a hunter (3), a beast of mass 4 and the giant beetle (16, the heaviest a
+        genome allows), among bushes and a young tree. The middle view scales with it.
       </p>
       <figure class="screen">
-        <canvas
-          data-picture="local-24"
-          aria-label="The local view, 24 art pixels to the cell"
-        ></canvas>
+        <canvas data-picture="size-1" aria-label="The local view, animals at 0.4"></canvas>
         <figcaption>
-          <b>Full size. L1: 24 art pixels to the cell.</b> Three times closer than the middle view:
-          21 by 12½ cells in sight.
+          <b>Full size. A1: 0.4.</b> Mass 1 is 14 art pixels long here (3½ in the middle view), a
+          seventh of a grown tree's height.
         </figcaption>
       </figure>
       <figure class="screen">
-        <canvas
-          data-picture="local-32"
-          aria-label="The local view, 32 art pixels to the cell"
-        ></canvas>
+        <canvas data-picture="size-2" aria-label="The local view, animals at 0.5"></canvas>
         <figcaption>
-          <b>Full size. L2: 32 art pixels to the cell</b> <span class="pick">my pick</span>
-          Four times closer: 16 by 9 cells in sight.
+          <b>Full size. A2: 0.5</b> <span class="pick">my pick</span> Mass 1 is 18 art pixels long
+          (4½ in the middle view), a fifth of a grown tree's height; the giant comes to a tree's
+          knee, not over its head. Everything else on this sheet uses it.
         </figcaption>
       </figure>
       <figure class="screen">
-        <canvas
-          data-picture="local-48"
-          aria-label="The local view, 48 art pixels to the cell"
-        ></canvas>
+        <canvas data-picture="size-3" aria-label="The local view, animals at 0.62"></canvas>
         <figcaption>
-          <b>Full size. L3: 48 art pixels to the cell.</b> Six times closer: 11 by 6 cells in sight.
-          A grown tree is half the height of the screen.
+          <b>Full size. A3: 0.62.</b> Mass 1 is 22 art pixels long (5½ in the middle view): more of
+          the markings shows, and the giant is again as long as a young tree is tall.
         </figcaption>
       </figure>
-      <h3>Other animals, other ground (at L2)</h3>
-      <figure class="screen">
-        <canvas data-picture="local-wood" aria-label="The local view in a wood"></canvas>
-        <figcaption>
-          <b>Full size.</b> A hunter in the wood. The trees in front of it go see-through while it
-          is behind them.
-        </figcaption>
-      </figure>
+      <h3>A shore</h3>
       <figure class="screen">
         <canvas data-picture="local-shore" aria-label="The local view on a shore"></canvas>
         <figcaption>
@@ -352,17 +426,24 @@
 
       <h2>4. Creatures up close</h2>
       <p>
-        Style C3, as chosen: a body plan per kind of animal, outlined and lit. The fifteen reference
-        genomes at the local view's L1 distance (so that the heaviest fit), each on its own patch of
-        ground and enlarged twice.
+        Style C3, as chosen. Three things changed. <b>Shading</b>: every mass of the body now has
+        its far side in shade (a cooler, darker tone) as well as a lit back, the largest a gleam;
+        and every marking large enough is shaded the same way, each on its own.
+        <b>Markings stay on the body</b>: the artifacts you saw were markings sticking out over the
+        outline, or a highlight larger than what it lay on; each marking is now fitted to the mass
+        it is on. <b>Legs turn into fins</b> with the aquatic gene (see its row below).
+      </p>
+      <p>
+        The fifteen reference genomes, each on its own patch of ground at the local view's own size,
+        enlarged twice:
       </p>
       <div id="specimens" class="tiles"></div>
-      <h3>Markings <span class="pick new">new</span></h3>
+      <h3>Markings</h3>
       <p>
-        Five markings were not enough. There are twelve now, each in one of four colours (darker,
-        paler, a colour from across the wheel, one a third of the way round), which the one pattern
-        gene picks between: forty-eight looks per body. The same twelve on a beast's back and on a
-        beetle's shell:
+        The twelve markings, each in one of its four colours, on a beast's back and on a beetle's
+        shell. Drawn twice as close as the local view, as a bestiary would show an animal: at the
+        local view's size most animals are 15 to 25 pixels long and a marking is a few pixels, so
+        the shading of markings shows on the heavy ones and from this close.
       </p>
       <div id="patterns-beast" class="tiles"></div>
       <div id="patterns-beetle" class="tiles"></div>
@@ -392,23 +473,23 @@
           <tr>
             <td>Script per frame, map view (216 animals as dots)</td>
             <td>0.2 ms</td>
-            <td>2 ms (up to 6)</td>
+            <td>3 ms (up to 8)</td>
             <td rowspan="4">33 ms a frame at 30 fps</td>
           </tr>
           <tr>
             <td>Script per frame, middle view (50 animals)</td>
-            <td>0.3 ms</td>
-            <td>4 ms (up to 9)</td>
+            <td>0.2 ms</td>
+            <td>3 ms (up to 8)</td>
           </tr>
           <tr>
             <td>Script per frame, middle view (all 216 animals alive)</td>
-            <td>0.6 ms</td>
-            <td>10 ms (up to 20)</td>
+            <td>0.5 ms</td>
+            <td>8 ms (up to 15)</td>
           </tr>
           <tr>
             <td>Script per frame, local view (following one animal)</td>
-            <td>0.1 ms</td>
-            <td>0.5 ms (up to 5)</td>
+            <td>0.2 ms</td>
+            <td>1 ms (up to 8)</td>
           </tr>
           <tr>
             <td>The page's process, any view</td>
@@ -419,12 +500,12 @@
           <tr>
             <td>Painting the map's and the middle view's ground</td>
             <td>0.5 s</td>
-            <td>9 s</td>
+            <td>10 s</td>
             <td>once a sim-day</td>
           </tr>
           <tr>
             <td>Painting the local view's ground, per piece of 8 × 8 cells</td>
-            <td>30 ms</td>
+            <td>35 ms</td>
             <td>0.6 s</td>
             <td>two or three new pieces whenever the animal has walked 8 cells</td>
           </tr>
@@ -455,7 +536,7 @@
         <li>
           <b>Painting ground is the one thing that does not fit in a frame.</b> On the board a piece
           of the local view's ground would stop the picture for half a second, and the daily repaint
-          of the other two for nine. Both have to be painted in the background (a worker), ahead of
+          of the other two for ten. Both have to be painted in the background (a worker), ahead of
           the camera for the local view. Measured as it is, the local view drops to 2 frames a
           second while a piece is painted.
         </li>
@@ -468,23 +549,27 @@
         <li><b>A 1 GB board is tight</b> next to the simulation; 2 GB or more is safer.</li>
       </ul>
       <p class="note">
-        "At the board's speed" is the same page with its processor throttled 21 times in Chromium;
-        in brackets, the slowest frame in a hundred. The page's process and the memory are
-        Chromium's own figures on the PC. Sources for the scores: Geekbench 6 uploads for the Orange
-        Pi Zero 3 (same chip) and for the Core Ultra 9 275HX.
+        Measured again with this sheet's local view: its calmer ground, detail and shadows cost
+        about a fifth more to paint per piece than the ground before them (33 ms against 27), and
+        the shading of the animals nothing that shows, since they are drawn smaller. "At the board's
+        speed" is the same page with its processor throttled 21 times in Chromium; in brackets, the
+        slowest frame in a hundred. The page's process and the memory are Chromium's own figures on
+        the PC. Sources for the scores: Geekbench 6 uploads for the Orange Pi Zero 3 (same chip) and
+        for the Core Ultra 9 275HX.
       </p>
 
       <h2>To choose, and to say</h2>
       <ul>
-        <li><b>How close the local view is</b>: L1, L2 or L3.</li>
+        <li><b>The ground's patches</b>: K1, K2 or K3.</li>
+        <li><b>Trees and bushes</b>: T1, T2 or T3, or what to take from each.</li>
+        <li><b>The size of the animals</b>: A1, A2 or A3. One number for all three views.</li>
         <li>
-          <b>The local view's plants and ground</b>: whether this is the amount of detail you had in
-          mind, and what is missing.
+          <b>The small plants and the ground's detail</b>: whether this is the amount you had in
+          mind, what is missing, what is too much.
         </li>
-        <li><b>The markings</b>: which to keep, drop or add.</li>
         <li>
-          <b>The size of the animals</b> against plants, now that both are seen from close: 0.85 is
-          one number for all three views.
+          <b>Fins</b>: whether legs webbing into flippers reads well, or should go further (a fluke,
+          a fin down the back).
         </li>
       </ul>
     </main>

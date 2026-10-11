@@ -1,14 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { cellHash, plantLook, plantOffset, standsAlone } from "../../src/spike/pixelart";
 import {
+  cellHash,
+  plantLook,
+  plantOffset,
+  standsAlone,
+  type Form,
+  type Stage,
+} from "../../src/spike/pixelart";
+import {
+  FLOWER_COLOURS,
   INK,
   PLANT_SCALES,
+  SMALL_KINDS,
+  SMALL_SIZES,
   STANDING_VARIANTS,
+  TREE_STYLES,
   colourArt,
-  drawFlower,
+  drawSmall,
   drawStanding,
-  drawStone,
   type PlantArt,
+  type TreeStyle,
 } from "../../src/spike/plantart";
 import { mulberry32 } from "../../src/spike/rng";
 import { PALETTE } from "./worlds";
@@ -153,19 +164,6 @@ describe("standing plants", () => {
     expect(young.tall).toBeLessThan(grown.tall);
   });
 
-  it("stand beside flowers and stones up close", () => {
-    const flower = drawFlower([6, 10], mulberry32(31));
-    expect(count(flower, [INK.accent])).toBe(4); // four petals
-    expect(count(flower, [INK.light])).toBe(1); // round a middle
-    expect(count(flower, [INK.dark])).toBeGreaterThan(5); // on a stem
-    const stone = drawStone([10, 6], mulberry32(41));
-    expect(count(stone, LEAVES)).toBeGreaterThan(15);
-    expect(count(stone, [INK.outline])).toBeGreaterThan(10);
-    expect(count(stone, [INK.shadow])).toBeGreaterThan(2);
-    const grey = colourArt(stone, ["#77716c", "#98928c", "#b5b0aa"]);
-    expect(grey.width).toBe(stone.width);
-  });
-
   it("take their form's colours, with a see-through shadow", () => {
     const scale = PLANT_SCALES[1];
     if (scale === undefined) throw new Error("no medium scale");
@@ -184,6 +182,214 @@ describe("standing plants", () => {
       if (ink === INK.mid) expect(hex(at)).toBe(ramp[1]);
       if (ink === INK.light) expect(hex(at)).toBe(ramp[2]);
     });
+  });
+});
+
+describe("the styles of tree to choose from", () => {
+  const large = PLANT_SCALES[2];
+  if (large === undefined) throw new Error("no large scale");
+  /** The local view: four times the middle view's pixels to the cell. */
+  const near = (form: Form, variant: number, style: TreeStyle, stage: Stage = "mature"): PlantArt =>
+    drawStanding(form, stage, variant, large, 4, style);
+  const FOLIAGE: readonly number[] = [INK.deep, INK.dark, INK.mid, INK.light, INK.bright];
+
+  it("draw every tree and bush differently from each other and from the first", () => {
+    for (const form of ["BROADLEAF", "CONIFER", "SHRUB"] as const) {
+      const drawings = [...TREE_STYLES, "first" as const].map((style) =>
+        near(form, 0, style).ink.join(""),
+      );
+      expect(new Set(drawings).size).toBe(TREE_STYLES.length + 1);
+      for (const style of TREE_STYLES) {
+        expect(near(form, 0, style).ink.join("")).toBe(drawings[TREE_STYLES.indexOf(style)]);
+      }
+    }
+  });
+
+  it("carry no shadow of their own, and say what the ground should paint for them", () => {
+    for (const style of TREE_STYLES) {
+      for (const form of ["BROADLEAF", "CONIFER", "SHRUB"] as const) {
+        const art = near(form, 1, style);
+        expect(count(art, [INK.shadow])).toBe(0);
+        expect(art.shadow?.rx).toBeGreaterThan(8);
+        expect(art.shadow?.ry).toBeLessThan(art.shadow?.rx ?? 0);
+        // It stands on its foot: the lowest thing drawn is the trunk or the leaves there.
+        expect(extent(art).bottom).toBeLessThanOrEqual(art.footY);
+        expect(extent(art).bottom).toBeGreaterThan(art.footY - 6);
+      }
+    }
+    expect(drawStanding("BROADLEAF", "mature", 0, large).shadow).toBeUndefined();
+  });
+
+  it("shade a crown in five tones, with an outline round its leaves", () => {
+    for (const style of TREE_STYLES) {
+      const art = near("BROADLEAF", 0, style);
+      for (const tone of FOLIAGE) expect(count(art, [tone]), `${style} ${tone}`).toBeGreaterThan(8);
+      expect(count(art, [INK.trunk, INK.trunkDark])).toBeGreaterThan(20);
+      // No leaf touches the air.
+      for (let y = 0; y < art.height; y++) {
+        for (let x = 0; x < art.width; x++) {
+          if (!FOLIAGE.includes(inkAt(art, x, y))) continue;
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ] as const) {
+            expect(inkAt(art, x + dx, y + dy)).not.toBe(INK.none);
+          }
+        }
+      }
+    }
+    // Light comes from the upper left: the lightest tones lie there, the darkest opposite.
+    for (const style of TREE_STYLES) {
+      const art = near("BROADLEAF", 0, style);
+      const middle = (inks: readonly number[]): [number, number] => {
+        let x = 0;
+        let y = 0;
+        let n = 0;
+        art.ink.forEach((ink, at) => {
+          if (!inks.includes(ink)) return;
+          x += at % art.width;
+          y += Math.floor(at / art.width);
+          n += 1;
+        });
+        return [x / n, y / n];
+      };
+      const [lightX, lightY] = middle([INK.bright, INK.light]);
+      const [darkX, darkY] = middle([INK.deep, INK.dark]);
+      expect(lightX).toBeLessThan(darkX);
+      expect(lightY).toBeLessThan(darkY);
+    }
+  });
+
+  it("come in three builds, and adapt to the middle view's size", () => {
+    for (const style of TREE_STYLES) {
+      const [even, slender, broad] = [0, 1, 2].map((variant) =>
+        extent(near("BROADLEAF", variant, style)),
+      );
+      expect(slender?.tall).toBeGreaterThan(even?.tall ?? 0);
+      expect(broad?.wide).toBeGreaterThan(slender?.wide ?? 0);
+      expect(broad?.tall).toBeLessThan(even?.tall ?? 0);
+      // A young tree is smaller; a bush lower than a tree; one bush in three in berry.
+      expect(extent(near("BROADLEAF", 0, style, "young")).tall).toBeLessThan(even?.tall ?? 0);
+      expect(extent(near("SHRUB", 0, style)).tall).toBeLessThan((even?.tall ?? 0) / 2);
+      const fruit = [0, 1, 2].map((variant) => count(near("SHRUB", variant, style), [INK.accent]));
+      expect([fruit[0], fruit[2]]).toEqual([0, 0]);
+      expect(fruit[1]).toBeGreaterThan(3);
+      // The same rule at the middle view's size: a tree of a few dozen pixels, still a tree.
+      for (const form of ["BROADLEAF", "CONIFER"] as const) {
+        const small = drawStanding(form, "mature", 0, large, 1, style);
+        expect(extent(small).tall).toBeGreaterThan(large.broadleaf[0][1] - 4);
+        expect(extent(small).tall).toBeLessThanOrEqual(large.broadleaf[0][1] + 2);
+        // Leaves and their outline: a whorled conifer this small is mostly outline.
+        expect(count(small, [...FOLIAGE, INK.outline])).toBeGreaterThan(45);
+      }
+    }
+  });
+
+  it("tell the conifers of each style apart: boughs, clean tiers, whorls with air between", () => {
+    const [boughs, tiers, whorls] = TREE_STYLES.map((style) => near("CONIFER", 0, style));
+    if (boughs === undefined || tiers === undefined || whorls === undefined)
+      throw new Error("styles");
+    // Clean tiers have the least rim for their leaves; whorls let the trunk show.
+    const rim = (art: PlantArt): number => count(art, [INK.outline]) / count(art, FOLIAGE);
+    expect(rim(tiers)).toBeLessThan(rim(boughs));
+    expect(rim(boughs)).toBeLessThan(rim(whorls));
+    const wood = (art: PlantArt): number => count(art, [INK.trunk, INK.trunkDark, INK.trunkLight]);
+    expect(wood(whorls)).toBeGreaterThan(2 * wood(tiers));
+  });
+});
+
+describe("what grows and lies among the trees", () => {
+  const draw = (kind: (typeof SMALL_KINDS)[number], variant = 0): PlantArt => {
+    const [width, height] = SMALL_SIZES[kind];
+    return drawSmall(kind, [width * 4, height * 4], mulberry32(31 + variant), variant);
+  };
+
+  it("draws each kind inside its own size, standing on its foot, the same every time", () => {
+    for (const kind of SMALL_KINDS) {
+      const art = draw(kind);
+      const [width, height] = SMALL_SIZES[kind];
+      const drawn = extent(art);
+      expect(drawn.wide, kind).toBeGreaterThan(1);
+      // Its outline may reach a pixel beyond the size on every side.
+      expect(drawn.wide, kind).toBeLessThanOrEqual(width * 4 + 2);
+      expect(drawn.tall, kind).toBeLessThanOrEqual(height * 4 + 2);
+      expect(drawn.tall, kind).toBeGreaterThan(height * 4 * 0.4);
+      expect(drawn.bottom, kind).toBeGreaterThan(art.footY - 3);
+      expect(draw(kind).ink.join("")).toBe(art.ink.join(""));
+    }
+    expect(new Set(SMALL_KINDS.map((kind) => draw(kind).ink.join(""))).size).toBe(
+      SMALL_KINDS.length,
+    );
+  });
+
+  it("gives flowers petals on a stem, in the colour asked for", () => {
+    for (const kind of ["daisy", "bell", "spike", "umbel"] as const) {
+      const art = draw(kind);
+      expect(count(art, [INK.accent, INK.accentDark]), kind).toBeGreaterThan(3);
+      expect(count(art, [INK.dark, INK.deep]), kind).toBeGreaterThan(4);
+      expect(count(art, [INK.outline]), kind).toBe(0);
+      // Petals are at the top, the stem below them.
+      const rows = (inks: readonly number[]): number[] =>
+        [...art.ink].flatMap((ink, at) => (inks.includes(ink) ? [Math.floor(at / art.width)] : []));
+      expect(Math.min(...rows([INK.accent]))).toBeLessThan(Math.min(...rows([INK.dark])) + 2);
+    }
+    const pink = colourArt(draw("daisy"), PALETTE["GRASS"] ?? ["", "", ""], FLOWER_COLOURS[2]);
+    const petal = draw("daisy").ink.indexOf(INK.accent);
+    expect([...pink.rgba.slice(petal * 4, petal * 4 + 3)]).toEqual([0xe5, 0x8f, 0xb1]);
+    expect(FLOWER_COLOURS).toHaveLength(5);
+  });
+
+  it("tells a mushroom, a stone, a log and a stump by what they are made of", () => {
+    const mushroom = draw("mushroom");
+    expect(count(mushroom, [INK.pale])).toBeGreaterThan(2); // a pale stem, and spots
+    expect(count(mushroom, [INK.accent, INK.accentDark])).toBeGreaterThan(8); // a cap
+    expect(count(draw("mushroom", 1), [INK.pale])).toBeLessThan(count(mushroom, [INK.pale]));
+    // A stone is bare or grown over; a boulder is a stone several times the size.
+    expect(count(draw("stone", 0), [INK.accent])).toBe(0);
+    expect(count(draw("stone", 1), [INK.accent])).toBeGreaterThan(1);
+    expect(count(draw("boulder"), LEAVES)).toBeGreaterThan(3 * count(draw("stone"), LEAVES));
+    // Wood, outlined all round, with a shadow for the ground to paint.
+    for (const kind of ["log", "stump"] as const) {
+      const art = draw(kind);
+      expect(count(art, [INK.trunk, INK.trunkDark, INK.trunkLight])).toBeGreaterThan(10);
+      expect(count(art, [INK.pale])).toBeGreaterThan(2); // the cut
+      expect(count(art, [INK.outline])).toBeGreaterThan(12);
+      expect(art.shadow).toBeDefined();
+    }
+    // What is too slight for a shadow has none.
+    for (const kind of ["daisy", "fern", "herb", "reed", "mushroom"] as const) {
+      expect(draw(kind).shadow).toBeUndefined();
+    }
+  });
+
+  it("colours the darkest tone cooler and the lightest warmer, and wood as asked", () => {
+    const ramp = PALETTE["BROADLEAF"] ?? ["", "", ""];
+    const scale = PLANT_SCALES[2];
+    if (scale === undefined) throw new Error("no large scale");
+    const art = drawStanding("BROADLEAF", "mature", 0, scale, 4, "bundles");
+    const pixels = colourArt(art, ramp);
+    const rgb = (ink: number): number[] => {
+      const at = art.ink.indexOf(ink);
+      return [...pixels.rgba.slice(at * 4, at * 4 + 3)];
+    };
+    const sum = (colour: number[]): number => colour.reduce((total, value) => total + value, 0);
+    const [deep, dark, light, bright] = [INK.deep, INK.dark, INK.light, INK.bright].map(rgb);
+    if (deep === undefined || dark === undefined || light === undefined || bright === undefined)
+      throw new Error("tones");
+    expect(sum(deep)).toBeLessThan(sum(dark));
+    expect((deep[2] ?? 0) / sum(deep)).toBeGreaterThan((dark[2] ?? 0) / sum(dark));
+    expect(sum(bright)).toBeGreaterThan(sum(light));
+    expect((bright[2] ?? 0) / sum(bright)).toBeLessThan((light[2] ?? 0) / sum(light));
+    const charred = colourArt(
+      draw("stump", 1),
+      PALETTE["BURNT"] ?? ["", "", ""],
+      undefined,
+      "#2e2622",
+    );
+    const at = draw("stump", 1).ink.indexOf(INK.trunk);
+    expect([...charred.rgba.slice(at * 4, at * 4 + 3)]).toEqual([0x2e, 0x26, 0x22]);
   });
 });
 
