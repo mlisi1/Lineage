@@ -37,11 +37,11 @@ test("the look sheet draws every picture", async ({ page }) => {
   await expect(page.locator("#sweeps figure.tile")).toHaveCount(50);
   await expect(page.locator("#sweeps .sweep").nth(1)).toContainText("spider");
   await expect(page.locator("#sweeps .sweep").nth(5)).toContainText("flippers");
-  // The local view's parts: three sheets of trees and bushes per style, two of small
-  // plants, and a sample of every kind of ground.
-  for (const style of ["bundles", "dome", "limbs"]) {
-    await expect(page.locator(`#trees-${style} canvas`)).toHaveCount(3);
-  }
+  // The local view's parts: three sheets of trees and bushes, two of small plants, a
+  // sample of every kind of ground, and a piece of the middle view at each size of animal.
+  await expect(page.locator("#trees canvas")).toHaveCount(3);
+  await expect(page.locator("#sizes-mid figure.tile")).toHaveCount(6);
+  await expect(page.locator("#sizes-mid")).toContainText("as the middle view is now");
   await expect(page.locator("#plants-small canvas")).toHaveCount(2);
   await expect(page.locator("#ground-samples figure.tile")).toHaveCount(13);
   await expect(page.locator("#ground-samples")).toContainText("lichen on rock");
@@ -76,18 +76,17 @@ test("the look sheet draws every picture", async ({ page }) => {
     ),
   );
   expect(sizes).toHaveLength(17);
-  expect(sizes.filter((size) => size === "512,300,1024")).toHaveLength(13);
+  expect(sizes.filter((size) => size === "512,300,1024")).toHaveLength(7);
+  expect(sizes.filter((size) => size === "512,192,1024")).toHaveLength(6);
   expect(sizes.filter((size) => size === "512,300,512")).toHaveLength(4);
 
-  // The three views; the ground read over one, two and three cells; the wood in each
-  // style of tree; the animals at each size; the lights: each set is so many pictures.
+  // The three views; the local view's places; the line-up at each size of animal; the
+  // lights: each set is so many different pictures.
   const sets = [
-    ["map", "mid-shore", "size-2"],
+    ["map", "mid-shore", "local-meadow"],
     ["mid-shore", "mid-wood"],
-    ["ground-1", "ground-2", "ground-3"],
-    ["wood-bundles", "wood-dome", "wood-limbs"],
-    ["size-1", "size-2", "size-3"],
-    ["size-2", "wood-bundles", "local-shore"],
+    ["ground", "local-meadow", "local-wood", "local-shore"],
+    [1, 2, 3, 4, 5, 6].map((size) => `size-${size}`),
     ["day", "dusk", "night", "dawn"].map((light) => `light-${light}`),
   ];
   for (const names of sets) {
@@ -144,12 +143,13 @@ test("the saved page can carry the animals moving, as loops that need no script"
       return [4, 5, 6, 7].reduce((count, i) => count * 256 + bytes.charCodeAt(at + i), 0);
     }, label);
   // Animals in the picture: a loop. None, or a light that is only a tint: a still.
-  expect(await frames("The local view, animals at 0.5")).toBe(2);
-  expect(await frames("A wood of trees as domes")).toBe(2);
+  expect(await frames("The line-up, animals at 0.35")).toBe(2);
+  expect(await frames("The local view in a wood")).toBe(2);
+  expect(await frames("0.25")).toBe(2);
   expect(await frames("The map view")).toBe(2);
   expect(await frames("grazer: beast · herbivore · mass 0.9 · bands")).toBe(2);
   expect(await frames("eyespots")).toBe(2);
-  expect(await frames("The ground read over two cells around")).toBe(1);
+  expect(await frames("The local view's ground on its own")).toBe(1);
   expect(await frames("bundles: broadleaf trees")).toBe(1);
   expect(await frames("Ground: lichen on rock")).toBe(1);
   expect(await frames("The shore at night")).toBe(1);
@@ -162,7 +162,7 @@ test("the saved page can carry the animals moving, as loops that need no script"
 
 test("the still pictures are the same every time", async ({ page }) => {
   await open(page, 1);
-  const names = ["size-2", "wood-limbs", "ground-2", "map"];
+  const names = ["size-4", "local-wood", "ground", "map"];
   const first = await Promise.all(names.map((name) => png(page, name)));
   await open(page, 1);
   expect(await Promise.all(names.map((name) => png(page, name)))).toEqual(first);

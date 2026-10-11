@@ -232,11 +232,10 @@
 
       <h2>2. The middle view <span class="pick">settled</span></h2>
       <p>
-        A sixteenth of the continent, 8 art pixels to the cell. As you chose: the ground
-        interpolated and dithered (G4), the large plants (P3), animals as outlined body plans (C3).
-        <b>The animals are smaller again</b>: 0.5 of the first size instead of 0.85, so an animal of
-        mass 1 is 4 to 5 art pixels long here and the heaviest about 11. That number is the same in
-        every view; section 3 has it at three values to choose from.
+        A sixteenth of the continent, 8 art pixels to the cell: the ground interpolated and dithered
+        (G4), the large plants (P3), animals as outlined body plans (C3) at 0.5 of the first size,
+        as you found it good. One thing changed here: a conifer's trunk stood left of its crown, in
+        this view too, and now stands under it.
       </p>
       <figure class="screen">
         <canvas data-picture="mid-shore" aria-label="The middle view, a shore"></canvas>
@@ -247,161 +246,155 @@
       <figure class="screen">
         <canvas data-picture="mid-wood" aria-label="The middle view, a wood"></canvas>
         <figcaption>
-          <b>Full size.</b> The densest wood, with whoever of the herd is there. The trees here are
-          still the P3 ones; once a style is chosen below they are redrawn to match (each style's
-          row shows how it comes out at this size).
+          <b>Full size.</b> The densest wood, with whoever of the herd is there. The trees are the
+          P3 ones; the last strip of section 3's trees shows T1 at this size, should you want the
+          middle view to follow it.
         </figcaption>
       </figure>
 
-      <h2>3. The local view <span class="pick new">reworked</span></h2>
+      <h2>3. The local view</h2>
       <p>
-        One animal from close to the ground, 32 art pixels to the cell (your L2): 16 by 9 cells in
-        sight. Nothing is rescaled between the views: a tree is three cells tall and an animal half
-        a cell long in the middle view too. Four things changed since the last sheet, each with
-        proposals to choose from.
+        One animal from close to the ground, 32 art pixels to the cell: 16 by 9 cells in sight.
+        Settled since the last sheet: the ground read over two cells around (K2), and trees and
+        bushes as bundles of leaves (T1), with the faults you pointed at mended. Open: how large the
+        animals are, at the end of this section.
       </p>
 
-      <h3>The ground: larger patches <span class="pick new">new</span></h3>
-      <p>
-        Why there were so many spots: the world's cells differ one from the next (grass, then a cell
-        of scrub, then bare), which reads as texture when a cell is 8 pixels and as a patchwork when
-        it is 32. On top of that the soil showed through the growth in blobs half a cell wide. Now a
-        close view reads what grows over a few cells around, so a kind of ground only shows where it
-        holds several cells together, and thin growth opens in gaps a cell or two across. The
-        blending is as it was. The same meadow, read over one, two and three cells around, without
-        plants or animals:
-      </p>
+      <h3>The ground <span class="pick">settled</span></h3>
       <figure class="screen">
-        <canvas data-picture="ground-1" aria-label="The ground read over one cell around"></canvas>
+        <canvas data-picture="ground" aria-label="The local view's ground on its own"></canvas>
         <figcaption>
-          <b>Full size. K1: one cell around.</b> Closest to what the cells say.
+          <b>Full size.</b> A meadow without its plants and animals: patches several cells wide, and
+          in them what the ground is made of.
         </figcaption>
       </figure>
-      <figure class="screen">
-        <canvas data-picture="ground-2" aria-label="The ground read over two cells around"></canvas>
-        <figcaption>
-          <b>Full size. K2: two cells around</b> <span class="pick">my pick</span> A patch is at
-          least two or three cells wide. The pictures further down use this one.
-        </figcaption>
-      </figure>
-      <figure class="screen">
-        <canvas
-          data-picture="ground-3"
-          aria-label="The ground read over three cells around"
-        ></canvas>
-        <figcaption>
-          <b>Full size. K3: three cells around.</b> The calmest; small woods and clearings merge
-          into their surroundings.
-        </figcaption>
-      </figure>
-      <p>
-        What the pixels are spent on instead is what the ground is made of. Each kind has its own
-        detail, drawn by rule: blades and a bloom in grass, pebbles, grit and cracks in soil,
-        ripples in sand, leaf litter under broadleaves and needles under conifers, ash where it
-        burnt. <b>Lichen</b> is no longer a colour of the ground but rosettes on it, grey-green,
-        mustard and chalk-white, thick where it grows thick, and scattered on any bare rock. A piece
-        of each, enlarged twice:
-      </p>
+      <p>A piece of each kind of ground, enlarged twice:</p>
       <div id="ground-samples" class="tiles"></div>
 
-      <h3>Trees and bushes: three proposals <span class="pick new">new</span></h3>
-      <p>
-        The old trees had two faults in the drawing itself: the crown was cut off flat along its
-        lower edge, and each tree carried its own see-through shadow, so that shadows darkened the
-        crowns behind them and each other. Shadows are now painted on the ground, once, however many
-        trees throw them, and crowns end where their leaves end.
-      </p>
-      <p>
-        For the style I looked at how pixel-art trees are usually built and wrote three rules after
-        what I found. Each draws every tree and bush at any size, in three builds (as the scale has
-        it, slender, broad) and with a different arrangement for every drawing. Three sheets per
-        style: broadleaf grown ×3 and young ×2; conifers the same; bushes (the second in berry) and,
-        last, the three kinds at the middle view's size.
-      </p>
+      <h3>Trees and bushes <span class="pick new">mended</span></h3>
+      <p>What I found looking at them pixel by pixel, and changed:</p>
+      <ul>
+        <li>
+          <b>A conifer's trunk stood a quarter of the way in from its left edge</b>, not under its
+          top: the rule that made it thinner than a broadleaf's also moved it. It is under the
+          middle now, in every view.
+        </li>
+        <li>
+          <b>Blocky leaves.</b> A crown was some twenty large bundles, each with a saw-toothed rim,
+          flat tones and a thick line of shade beneath. It is now about twice as many smaller
+          bundles with soft rims; leaves are small slanted dabs that ruffle the line between two
+          tones, and the shade between bundles is a thin line.
+        </li>
+        <li>
+          <b>Conifers were split down the middle</b>, light on the left and dark on the right with a
+          straight line between. Each tier is now lit on its upper left and shaded under its right
+          hem, needles hanging in the tones; the tips of a tier hang to different lengths and not
+          under those of the next.
+        </li>
+        <li>
+          <b>Bushes were cut off flat</b> where a bundle reached below the ground line, or floated
+          above their shadow. They end at the ground and sit on it.
+        </li>
+      </ul>
+      <div id="trees" class="strip"></div>
       <p class="note">
-        References: Slynyrd's Pixelblog 44 (top-down trees built from one bundle of leaves, layered
-        in tones) and 15 (how much leaf detail a crown bears); the usual construction of top-down
-        game trees, crown over a short trunk with the shadow apart; Gentree, which grows a tree by
-        forking branches and hangs a clump of leaves on each end.
+        Broadleaf grown ×3 and young ×2; conifers the same; bushes (the second in berry) and, last,
+        the three kinds at the middle view's size. Three builds each: as the scale has it, slender,
+        broad.
       </p>
-      <div id="trees-bundles" class="strip"></div>
       <figure class="screen">
-        <canvas data-picture="wood-bundles" aria-label="A wood of trees in bundles"></canvas>
+        <canvas data-picture="local-wood" aria-label="The local view in a wood"></canvas>
         <figcaption>
-          <b>Full size. T1: bundles</b> <span class="pick">my pick</span> A crown is many small
-          bundles of leaves, each lit on its own and shading the ones behind it; conifers in
-          drooping boughs. The richest of the three, and the one that looks most grown.
+          <b>Full size.</b> A hunter in the densest wood, with company. Trees in front of the animal
+          the picture is about go see-through while it is behind them.
         </figcaption>
       </figure>
-      <div id="trees-dome" class="strip"></div>
-      <figure class="screen">
-        <canvas data-picture="wood-dome" aria-label="A wood of trees as domes"></canvas>
-        <figcaption>
-          <b>Full size. T2: domes.</b> A crown is one rounded mass with a bumpy rim, shaded as a
-          whole in five stepped tones; conifers in clean tiers. The calmest and the easiest to read
-          from a distance.
-        </figcaption>
-      </figure>
-      <div id="trees-limbs" class="strip"></div>
-      <figure class="screen">
-        <canvas data-picture="wood-limbs" aria-label="A wood of trees on their limbs"></canvas>
-        <figcaption>
-          <b>Full size. T3: limbs.</b> A trunk that forks, a clump of leaves on each end and air
-          between them; conifers as whorls on a trunk that shows. The lightest: more ground and more
-          of the animals show through a wood.
-        </figcaption>
-      </figure>
-      <p class="note">
-        All three: a hunter in the densest wood, with company. Trees in front of the animal the
-        picture is about go see-through while it is behind them.
-      </p>
 
-      <h3>What grows and lies among them <span class="pick new">new</span></h3>
+      <h3>What grows and lies among them</h3>
       <p>
         Small plants, placed by what covers each cell. In grass: tufts to walk through, herbs, and
-        four kinds of flower in five colours, which come in drifts (one kind and colour over several
-        cells, thick in places, rare between). Under bushes and trees: ferns, mushrooms, fallen
-        logs. On bare ground: stones and boulders, some grown over with lichen or moss; reeds on the
-        shore; charred stumps where it burnt.
+        four kinds of flower in five colours, which come in drifts. Under bushes and trees: ferns,
+        mushrooms, fallen logs. On bare ground: stones and boulders, some grown over with lichen or
+        moss; reeds on the shore; charred stumps where it burnt.
       </p>
       <div id="plants-small" class="strip"></div>
-
-      <h3>How large the animals are: three proposals <span class="pick new">new</span></h3>
-      <p>
-        You were right that the proportions were off: at 0.85 the heaviest animal was as long as a
-        grown tree is wide. The same meadow with a grazer (mass 0.9, the one the picture is about),
-        a mouse (0.3), a hunter (3), a beast of mass 4 and the giant beetle (16, the heaviest a
-        genome allows), among bushes and a young tree. The middle view scales with it.
-      </p>
       <figure class="screen">
-        <canvas data-picture="size-1" aria-label="The local view, animals at 0.4"></canvas>
-        <figcaption>
-          <b>Full size. A1: 0.4.</b> Mass 1 is 14 art pixels long here (3½ in the middle view), a
-          seventh of a grown tree's height.
-        </figcaption>
+        <canvas data-picture="local-meadow" aria-label="The local view in a meadow"></canvas>
+        <figcaption><b>Full size.</b> A grazer in a meadow, among bushes.</figcaption>
       </figure>
-      <figure class="screen">
-        <canvas data-picture="size-2" aria-label="The local view, animals at 0.5"></canvas>
-        <figcaption>
-          <b>Full size. A2: 0.5</b> <span class="pick">my pick</span> Mass 1 is 18 art pixels long
-          (4½ in the middle view), a fifth of a grown tree's height; the giant comes to a tree's
-          knee, not over its head. Everything else on this sheet uses it.
-        </figcaption>
-      </figure>
-      <figure class="screen">
-        <canvas data-picture="size-3" aria-label="The local view, animals at 0.62"></canvas>
-        <figcaption>
-          <b>Full size. A3: 0.62.</b> Mass 1 is 22 art pixels long (5½ in the middle view): more of
-          the markings shows, and the giant is again as long as a young tree is tall.
-        </figcaption>
-      </figure>
-      <h3>A shore</h3>
       <figure class="screen">
         <canvas data-picture="local-shore" aria-label="The local view on a shore"></canvas>
         <figcaption>
           <b>Full size.</b> A heavy beetle on the shore, with swimmers in the water beside it.
         </figcaption>
       </figure>
+
+      <h3>How large the animals are: six sizes <span class="pick new">to choose</span></h3>
+      <p>
+        You were right about the tree: the one beside the animals last time was a young conifer, 56
+        art pixels tall, so every size looked larger than it is against the wood. Here the trees and
+        bushes are full grown: a broadleaf and a conifer 96 art pixels tall (three cells), a bush
+        40. They stand in a row on a meadow, and in front of them the same five animals at each
+        size: masses 0.25, 0.7, 2, 5.7 and 16, from the lightest a genome allows to the heaviest.
+        Most animals of this world weigh between 0.7 and 2.6. Nothing but the animals' size changes
+        from one picture to the next.
+      </p>
+      <figure class="screen">
+        <canvas data-picture="size-1" aria-label="The line-up, animals at 0.2"></canvas>
+        <figcaption>
+          <b>0.20.</b> Mass 1 is 6 art pixels long, a sixteenth of a grown tree; the heaviest 16,
+          not half a bush.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="size-2" aria-label="The line-up, animals at 0.25"></canvas>
+        <figcaption>
+          <b>0.25.</b> Mass 1 is 8 art pixels long, a twelfth of a grown tree; the heaviest 20, half
+          a bush.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="size-3" aria-label="The line-up, animals at 0.3"></canvas>
+        <figcaption>
+          <b>0.30.</b> Mass 1 is 10 art pixels long, a tenth of a grown tree; the heaviest 24.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="size-4" aria-label="The line-up, animals at 0.35"></canvas>
+        <figcaption>
+          <b>0.35</b> <span class="pick">my pick</span> Mass 1 is 11 art pixels long, an eighth of a
+          grown tree; the heaviest 28, two thirds of a bush's height and under a third of a tree's.
+          The smallest at which a middling animal still shows its legs and a marking from this
+          close. The local pictures above are drawn at it.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="size-5" aria-label="The line-up, animals at 0.4"></canvas>
+        <figcaption>
+          <b>0.40</b> (the A1 you found a bit large). Mass 1 is 13 art pixels long, a seventh of a
+          grown tree; the heaviest 33.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="size-6" aria-label="The line-up, animals at 0.5"></canvas>
+        <figcaption>
+          <b>0.50</b> (A2, and what the middle view is drawn at). Mass 1 is 16 art pixels long, a
+          sixth of a grown tree; the heaviest 41, as long as a bush is tall.
+        </figcaption>
+      </figure>
+      <p>
+        <b>What each size does to the middle view.</b> So far one number sizes the animals in every
+        view, which is what keeps the views in proportion. The middle view you found good is at 0.5,
+        where an animal of mass 1 is 4½ art pixels long; at 0.35 it is 3, at 0.25 two, which is a
+        dot with an outline. The same piece of the middle view at each size, enlarged twice:
+      </p>
+      <div id="sizes-mid" class="tiles"></div>
+      <p>
+        So the choice has two parts: the size for the local view, and whether the middle view
+        follows it or keeps 0.5. Keeping it would draw animals larger than life there, as the map
+        already does with its dots: a view from further away exaggerating what would otherwise
+        vanish. The pictures of section 2 are still at 0.5.
+      </p>
       <h3>Light</h3>
       <p>
         The time of day is one colour multiplied over the whole picture. Presence will drive it
@@ -427,26 +420,49 @@
       </div>
       <p class="note">Half size: the 512×300 drawing shown without stretching.</p>
 
-      <h2>4. Creatures up close</h2>
+      <h2>4. Creatures up close <span class="pick new">mended</span></h2>
       <p>
-        Style C3, as chosen. Three things changed. <b>Shading</b>: every mass of the body now has
-        its far side in shade (a cooler, darker tone) as well as a lit back, the largest a gleam;
-        and every marking large enough is shaded the same way, each on its own.
-        <b>Markings stay on the body</b>: the artifacts you saw were markings sticking out over the
-        outline, or a highlight larger than what it lay on; each marking is now fitted to the mass
-        it is on. <b>Legs turn into fins</b> with the aquatic gene (see its row below).
+        Style C3, shaded, with legs that turn into fins, as on the last sheet. Looking at every
+        specimen and marking four times enlarged, this is what was wrong and is changed:
       </p>
+      <ul>
+        <li>
+          <b>Ragged snouts.</b> Tusks were drawn over the head without an outline, which left a
+          fringe of stray pixels at the snout. They now come out from under the head, outlined with
+          it.
+        </li>
+        <li>
+          <b>Crabs</b> trailed a club behind the carapace (a joint of the chain that should not
+          show), carried a dark slot on the back (armour plates meant for long bodies) and had
+          triangles for claws. A crab now ends with its carapace and has pincers: a palm and two
+          fingers that close toward each other.
+        </li>
+        <li>
+          <b>Markings.</b> Bars were two crossing strokes per place, a zigzag; they are one slanted
+          bar each, as a tiger's. Bands were fat ovals that read as blobs; they are narrow ovals
+          across the back. A stripe down a back was a row of separate rectangles; it is ovals that
+          run into each other. A fade on a shell was two spots; it is ovals nested toward the rear.
+          A stripe on a shell was doubled by its own lit patch; long markings carry none now. A
+          saddle's mask sat behind the eyes as a third blob; it lies across them.
+        </li>
+        <li>
+          <b>Fins.</b> A shelled animal with a little of the aquatic gene grew a sliver of tail fin
+          under its shell: only bodies with a tail carry one now. Webbed feet were triangles that
+          read as spikes; they are oval paddles, little wider than a foot. Flippers on a body that
+          keeps other legs (a crab's, a beetle's last pair) are shorter.
+        </li>
+      </ul>
       <p>
-        The fifteen reference genomes, each on its own patch of ground at the local view's own size,
-        enlarged twice:
+        The fifteen reference genomes, each on its own patch of ground at the local view's own size
+        (0.35), enlarged twice:
       </p>
       <div id="specimens" class="tiles"></div>
       <h3>Markings</h3>
       <p>
         The twelve markings, each in one of its four colours, on a beast's back and on a beetle's
-        shell. Drawn twice as close as the local view, as a bestiary would show an animal: at the
-        local view's size most animals are 15 to 25 pixels long and a marking is a few pixels, so
-        the shading of markings shows on the heavy ones and from this close.
+        shell. Drawn from nearly three times as close as the local view, as a bestiary would show an
+        animal: at the local view's size most animals are 10 to 16 pixels long and a marking is a
+        pixel or two, so markings and their shading show on the heavy ones and from this close.
       </p>
       <div id="patterns-beast" class="tiles"></div>
       <div id="patterns-beetle" class="tiles"></div>
@@ -563,17 +579,19 @@
 
       <h2>To choose, and to say</h2>
       <ul>
-        <li><b>The ground's patches</b>: K1, K2 or K3.</li>
-        <li><b>Trees and bushes</b>: T1, T2 or T3, or what to take from each.</li>
-        <li><b>The size of the animals</b>: A1, A2 or A3. One number for all three views.</li>
         <li>
-          <b>The small plants and the ground's detail</b>: whether this is the amount you had in
-          mind, what is missing, what is too much.
+          <b>The size of the animals in the local view</b>: 0.20 to 0.50, from the line-up in
+          section 3.
         </li>
         <li>
-          <b>Fins</b>: whether legs webbing into flippers reads well, or should go further (a fluke,
-          a fin down the back).
+          <b>Whether the middle view follows that size</b> or keeps the 0.5 you found good (the row
+          under the line-up shows both).
         </li>
+        <li>
+          <b>Whether the middle view's trees should be redrawn as T1</b>, now that it is chosen (the
+          last strip of the trees shows it at that size), or stay as they are.
+        </li>
+        <li><b>Anything on trees or creatures that still looks wrong.</b></li>
       </ul>
     </main>
     <script type="module" src="/src/spike/look.ts"></script>

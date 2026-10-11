@@ -31,7 +31,6 @@ import {
   MOSS_COLOUR,
   PLANT_SCALES,
   SMALL_SIZES,
-  TREE_STYLES,
   colourArt,
   drawSmall,
   drawStanding,
@@ -40,16 +39,18 @@ import {
   type Small,
   type TreeStyle,
 } from "./plantart";
-import { standingPlants } from "./plants";
+import { plantLineUp, standingPlants, type LineUpItem } from "./plants";
 import {
   CREATURE_SCALES,
   GROUND,
   LOCAL_PIXELS,
   MAP_GROUND,
   MID_BODY,
+  MID_CREATURE_SCALE,
   PLANTS,
   PORTRAIT_PIXELS,
   TREES,
+  midBody,
   localBody,
 } from "./proposal";
 import { mulberry32, type Random } from "./rng";
@@ -78,14 +79,32 @@ const ART = 2;
 const VIEW = { width: DESIGN_WIDTH / ART, height: DESIGN_HEIGHT / ART };
 /**
  * Portraits: an animal on its patch of ground at the local view's own size, and on one
- * flat colour twice as close, as a bestiary would show it.
+ * flat colour from much closer, as a bestiary would show it.
  */
 const SPECIMEN = { width: 112, height: 88, enlarged: 2 };
 const SWATCH = { width: 84, height: 64, enlarged: 2 };
 /** Bare heights (rock, snow) make a poor meadow: land this far above the sea is passed over. */
 const MEADOW_BELOW = 0.2;
-/** How many cells around the local view's ground is read over: the proposals. */
-const CALMS = [1, 2, 3] as const;
+/**
+ * The line-up the animals' sizes are judged by: grown trees and bushes in a row on a
+ * meadow, the same five animals in front of them. So many cells across and down, the
+ * row of feet so far down, each animal kept in a lane of its own below it.
+ */
+const LINE_UP = {
+  cells: [16, 6],
+  feet: 3.5,
+  lanes: { top: 4.2, bottom: 5.35, margin: 0.4 },
+  items: [
+    { form: "BROADLEAF", variant: 0, at: 1.5 },
+    { form: "CONIFER", variant: 0, at: 4.1 },
+    { form: "SHRUB", variant: 0, at: 6.5 },
+    { form: "BROADLEAF", variant: 2, at: 9.2 },
+    { form: "CONIFER", variant: 1, at: 11.9 },
+    { form: "SHRUB", variant: 1, at: 14.3 },
+  ] satisfies LineUpItem[],
+} as const;
+/** What each size does to the middle view: a piece of it, so many art pixels, with this many animals. */
+const MID_SAMPLE = { width: 160, height: 100, enlarged: 2, animals: 12 };
 /** A sample of each kind of ground: so many cells of it, at the local view's size. */
 const SAMPLE = { cells: [3, 2], enlarged: 2 } as const;
 /** How far from the middle of its picture the animal a local picture is about may go, in cells. */
@@ -586,15 +605,9 @@ async function main(): Promise<void> {
     wood: middle(findSite(fixture, ...localCells, forest)),
     shore: middle(findSite(fixture, ...localCells, shore)),
   };
-  const near = Object.fromEntries(
-    TREE_STYLES.map((style) => [style, standingPlants(fixture, large, LOCAL_PIXELS, style)]),
-  );
-  for (const style of TREE_STYLES) {
-    const layer = near[style];
-    if (layer !== undefined) stage.addPlants(`local-${style}`, layer);
-  }
-  // Trees are as large in every style, so the shadows of one style serve them all.
-  const shadows = (cells: CellRect): Shadow[] => near[TREES]?.shadows(cells) ?? [];
+  const near = standingPlants(fixture, large, LOCAL_PIXELS, TREES);
+  stage.addPlants("local", near);
+  const shadows = (cells: CellRect): Shadow[] => near.shadows(cells);
   /** The players of a local picture: the animal it is about, kept near the middle, and company. */
   const players = (scene: keyof typeof LOCAL_SCENES): CreatureSeed[] => {
     const centre = localSites[scene];
@@ -606,47 +619,136 @@ async function main(): Promise<void> {
       ...others.map((seed) => ({ ...seed, pen: pen(centre, COMPANY_PEN) })),
     ];
   };
-  const seeds = { meadow: players("meadow"), wood: players("wood"), shore: players("shore") };
-  for (const scene of ["meadow", "wood", "shore"] as const) {
+  const local = (scene: keyof typeof LOCAL_SCENES): Picture => {
     paint(scene, localSites[scene], LOCAL_PIXELS, VIEW.width, VIEW.height, { shadows });
-  }
-  const local = (
-    scene: keyof typeof LOCAL_SCENES,
-    style: TreeStyle = TREES,
-    scale?: number,
-  ): Picture => ({
-    ...base,
-    zoom: LOCAL_PIXELS,
-    ground: scene,
-    plants: `local-${style}`,
-    cast: stage.cast(seeds[scene], 5, localBody(LOCAL_PIXELS, scale)),
-    subject: 0,
-    centre: localSites[scene],
-  });
-  // The ground on its own, read over one, two and three cells around.
-  for (const calm of CALMS) {
-    paint(`calm-${calm}`, localSites.meadow, LOCAL_PIXELS, VIEW.width, VIEW.height, { calm });
-    place(`ground-${calm}`, {
+    return {
       ...base,
       zoom: LOCAL_PIXELS,
-      ground: `calm-${calm}`,
-      centre: localSites.meadow,
-    });
-  }
+      ground: scene,
+      plants: "local",
+      cast: stage.cast(players(scene), 5, localBody(LOCAL_PIXELS)),
+      subject: 0,
+      centre: localSites[scene],
+    };
+  };
+  // The ground on its own, then a piece of each kind of it.
+  paint("bare", localSites.meadow, LOCAL_PIXELS, VIEW.width, VIEW.height);
+  place("ground", { ...base, zoom: LOCAL_PIXELS, ground: "bare", centre: localSites.meadow });
   groundSamples(element("ground-samples"), fixture);
-  // The wood in each style of tree, and the trees of each style side by side.
-  for (const style of TREE_STYLES) {
-    place(`wood-${style}`, local("wood", style));
-    treeSheets(element(`trees-${style}`), style, large, fixture);
-  }
+  // The trees and bushes side by side, then in a wood; what grows among them.
+  treeSheets(element("trees"), TREES, large, fixture);
+  place("local-wood", local("wood"));
   smallSheets(element("plants-small"), large, fixture);
-  // The meadow with the animals at each size.
-  CREATURE_SCALES.forEach((scale, index) => {
-    place(`size-${index + 1}`, local("meadow", TREES, scale));
-  });
+  place("local-meadow", local("meadow"));
   const shoreline = local("shore");
   place("local-shore", shoreline);
   for (const light of LIGHT_ORDER) place(`light-${light}`, { ...shoreline, light }, 1);
+
+  // How large the animals are. A line-up: grown trees and bushes in a row on a meadow,
+  // and in front of them the same five animals, from the lightest a genome allows to
+  // the heaviest, at each size on offer.
+  const [lineWide, lineTall] = LINE_UP.cells;
+  const lineSite = findSite(fixture, lineWide, Math.ceil(lineTall), (shares) => {
+    // Land all over, for the animals to stand on; what grows there does not show.
+    return -(shares["WATER"] ?? 0);
+  });
+  const lineUp = plantLineUp(
+    fixture,
+    large,
+    LOCAL_PIXELS,
+    TREES,
+    lineSite.x0,
+    lineSite.y0 + LINE_UP.feet,
+    LINE_UP.items,
+  );
+  stage.addPlants("line-up", lineUp);
+  {
+    // The meadow under it: grown grass over a few cells more than are seen, painted
+    // where the line-up stands.
+    const margin = 2;
+    const wide = lineWide + 2 * margin;
+    const tall = Math.ceil(lineTall) + 2 * margin;
+    const meadowWorld: WorldFixture = {
+      ...fixture,
+      width: wide,
+      height: tall,
+      cover: new Uint8Array(wide * tall).fill(Math.max(fixture.coverClasses.indexOf("GRASS"), 0)),
+      biomass: new Uint8Array(wide * tall).fill(255),
+      heights: new Float32Array(wide * tall).fill(fixture.seaLevel + 0.1),
+      creatures: [],
+      casts: [],
+    };
+    const cells = {
+      x0: margin,
+      y0: margin,
+      x1: margin + lineWide,
+      y1: margin + Math.ceil(lineTall),
+    };
+    stage.addGround(
+      "line-up",
+      paintGround(meadowWorld, {
+        tile: LOCAL_PIXELS,
+        style: GROUND,
+        grain: true,
+        cells,
+        shadows: lineUp.shadows(lineSite).map((shadow) => ({
+          ...shadow,
+          x: shadow.x - lineSite.x0 + margin,
+          y: shadow.y - lineSite.y0 + margin,
+        })),
+      }),
+      LOCAL_PIXELS,
+      lineSite,
+    );
+  }
+  const sized = cast("sweep-size");
+  const lane = lineWide / sized.creatures.length;
+  const inLanes = sized.creatures.map((seed, index) => {
+    const { top, bottom, margin } = LINE_UP.lanes;
+    const kept = {
+      x0: lineSite.x0 + index * lane + margin,
+      y0: lineSite.y0 + top,
+      x1: lineSite.x0 + (index + 1) * lane - margin,
+      y1: lineSite.y0 + bottom,
+    };
+    return { ...seed, ...middle(kept), pen: kept };
+  });
+  // The same animals in a piece of the middle view, to see what each size does there.
+  const sampleCells = around(
+    midShore,
+    MID_SAMPLE.width / MID_TILE,
+    MID_SAMPLE.height / MID_TILE,
+    0,
+    fixture,
+  );
+  // Animals of the world's own herd, which are of middling mass, kept inside the piece.
+  const inSample = scatter(
+    fixture.creatures.slice(0, MID_SAMPLE.animals),
+    sampleCells,
+    passable,
+    random,
+  ).map((seed) => ({ ...seed, pen: sampleCells }));
+  CREATURE_SCALES.forEach((scale, index) => {
+    place(`size-${index + 1}`, {
+      ...base,
+      width: lineWide * LOCAL_PIXELS,
+      height: lineTall * LOCAL_PIXELS,
+      zoom: LOCAL_PIXELS,
+      ground: "line-up",
+      plants: "line-up",
+      cast: stage.cast(inLanes, 7, localBody(LOCAL_PIXELS, scale)),
+      centre: { x: lineSite.x0 + lineWide / 2, y: lineSite.y0 + lineTall / 2 },
+    });
+    const picture = {
+      ...mid,
+      width: MID_SAMPLE.width,
+      height: MID_SAMPLE.height,
+      cast: stage.cast(inSample, 8, midBody(scale)),
+      centre: midShore,
+    };
+    const note = scale === MID_CREATURE_SCALE ? "as the middle view is now" : "";
+    element("sizes-mid").append(tile(scale.toFixed(2), note, picture, MID_SAMPLE.enlarged));
+  });
 
   // 4. Creatures up close: each specimen on its own patch of ground, at the local view's size.
   const roomy: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };

@@ -547,3 +547,66 @@ export function standingPlants(
     close !== null ? { tall, rowsPerCell: 4 } : { tall, eager: true },
   );
 }
+
+/** One of a line-up: a grown tree or bush, in one of its drawings, `at` cells along the row. */
+export interface LineUpItem {
+  form: "BROADLEAF" | "CONIFER" | "SHRUB";
+  variant: number;
+  at: number;
+}
+
+/**
+ * Grown trees and bushes standing in a row, to judge sizes against: drawn as the local
+ * view draws them in `style`, each with its foot on row `y` of the world (in cells, as
+ * `x` is: where the row starts). Nothing else of the world's plants is in the layer.
+ */
+export function plantLineUp(
+  fixture: WorldFixture,
+  scale: PlantScale,
+  tile: number,
+  style: TreeStyle,
+  x: number,
+  y: number,
+  items: readonly LineUpItem[],
+): PlantLayer {
+  const detail = tile / SPRITE_WIDTH;
+  const drawings = strip(
+    items.map((item, index) => ({
+      key: String(index),
+      art: drawStanding(item.form, "mature", item.variant, scale, detail, style),
+      ramp: fixture.palette[item.form] ?? NO_RAMP,
+    })),
+  );
+  let tall = 0;
+  for (const { art } of drawings.values()) tall = Math.max(tall, art.height / tile);
+  return new PlantLayer(
+    fixture,
+    (_look, cellX, cellY) => {
+      const out: Placed[] = [];
+      items.forEach((item, index) => {
+        const drawing = drawings.get(String(index));
+        // The cell its foot is in: a foot on a cell's lower edge belongs to that cell.
+        if (
+          drawing === undefined ||
+          Math.floor(x + item.at) !== cellX ||
+          Math.ceil(y) - 1 !== cellY
+        )
+          return;
+        const { art } = drawing;
+        out.push({
+          texture: drawing.texture,
+          anchorX: art.footX / art.width,
+          anchorY: art.footY / art.height,
+          scale: 1 / tile,
+          dx: x + item.at - (cellX + 0.5),
+          dy: y - (cellY + 1),
+          ...(art.shadow === undefined
+            ? {}
+            : { shadow: { rx: art.shadow.rx / tile, ry: art.shadow.ry / tile } }),
+        });
+      });
+      return out;
+    },
+    { tall, rowsPerCell: 4 },
+  );
+}
