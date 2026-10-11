@@ -328,6 +328,108 @@ describe("body plans", () => {
     }
   });
 
+  it("draw bars, bands, stripes and a shell's fade so that they read as what they are", () => {
+    const marks = (body: Partial<CreatureSeed>, k: number, options = SHAPES): BodyPlan["parts"] =>
+      inLayer(
+        bodyPlan(seed({ ...body, mass: 12, pattern: (k + 0.5) / 12, jaw: 0 }), options),
+        LAYER.mark,
+      );
+    const index = (name: (typeof PATTERNS)[number]): number => PATTERNS.indexOf(name);
+    // Bars: at most one to a place on the back (as spots are; none where the back is
+    // too narrow for one), all leaning the same way.
+    const bars = marks(KINDS.beast, index("bars")).filter((mark) => mark.shape === "bar");
+    expect(bars.length).toBeGreaterThanOrEqual(3);
+    expect(bars.length).toBeLessThanOrEqual(marks(KINDS.beast, index("spots")).length);
+    expect(new Set(bars.map((bar) => bar.turn)).size).toBe(1);
+    // Bands: ovals across the back, far wider than they are long.
+    for (const band of marks(KINDS.beast, index("bands"))) {
+      expect(band.across).toBeGreaterThan(1.8 * band.along);
+    }
+    // A stripe down a back: ovals long enough to run into each other, drawn flat, so
+    // that a lit body does not shade each length of it on its own.
+    const plan = bodyPlan(seed({ ...KINDS.beast, mass: 12, pattern: 1.5 / 12, jaw: 0 }), SHAPES);
+    const stripe = inLayer(plan, LAYER.mark);
+    expect(stripe.every((mark) => mark.shape === "disc" && mark.flat)).toBe(true);
+    expect(stripe.every((mark) => mark.along > plan.spacing)).toBe(true);
+    for (const pattern of ["stripe", "twin"] as const) {
+      for (const body of [KINDS.beast, KINDS.beetle]) {
+        const lit = marks(body, index(pattern), CLOSE).filter((mark) => mark.shape === "disc");
+        const flat = marks(body, index(pattern)).filter((mark) => mark.shape === "disc");
+        expect(lit).toHaveLength(flat.length);
+      }
+    }
+    // A shell fades in three ovals that all end where the shell ends, each smaller.
+    const shell = marks(KINDS.beetle, index("fade")).filter((mark) => mark.shape === "disc");
+    expect(shell).toHaveLength(3);
+    const rear = shell.map((oval) => oval.forward - oval.along / 2);
+    expect(rear[1]).toBeCloseTo(rear[0] ?? 0);
+    expect(rear[2]).toBeCloseTo(rear[0] ?? 0);
+    expect(shell[1]?.along).toBeLessThan(shell[0]?.along ?? 0);
+    expect(new Set(shell.map((oval) => oval.colour)).size).toBe(3);
+    // A long marking carries no lit patch (it would cut a band in two): it comes in
+    // shade and as itself, and that is all. A rounder one comes as three.
+    for (const body of [KINDS.beast, KINDS.beetle]) {
+      const flatBands = marks(body, index("bands")).filter((mark) => mark.shape === "disc");
+      const long = flatBands.filter((band) => band.across > 2.2 * band.along).length;
+      const lit = marks(body, index("bands"), CLOSE).filter((mark) => mark.shape === "disc");
+      expect(lit).toHaveLength(2 * long + 3 * (flatBands.length - long));
+    }
+    expect(marks(KINDS.beast, index("bands")).some((band) => band.across > 2.2 * band.along)).toBe(
+      true,
+    );
+    // A saddle's mask lies across the eyes: wider than long, ahead of the head's middle.
+    const mask = marks(KINDS.beast, index("saddle")).find((mark) => mark.joint === 0);
+    expect(mask?.across).toBeGreaterThan(mask?.along ?? 0);
+    expect(mask?.forward).toBeGreaterThan(0);
+  });
+
+  it("bring tusks out from under the head, outlined with it", () => {
+    const plain = bodyPlan(seed({ ...KINDS.beast, jaw: 0.8 }), SHAPES);
+    const tusks = inLayer(plain, LAYER.under).filter(
+      (part) => part.shape === "wedge" && part.joint === 0 && part.side !== 0 && part.forward > 0,
+    );
+    expect(tusks).toHaveLength(2);
+    expect(inLayer(plain, LAYER.mark).filter((part) => part.joint === 0)).toHaveLength(0);
+    // None without the gene.
+    const none = bodyPlan(seed({ ...KINDS.beast, jaw: 0 }), SHAPES);
+    expect(inLayer(none, LAYER.under).filter((p) => p.joint === 0 && p.forward > 0)).toHaveLength(
+      0,
+    );
+    // In the lit style everything under the head has its edge.
+    const lit = bodyPlan(seed({ ...KINDS.beast, jaw: 0.8 }), LIT);
+    expect(inLayer(lit, LAYER.outline).length).toBe(
+      inLayer(plain, LAYER.under).length + inLayer(plain, LAYER.body).length,
+    );
+  });
+
+  it("end a crab with its carapace, and give it pincers", () => {
+    const crab = bodyPlan(seed({ ...KINDS.crab, jaw: 0.6 }), SHAPES);
+    const solid = crab.parts.filter(
+      (part) => part.layer === LAYER.body || part.layer === LAYER.under,
+    );
+    // Nothing trails behind: the last joint only steers the chain.
+    expect(solid.filter((part) => part.joint === crab.joints - 1)).toHaveLength(0);
+    const carapace = discs(crab).reduce((best, part) => (part.across > best.across ? part : best));
+    expect(carapace.across).toBeGreaterThan(carapace.along);
+    // The head pokes out in front of the carapace, and no further than a head.
+    expect(crab.spacing).toBeGreaterThan(carapace.along / 2);
+    expect(crab.spacing).toBeLessThan(carapace.along);
+    // A pincer each side: a palm, and two fingers of different lengths that lean inward.
+    const palms = discs(crab).filter((part) => part.joint === 1 && part.side !== 0);
+    const fingers = inLayer(crab, LAYER.under).filter(
+      (part) => part.shape === "wedge" && part.joint === 1 && part.side !== 0,
+    );
+    expect(palms).toHaveLength(2);
+    expect(fingers).toHaveLength(4);
+    for (const finger of fingers) {
+      expect(Math.sign(finger.turn)).toBe(-Math.sign(finger.side));
+      expect(finger.forward).toBeGreaterThan(palms[0]?.forward ?? 0);
+    }
+    expect(new Set(fingers.map((finger) => finger.along.toFixed(4))).size).toBe(2);
+    // Its armour is the carapace: no plates laid on it.
+    expect(inLayer(crab, LAYER.mark).filter((part) => part.shape === "bar")).toHaveLength(0);
+  });
+
   it("leave out a marking too small to show", () => {
     const marks = (pixels: number): number =>
       inLayer(
@@ -501,11 +603,23 @@ describe("body plans", () => {
       ).length;
     expect(wedges(KINDS.beast, 0.45) - wedges(KINDS.beast, 0)).toBe(0);
     expect(wedges(KINDS.fish, 0.9)).toBeGreaterThanOrEqual(2);
-    // With three or four pairs only the last turns, as a water beetle's.
+    // With three or four pairs only the last turns, as a water beetle's, and into
+    // shorter flippers than on a body that swims with all its legs.
     const six = legs(0.9, KINDS.beetle);
     expect(six.map((leg) => leg.fin)).toEqual([0, 0, 0, 0, 1, 1]);
     const eight = legs(0.45, KINDS.crab);
     expect(eight.filter((leg) => leg.fin > 0)).toHaveLength(2);
+    const shortened = (body: Partial<CreatureSeed>): number =>
+      (legs(0.9, body).at(-1)?.length ?? 0) / (legs(0.2, body).at(-1)?.length ?? 1);
+    expect(shortened(KINDS.beetle)).toBeLessThan(0.8 * shortened(KINDS.tortoise));
+    // A fin at the end of the tail only where there is a tail: not under a shell.
+    const flukes = (body: Partial<CreatureSeed>, aquatic: number): number =>
+      bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
+        (part) => part.shape === "wedge" && part.side === 0 && part.forward < 0 && part.turn === 0,
+      ).length;
+    expect(flukes(KINDS.lizard, 0.45) - flukes(KINDS.lizard, 0)).toBe(1);
+    expect(flukes(KINDS.beetle, 0.45) - flukes(KINDS.beetle, 0)).toBe(0);
+    expect(flukes(KINDS.tortoise, 0.45) - flukes(KINDS.tortoise, 0)).toBe(0);
   });
 });
 

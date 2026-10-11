@@ -41,8 +41,13 @@ const STROKE_SWING = 0.55;
 const FLIPPER_REST = 0.3;
 /** Where along its length a flipper is joined to the body. */
 const FLIPPER_ROOT = 0.12;
-/** How far past the end of the leg the middle of a webbed foot is, in foot radii. */
-const WEB_AHEAD = 0.6;
+/**
+ * A webbed foot: how far past the end of the leg its middle is, in foot radii, and how
+ * long (the way the shin points) and wide it is against a round foot.
+ */
+const WEB_AHEAD = 0.5;
+const WEB_LONG = 0.9;
+const WEB_WIDE = 1.2;
 
 /** How a layer's creatures are shown: as bodies, as dots on the map, or not at all. */
 export type Showing = "bodies" | "markers" | "hidden";
@@ -58,7 +63,7 @@ interface Leg {
   edges: Sprite[];
   /** The foot at the end of the leg, on legs thick enough to show one. */
   sole: Sprite | null;
-  /** The foot is webbed: a fan that opens the way the leg points. */
+  /** The foot is webbed: a paddle set across the way the leg points. */
   webbed: boolean;
 }
 
@@ -245,12 +250,13 @@ export class CreatureLayer {
       sprite.tint = tint;
       return container.addChild(sprite);
     };
-    /** A foot: round, or with `webbed` a fan (its point where the leg ends). */
+    /** A foot: round, or with `webbed` a paddle, an oval wider than it is long. */
     const round = (tint: number, radius: number, webbed = false): Sprite => {
-      const texture = webbed ? this.atlas.wedge : this.atlas.disc;
-      const sprite = new Sprite({ texture, anchor: 0.5 });
+      const sprite = new Sprite({ texture: this.atlas.disc, anchor: 0.5 });
       sprite.tint = tint;
-      sprite.scale.set((2 * radius) / DISC_SIZE);
+      const across = (2 * radius) / DISC_SIZE;
+      if (webbed) sprite.scale.set(across * WEB_LONG, across * WEB_WIDE);
+      else sprite.scale.set(across);
       return container.addChild(sprite);
     };
     /** A flipper: an oval blade, held near one end; `margin` wider all round for its edge. */
@@ -437,13 +443,13 @@ export class CreatureLayer {
     const edge = 2 * leg.plan.edge;
     if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
     if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
-    // A webbed foot opens ahead of the leg's end, the way the shin points.
+    // A webbed foot lies ahead of the leg's end, across the way the shin points.
     const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
     const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
     for (const sprite of [soleEdge, leg.sole]) {
       if (sprite === undefined || sprite === null) continue;
       sprite.position.set(leg.foot.x + Math.cos(shin) * reach, leg.foot.y + Math.sin(shin) * reach);
-      if (leg.webbed) sprite.rotation = shin + Math.PI;
+      if (leg.webbed) sprite.rotation = shin;
     }
   }
 
