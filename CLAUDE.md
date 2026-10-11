@@ -26,7 +26,9 @@ own history.
 - **Outputs**: one continuous scene on a 7" screen (documentary camera + captions), a phone
   web app, push notifications for major events, and a daily public journal (static site).
 - **Look**: pixel art everywhere (flat palettes, stepped shading, hard pixel edges); see
-  `docs/design/concept.md`.
+  `docs/design/concept.md`. The screen shows the world from three distances: the
+  continent as a map, a region, and one animal from close to the ground
+  (`docs/design/renderer.md`, ADR 0007).
 
 Design references live in `docs/design/` and `mockups/`. They are the spec; keep them in
 sync when behaviour changes.
@@ -373,8 +375,9 @@ needs a note in `docs/decisions/`.
 - **Accept**: ≥ 30 fps median. Otherwise write an ADR choosing the native fallback.
 
 ### R1 — Terrain and plants from the state stream
-- **Deliver**: protocol types generated from the schema; terrain bitmap with daily
-  cross-fade; plant sprites by form and season.
+- **Deliver**: protocol types generated from the schema; the ground painted from the
+  cells for the three views (ADR 0007), cross-faded when it changes and painted off the
+  frame; the plants that stand on it, by form and season.
 - **Tests**: vitest for plant form mapping; Playwright snapshots of fixed states.
 
 ### R2 — Procedural creatures
@@ -385,8 +388,9 @@ needs a note in `docs/decisions/`.
 - **Tests**: vitest geometry tests, Playwright snapshots of the 15 specimen genomes.
 
 ### R3 — Documentary camera and captions
-- **Deliver**: subject selection (interest score), smooth follow/zoom, wide shots at dawn,
-  captions from chronicle entries, Monday recap tour.
+- **Deliver**: subject selection (interest score), the three views (map, region, one
+  animal followed from close by) and the moves between them, wide shots at dawn, captions
+  from chronicle entries, Monday recap tour.
 - **Tests**: subject selection unit tests; snapshot of caption layout; no caption overlaps.
 
 ### R4 — Atmosphere
