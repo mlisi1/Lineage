@@ -4,6 +4,8 @@
  * A stand-in until the state stream and its protocol exist (R1).
  */
 
+import { seasonOf, type Season } from "./seasons";
+
 export const FIXTURE_FORMAT = "lineage-spike-fixture/3";
 
 export type Ramp = readonly [string, string, string];
@@ -77,6 +79,8 @@ export interface WorldFixture {
   herbivoreMaxDiet: number;
   predatorMinDiet: number;
   description: string;
+  /** The time of year in the world: what its plants are drawn in. */
+  season: Season;
 }
 
 /** Decode base64 into bytes (browsers and Node both provide `atob`). */
@@ -225,5 +229,6 @@ export function parseFixture(raw: unknown): WorldFixture {
     herbivoreMaxDiet: field(diet, "herbivore_max", isNumber),
     predatorMinDiet: field(diet, "predator_min", isNumber),
     description: `seed ${String(source["seed"])}, ${String(source["date"])} (${String(source["season"])})`,
+    season: seasonOf(String(source["season"])),
   };
 }

@@ -23,6 +23,7 @@
  */
 import type { CellRect } from "./camera";
 import type { Ramp, WorldFixture } from "./fixture";
+import { floorRamp, seasonRamp, type Season } from "./seasons";
 import { VISIBLE_FROM, cellHash, hexToRgb, type Pixels } from "./pixelart";
 
 export type GroundStyle = "squares" | "warped" | "tiles" | "smooth" | "blended";
@@ -69,6 +70,14 @@ export interface GroundOptions {
   calm?: number;
   /** Shadows to lay on the land. */
   shadows?: readonly Shadow[];
+  /**
+   * The time of year: the colours of what grows, blooms in the grass in spring and
+   * summer, fallen leaves under broadleaves in autumn, and in winter low growth dried
+   * whatever its biomass (the simulation's own winter has it die back). Summer if left out.
+   */
+  season?: Season;
+  /** Winter with snow lying on the land: in patches, thinner under trees. */
+  snow?: boolean;
 }
 
 /** The forms that grow, in the order of their class numbers here (1 to 5); 0 is bare. */
@@ -118,6 +127,27 @@ const DRY_DRIFT = 0.12;
 /** Under trees and bushes a close view shows a floor of litter: mixed this far into their dark. */
 const LITTER = 0x6a5637;
 const FLOOR_LITTER: readonly number[] = [0, 0, 0, 0.18, 0.4, 0.46, 0];
+/** Snow lies where this noise is under so much: in the open, and under trees. */
+const SNOW_OPEN = 0.64;
+const SNOW_UNDER_TREES = 0.46;
+const SNOW_PATCH = 2.4;
+/** How much more or less of what comes and goes with the year the ground shows. */
+const BLOOMING: Readonly<Record<Season, number>> = { spring: 2.5, summer: 1, autumn: 0, winter: 0 };
+const LEAF_FALL: Readonly<Record<Season, number>> = {
+  spring: 0.8,
+  summer: 1,
+  autumn: 2,
+  winter: 1.3,
+};
+const BLADE_GROWTH: Readonly<Record<Season, number>> = {
+  spring: 0.9,
+  summer: 1,
+  autumn: 0.8,
+  winter: 0.4,
+};
+/** Fallen leaves in autumn. */
+const LEAF_GOLD = 0xd29a2a;
+const LEAF_FLAME = 0xc25a26;
 /** What a shadow is mixed with, how far, and how wide (as a share of it) its dithered rim is. */
 const SHADOW = 0x16203a;
 const SHADOW_MIX = 0.32;
@@ -356,9 +386,23 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
   const bare = packRamp(fixture.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
   const rock = packRamp(relief.highRock);
   const snow = packRamp(relief.snow);
-  const dry = packRamp(fixture.palette["DORMANT"] ?? ["#8f8448", "#b3a65c", "#cdc177"]);
+  const season = options.season ?? "summer";
+  const snowing = options.snow === true && season === "winter";
+  // Dried growth: the maps' own dry colours, paler in winter.
+  const dry = packRamp(
+    season === "winter"
+      ? seasonRamp(fixture.palette, "GRASS", "winter")
+      : (fixture.palette["DORMANT"] ?? ["#8f8448", "#b3a65c", "#cdc177"]),
+  );
   const burnt = packRamp(fixture.palette["BURNT"] ?? ["#3a302b", "#4f423a", "#66564b"]);
-  const ramps = FORMS.map((form) => packRamp(fixture.palette[form] ?? ["", "", ""]));
+  // Grass and lichen are the ground's own colour; under bushes and trees it is their floor.
+  const ramps = FORMS.map((form, index) =>
+    packRamp(
+      index + 1 > LOW && grain
+        ? floorRamp(fixture.palette, form, season)
+        : seasonRamp(fixture.palette, form, season),
+    ),
+  );
   const dries = FORMS.map((form) => fixture.dormantClasses.includes(form));
   const dryBelow = fixture.dormantBelow / 255;
   const bands = relief.seaBands.map((band) => ({ limit: band.limit, colour: pack(band.colour) }));
@@ -559,7 +603,10 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     // is dithered, as every other line is.
     const drift =
       calm > 0 ? DRY_DRIFT * (valueNoise(hereU * 1.3, hereV * 1.3, 13) - 0.5 + 0.3 * dither) : 0;
-    withered = grows !== BURNT && (dries[grows - 1] ?? false) && grown + drift < dryBelow;
+    withered =
+      grows !== BURNT &&
+      (dries[grows - 1] ?? false) &&
+      (season === "winter" || grown + drift < dryBelow);
     const ramp = grows === BURNT ? burnt : withered ? dry : (ramps[grows - 1] ?? bare);
     // A plant standing on a floor: the floor is a tone darker, for it to stand out on.
     const floor = grows > LOW && grows !== BURNT;
@@ -666,11 +713,23 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
       const step = felt > relief.slope ? 2 : felt < -relief.slope ? 0 : 1;
       // Two kinds side by side: nearer the border, more pixels go to the other.
       const grows = dithered && dither + 1 < 1 - lead / mixClass ? second : first;
-      const growthColour = cover(grows, step, worldX, worldY, dither);
       if (detailed) {
         toned[at] = step;
         thick[at] = Math.round(grown * 255);
       }
+      if (snowing) {
+        // Snow in patches cells across, with a dithered edge; less of it under trees.
+        const lying =
+          0.82 * valueNoise(u / SNOW_PATCH, v / SNOW_PATCH, 40) +
+          0.18 * valueNoise(worldX / PATCH, worldY / PATCH, 41);
+        const under = grows === 4 || grows === 5 ? SNOW_UNDER_TREES : SNOW_OPEN;
+        if (lying + 0.04 * dither < under) {
+          colours[at] = snow[step] ?? 0xffffff;
+          if (detailed) matter[at] = MATTER.snow;
+          continue;
+        }
+      }
+      const growthColour = cover(grows, step, worldX, worldY, dither);
       if (growthColour !== -1) {
         colours[at] = growthColour;
         if (detailed) matter[at] = withered ? MATTER.dry : (MATTER_OF[grows] ?? MATTER.soil);
@@ -723,7 +782,15 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
         let motifs: readonly Motif[] | null = null;
         for (const [set, chance] of DETAIL[made]) {
           const often =
-            set === BLADES || set === ROSETTES ? chance * (0.45 + 0.75 * amount) : chance;
+            set === BLADES
+              ? chance * (0.45 + 0.75 * amount) * BLADE_GROWTH[season]
+              : set === ROSETTES
+                ? chance * (0.45 + 0.75 * amount)
+                : set === BLOOMS
+                  ? chance * BLOOMING[season]
+                  : set === LEAVES
+                    ? chance * LEAF_FALL[season]
+                    : chance;
           if (pick < often) {
             motifs = set;
             break;
@@ -757,8 +824,8 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
           a: lichen[2],
           c: lichen[1],
           e: lichen[0],
-          o: LEAF_OCHRE,
-          n: LEAF_BROWN,
+          o: season === "autumn" ? LEAF_GOLD : LEAF_OCHRE,
+          n: season === "autumn" ? LEAF_FLAME : LEAF_BROWN,
           m: MOSS,
           t: made === MATTER.burnt ? shade(TWIG, 0.5) : TWIG,
           w: ASH_PALE,

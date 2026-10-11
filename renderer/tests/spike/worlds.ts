@@ -81,6 +81,7 @@ export function world(
     herbivoreMaxDiet: 0.35,
     predatorMinDiet: 0.65,
     description: "",
+    season: "summer",
   };
 }
 

@@ -122,6 +122,7 @@ export class GroundPieces {
           style: this.style,
           grain: true,
           cells: padded,
+          season: this.fixture.season,
           ...(shadows === undefined ? {} : { shadows }),
         });
         const canvas = document.createElement("canvas");

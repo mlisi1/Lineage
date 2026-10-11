@@ -26,6 +26,9 @@ describe("the committed fixture", () => {
     expect(fixture.coverClasses[0]).toBe("WATER");
     expect(fixture.creatures.length).toBeGreaterThan(50);
     expect(fixture.description).toContain("seed 42");
+    // The time of year comes with the world: its plants are drawn in it.
+    expect(fixture.season).toBe("summer");
+    expect(fixture.description).toContain(fixture.season);
   });
 
   it("has a three-tone ramp for every plant form and for dormant plants", () => {

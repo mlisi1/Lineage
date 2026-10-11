@@ -10,6 +10,7 @@ import {
   type GroundStyle,
 } from "../../src/spike/ground";
 import { hexToRgb, type Pixels } from "../../src/spike/pixelart";
+import { SEASONS, seasonRamp, type Season } from "../../src/spike/seasons";
 import { DEPTH, LAND, MAP, PALETTE, SEA, SEA_LEVEL, SHORE_OUTLINE, world } from "./worlds";
 
 const rows = (letter: string, width: number, height: number): string[] =>
@@ -375,6 +376,72 @@ describe("the ground of a close view", () => {
     expect(colours(paintGround(world(rows(".", 6, 6), 0), near()))).toBeGreaterThanOrEqual(3);
     // Without grain there is none of it.
     expect(colours(paintGround(world(rows("g", 6, 6), 255), near({ grain: false })))).toBe(1);
+  });
+
+  it("follows the seasons: colours, blooms, fallen leaves, winter's dieback", () => {
+    const meadow = world(rows("g", 8, 8), 255);
+    const wood = world(rows("b", 8, 8), 255);
+    const same = (a: Pixels, b: Pixels): boolean => a.rgba.every((value, i) => value === b.rgba[i]);
+    const grass = (season: Season): string => seasonRamp(PALETTE, "GRASS", season)[1];
+    // Summer is what is painted when no season is given.
+    expect(same(paintGround(meadow, near({ season: "summer" })), paintGround(meadow, near()))).toBe(
+      true,
+    );
+    // Each season paints the grass in its own tone, and in none of the others'.
+    for (const season of SEASONS) {
+      const image = paintGround(meadow, near({ season }));
+      expect(like(image, grass(season)), season).toBeGreaterThan(0.6);
+      for (const other of SEASONS) {
+        if (grass(other) !== grass(season)) expect(like(image, grass(other))).toBe(0);
+      }
+    }
+    // Winter dries low growth whatever its biomass, as the simulation's own winter does.
+    expect(grass("winter")).not.toBe(GRASS[1]);
+    expect(like(paintGround(meadow, near({ season: "winter" })), GRASS[1])).toBe(0);
+    // Blooms in the turf: most in spring, some in summer, none after.
+    const blooms = (season: Season): number =>
+      like(paintGround(meadow, near({ season })), "#f4f1e4") +
+      like(paintGround(meadow, near({ season })), "#f2d24b");
+    expect(blooms("spring")).toBeGreaterThan(1.5 * blooms("summer"));
+    expect(blooms("summer")).toBeGreaterThan(0);
+    expect([blooms("autumn"), blooms("winter")]).toEqual([0, 0]);
+    // Under broadleaves autumn lays leaves, gold and flame, more than summer's litter.
+    const fallen = (season: Season, colours: readonly string[]): number =>
+      colours.reduce((sum, colour) => sum + like(paintGround(wood, near({ season })), colour), 0);
+    expect(fallen("autumn", ["#d29a2a", "#c25a26"])).toBeGreaterThan(
+      1.5 * fallen("summer", ["#b08a4a", "#7a5a34"]),
+    );
+    expect(fallen("summer", ["#d29a2a", "#c25a26"])).toBe(0);
+    // The map takes the season's colours too, flat.
+    const map = paintGround(meadow, {
+      tile: MAP_TILE,
+      style: "smooth",
+      grain: false,
+      season: "autumn",
+    });
+    expect(share(map, grass("autumn"))).toBe(1);
+    // The middle view as well.
+    expect(
+      like(paintGround(meadow, { ...local("blended"), season: "spring" }), grass("spring")),
+    ).toBeGreaterThan(0.5);
+  });
+
+  it("lays snow in winter if asked: in patches, thinner under trees, never in another season", () => {
+    const meadow = world(rows("g", 12, 12), 255);
+    const wood = world(rows("b", 12, 12), 255);
+    const snowOn = (fixture: Parameters<typeof paintGround>[0], season: Season): number => {
+      const image = paintGround(fixture, near({ season, snow: true }));
+      return ["#c9d3dc", "#e6edf2", "#ffffff"].reduce((sum, tone) => sum + like(image, tone, 2), 0);
+    };
+    const open = snowOn(meadow, "winter");
+    expect(open).toBeGreaterThan(0.4);
+    expect(open).toBeLessThan(0.97);
+    expect(snowOn(wood, "winter")).toBeLessThan(open - 0.15);
+    expect(snowOn(wood, "winter")).toBeGreaterThan(0.05);
+    expect(snowOn(meadow, "summer")).toBe(0);
+    // Without being asked, winter is bare.
+    const bare = paintGround(meadow, near({ season: "winter" }));
+    expect(like(bare, "#e6edf2", 2)).toBe(0);
   });
 
   it("lays shadows on the land, once however many overlap, with a dithered rim", () => {
