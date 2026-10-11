@@ -568,12 +568,14 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     if (floor && detailed && !withered) tone = mix(tone, LITTER, FLOOR_LITTER[grows] ?? 0);
     const [thin, full] = COVERAGE[grows] ?? [0, 0];
     if (calm > 0) {
-      // Growth thins in patches cells across, and the soil shows in the gaps.
+      // Growth thins in patches cells across, and the soil shows in the gaps. A gap's
+      // edge is ragged but not dithered: where the growth only just thins, dithering
+      // left a faint field of dots instead of a gap.
       const covered = thin + (full - thin) * grown;
       const patch =
         (1 - CALM_RAGGED) * valueNoise(hereU / CALM_PATCH, hereV / CALM_PATCH, 5) +
         CALM_RAGGED * valueNoise(px / PATCH, py / PATCH, 10);
-      if (patch + 0.03 * dither >= covered) return -1;
+      if (patch >= covered) return -1;
       // The detail is drawn over it afterwards.
       if (detailed) return tone;
     } else {
