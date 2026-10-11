@@ -78,6 +78,14 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 - `Flora.set_daylight(level)` for presence (M8).
 - `Wildfire.ignite(y, x, t)` for god powers (M8).
 
+## How it is drawn
+
+The renderer shows a cell's plant by its form, its biomass and the season: four stages
+of growth by biomass (a sprout under 0.17, young to 0.5, grown to 0.85, old above) and
+the four seasons, with broadleaves bare in winter and low growth dried, which is how
+winter dieback looks. See `renderer.md`, Plants. The plant genome does not reach the
+renderer yet.
+
 ## Measured behaviour (M3 report, 20 seeds × 5 sim-years from bare rock)
 
 See `reports/M3-flora/`. Targets from CLAUDE.md §8, and how they are read:

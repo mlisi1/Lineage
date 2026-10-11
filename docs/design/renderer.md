@@ -27,14 +27,14 @@ The world is a continent, and the screen shows it from three distances
 |---|---|---|---|---|
 | **map** | 2 | all 256 × 150 cells | the continent | a dot |
 | **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 4½ art pixels long |
-| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 (proposed) |
+| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 |
 
 The land and its plants are not rescaled between the views: a grown tree is three cells
-tall in the middle view and in the local one, and the plants of the middle view stand in
-the same places in the local view; the camera is closer, and what it shows is drawn with
-the detail that distance has room for. Whether the animals keep one size across the
-views is open (see Creatures): the middle view draws them at the size it was found good
-at, and the local view's is being chosen against grown trees.
+tall in the middle view and in the local one, drawn by the same rule, and the plants of
+the middle view stand in the same places in the local view; the camera is closer, and
+what it shows is drawn with the detail that distance has room for. Animals are the one
+exception (see Creatures): true to the trees in the local view, larger than life in the
+middle view, dots on the map.
 
 ### The ground: one painter
 
@@ -78,10 +78,18 @@ under conifers, ash where it burnt. **Lichen** is not a colour of the ground fro
 but rosettes on soil or rock, grey-green, mustard and chalk-white, more of them where it
 grows thicker, and a few on any bare rock.
 
-**Shadows are the ground's.** What stands on the ground says how large a shadow it
-throws (`PlantLayer.shadows`), and the painter darkens the land under it once, however
-many overlap, with a dithered rim. A shadow drawn with each plant darkened the crowns
-behind it and every other shadow it crossed.
+**Shadows are the ground's**, in the middle view and the local one. What stands on the
+ground says how large a shadow it throws (`PlantLayer.shadows`), and the painter darkens
+the land under it once, however many overlap, with a dithered rim. A shadow drawn with
+each plant darkened the crowns behind it and every other shadow it crossed.
+
+**The ground follows the seasons** (`season`; summer unless told): the tones of what
+grows are the season's (`seasons.ts`), the turf blooms in spring and less in summer,
+broadleaves drop gold and flame on a russet floor in autumn, and in winter low growth is
+painted dried whatever its biomass, which is what the simulation's own winter does to it
+by dieback. With `snow`, winter lays snow on the land in patches cells across with a
+dithered edge, thinner under trees. The simulation has no snow on low ground: it is the
+renderer's own and still to be decided.
 
 The map and the middle view are each one picture of the whole world (512×300 and
 2048×1200), repainted when the plants change, once a sim-day. The local view would be
@@ -94,44 +102,67 @@ the whole (a test holds this).
 
 In the map view plants are the ground's colour. From the middle view on, grass and lichen
 are the ground's own texture and what stands on it is drawn by rule (`plantart.ts`), a
-little off the middle of its cell:
+little off the middle of its cell. One rule draws a plant at any size, so the middle view
+and the local view show the same tree, a quarter of the size in the first:
 
 | | Middle view | Local view |
 |---|---|---|
-| Broadleaf, conifer | 24 art pixels tall, in 4 cells of a wood out of 10 | the same trees, 96 tall, in a style still to be chosen |
-| Bush | 10 tall, in 6 cells of scrub out of 10 | the same bushes, 40 tall; one in three in berry |
-| Grass | a tuft in one cell of grown grass out of three | tufts in every cell that grows it, more where it is thick; dry tufts where it has dried |
-| Small plants | none | by what covers the cell: see below |
+| Broadleaf, conifer | 24 art pixels tall full grown, in 4 cells of a wood out of 10 | the same trees, 96 tall |
+| Bush | 10 tall, in 6 cells of scrub out of 10 | the same bushes, 40 tall |
+| Grass | a tuft in one cell of grown grass out of three | tufts in every cell that grows it, more where it is thick |
+| Small plants | none | by what covers the cell and by the season: see below |
 
-Drawing by rule is what lets one plant be drawn at two distances and several styles be
-compared; what is kept can be redrawn by hand in R1. The middle view's trees are the
-first rule (`first`: four lobes on a trunk, a conifer in tiers, its shadow drawn with
-it). For the local view three more were written after how pixel-art trees are usually
-built, and **`bundles` was chosen** (T1):
+**The rule** (T1, chosen from three; the other two, a rounded dome and forking limbs
+with a clump per end, are in ADR 0007 and no longer in the code):
 
-| Style | Broadleaf | Conifer | Bush | After |
+- A **broadleaf** is a crown of some thirty-five small bundles of leaves packed like a
+  sunflower's seeds, after Slynyrd's Pixelblog 44 (one bundle of leaves, repeated and
+  layered by the light). A bundle is a disc with a soft rim of three gentle bulges, lit
+  on its own; its leaves are slanted dabs a couple of pixels long, which ruffle the line
+  between two tones; it throws a thin line of shade on the bundles behind it. Five tones:
+  the palette's three, a cooler one below and a warmer one above.
+- A **conifer** is tiers of drooping boughs, the lowest drawn first, each shading the one
+  below: lit on its upper left, in shade under its right hem, needles (two rows to a
+  draw) ruffling the tones, the tips of its hem hanging to different lengths.
+- A **bush** is a mound: rows of bundles from the ground up, each row narrower along the
+  line of a dome, widest a little above the ground. (Bundles packed into an oval, as a
+  crown is, came out lopsided and flat-sided.)
+- A **trunk** stands under the middle of its crown and has bark from four pixels thick:
+  a broadleaf's furrowed (strokes of shade down it, each column on its own rhythm, a knot
+  on the stoutest, the crown's shade on the wood just under the leaves), a conifer's
+  redder and scaly (short plates, staggered from one column to the next).
+- Each kind comes in three drawings and three builds (as the scale has it, slender and
+  tall, broad and low). Below three pixels of radius a clump is too small for a line of
+  shade and is drawn a little lighter instead: that is what keeps the middle view's
+  plants clear of the ground.
+
+**Stages of growth** follow from the biomass of the cell (`growthOf`), four of them:
+
+| Stage | Biomass (of 255) | A tree | A bush | Grass |
 |---|---|---|---|---|
-| `bundles` (T1, chosen) | a crown of some thirty-five small bundles of leaves packed like a sunflower's seeds, each lit on its own, with a thin line of shade on the ones behind it | drooping boughs: tiers with a hem of hanging tips, each shading the one below | a mound of bundles | Slynyrd's Pixelblog 44: one bundle of leaves, repeated and layered by the light |
-| `dome` (T2, passed over) | one rounded mass with a bumpy rim, shaded as a whole in five stepped tones | clean tiers, cut straight | a dome | the usual top-down game tree: crown over a short trunk, shadow apart |
-| `limbs` (T3, passed over) | a trunk that parts into limbs and twigs, a clump of leaves at each fork and end | whorls of boughs on a trunk that shows | clumps on stems that fan from the foot | Gentree: branches grown by forking, a clump of leaves per end |
+| sprout | 20–43 | a sapling: a stem and a few leaves, 0.42 of full height | first shoots (local view only: scrub that low has died back and is ground in the middle view) | a short tuft |
+| young | 44–127 | 0.58 of full height | 0.6 | a middling tuft |
+| grown | 128–215 | full height: three cells | full | a tall tuft |
+| old | 216– | no taller, a ninth broader, a stouter trunk | a little larger | as grown |
 
-Each style draws every kind in three builds (as the scale has it, slender and tall,
-broad and low) with a different arrangement per drawing, in five tones (the palette's
-three, a cooler one below and a warmer one above), outlined, and adapts to the middle
-view's size. Whether the middle view's trees are redrawn as `bundles` is open.
+In the fixture's two-year-old world half of the tree cells hold sprouts, a third young
+trees and one in seven a grown or old one. Where it burnt stand charred stumps and
+snags (a dead trunk, broken off, with the stubs of limbs).
 
-What makes a crown of bundles read as leaves rather than blocks (it was judged blocky
-when its bundles were half as many, twice the size and saw-toothed): a bundle is a disc
-with a soft rim of three gentle bulges, so that many side by side give a bumpy outline;
-its leaves are slanted dabs a couple of pixels long, which ruffle the line between two
-tones and stand out lighter or darker here and there; the shade a bundle throws on those
-behind it is a line, not a field. A conifer's tier is lit on its upper left and in shade
-under its right hem, with needles (two rows to a draw) ruffling the tones; the tips of
-its hem hang to different lengths and not under those of the tier above. A trunk stands
-under the middle of its crown whatever its thickness (a conifer's is thinner than its
-width would give it, and the rule that thinned it used to move it left, in the middle
-view too). A bush is moved down until it sits on the ground, and nothing of a plant is
-drawn below the line it stands on.
+**Seasons** (`seasons.ts`). The fixture carries the world's season; a layer can be
+drawn in any:
+
+| | Spring | Summer | Autumn | Winter |
+|---|---|---|---|---|
+| Broadleaf | lighter, yellower greens; one in three in blossom | the palette's greens | one in three gold, one flame, one half green | bare: the trunk, limbs that fork down to twigs |
+| Conifer | light tips on the boughs | the palette's | unchanged | darker and bluer |
+| Bush | two in three in blossom, white or pink | one in three in berry | rust; two in three in berry | bare twigs, a few berries left |
+| Grass | short, fresh | tall | yellowed, in seed | dried, pressed flat |
+| Small plants | daisies and bells; few mushrooms | all four flowers; reeds green | few flowers, ferns browned, mushrooms at their most | none but brown ferns, dry reeds |
+
+With `snow` (winter only) it lies on the crowns and limbs, on the shoulders of every
+tier of a conifer, on stones and wood. Changing from one season to the next over days
+rather than at once belongs to R1.
 
 **Small plants** (`drawSmall`) are placed by what covers each cell, by hashes of the
 cell, so they are where they were on the next visit:
@@ -139,17 +170,19 @@ cell, so they are where they were on the next visit:
 | Ground | What stands or lies on it |
 |---|---|
 | Grown grass | herbs; flowers of four kinds (daisy, bell, spike, umbel) in five colours, in drifts: one kind and colour over several cells, thick in places and rare between |
-| Scrub | ferns, herbs, a flower now and then |
+| Scrub | ferns, herbs, a flower now and then; the first shoots of a bush where it has died back |
 | Under broadleaves and conifers | mushrooms (three caps), ferns, fallen logs |
 | Bare ground, lichen | stones and boulders, some grown over with lichen or moss; herbs |
 | Shore | reeds |
-| Burnt | charred stumps, logs |
+| Burnt | charred stumps, snags, logs |
 
 Plants are kept in rows from the top of the map down (`plants.ts`), so that the nearer
 cover the farther; each row has a place for the creatures on it, so an animal passes
 behind the trees in front of it. The local view sorts four rows to the cell. Rows are
 built a chunk at a time, when the view first comes near. In the local view a plant that
-covers the animal the picture is about goes see-through.
+covers the animal the picture is about goes see-through. A layer's drawings are packed
+into one texture in rows no wider than 1 024 pixels (`standingArts` lists them: 45 for
+the middle view, 93 for the local one).
 
 ### Creatures
 
@@ -229,14 +262,14 @@ same body gets what there is now room for: a glint in each eye, legs with an edg
 feet; and it ambles. Only creatures in sight are worked out.
 
 How long an animal is drawn is the renderer's choice (the simulation knows mass, not
-length): a number times 1.1 cells at mass 1. The middle view draws at 0.5, where it was
-found good: 4½ art pixels at mass 1. For the local view 0.5 and then 0.4 were judged too
-large, the second against a young tree; it is being chosen from 0.2 to 0.5 against a
-line-up of grown trees and bushes, with 0.35 proposed: mass 1 is an eighth as long as a
-grown tree is tall, and the heaviest a genome allows (mass 16) two thirds of a bush's
-height. If the middle view followed, its animals would be 3 pixels long at 0.35 and 2 at
-0.25, dots with an outline; if it keeps 0.5 it draws animals larger than life, as the
-map does with its dots. That is the second half of the choice. Seen from close enough
+length): a number times 1.1 cells at mass 1. **The local view draws at 0.35**, chosen
+against a line-up of full-grown trees and bushes: mass 1 is 11 art pixels long, an
+eighth as long as a grown tree is tall, and the heaviest a genome allows (mass 16) two
+thirds of a bush's height. **The middle view draws at 0.5**, larger than life: at 0.35
+its animals would be 3 pixels long, dots with an outline, and it was found good at 4½.
+So the views are in proportion for the land and its plants and not for the animals,
+each view exaggerating them as much as it needs to show them: not at all from close,
+by half in the middle view, to a dot a cell wide on the map. Seen from close enough
 that mass 1 is some thirty pixels long, the same bodies are portraits, as a bestiary
 will want them: the look sheet draws the markings that way. Kinds change at thresholds,
 so two animals of one species either side of one will look like different kinds; whether
@@ -246,15 +279,16 @@ that needs softening is for R2.
 
 `renderer/look.html` shows the three views as they stand, drawn by the same code as the
 benchmark with the settings of `proposal.ts`, and for what is still open the proposals
-side by side with one marked as the pick: the map; the middle view on a shore and in a
-wood; for the local view its ground alone and a sample of every kind of ground, the
-trees and bushes on sheets and in a wood, the small plants, a meadow, a shore, and the
-four lights; then **the line-up the animals' size is chosen by**: grown trees and
-bushes in a row on a meadow and the same five animals (masses 0.25 to 16) in front of
-them, at six sizes, with a piece of the middle view at each size beneath; then the
-fifteen specimen genomes at the local view's size, and every marking on two bodies and
-each gene swept on its own, as portraits. Live, the creatures walk (`npm run dev`, then
-`/look.html`); `npm run look` writes a self-contained copy to
+side by side: the map; the middle view on a shore and in a wood; for the local view its
+ground alone and a sample of every kind of ground, the trees and bushes on sheets and in
+a wood, the small plants, a meadow, a shore, and the four lights; then **the vegetation
+in every variation**: the stages of growth, and for each time of year (the four seasons,
+and winter under snow) a sheet of the plants, the same shore from close and the same
+wood from the middle view; then the fifteen specimen genomes at the local view's size,
+and every marking on two bodies and each gene swept on its own, as portraits. The sheets
+are built from `standingArts`, the list a layer itself draws from, so they show what the
+views show. Live, the creatures walk (`npm run dev`, then `/look.html`); `npm run look`
+writes a self-contained copy to
 [`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md) that can be read
 anywhere: creatures walk for a fixed, seeded 8 s, then every picture is saved inline,
 those with animals in them as loops of 6 s (animated PNG, written by `apng.ts`: the first
@@ -267,8 +301,8 @@ by pixel: most of what was mended after the second sight of the local view (a tr
 beside its crown, tusks without an outline, a crab trailing a joint) cannot be seen at
 the size the sheet shows them and was plain at that one.
 
-Still to be chosen there: the size of the animals in the local view, whether the middle
-view follows it, and whether the middle view's trees are redrawn as `bundles`.
+Still to be chosen there: whether winter has snow, and whatever the first sight of the
+seasons and the stages asks to change.
 
 ## What it costs: an estimate for the board
 
@@ -280,13 +314,14 @@ another graphics stack, so the last column is an order of magnitude.
 
 | | On the PC | At the board's speed | Against |
 |---|---|---|---|
-| Script per frame, map view, 216 animals as dots | 0.2 ms | 3 ms (up to 8) | 33 ms a frame at 30 fps |
-| Script per frame, middle view, 50 animals | 0.2 ms | 3 ms (up to 8) | |
-| Script per frame, middle view, 216 animals alive | 0.5 ms | 8 ms (up to 15) | |
-| Script per frame, local view, following one animal | 0.2 ms | 1 ms (up to 8) | |
+| Script per frame, map view, 216 animals as dots | 0.2 ms | 2 ms (up to 7) | 33 ms a frame at 30 fps |
+| Script per frame, middle view, 50 animals | 0.2 ms | 3 ms (up to 9) | |
+| Script per frame, middle view, 216 animals alive | 0.6 ms | 10 ms (up to 17) | |
+| Script per frame, local view, following one animal | 0.2 ms | 1 ms (up to 9) | |
 | The page's process, any view | 5–7 % of a core at 60 fps | about 0.6 of a core at 30 fps | 4 cores; the sim may use ¼ of one |
-| Painting the map's and the middle view's ground | 0.5 s | 10 s | once a sim-day |
-| Painting a piece of the local view's ground | 35 ms | 0.6 s | 2–3 pieces every 8 cells walked |
+| Painting the map's and the middle view's ground, with the shadows of every plant | 0.6 s | 11 s | once a sim-day |
+| Painting a piece of the local view's ground | 40 ms | 0.7 s | 2–3 pieces every 8 cells walked |
+| Drawing the plants' pictures: 93 for the local view, 45 for the middle one | 15 ms and 2 ms | 0.3 s and 35 ms | when the season turns |
 | Pixels to fill per frame | 512×300, two to three layers deep | | a Mali-G31 MP2, if Chromium is given it |
 | WebGL drawn by the processor | 2–3 cores | out of reach | 4 cores, 21 times slower |
 | Chromium's memory | about 0.6 GB | | 1–4 GB by model; sim and server get 0.3 |
@@ -303,7 +338,7 @@ shows, since they are drawn smaller. What follows:
 - **Painting ground does not fit in a frame.** On the board a piece of the local view's
   ground would stop the picture for half a second (measured as it is, the local view
   drops to 2 fps while a piece is painted), and the daily repaint of the other two for
-  ten. Both belong in a worker, ahead of the camera for the local view.
+  eleven. Both belong in a worker, ahead of the camera for the local view.
 - **Everything still hangs on the graphics driver.** With the GPU the picture is small
   work; drawn by the processor nothing here is fast enough. Reports for this board show
   Panfrost loading while OpenGL still falls back to llvmpipe, so it is the first thing
@@ -407,19 +442,22 @@ image draws WebGL with the GPU.
 - **Creature bodies and motion.** Bodies are discs, wedges and bars; the wandering is
   cosmetic and seeded, not the simulation's. Walkers keep to land and swimmers to water
   only because the spike says so.
-- **Plant and ground art.** Drawn by rule, to be compared at several sizes, distances
-  and styles. Which plants a cell carries is decided here from its cover and hashes of
-  its position; the simulation's plant genome does not yet reach the renderer.
+- **Plant and ground art.** Drawn by rule, at any size, stage and season. Which plants
+  a cell carries is decided here from its cover, its biomass and hashes of its position;
+  the simulation's plant genome does not yet reach the renderer. The season is the
+  fixture's (`source.season`).
 - **The camera.** The benchmark's local view follows the first creature of the save;
   choosing whom to follow, and moving between the views, is R3.
 
 ## Open
 
-- **The animals' size in the local view**, and whether the middle view follows it or
-  keeps its own: the line-up on the look sheet.
-- **The middle view's trees**: as they are, or redrawn as `bundles`.
-- **Plant genes in the drawing.** A style's three builds and the kinds of flower are the
-  renderer's own variety. The 8-gene plant genome could choose them (R1).
+- **Snow.** Drawn, as an option; the simulation has none on low ground. If kept, when
+  it lies is the renderer's to decide (the coldest weeks, a holiday's dark age).
+- **Turning from one season to the next.** A layer is drawn in one season; the turn
+  over days or weeks (trees colouring one after another, snow coming and going) is R1.
+- **Plant genes in the drawing.** The three builds, which broadleaf flowers or turns
+  gold, and the kinds of flower are the renderer's own variety. The 8-gene plant genome
+  could choose them (R1): `HEIGHT` the build, `EVERGREEN` how late a tree turns.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: see the cost above.

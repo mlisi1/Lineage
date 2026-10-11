@@ -1,8 +1,7 @@
 # 0007 — Three views of the world, and the look chosen for them
 
-- **Status**: accepted; amended twice the same day, after the first and the second sight
-  of the local view (see the end). Open: the size of the animals in the local view, and
-  whether the middle view follows it
+- **Status**: accepted; amended three times the same day, after each sight of the local
+  view (see the end). Open: whether winter has snow
 - **Date**: 2026-10-11
 
 ## Context
@@ -114,3 +113,33 @@ a young tree; creatures fine but for some faults in the drawing.
   patch; a tail fin only on a tail; webbed feet are paddles.
 - **Looking closely is part of making a sheet**: trees and creatures are checked
   enlarged four times before it goes out.
+
+## Third amendment: sizes, and the vegetation through its stages and the year
+
+The owner's verdict on the line-up and the mended trees: trees almost fine (more texture
+on the trunks; bushes awkward in shape); animals at 0.35 in the local view; the middle
+view to keep 0.5 and to have its vegetation redrawn as T1; and a wish to see every
+variation of the vegetation, by stage and by season.
+
+- **Animals are not at one scale across the views.** 0.35 in the local view, true to
+  the trees; 0.5 in the middle view, larger than life; a dot on the map. "One world
+  scale" stands for the land and its plants. Each view exaggerates the animals as much
+  as it needs to show them.
+- **One rule draws the vegetation in the middle view and the local one** (T1). The
+  first rule (four lobes on a trunk) and the two styles passed over are removed from
+  the code, as are the two smaller plant sizes (P1, P2). Small clumps carry no line of
+  shade and are drawn lighter, which keeps the middle view as readable as it was.
+- **Shadows are painted on the ground in the middle view too.**
+- **Trunks have bark; a bush is a mound** of rows of bundles, not bundles packed into an
+  oval.
+- **Four stages of growth** by biomass (sprout, young, grown, old) instead of two. A
+  wood shows its age: in a two-year-old world most trees are saplings and young.
+- **Four seasons**, from the date the world carries: the colours of each form, blossom,
+  berries, bare branches, grass that goes to seed and is pressed flat, what small plants
+  are out, and the ground's own colours, blooms and fallen leaves. **Snow** is drawn as
+  an option and left to the owner: the simulation has none on low ground.
+
+Consequences: R1's "plants by form and season" has its first version here, with the
+turn from one season to the next still to do. R4's seasons are down to light and
+weather. The fixture's `source.season` is now read by the renderer and should be part
+of the protocol.
