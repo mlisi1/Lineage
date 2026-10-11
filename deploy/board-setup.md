@@ -15,15 +15,23 @@ corrects this page, and S6 turns it into `setup.sh`.
 | microSD card (8 GB or more), reader, the PC | yes | |
 | USB-C supply, 5 V 3 A | yes | yes |
 | Wi-Fi the board and the PC are both on | yes | yes |
-| **The 7" screen on the board's mini-HDMI port** | no | **yes** |
+| **A display on the board's mini-HDMI port** | no | **yes** |
 | USB keyboard on the board | no | no |
 
-The screen is not needed to set the board up: it is done over Wi-Fi. It is needed to
-measure, because R0 asks for frames shown on that screen at 1024×600. Chromium paces its
-frames to a display, and the report refuses a run without one. A mini-HDMI to HDMI
-adapter is only one way to connect it: a mini-HDMI to HDMI cable does the same, and so
-does a flat FPC HDMI cable with a mini-HDMI end. Look at what plugs into the screen's own
-board before buying anything.
+A display is not needed to set the board up: that is done over Wi-Fi. It is needed to
+measure: Chromium paces its frames to a display, and the report refuses a run without
+one.
+
+**Which display.** The 7" screen, or until it is bought any HDMI monitor at its own
+resolution. The scene is drawn at the same size and stretched to the page, so a larger
+display is at least as hard on the board as the screen will be; the report counts such a
+run and says what it was made on ([ADR 0008](../docs/decisions/0008-r0-on-a-stand-in-display.md)).
+A result under 30 frames a second on a monitor does not settle it, the screen being less
+work.
+
+**How it connects.** Mini HDMI is the board's only output for a display. Its two USB-C
+ports are USB 2.0, for power and data: they carry no video. So one of these is needed,
+whatever the display: a mini-HDMI to HDMI adapter, or a mini-HDMI to HDMI cable.
 
 ## 1. Flash Armbian
 
@@ -128,7 +136,8 @@ cat /sys/class/thermal/thermal_zone*/temp
 6.12 or newer, and temperatures in thousandths of a degree (`45000` is 45 °C).
 
 The memory matters: Chromium takes about 0.6 GB, and the simulation and server are
-budgeted 0.3 GB beside it. On the 1 GB board that leaves nothing.
+budgeted 0.3 GB beside it. On the 1 GB board that leaves nothing; on the 2 GB one it
+fits.
 
 ## 5. Is the GPU driver there?
 
@@ -149,9 +158,9 @@ overlay and depends on the exact image.
 A loaded driver is half of it. One forum report has Panfrost loaded and OpenGL still
 drawn by the processor (`llvmpipe`); the next step and the benchmark itself tell.
 
-## 6. Connect the screen and look
+## 6. Connect the display and look
 
-Power the board off (`sudo poweroff`), connect the 7" screen to its mini-HDMI port, power
+Power the board off (`sudo poweroff`), connect the display to its mini-HDMI port, power
 both.
 
 ```sh
@@ -159,10 +168,11 @@ cat /sys/class/drm/card*-HDMI-A-1/status
 head -3 /sys/class/drm/card*-HDMI-A-1/modes
 ```
 
-**You should see** `connected`, and `1024x600` as the first mode. The console's text
-should be on the screen.
+**You should see** `connected`, the display's own resolution as the first mode
+(`1920x1080` on a monitor set to that, `1024x600` on the 7" screen), and the console's
+text on the display. On a monitor, leave the mode as it is.
 
-If the screen is dark or the first mode is another one, force it: in
+If the 7" screen is dark or its first mode is another one, force it: in
 `/boot/armbianEnv.txt` add the line `extraargs=video=HDMI-A-1:1024x600@60`, reboot, and
 look again. (The usual remedy for small HDMI panels; not tried with this one.)
 
@@ -172,7 +182,7 @@ Then what draws:
 sudo timeout 8 kmscube 2>&1 | grep -E 'vendor|renderer'
 ```
 
-**You should see** a spinning cube on the screen for eight seconds, and a line
+**You should see** a spinning cube on the display for eight seconds, and a line
 `renderer: "Mali-G31 (Panfrost)"`. `llvmpipe` in its place means the processor is
 drawing: note it and go on, the benchmark will say the same with numbers.
 
@@ -236,8 +246,9 @@ uv run python -m tools.report R0 --runs runs/r0-device
 ```
 
 This writes `reports/R0-renderer-spike/`, with the evidence file in it. The report
-passes only if the run was on the board, on the display, at 1024×600, and the best
-profile reaches 30 frames a second in the acceptance scenario.
+passes only if the run was on the board, on a display, with the page 1024×600 or larger,
+and the best profile reaches 30 frames a second in the acceptance scenario. On a monitor
+it says so, and how many times the screen's pixels it had to fill.
 
 ## If it does not work
 

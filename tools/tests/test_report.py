@@ -484,6 +484,41 @@ def test_r0_fails_below_the_target_and_away_from_the_device(tmp_path: Path) -> N
     assert "This is not the R0 measurement" in " ".join(_parse(out / "report.html").text)
 
 
+def test_r0_counts_a_larger_display_as_at_least_as_hard(tmp_path: Path) -> None:
+    """A monitor standing in for the 7" screen: the same scene stretched further (ADR 0008)."""
+
+    def on(width: int, height: int, name: str) -> dict[str, Any]:
+        run = _bench_run("gpu", 41.0)
+        run["results"]["screen"] = {"width": width, "height": height, "device_pixel_ratio": 1}
+        run["results"]["viewport"] = {"width": width, "height": height}
+        out = build_report("R0", _bench_evidence(tmp_path, [run]), tmp_path / name)
+        return json.loads((out / "metrics.json").read_text(encoding="utf-8")) | {
+            "readme": (out / "README.md").read_text(encoding="utf-8"),
+            "text": " ".join(_parse(out / "report.html").text),
+        }
+
+    monitor = on(1920, 1080, "monitor")
+    assert monitor["off_spec"] == []
+    assert monitor["stand_in"] == [
+        "the page was 1920×1080, 3.4 times the pixels of the 1024×600 screen: "
+        "at least as hard to draw"
+    ]
+    assert {a["id"]: a["status"] for a in monitor["acceptance"]} == {"R0.1": "PASS", "R0.2": "PASS"}
+    assert "**On a stand-in display:**" in monitor["readme"]
+    assert "standing in for the 7″ screen" in monitor["text"]
+    assert "1920×1080, page 1920×1080" in monitor["text"]
+    assert "not the R0 measurement" not in monitor["text"]
+
+    # The screen itself is no stand-in; a smaller page is less work and does not count.
+    assert on(1024, 600, "screen")["stand_in"] == []
+    small = on(800, 480, "small")
+    assert small["stand_in"] == []
+    assert small["off_spec"] == ["the page was 800×480, smaller than 1024×600"]
+    assert {a["id"]: a["status"] for a in small["acceptance"]}["R0.1"] == "FAIL"
+    # Wider and lower is not larger: it does not hold the screen's 600 rows.
+    assert on(1280, 480, "wide")["off_spec"] == ["the page was 1280×480, smaller than 1024×600"]
+
+
 def test_r0_best_profile_at_equal_frame_rate_uses_less_cpu(tmp_path: Path) -> None:
     runs = [
         _bench_run("default", 60.1, cpu=310.0, driver="llvmpipe"),

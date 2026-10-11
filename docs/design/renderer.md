@@ -352,7 +352,9 @@ shows, since they are drawn smaller. What follows:
   work; drawn by the processor nothing here is fast enough. Reports for this board show
   Panfrost loading while OpenGL still falls back to llvmpipe, so it is the first thing
   to try when the board is on the desk.
-- **A 1 GB board is tight** next to the simulation; 2 GB or more is safer.
+- **Memory fits on the board on the desk**, which is the 2 GB model: Chromium's 0.6 GB
+  and the 0.3 GB budgeted for simulation and server leave room. On a 1 GB board they
+  would not.
 
 Sources for the scores: Geekbench 6 uploads for the Orange Pi Zero 3, which has the same
 chip ([145/425](https://browser.geekbench.com/v6/cpu/16858950),
@@ -418,10 +420,15 @@ Every run records what actually drew the page ("WebGL on <driver>", "…(softwar
 CPU)", or "2D canvas … (WebGL was not available)"): PixiJS silently falls back to the
 canvas when the browser has no WebGL, and a frame rate without that line means nothing.
 
-The procedure is in [`deploy/README.md`](../../deploy/README.md). The file it produces
+The procedure is in [`deploy/README.md`](../../deploy/README.md), and from a board in its
+box in [`deploy/board-setup.md`](../../deploy/board-setup.md). The file it produces
 becomes `reports/R0-renderer-spike/` through `tools.report R0`. The report passes R0 only
-if the numbers were taken as specified (ARM board, kiosk on the display, 1024×600) and
-the best profile reaches 30 fps median in `spec-1x`.
+if the numbers were taken as specified (ARM board, kiosk on a display, the page 1024×600
+or larger) and the best profile reaches 30 fps median in `spec-1x`. A larger display may
+stand in for the 7" screen, which is not bought yet
+([ADR 0008](../decisions/0008-r0-on-a-stand-in-display.md)): the scene is drawn at the
+same size and stretched further, which is at least as hard. The report names the display
+and says so.
 
 ### What a PC already says (not the acceptance)
 

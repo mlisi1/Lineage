@@ -35,7 +35,7 @@ sync when behaviour changes.
 
 ## 2. Target hardware (for context; hardware work comes later)
 
-- Orange Pi Zero 2W (Allwinner H618, quad A53, 1–4 GB RAM), Debian-based OS, Python 3.11.
+- Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS, Python 3.11.
 - Waveshare 70H-1024600 7" IPS, 1024×600, HDMI via adapter board + 15 cm FPC; backlight
   enable/PWM pins driven from GPIO.
 - PIR sensor, covered toggle switch, cooldown LED, 18650 UPS module with mains-loss sense.
@@ -373,7 +373,8 @@ needs a note in `docs/decisions/`.
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,
   plant sprites and a full-screen tint, in Chromium kiosk on the Orange Pi at 1024×600.
 - **Measure**: fps (median, 1% low), CPU, GPU driver in use, RAM.
-- **Accept**: ≥ 30 fps median. Otherwise write an ADR choosing the native fallback.
+- **Accept**: ≥ 30 fps median. Otherwise write an ADR choosing the native fallback. A
+  larger HDMI display may stand in for the 7" screen (ADR 0008).
 
 ### R1 — Terrain and plants from the state stream
 - **Deliver**: protocol types generated from the schema; the ground painted from the

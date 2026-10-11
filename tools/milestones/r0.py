@@ -30,8 +30,8 @@ PROCESS_KINDS = ("renderer", "gpu", "browser", "utility", "zygote")
 CRITERIA = [
     Criterion(
         "R0.1",
-        "Measured as specified: on the ARM board, Chromium kiosk on its display, "
-        "1024×600 (1 = yes)",
+        "Measured as specified: on the ARM board, Chromium kiosk on a display, the page "
+        "1024×600 or larger (1 = yes)",
         "evidence.as_specified",
         low=1.0,
     ),
@@ -103,14 +103,37 @@ def off_spec(evidence: dict[str, Any]) -> list[str]:
         reasons.append(f"measured on {machine or 'an unknown machine'}, not on the ARM board")
     if evidence["settings"].get("headless"):
         reasons.append("Chromium ran headless, not as a kiosk on the display")
-    sizes = {
+    for width, height in sorted(_page_sizes(evidence)):
+        if width < SPEC_VIEWPORT[0] or height < SPEC_VIEWPORT[1]:
+            reasons.append(f"the page was {width}×{height}, smaller than 1024×600")
+    return reasons
+
+
+def _page_sizes(evidence: dict[str, Any]) -> set[tuple[int, int]]:
+    """Every size the page had while it was measured."""
+    return {
         (results["viewport"]["width"], results["viewport"]["height"])
         for run in evidence["runs"]
         if (results := run.get("results")) and results.get("viewport")
     }
-    for width, height in sorted(sizes - {SPEC_VIEWPORT}):
-        reasons.append(f"the page was {width}×{height}, not 1024×600")
-    return reasons
+
+
+def stand_in(evidence: dict[str, Any]) -> list[str]:
+    """Where a larger display stood in for the 7" screen (ADR 0008).
+
+    The scene is drawn at the same size and stretched to the page, so a larger page is
+    the same work and more pixels to fill: at least as hard. Such a run counts as the
+    measurement, and the report says what it was made on.
+    """
+    spec_pixels = SPEC_VIEWPORT[0] * SPEC_VIEWPORT[1]
+    return [
+        f"the page was {width}×{height}, {width * height / spec_pixels:.1f} times the "
+        "pixels of the 1024×600 screen: at least as hard to draw"
+        for width, height in sorted(_page_sizes(evidence))
+        if (width, height) != SPEC_VIEWPORT
+        and width >= SPEC_VIEWPORT[0]
+        and height >= SPEC_VIEWPORT[1]
+    ]
 
 
 def metrics(evidence: dict[str, Any]) -> dict[str, float]:
@@ -151,6 +174,17 @@ def _where(evidence: dict[str, Any]) -> str:
     return f"{host.get('model') or host.get('hostname') or 'unknown'} ({host.get('machine')})"
 
 
+def _display(results: dict[str, Any]) -> str:
+    """The screen the browser saw and the page on it, as the page reported them."""
+    screen, page = results.get("screen") or {}, results.get("viewport") or {}
+    if not screen or not page:
+        return "unknown"
+    return (
+        f"{screen.get('width')}×{screen.get('height')}, "
+        f"page {page.get('width')}×{page.get('height')}"
+    )
+
+
 def header(evidence: dict[str, Any]) -> list[tuple[str, str]]:
     host, settings, results = evidence["host"], evidence["settings"], _first_results(evidence)
     window = "×".join(str(n) for n in settings.get("window", []))
@@ -167,6 +201,7 @@ def header(evidence: dict[str, Any]) -> list[tuple[str, str]]:
             f"{settings.get('seconds'):g} s per scenario after {settings.get('warmup'):g} s "
             f"of warm-up, {mode} window {window}",
         ),
+        ("Display", _display(results)),
         ("Profiles", ", ".join(run["profile"] for run in evidence["runs"])),
         ("World drawn", str((results.get("world") or {}).get("description", "unknown"))),
         ("Best profile", "none finished" if best is None else best["profile"]),
@@ -189,6 +224,9 @@ def summary(evidence: dict[str, Any]) -> str:
     reasons = off_spec(evidence)
     if reasons:
         text += " **Not the R0 measurement:** " + "; ".join(reasons) + "."
+    larger = stand_in(evidence)
+    if larger:
+        text += " **On a stand-in display:** " + "; ".join(larger) + "."
     return text
 
 
@@ -206,6 +244,7 @@ def provenance(evidence: dict[str, Any]) -> dict[str, Any]:
         | {"browser": host.get("browser_version")},
         "settings": evidence["settings"],
         "off_spec": off_spec(evidence),
+        "stand_in": stand_in(evidence),
         "best_profile": None if best is None else best["profile"],
         "drawn_by": None if best is None else drawn_by(best["results"]),
     }
@@ -258,6 +297,13 @@ def _reading_section(evidence: dict[str, Any]) -> Section:
         if reasons
         else ""
     )
+    larger = stand_in(evidence)
+    if larger:
+        warning += (
+            '<p class="note">Measured on a display standing in for the 7″ screen: '
+            + e("; ".join(larger))
+            + ". The scene is drawn at the same size and stretched further.</p>"
+        )
     rows: list[list[str]] = []
     for name in scenario_names(evidence):
         measured = next(s for run in evidence["runs"] if (s := _scenario(run, name)) is not None)
