@@ -1,6 +1,7 @@
 # 0007 — Three views of the world, and the look chosen for them
 
-- **Status**: accepted (the local view's distance is still open)
+- **Status**: accepted; amended the same day after the first sight of the local view
+  (see the end). Open: the style of its trees, how calm its ground, the size of animals
 - **Date**: 2026-10-11
 
 ## Context
@@ -50,3 +51,36 @@ camera on one animal, near the ground.
   will not draw; it moves to the three views once the local view is settled.
 - The estimated cost on the board (`docs/design/renderer.md`) says drawing fits and
   painting ground does not fit in a frame. The graphics driver remains the open risk.
+
+## Amendment: after the first sight of the local view
+
+The owner's verdict on the sheet with the three views: the map is good and the middle
+view close; in the local view the ground changed too often from spot to spot, the
+animals were far too large against the trees (the heaviest three times a young tree),
+the trees were not liked and had faults in the drawing, and there was not enough to see
+on the ground. Settled and changed:
+
+- **The local view is 32 art pixels to the cell** (L2). The 24 and 48 are dropped.
+- **Animals are smaller in every view**: 0.5 × 1.1 cells at mass 1 is proposed, with 0.4
+  and 0.62 beside it. One world scale stays the rule, so the middle view shrinks with
+  the local one.
+- **A close view reads the ground over the cells around** each cell (two proposed, one
+  and three beside it) instead of cell by cell, so that patches are several cells wide,
+  and spends its pixels on what the ground is made of: blades, pebbles, ripples, litter,
+  and lichen as rosettes on soil and rock. The shore is not smoothed. In this one way the
+  local view is no longer the middle view with more worked out: a lone cell of scrub
+  that shows as a speck in the middle view is ground like its surroundings in the local
+  one (the bush on it still stands).
+- **Shadows belong to the ground**, painted once under whatever stands, not to each
+  plant.
+- **Trees and bushes of the local view are drawn in a style still to be chosen** among
+  three rules written after references (bundles of leaves, domes, limbs), each in three
+  builds. The middle view keeps its P3 trees until then and follows the choice after.
+- **Small plants** are placed by what covers a cell: flowers in drifts, ferns,
+  mushrooms, reeds, stones and boulders, logs, stumps.
+- **Creatures are shaded on their far side** as well as lit, markings too, each fitted
+  to the mass it is on. **The aquatic gene turns legs into fins**: webbed feet from 0.3,
+  flippers that row from 0.6; with three or four pairs only the last.
+
+Consequence for R1: the painter needs the neighbourhood of a piece (two cells of it) and
+the shadows of the plants on it, so painting off the frame has to carry both.

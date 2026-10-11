@@ -26,10 +26,10 @@ The world is a continent, and the screen shows it from three distances
 | View | Art pixels to the cell | In sight | What it is for | An animal of mass 1 |
 |---|---|---|---|---|
 | **map** | 2 | all 256 × 150 cells | the continent | a dot |
-| **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 7 art pixels long |
-| **local** | 32 (24 and 48 are on offer) | 16 × 9 | one animal, and what it walks through | 30 |
+| **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 4½ art pixels long |
+| **local** | 32 | 16 × 9 | one animal, and what it walks through | 18 |
 
-Nothing is rescaled between the views. An animal is the same 0.85 of a cell long (at
+Nothing is rescaled between the views. An animal is the same 0.55 of a cell long (at
 mass 1) and a grown tree the same three cells tall in the middle view and in the local
 one; the camera is closer, and what it shows is drawn with the detail that distance has
 room for. The plants of the middle view stand in the same places in the local view.
@@ -57,29 +57,78 @@ are the same on the land at every distance; from the local view on, their edges 
 ragged a pixel at a time, blades are longer, sand the sea has just left is darker and the
 foam is a band rather than a line.
 
+**A close view is calm.** The world's cells differ one from the next (grass, then a cell
+of scrub, then bare). At 8 pixels to the cell that is texture; at 32 it is a patchwork,
+which is what the first local view was. So from 16 pixels to the cell on, the painter
+reads what grows, how thickly, and how the land slopes over the cells around each cell
+(a binomial kernel reaching `calm` cells: 2, with 1 and 3 on offer) before it
+interpolates. A kind of ground then shows only where it holds several cells together;
+growth thins in gaps a cell or two across instead of specks; the line where grass dries
+wanders. The shore is not smoothed: it stays where the heights put it, the same in every
+view and for the animals. Trees and bushes still stand on the cells that grow them.
+
+**What a close view spends its pixels on** is what the ground is made of. On a grid of
+places a few pixels apart, each a little off its place, it draws a small motif (a few
+pixels, as text bitmaps in `ground.ts`) of the ground found there, and only onto that
+kind of ground: blades and a bloom in grass, pebbles, grit and cracks in soil, ripples
+in sand, leaf litter under broadleaves (whose floor is mixed toward brown), needles
+under conifers, ash where it burnt. **Lichen** is not a colour of the ground from close
+but rosettes on soil or rock, grey-green, mustard and chalk-white, more of them where it
+grows thicker, and a few on any bare rock.
+
+**Shadows are the ground's.** What stands on the ground says how large a shadow it
+throws (`PlantLayer.shadows`), and the painter darkens the land under it once, however
+many overlap, with a dithered rim. A shadow drawn with each plant darkened the crowns
+behind it and every other shadow it crossed.
+
 The map and the middle view are each one picture of the whole world (512×300 and
 2048×1200), repainted when the plants change, once a sim-day. The local view would be
 8192×4800, so its ground is painted in pieces of 8 × 8 cells as the camera comes over
-them (`GroundPieces`) and forgotten when far behind.
+them (`GroundPieces`) and forgotten when far behind. A piece is painted with a cell of
+margin, which is cut off: calm, detail and shadows come out the same in a piece as in
+the whole (a test holds this).
 
 ### Plants
 
 In the map view plants are the ground's colour. From the middle view on, grass and lichen
-are the ground's own texture and what stands on it is drawn by rule (`plantart.ts`), with
-an outline and a shadow at the foot, a little off the middle of its cell:
+are the ground's own texture and what stands on it is drawn by rule (`plantart.ts`), a
+little off the middle of its cell:
 
 | | Middle view | Local view |
 |---|---|---|
-| Broadleaf, conifer | 24 art pixels tall, in 4 cells of a wood out of 10 | the same trees, 96 tall |
+| Broadleaf, conifer | 24 art pixels tall, in 4 cells of a wood out of 10 | the same trees, 96 tall, in a style still to be chosen |
 | Bush | 10 tall, in 6 cells of scrub out of 10 | the same bushes, 40 tall; one in three in berry |
-| Grass | a tuft in one cell of grown grass out of three | tufts in every cell that grows it, more where it is thick |
-| Flowers, stones | none | flowers in grown grass, stones on bare ground |
+| Grass | a tuft in one cell of grown grass out of three | tufts in every cell that grows it, more where it is thick; dry tufts where it has dried |
+| Small plants | none | by what covers the cell: see below |
 
-The rule adapts to the size it is asked for: a tree 24 pixels tall is four clumps of
-foliage; the same tree 96 tall is a crown of many, with single leaves picked out, bark
-lit on one side and roots. A conifer's tiers end in a fringe, a bush is a mound of clumps,
-grass a fan of blades. Drawing by rule is what lets one plant be drawn at two distances
-and several sizes be compared; what is kept can be redrawn by hand in R1.
+Drawing by rule is what lets one plant be drawn at two distances and several styles be
+compared; what is kept can be redrawn by hand in R1. The middle view's trees are the
+first rule (`first`: four lobes on a trunk, a conifer in tiers, its shadow drawn with
+it). For the local view there are three more, written after how pixel-art trees are
+usually built, to choose from:
+
+| Style | Broadleaf | Conifer | Bush | After |
+|---|---|---|---|---|
+| `bundles` (T1, proposed) | a crown of many small bundles of leaves packed like a sunflower's seeds, each lit on its own and shading the ones behind it | drooping boughs: tiers with a hem of hanging tips, each shading the one below | a mound of bundles | Slynyrd's Pixelblog 44: one bundle of leaves, repeated and layered by the light |
+| `dome` (T2) | one rounded mass with a bumpy rim, shaded as a whole in five stepped tones whose edges follow a pattern of small bricks | clean tiers, cut straight | a dome | the usual top-down game tree: crown over a short trunk, shadow apart |
+| `limbs` (T3) | a trunk that parts into limbs and twigs, a clump of leaves at each fork and end, air between | whorls of boughs on a trunk that shows | clumps on stems that fan from the foot | Gentree: branches grown by forking, a clump of leaves per end |
+
+Each style draws every kind in three builds (as the scale has it, slender and tall,
+broad and low) with a different arrangement per drawing, in five tones (the palette's
+three, a cooler one below and a warmer one above), outlined, and adapts to the middle
+view's size, so that once one is chosen the middle view's trees can follow it.
+
+**Small plants** (`drawSmall`) are placed by what covers each cell, by hashes of the
+cell, so they are where they were on the next visit:
+
+| Ground | What stands or lies on it |
+|---|---|
+| Grown grass | herbs; flowers of four kinds (daisy, bell, spike, umbel) in five colours, in drifts: one kind and colour over several cells, thick in places and rare between |
+| Scrub | ferns, herbs, a flower now and then |
+| Under broadleaves and conifers | mushrooms (three caps), ferns, fallen logs |
+| Bare ground, lichen | stones and boulders, some grown over with lichen or moss; herbs |
+| Shore | reeds |
+| Burnt | charred stumps, logs |
 
 Plants are kept in rows from the top of the map down (`plants.ts`), so that the nearer
 cover the farther; each row has a place for the creatures on it, so an animal passes
@@ -98,10 +147,15 @@ transforms. The derived values (mass, leg pairs, speeds) come from `fauna/phenot
 through the fixture; R2 ports that function and replaces these drawings.
 
 The style is **body plans, outlined and lit**: a plan per kind of animal, so that the
-silhouette says what it is, a dark outline one art pixel wide around the whole animal,
-and a lighter back toward the light. (The `circles` style, every animal the same chain,
-is the first look and what the first benchmark scenarios draw.) The kind follows from
-the genes, leg pairs first:
+silhouette says what it is, and a dark outline one art pixel wide around the whole
+animal. Light comes from the upper left of the screen whichever way the animal faces.
+Every mass of the body large enough (3 pixels across) is drawn twice: as it is, in a
+darker and cooler tone, and on that the mass itself, a little smaller and toward the
+light, so that the shade shows along its far edge only; round masses of 5 pixels and
+more carry a lit patch, the largest a gleam. The masses are stacked layer by layer
+(outline, shade, body, light), so that the shade of one does not show on its neighbour.
+(The `circles` style, every animal the same chain, is the first look and what the first
+benchmark scenarios draw.) The kind follows from the genes, leg pairs first:
 
 | Leg pairs | Kinds, and what decides between them |
 |---|---|
@@ -114,7 +168,15 @@ the genes, leg pairs first:
 Within a kind the genes still show: size as length (cube root of mass), speed as a
 slimmer build and longer legs, armour short of a shell as plates along the back, sense
 as eye size (ears on a beast), jaw as tusks, pincers or claws, diet as a hunter's
-pointed snout and ivory instead of dark jaws, aquatic as fins. `BROOD` shows nowhere.
+pointed snout and ivory instead of dark jaws. `BROOD` shows nowhere.
+
+**The aquatic gene turns legs into fins.** A body without legs grows fins at the
+shoulders and a tail fin from 0.3. A body with legs grows none beside them: its feet
+web from 0.3, wider with the gene (a fan at the end of each leg, in a colour that goes
+toward the fins'), and at 0.6, where the animal lives in the water, its legs are
+flippers: broad blades that row, swinging about where they join the body, each pair a
+little after the one in front. With three or four pairs of legs only the last pair
+turns, as a water beetle's. A flat tail fin comes as before.
 
 **Markings.** The pattern gene picks one of twelve by twelfths (plain, stripe, twin
 stripes, bands, bars, spots, rings, saddle and mask, fade, chevrons, speckle, eyespots),
@@ -123,24 +185,40 @@ paler, a colour from across the wheel, or one a third of the way round. Markings
 stations down the back: along the shell or carapace of a kind that has one, else on the
 widest part at each joint.
 
+A marking never leaves the mass it is on: each is fitted to that mass's oval, and drawn
+smaller where the mass has less room for it (the ends of a shell). On a shell a stripe
+is one long oval that tapers with it. A back that fades does it in the colours of its
+masses, joint by joint; a shell fades in ovals laid on it. A marking too small to show
+(under most of a pixel) is left out, which in the middle view is most of them. A marking
+of 3 pixels and more is shaded as a mass is, on its own: its far edge in shade, and a
+sunlit patch if it is round and large enough.
+
 **By distance.** On the map a creature is a dot: its colour, edged dark, a little bigger
 for the heavy. In the middle view it is its body, small, hurrying. In the local view the
 same body gets what there is now room for: a glint in each eye, legs with an edge and
 feet; and it ambles. Only creatures in sight are worked out.
 
 How long an animal is drawn is the renderer's choice (the simulation knows mass, not
-length): 0.85 × 1.1 cells at mass 1, one number for all views. Kinds change at
-thresholds, so two animals of one species either side of one will look like different
-kinds; whether that needs softening is for R2.
+length): 0.5 × 1.1 cells at mass 1, one number for all views (0.4 and 0.62 are on
+offer). At 0.5 an animal of mass 1 is a fifth as long as a grown tree is tall, and the
+heaviest a genome allows (mass 16) comes to a tree's knee; at the 0.85 before it the
+heaviest was as long as a grown tree is wide. Seen twice as close as the local view (64
+pixels to the cell), the same bodies are portraits, as a bestiary will want them: the
+look sheet draws the markings that way. Kinds change at thresholds, so two animals of
+one species either side of one will look like different kinds; whether that needs
+softening is for R2.
 
 ## The look sheet
 
 `renderer/look.html` shows the three views as they stand, drawn by the same code as the
-benchmark with the settings of `proposal.ts`: the map; the middle view on a shore and in
-a wood; the local view of a meadow at the three distances on offer, then of a wood and a
-shore, and in the four lights; what stands in the local view; the fifteen specimen
-genomes, every marking on two bodies, and each gene swept on its own. Live, the creatures
-walk (`npm run dev`, then `/look.html`); `npm run look` writes a self-contained copy to
+benchmark with the settings of `proposal.ts`, and for what is still open the proposals
+side by side with one marked as the pick: the map; the middle view on a shore and in a
+wood; for the local view the ground alone read over one, two and three cells, a sample
+of every kind of ground, the trees and bushes of each style on a sheet and in a wood,
+the small plants, a meadow with the animals at three sizes, a shore, and the four
+lights; then the fifteen specimen genomes at the local view's size, and every marking on
+two bodies and each gene swept on its own, twice as close. Live, the creatures walk
+(`npm run dev`, then `/look.html`); `npm run look` writes a self-contained copy to
 [`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md) that can be read
 anywhere: creatures walk for a fixed, seeded 8 s, then every picture is saved inline,
 those with animals in them as loops of 6 s (animated PNG, written by `apng.ts`: the first
@@ -148,8 +226,8 @@ frame whole, then only what changed), which play without a script. In the sheet 
 local view's camera holds on the patch its animal is kept on, which is what keeps the
 loops small; in the benchmark it follows the animal.
 
-Still to be chosen there: how close the local view is (24, 32 or 48 art pixels to the
-cell), and whatever the first sight of the local view asks to change.
+Still to be chosen there: the style of the local view's trees and bushes (T1 to T3), how
+far around its ground is read (K1 to K3), and the size of the animals (A1 to A3).
 
 ## What it costs: an estimate for the board
 
@@ -161,27 +239,30 @@ another graphics stack, so the last column is an order of magnitude.
 
 | | On the PC | At the board's speed | Against |
 |---|---|---|---|
-| Script per frame, map view, 216 animals as dots | 0.2 ms | 2 ms (up to 6) | 33 ms a frame at 30 fps |
-| Script per frame, middle view, 50 animals | 0.3 ms | 4 ms (up to 9) | |
-| Script per frame, middle view, 216 animals alive | 0.6 ms | 10 ms (up to 20) | |
-| Script per frame, local view, following one animal | 0.1 ms | 0.5 ms (up to 5) | |
+| Script per frame, map view, 216 animals as dots | 0.2 ms | 3 ms (up to 8) | 33 ms a frame at 30 fps |
+| Script per frame, middle view, 50 animals | 0.2 ms | 3 ms (up to 8) | |
+| Script per frame, middle view, 216 animals alive | 0.5 ms | 8 ms (up to 15) | |
+| Script per frame, local view, following one animal | 0.2 ms | 1 ms (up to 8) | |
 | The page's process, any view | 5–7 % of a core at 60 fps | about 0.6 of a core at 30 fps | 4 cores; the sim may use ¼ of one |
-| Painting the map's and the middle view's ground | 0.5 s | 9 s | once a sim-day |
-| Painting a piece of the local view's ground | 30 ms | 0.6 s | 2–3 pieces every 8 cells walked |
+| Painting the map's and the middle view's ground | 0.5 s | 10 s | once a sim-day |
+| Painting a piece of the local view's ground | 35 ms | 0.6 s | 2–3 pieces every 8 cells walked |
 | Pixels to fill per frame | 512×300, two to three layers deep | | a Mali-G31 MP2, if Chromium is given it |
 | WebGL drawn by the processor | 2–3 cores | out of reach | 4 cores, 21 times slower |
 | Chromium's memory | about 0.6 GB | | 1–4 GB by model; sim and server get 0.3 |
 
 "At the board's speed" is the same page with its processor throttled 21 times in
 Chromium (`Emulation.setCPUThrottlingRate`); in brackets the slowest frame in a hundred.
-What follows:
+The figures are those of the reworked local view: reading the ground over the cells
+around, its detail and its shadows cost about a fifth more to paint per piece than the
+ground before them (33 ms against 27), and the shading of the animals nothing that
+shows, since they are drawn smaller. What follows:
 
 - **Drawing the frames fits in all three views.** The local view is the cheapest per
   frame, few animals being in sight.
 - **Painting ground does not fit in a frame.** On the board a piece of the local view's
   ground would stop the picture for half a second (measured as it is, the local view
   drops to 2 fps while a piece is painted), and the daily repaint of the other two for
-  nine. Both belong in a worker, ahead of the camera for the local view.
+  ten. Both belong in a worker, ahead of the camera for the local view.
 - **Everything still hangs on the graphics driver.** With the GPU the picture is small
   work; drawn by the processor nothing here is fast enough. Reports for this board show
   Panfrost loading while OpenGL still falls back to llvmpipe, so it is the first thing
@@ -285,13 +366,18 @@ image draws WebGL with the GPU.
 - **Creature bodies and motion.** Bodies are discs, wedges and bars; the wandering is
   cosmetic and seeded, not the simulation's. Walkers keep to land and swimmers to water
   only because the spike says so.
-- **Plant and ground art.** Drawn by rule, to be compared at several sizes and distances.
+- **Plant and ground art.** Drawn by rule, to be compared at several sizes, distances
+  and styles. Which plants a cell carries is decided here from its cover and hashes of
+  its position; the simulation's plant genome does not yet reach the renderer.
 - **The camera.** The benchmark's local view follows the first creature of the save;
   choosing whom to follow, and moving between the views, is R3.
 
 ## Open
 
-- **How close the local view is**, and what its first sight asks to change.
+- **The local view's trees, ground and animal size**: the proposals on the look sheet.
+  Once a style of tree is chosen, the middle view's trees are redrawn in it.
+- **Plant genes in the drawing.** A style's three builds and the kinds of flower are the
+  renderer's own variety. The 8-gene plant genome could choose them (R1).
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: see the cost above.
