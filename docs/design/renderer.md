@@ -123,9 +123,11 @@ look like different kinds; whether that needs softening is for R2.
 `renderer/look.html` shows the two views and, for each part of them, the proposals side
 by side, drawn by the same code as the benchmark. Each section changes one thing and
 holds the rest at what `proposal.ts` picks. Live, the creatures walk (`npm run dev`, then
-`/look.html`); `npm run look` writes a still, self-contained copy to
-[`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md), where creatures walk
-for a fixed, seeded 8 s and every picture is saved inline.
+`/look.html`); `npm run look` writes a self-contained copy to
+[`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md) that can be read
+anywhere: creatures walk for a fixed, seeded 8 s, then every picture is saved inline,
+those with animals in them as loops of 6 s (animated PNG, written by `apng.ts`: the first
+frame whole, then only what changed), which play without a script.
 
 | To choose | Proposals | Held at |
 |---|---|---|

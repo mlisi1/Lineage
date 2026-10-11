@@ -5,8 +5,10 @@ self-contained file. A still copy of `renderer/look.html`, which is the same she
 with the creatures walking (`cd renderer && npm run dev`, then open `/look.html`).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `318a553b1b99`
-- 123 pictures, taken after the creatures have walked for 8 s
+- Renderer build: `6dfa6a9b9f90`
+- 123 pictures, taken after the creatures have walked for 8 s;
+  those with animals in them are loops of 6 s at 10 frames a second
+  (animated PNG: they play in any browser, without a script)
 
 Regenerate with `cd renderer && npm run look`; do not edit by hand. It is a view of
 the look, not a measurement: nothing here is an acceptance criterion.
