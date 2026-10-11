@@ -47,6 +47,27 @@ describe("the committed fixture", () => {
     }
   });
 
+  it("carries the heights the ground is painted from, and the maps' rules for them", () => {
+    expect(fixture.heights).toHaveLength(256 * 150);
+    expect(fixture.seaLevel).toBeGreaterThan(0);
+    expect(fixture.seaLevel).toBeLessThan(1);
+    // What stands above the sea is exactly what is not water.
+    const water = fixture.coverClasses.indexOf("WATER");
+    for (let cell = 0; cell < fixture.heights.length; cell += 7) {
+      expect((fixture.heights[cell] ?? 0) > fixture.seaLevel).toBe(fixture.cover[cell] !== water);
+    }
+    const { relief } = fixture;
+    expect(relief.seaBands.length).toBeGreaterThanOrEqual(3);
+    const limits = relief.seaBands.map((band) => band.limit);
+    expect([...limits].sort((a, b) => a - b)).toEqual(limits); // shallowest first
+    expect(fixture.sea).toEqual(relief.seaBands.map((band) => band.colour));
+    expect(relief.slope).toBeGreaterThan(0);
+    expect(relief.highRockFrom).toBeLessThan(relief.snowFrom);
+    for (const tone of [...relief.highRock, ...relief.snow, relief.shoreOutline]) {
+      expect(tone).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
   it("carries the genes that show, in range", () => {
     for (const creature of fixture.creatures) {
       const genes = [
@@ -121,6 +142,8 @@ describe("parseFixture", () => {
     expect(() => parseFixture(null)).toThrow("not an object");
     const broken = { ...(document as Record<string, unknown>), width: 10 };
     expect(() => parseFixture(broken)).toThrow("does not match");
+    const flat = { ...(document as Record<string, unknown>), heights: "AAAA" };
+    expect(() => parseFixture(flat)).toThrow("does not match");
     const short = { ...(document as Record<string, unknown>), creature_fields: ["x", "y"] };
     expect(() => parseFixture(short)).toThrow('no creature field "mass"');
     const lopsided = {

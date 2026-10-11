@@ -315,6 +315,18 @@ export function disc(size: number): Pixels {
   return { width: size, height: size, rgba };
 }
 
+/** A hard-edged white wedge: its base down the left edge, its point at the middle right. */
+export function wedge(size: number): Pixels {
+  const rgba = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const half = (size / 2) * (1 - (x + 0.5) / size);
+      if (Math.abs(y + 0.5 - size / 2) <= half) rgba.set([255, 255, 255, 255], (y * size + x) * 4);
+    }
+  }
+  return { width: size, height: size, rgba };
+}
+
 /** Biomass (0–255) from which a plant is drawn grown. */
 export const MATURE_FROM = 128;
 /** Biomass (0–255) below which a cell shows bare ground instead of a plant. */

@@ -1,13 +1,19 @@
-/** The spike's scene: terrain bitmap, plants, creatures and a full-screen tint. */
+/**
+ * The benchmark's scene: ground, plants, creatures and a full-screen tint, in the spike's
+ * first look or in the look proposed since, as the scenario asks.
+ */
 import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
 import { viewAt } from "./camera";
 import { CreatureLayer } from "./creatures";
 import type { WorldFixture } from "./fixture";
-import { PIXEL_ART, loadWorldLayers } from "./layers";
+import { LOCAL_TILE, MAP_TILE, paintGround } from "./ground";
+import { PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";
 import { cycleTint } from "./light";
 import type { Backend } from "./params";
-import type { PlantLayer } from "./plants";
+import { PLANT_SCALES } from "./plantart";
+import { standingPlants, type PlantLayer } from "./plants";
+import { PROPOSED_BODY, PROPOSED_GROUND, PROPOSED_MAP_GROUND, PROPOSED_PLANTS } from "./proposal";
 import { mulberry32 } from "./rng";
 import type { Scenario } from "./scenarios";
 
@@ -28,26 +34,50 @@ export interface Applied {
   internal: [number, number];
   plant_sprites: number;
   creature_sprites: number;
+  /** Time it took to paint the grounds of the proposed look, the first time they were needed. */
+  ground_paint_ms: number;
+}
+
+/** What the proposed look adds to the scene, built the first time a scenario asks for it. */
+interface Proposed {
+  mapGround: Sprite;
+  localGround: Sprite;
+  standing: PlantLayer;
+  creatures: CreatureLayer;
+  paintMs: number;
 }
 
 export class SpikeScene {
   private readonly world = new Container({ isRenderGroup: true });
+  private readonly grounds = new Container();
+  private readonly plantLayers = new Container();
+  private readonly casts = new Container();
   private readonly tint: Sprite;
+  private proposed: Proposed | null = null;
   private shot: Scenario["shot"] = "wide";
+  /** Creatures shown as dots, as on the proposed map: no bodies to work out. */
+  private dots = false;
   private timeS = 0;
   private drawnPlants = 0;
+  /** The plants and creatures of the scenario in force. */
+  private activePlants: PlantLayer | null = null;
+  private activeCreatures: CreatureLayer;
 
   private constructor(
     private readonly app: Application,
     private readonly fixture: WorldFixture,
-    /** The bare ground, and the same with plants as flat colours: one texel per cell. */
-    private readonly ground: Sprite,
-    private readonly map: Sprite,
-    private readonly plants: PlantLayer,
+    private readonly layers: WorldLayers,
     private readonly creatures: CreatureLayer,
-    tint: Sprite,
+    private readonly seed: number,
   ) {
-    this.tint = tint;
+    this.tint = new Sprite({ texture: layers.atlas.white, blendMode: "multiply" });
+    this.activeCreatures = creatures;
+    // One texel of the bitmaps is one cell, the unit of the world container.
+    this.grounds.addChild(layers.ground, layers.map);
+    this.plantLayers.addChild(layers.plants.container);
+    this.casts.addChild(creatures.container);
+    this.world.addChild(this.grounds, this.plantLayers, this.casts);
+    app.stage.addChild(this.world, this.tint);
   }
 
   /** `folder` holds the fixture's terrain.png and map.png. */
@@ -69,21 +99,21 @@ export class SpikeScene {
     app.canvas.dataset["testid"] = "spike-stage";
     host.appendChild(app.canvas);
 
-    const { ground, map, atlas, plants, passable } = await loadWorldLayers(fixture, folder);
-    const creatures = new CreatureLayer(atlas, fixture.creatures, passable, mulberry32(seed));
-    const tint = new Sprite({ texture: atlas.white, blendMode: "multiply" });
-
-    const scene = new SpikeScene(app, fixture, ground, map, plants, creatures, tint);
-    // One texel of the bitmaps is one cell, the unit of the world container.
-    scene.world.addChild(ground, map, plants.container, creatures.container);
-    app.stage.addChild(scene.world, tint);
+    const layers = await loadWorldLayers(fixture, folder);
+    const creatures = new CreatureLayer(
+      layers.atlas,
+      fixture.creatures,
+      layers.passable,
+      mulberry32(seed),
+    );
+    const scene = new SpikeScene(app, fixture, layers, creatures, seed);
     window.addEventListener("resize", () => scene.layout());
     return scene;
   }
 
   /** Number of cells that carry a plant sprite. */
   get plantCells(): number {
-    return this.plants.count;
+    return this.layers.plants.count;
   }
 
   /** Configure the scene for a scenario. */
@@ -93,17 +123,40 @@ export class SpikeScene {
     this.app.renderer.resize(width, height);
     this.layout();
     this.shot = scenario.shot;
-    this.map.visible = scenario.plants === "map";
-    this.ground.visible = !this.map.visible;
-    this.plants.container.visible = scenario.plants === "sprites";
-    this.creatures.setCount(scenario.creatures);
+    const painted = scenario.plants === "painted";
+    const close = scenario.shot === "close";
+    const proposed = painted ? this.propose() : this.proposed;
+    const { ground, map, plants } = this.layers;
+    map.visible = scenario.plants === "map";
+    ground.visible = !map.visible && !painted;
+    plants.container.visible = scenario.plants === "sprites";
+    this.activePlants = plants.container.visible ? plants : null;
+    this.activeCreatures = this.creatures;
+    if (proposed !== null) {
+      proposed.mapGround.visible = painted && !close;
+      proposed.localGround.visible = painted && close;
+      proposed.standing.container.visible = painted && close;
+      if (painted) {
+        if (close) this.activePlants = proposed.standing;
+        this.activeCreatures = proposed.creatures;
+      }
+    }
+    for (const layer of [this.creatures, proposed?.creatures]) {
+      if (layer === undefined) continue;
+      layer.setCount(layer === this.activeCreatures ? scenario.creatures : 0);
+      // On the proposed map a creature is a dot.
+      layer.show(painted && !close ? "markers" : "bodies");
+      this.dots = painted && !close;
+    }
     this.tint.visible = scenario.tint;
     this.tint.scale.set(width / this.tint.texture.width, height / this.tint.texture.height);
     this.frame(0);
     return {
       internal: [width, height],
       plant_sprites: this.drawnPlants,
-      creature_sprites: this.creatures.spriteCount,
+      creature_sprites:
+        painted && !close ? 2 * scenario.creatures : this.activeCreatures.spriteCount,
+      ground_paint_ms: painted ? (proposed?.paintMs ?? 0) : 0,
     };
   }
 
@@ -121,10 +174,42 @@ export class SpikeScene {
     );
     this.world.scale.set(view.scale);
     this.world.position.set(Math.round(view.x), Math.round(view.y));
-    this.drawnPlants = this.plants.container.visible ? this.plants.cull(view.cells) : 0;
-    this.creatures.update(dtS);
+    this.drawnPlants = this.activePlants?.cull(view.cells) ?? 0;
+    this.activeCreatures.update(dtS, view.cells, !this.dots);
+    // Among plants a creature stands in its row, behind what grows in front of it.
+    this.activeCreatures.hostIn(this.activePlants?.guests ?? null);
     if (this.tint.visible) this.tint.tint = cycleTint(this.timeS);
     this.app.render();
+  }
+
+  /** Build what the proposed look needs, once: both grounds, the plants, the creatures. */
+  private propose(): Proposed {
+    if (this.proposed !== null) return this.proposed;
+    const started = performance.now();
+    const mapGround = groundSprite(
+      paintGround(this.fixture, { tile: MAP_TILE, style: PROPOSED_MAP_GROUND, grain: false }),
+      MAP_TILE,
+    );
+    const localGround = groundSprite(
+      paintGround(this.fixture, { tile: LOCAL_TILE, style: PROPOSED_GROUND, grain: true }),
+      LOCAL_TILE,
+    );
+    const paintMs = performance.now() - started;
+    const scale = PLANT_SCALES.find((candidate) => candidate.name === PROPOSED_PLANTS);
+    if (scale === undefined) throw new Error(`no plant scale "${PROPOSED_PLANTS}"`);
+    const standing = standingPlants(this.fixture, scale, LOCAL_TILE);
+    const creatures = new CreatureLayer(
+      this.layers.atlas,
+      this.fixture.creatures,
+      this.layers.passable,
+      mulberry32(this.seed),
+      PROPOSED_BODY,
+    );
+    this.grounds.addChild(mapGround, localGround);
+    this.plantLayers.addChild(standing.container);
+    this.casts.addChild(creatures.container);
+    this.proposed = { mapGround, localGround, standing, creatures, paintMs };
+    return this.proposed;
   }
 
   gpu(): GpuInfo {

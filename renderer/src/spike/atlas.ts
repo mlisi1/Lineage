@@ -9,6 +9,7 @@ import {
   disc,
   lookKey,
   rasterise,
+  wedge,
   type Pixels,
   type PlantLook,
 } from "./pixelart";
@@ -27,6 +28,8 @@ export interface Atlas {
   disc: Texture;
   /** A white square: legs and the full-screen tint, stretched and tinted. */
   white: Texture;
+  /** A white wedge pointing right: snouts, fins, claws, tinted. */
+  wedge: Texture;
 }
 
 function put(context: CanvasRenderingContext2D, pixels: Pixels, x: number, y: number): void {
@@ -71,6 +74,8 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
   put(context, disc(DISC_SIZE), 1, below);
   context.fillStyle = "#ffffff";
   context.fillRect(DISC_SIZE + 3, below, WHITE_SIZE, WHITE_SIZE);
+  const wedgeLeft = DISC_SIZE + WHITE_SIZE + 5;
+  put(context, wedge(DISC_SIZE), wedgeLeft, below);
 
   const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
   const plants = new Map<string, Texture>();
@@ -83,5 +88,6 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
       source,
       frame: new Rectangle(DISC_SIZE + 4, below + 1, WHITE_SIZE - 2, WHITE_SIZE - 2),
     }),
+    wedge: new Texture({ source, frame: new Rectangle(wedgeLeft, below, DISC_SIZE, DISC_SIZE) }),
   };
 }

@@ -1,6 +1,5 @@
 /** Small hand-drawn worlds for tests. */
 import type { Ramp, WorldFixture } from "../../src/spike/fixture";
-import { hexToRgb } from "../../src/spike/pixelart";
 
 const CLASSES = ["WATER", "BARE", "LICHEN", "GRASS", "SHRUB", "BROADLEAF", "CONIFER", "BURNT"];
 
@@ -18,8 +17,21 @@ export const PALETTE: Readonly<Record<string, Ramp>> = {
 export const SEA = ["#8ecbe6", "#5aa7d6", "#3b7fbf", "#2c5f9e", "#1f437a"];
 export const SHORE_OUTLINE = "#3d3528";
 
-/** A world from a picture: one letter per cell. Every plant has biomass `biomass`. */
-export function world(rows: readonly string[], biomass = 200): WorldFixture {
+/** How high the sea stands in these worlds, and how far land and sea floor lie from it. */
+export const SEA_LEVEL = 0.4;
+export const LAND = 0.1;
+export const DEPTH = 0.1;
+
+/**
+ * A world from a picture: one letter per cell. Every plant has biomass `biomass`; land
+ * lies `LAND` above the sea and the sea floor `DEPTH` below it, unless `heightOf` says
+ * otherwise.
+ */
+export function world(
+  rows: readonly string[],
+  biomass = 200,
+  heightOf?: (x: number, y: number, water: boolean) => number,
+): WorldFixture {
   const letters: Record<string, string> = {
     "~": "WATER",
     ".": "BARE",
@@ -31,14 +43,32 @@ export function world(rows: readonly string[], biomass = 200): WorldFixture {
   };
   const width = rows[0]?.length ?? 0;
   const cover = new Uint8Array(width * rows.length);
+  const heights = new Float32Array(width * rows.length);
   rows.forEach((row, y) => {
     [...row].forEach((letter, x) => {
       cover[y * width + x] = CLASSES.indexOf(letters[letter] ?? "BARE");
+      const water = letter === "~";
+      heights[y * width + x] =
+        heightOf?.(x, y, water) ?? (water ? SEA_LEVEL - DEPTH : SEA_LEVEL + LAND);
     });
   });
   return {
     width,
     height: rows.length,
+    heights,
+    seaLevel: SEA_LEVEL,
+    relief: {
+      seaBands: [0.02, 0.06, 0.14, 0.26, 9.99].map((limit, band) => ({
+        limit,
+        colour: SEA[band] ?? "",
+      })),
+      slope: 0.012,
+      highRockFrom: 0.3,
+      highRock: ["#77716c", "#98928c", "#b5b0aa"],
+      snowFrom: 0.46,
+      snow: ["#c9d3dc", "#e6edf2", "#ffffff"],
+      shoreOutline: SHORE_OUTLINE,
+    },
     cover,
     biomass: new Uint8Array(cover.length).fill(biomass),
     coverClasses: CLASSES,
@@ -69,34 +99,3 @@ export const MAP = world([
   "................bbbbbb~~",
   "................cccccc~~",
 ]);
-
-/**
- * The two map bitmaps of a world, as RGBA: the bare ground (the shore outlined, as in
- * the report maps) and the same with every plant in the middle tone of its ramp.
- */
-export function bitmaps(fixture: WorldFixture): {
-  terrain: Uint8ClampedArray;
-  map: Uint8ClampedArray;
-} {
-  const { width, height, cover, coverClasses } = fixture;
-  const terrain = new Uint8ClampedArray(width * height * 4);
-  const map = new Uint8ClampedArray(width * height * 4);
-  const kind = (x: number, y: number): string =>
-    x < 0 || y < 0 || x >= width || y >= height
-      ? ""
-      : (coverClasses[cover[y * width + x] ?? 0] ?? "");
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const name = kind(x, y);
-      const coastal = [kind(x - 1, y), kind(x + 1, y), kind(x, y - 1), kind(x, y + 1)].includes(
-        "WATER",
-      );
-      const ground =
-        name === "WATER" ? (SEA[2] ?? "") : coastal ? SHORE_OUTLINE : PALETTE["BARE"]?.[1];
-      const grown = name === "WATER" || name === "BARE" ? ground : PALETTE[name]?.[1];
-      terrain.set([...hexToRgb(ground ?? "#000000"), 255], (y * width + x) * 4);
-      map.set([...hexToRgb(grown ?? "#000000"), 255], (y * width + x) * 4);
-    }
-  }
-  return { terrain, map };
-}

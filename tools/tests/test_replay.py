@@ -91,7 +91,19 @@ def test_renderer_fixture_describes_the_world(world: replay.World) -> None:
     for name, ramp in document["palette"].items():
         assert name == "DORMANT" or name in Cover.__members__
         assert len(ramp) == 3
-    assert document["sea"] == [colour for _, colour in pixelmap.SEA_BANDS]
+    relief = document["relief"]
+    assert relief["sea_bands"] == [[limit, colour] for limit, colour in pixelmap.SEA_BANDS]
+    assert relief["slope"] == pixelmap.RELIEF_SLOPE
+    assert relief["high_rock"]["from"] < relief["snow"]["from"]
+    assert relief["shore_outline"] == pixelmap.SHORE_OUTLINE
+
+    # Heights come back as the sim has them, to a 65535th, and say what is sea.
+    steps = document["height_steps"]
+    height = np.frombuffer(base64.b64decode(document["heights"]), dtype="<u2").reshape(150, 256)
+    assert np.allclose(height / steps, world.terrain.height, atol=1 / steps)
+    assert np.array_equal(
+        height / steps > document["sea_level"], world.flora.cover() != Cover.WATER
+    )
     classes = document["diet_classes"]
     assert 0 < classes["herbivore_max"] < classes["predator_min"] < 1
 

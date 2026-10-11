@@ -1,25 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { passableIn } from "../../src/spike/habitat";
+import { heightAt, passableIn } from "../../src/spike/habitat";
 import { DAY_CYCLE_S, cycleTint, lightTint } from "../../src/spike/light";
-import { MAP } from "./worlds";
+import { MAP, SEA_LEVEL } from "./worlds";
 
 describe("where a body can be", () => {
   const passable = passableIn(MAP);
 
   it("is land for walkers and water for swimmers", () => {
-    expect(passable(12, 2, false)).toBe(true);
-    expect(passable(12, 2, true)).toBe(false);
-    expect(passable(2, 2, false)).toBe(false);
-    expect(passable(2, 2, true)).toBe(true);
-    expect(passable(11.6, 2.4, false)).toBe(true); // rounds to the cell
+    // The middle of a grass cell well inland, and of a sea cell well offshore.
+    expect(passable(14.5, 2.5, false)).toBe(true);
+    expect(passable(14.5, 2.5, true)).toBe(false);
+    expect(passable(1.5, 1.5, false)).toBe(false);
+    expect(passable(1.5, 1.5, true)).toBe(true);
+  });
+
+  it("puts the shore where the height between two cells crosses the sea level", () => {
+    // Columns 3 and 4 of row 2 are sea and land: their middles are at 3.5 and 4.5, and
+    // with land as high as the sea is deep the shore runs half-way, at 4.
+    expect(heightAt(MAP, 3.5, 2.5)).toBeCloseTo(SEA_LEVEL - 0.1);
+    expect(heightAt(MAP, 4.5, 2.5)).toBeCloseTo(SEA_LEVEL + 0.1);
+    expect(heightAt(MAP, 4, 2.5)).toBeCloseTo(SEA_LEVEL);
+    expect(passable(3.8, 2.5, true)).toBe(true);
+    expect(passable(4.2, 2.5, false)).toBe(true);
+    // Nobody stands on the waterline itself.
+    expect(passable(4, 2.5, false)).toBe(false);
+    expect(passable(4, 2.5, true)).toBe(false);
   });
 
   it("is never the outermost ring of cells, nor beyond it", () => {
     for (const swims of [false, true]) {
-      expect(passable(0, 5, swims)).toBe(false);
-      expect(passable(23, 5, swims)).toBe(false);
-      expect(passable(5, 0, swims)).toBe(false);
-      expect(passable(5, 11, swims)).toBe(false);
+      expect(passable(0.5, 5, swims)).toBe(false);
+      expect(passable(23.5, 5, swims)).toBe(false);
+      expect(passable(5, 0.5, swims)).toBe(false);
+      expect(passable(5, 11.5, swims)).toBe(false);
       expect(passable(-3, 40, swims)).toBe(false);
     }
   });

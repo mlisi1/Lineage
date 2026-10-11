@@ -43,6 +43,20 @@ describe("scenarios", () => {
     expect(SCENARIOS[0]?.name).toBe("floor");
   });
 
+  it("measure the two views of the look proposed since", () => {
+    const view = (name: string): (typeof SCENARIOS)[number] | undefined =>
+      SCENARIOS.find((scenario) => scenario.name === name);
+    // Art pixels of 2: the whole island in one, a close shot in the other.
+    expect(view("map-view")).toMatchObject({ artScale: 2, shot: "wide", plants: "painted" });
+    expect(view("local-view")).toMatchObject({
+      artScale: 2,
+      shot: "close",
+      plants: "painted",
+      creatures: SPEC_CREATURES,
+    });
+    expect(view("local-crowd")?.creatures).toBe(CROWD_CREATURES);
+  });
+
   it("can be selected by name, in table order", () => {
     expect(selectScenarios(null)).toHaveLength(SCENARIOS.length);
     expect(selectScenarios(["spec-2x", "floor"]).map((scenario) => scenario.name)).toEqual([

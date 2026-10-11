@@ -23,14 +23,20 @@ test("the look sheet draws every picture", async ({ page }) => {
   await expect(page.locator("#failure")).toBeHidden();
   await expect(page.locator("#world")).toContainText("seed 42");
 
-  await expect(page.locator("#plant-sheet canvas")).toHaveCount(5 * 4 + 3 * 4);
-  await expect(page.locator("#specimens figure.tile")).toHaveCount(15);
-  await expect(page.locator("#specimens figure.tile").first()).toContainText("grazer");
-  await expect(page.locator("#specimens figure.tile").first()).toContainText("herbivore");
-  await expect(page.locator("#specimens")).toContainText("predator");
-  await expect(page.locator("#specimens")).toContainText("swimmer");
+  // Creatures: fifteen specimens in each of three styles, and ten genes swept in five steps.
+  for (const style of ["circles", "shapes", "lit"]) {
+    await expect(page.locator(`#specimens-${style} figure.tile`)).toHaveCount(15);
+    await expect(page.locator(`#specimens-${style} figure.tile`).first()).toContainText("grazer");
+  }
+  await expect(page.locator("#specimens-circles")).not.toContainText("beetle");
+  for (const kind of ["beetle", "crab", "tortoise", "worm", "predator"]) {
+    await expect(page.locator("#specimens-lit")).toContainText(kind);
+  }
   await expect(page.locator("#sweeps .sweep")).toHaveCount(10);
   await expect(page.locator("#sweeps figure.tile")).toHaveCount(50);
+  await expect(page.locator("#sweeps .sweep").nth(1)).toContainText("spider");
+  // Plants: a strip of drawings per size.
+  await expect(page.locator(".strip canvas")).toHaveCount(3);
 
   // Nothing is left blank: every canvas holds more than one colour.
   const blank = await page.evaluate(() =>
@@ -55,36 +61,33 @@ test("the look sheet draws every picture", async ({ page }) => {
   );
   expect(blank).toEqual([]);
 
-  // The staged shot is drawn at three sizes of art pixel and shown at the screen's size.
+  // Every view is drawn with art pixels of 2 and shown at the screen's size.
   const sizes = await page.evaluate(() =>
-    ["together-1x", "together-2x", "together-4x"].map((name) => {
-      const canvas = document.querySelector<HTMLCanvasElement>(`canvas[data-picture="${name}"]`);
-      return [canvas?.width, canvas?.height, canvas?.getBoundingClientRect().width];
-    }),
+    [...document.querySelectorAll<HTMLCanvasElement>("canvas[data-picture]")].map((canvas) =>
+      [canvas.width, canvas.height, canvas.getBoundingClientRect().width].join(),
+    ),
   );
-  expect(sizes).toEqual([
-    [1024, 600, 1024],
-    [512, 300, 1024],
-    [256, 150, 1024],
-  ]);
-  // By day the light changes nothing; by night it does. Plants and creatures show on the map.
-  expect(await png(page, "light-day")).toBe(await png(page, "together-2x"));
-  expect(await png(page, "light-night")).not.toBe(await png(page, "light-day"));
-  expect(await png(page, "wide-map")).not.toBe(await png(page, "wide-ground"));
+  expect(sizes).toHaveLength(25);
+  expect(new Set(sizes)).toEqual(new Set(["512,300,1024"]));
 
-  // Three ways to put plants on the ground: three different pictures of one place,
-  // the painted one with far fewer drawings standing on it.
-  for (const place of ["wood", "shore"]) {
-    const pictures = await Promise.all(
-      ["now", "green", "painted"].map((style) => png(page, `style-${place}-${style}`)),
-    );
-    expect(new Set(pictures).size).toBe(3);
+  // Each set of proposals is so many different pictures of the same thing.
+  const proposals = [
+    ["map-squares", "map-smooth", "map-markers"],
+    ["warped", "tiles", "smooth", "blended"].map((style) => `ground-${style}-shore`),
+    ["warped", "tiles", "smooth", "blended"].map((style) => `ground-${style}-wood`),
+    ["small", "medium", "large"].map((size) => `plants-${size}-wood`),
+    ["1x", "1.5x", "2x"].map((size) => `creatures-${size}`),
+    ["day", "dusk", "night", "dawn"].map((light) => `light-${light}`),
+    ["light-day", "closer"],
+  ];
+  for (const names of proposals) {
+    const pictures = await Promise.all(names.map((name) => png(page, name)));
+    expect(pictures.every((picture) => picture.length > 1000)).toBe(true);
+    expect(new Set(pictures).size).toBe(names.length);
   }
-  const count = async (id: string): Promise<number> =>
-    Number((await page.locator(id).textContent())?.replaceAll(",", ""));
-  expect(await count("#count-icons")).toBeGreaterThan(10_000);
-  expect(await count("#count-scattered")).toBeGreaterThan(1000);
-  expect(await count("#count-scattered")).toBeLessThan((await count("#count-icons")) / 2);
+  // What the others are held at is the pick: the same picture under two names.
+  expect(await png(page, "creatures-1.5x")).toBe(await png(page, "light-day"));
+  expect(await png(page, "plants-medium-shore")).toBe(await png(page, "light-day"));
 });
 
 test("the look sheet saves itself as one self-contained page", async ({ page }) => {
@@ -106,14 +109,14 @@ test("the look sheet saves itself as one self-contained page", async ({ page }) 
   await expect(page.getByText("A still copy")).toBeVisible();
   await expect(page.getByText("This page is live")).toHaveCount(0);
   // Pixel art stays hard-edged and keeps its enlarged size.
-  const tile = page.locator("#specimens img").first();
+  const tile = page.locator("#specimens-lit img").first();
   expect(await tile.evaluate((image) => getComputedStyle(image).imageRendering)).toBe("pixelated");
-  expect((await tile.boundingBox())?.width).toBe(192);
+  expect((await tile.boundingBox())?.width).toBe(168);
 });
 
 test("the still pictures are the same every time", async ({ page }) => {
   await open(page, 1);
-  const first = [await png(page, "together-2x"), await png(page, "wide-map")];
+  const first = [await png(page, "light-day"), await png(page, "map-markers")];
   await open(page, 1);
-  expect([await png(page, "together-2x"), await png(page, "wide-map")]).toEqual(first);
+  expect([await png(page, "light-day"), await png(page, "map-markers")]).toEqual(first);
 });

@@ -35,7 +35,9 @@ from PIL import Image
 from tools.runs import DEFAULT_CONFIG, REPO_ROOT
 from tools.viz import pixelmap
 
-FIXTURE_FORMAT = "lineage-spike-fixture/2"
+FIXTURE_FORMAT = "lineage-spike-fixture/3"
+# Heights are stored as whole numbers: this many steps between 0 and 1.
+HEIGHT_STEPS = 65535
 MS_PER_DAY = 86_400_000
 # One row per creature in ``world.json``: where it is, the body the phenotype function
 # derives, then the genes that show on it.
@@ -201,14 +203,29 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
         "source": {"save": source, **summary(world)},
         "width": int(columns),
         "height": int(rows),
+        # Heights of the cells, row by row, as little-endian 16-bit numbers: with the sea
+        # level, what the close-up's ground is interpolated from.
+        "heights": base64.b64encode(
+            np.round(terrain.height.astype(np.float64) * HEIGHT_STEPS).astype("<u2").tobytes()
+        ).decode("ascii"),
+        "height_steps": HEIGHT_STEPS,
+        "sea_level": round(float(terrain.sea_level), 6),
         "cover_classes": [cover.name for cover in Cover],
         "cover": _b64(flora.cover()),
         "biomass": _b64(np.round(flora.biomass * 255.0)),
         "dormant_below_biomass": pixelmap.DORMANT_BELOW,
         "dormant_classes": [cover.name for cover in pixelmap.DORMANT_CLASSES],
         "palette": palette,
-        # Shallowest first: the colours of the sea in the ground image.
-        "sea": [colour for _, colour in pixelmap.SEA_BANDS],
+        # How the maps turn height into colour, for the renderer to do the same between
+        # cells: sea bands by depth (shallowest first), relief by slope toward the light,
+        # rock and snow on bare high ground, and the outline of the shore.
+        "relief": {
+            "sea_bands": [[limit, colour] for limit, colour in pixelmap.SEA_BANDS],
+            "slope": pixelmap.RELIEF_SLOPE,
+            "high_rock": {"from": pixelmap.HIGH_ROCK_FROM, "ramp": list(pixelmap.HIGH_ROCK)},
+            "snow": {"from": pixelmap.SNOW_FROM, "ramp": list(pixelmap.SNOW)},
+            "shore_outline": pixelmap.SHORE_OUTLINE,
+        },
         "diet_classes": {
             "herbivore_max": fauna.config.herbivore_max_diet,
             "predator_min": fauna.config.predator_min_diet,

@@ -4,7 +4,7 @@
  * A stand-in until the state stream and its protocol exist (R1).
  */
 
-export const FIXTURE_FORMAT = "lineage-spike-fixture/2";
+export const FIXTURE_FORMAT = "lineage-spike-fixture/3";
 
 export type Ramp = readonly [string, string, string];
 
@@ -36,9 +36,27 @@ export interface Cast {
   creatures: readonly CreatureSeed[];
 }
 
+/** How the maps turn height into colour; the renderer does the same between cells. */
+export interface Relief {
+  /** The sea by depth, shallowest first: down to `limit` below the surface, this colour. */
+  seaBands: readonly { limit: number; colour: string }[];
+  /** Height gained per cell toward the light (north-west) from which a slope is lit. */
+  slope: number;
+  /** Bare ground this far above the sea is rock, and higher still snow. */
+  highRockFrom: number;
+  highRock: Ramp;
+  snowFrom: number;
+  snow: Ramp;
+  shoreOutline: string;
+}
+
 export interface WorldFixture {
   width: number;
   height: number;
+  /** Height of each cell (0–1), row by row; above `seaLevel` is land. */
+  heights: Float32Array;
+  seaLevel: number;
+  relief: Relief;
   /** Land-cover class per cell, row by row; an index into `coverClasses`. */
   cover: Uint8Array;
   /** Plant biomass per cell, 0–255. */
@@ -92,9 +110,20 @@ export function parseFixture(raw: unknown): WorldFixture {
   }
   const width = field(raw, "width", isNumber);
   const height = field(raw, "height", isNumber);
+  const packed = decodeBase64(field(raw, "heights", isString));
+  const steps = field(raw, "height_steps", isNumber);
+  const heights = new Float32Array(packed.length / 2);
+  for (let i = 0; i < heights.length; i++) {
+    // Little-endian 16-bit numbers.
+    heights[i] = ((packed[2 * i] ?? 0) | ((packed[2 * i + 1] ?? 0) << 8)) / steps;
+  }
   const cover = decodeBase64(field(raw, "cover", isString));
   const biomass = decodeBase64(field(raw, "biomass", isString));
-  if (cover.length !== width * height || biomass.length !== width * height) {
+  if (
+    cover.length !== width * height ||
+    biomass.length !== width * height ||
+    heights.length !== width * height
+  ) {
     throw new Error("fixture: grid data does not match width × height");
   }
 
@@ -103,6 +132,29 @@ export function parseFixture(raw: unknown): WorldFixture {
     if (!isStrings(ramp) || ramp.length !== 3) throw new Error(`fixture: bad ramp ${name}`);
     palette[name] = [ramp[0] ?? "", ramp[1] ?? "", ramp[2] ?? ""];
   }
+
+  const ramp = (document: Json, key: string): Ramp => {
+    const tones = field(document, key, isStrings);
+    if (tones.length !== 3) throw new Error(`fixture: bad ramp ${key}`);
+    return [tones[0] ?? "", tones[1] ?? "", tones[2] ?? ""];
+  };
+  const shading = field(raw, "relief", isObject);
+  const highRock = field(shading, "high_rock", isObject);
+  const snow = field(shading, "snow", isObject);
+  const relief: Relief = {
+    seaBands: field(shading, "sea_bands", Array.isArray).map((band: unknown) => {
+      if (!Array.isArray(band) || !isNumber(band[0]) || !isString(band[1])) {
+        throw new Error("fixture: bad sea band");
+      }
+      return { limit: band[0], colour: band[1] };
+    }),
+    slope: field(shading, "slope", isNumber),
+    highRockFrom: field(highRock, "from", isNumber),
+    highRock: ramp(highRock, "ramp"),
+    snowFrom: field(snow, "from", isNumber),
+    snow: ramp(snow, "ramp"),
+    shoreOutline: field(shading, "shore_outline", isString),
+  };
 
   const fields = field(raw, "creature_fields", isStrings);
   const column = (name: string): number => {
@@ -156,11 +208,14 @@ export function parseFixture(raw: unknown): WorldFixture {
   return {
     width,
     height,
+    heights,
+    seaLevel: field(raw, "sea_level", isNumber),
+    relief,
     cover,
     biomass,
     coverClasses: field(raw, "cover_classes", isStrings),
     palette,
-    sea: field(raw, "sea", isStrings),
+    sea: relief.seaBands.map((band) => band.colour),
     dormantBelow: Math.round(field(raw, "dormant_below_biomass", isNumber) * 255),
     dormantClasses: field(raw, "dormant_classes", isStrings),
     creatures,

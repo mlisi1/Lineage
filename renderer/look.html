@@ -82,6 +82,39 @@
         padding-top: 6px;
         font-size: 0.88rem;
       }
+      .pick {
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--page);
+        font-size: 0.75rem;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+      .strip {
+        margin: 10px 0;
+      }
+      .wrap {
+        overflow-x: auto;
+      }
+      table.cost {
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.92rem;
+      }
+      table.cost th,
+      table.cost td {
+        padding: 6px 12px 6px 0;
+        border-bottom: 1px solid var(--rule);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.cost th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
       .lights {
         display: grid;
         grid-template-columns: repeat(2, max-content);
@@ -97,7 +130,7 @@
         margin: 0;
       }
       figure.tile figcaption {
-        max-width: 192px;
+        max-width: 168px;
         padding-top: 3px;
         line-height: 1.3;
       }
@@ -106,7 +139,7 @@
         color: var(--text);
       }
       .steps figure.tile figcaption {
-        max-width: 128px;
+        max-width: 112px;
       }
       .sweep {
         display: flex;
@@ -146,15 +179,23 @@
     <main>
       <h1>Lineage look sheet</h1>
       <p class="sub">
-        How the renderer draws the world today: terrain, plants, creatures, and all three together.
-        World: <span id="world">…</span>. Renderer build <code id="build">…</code>.
+        How the renderer draws the world, and what there is to choose. World:
+        <span id="world">…</span>. Renderer build <code id="build">…</code>.
       </p>
       <p id="failure" hidden></p>
       <p>
-        Everything here is drawn by the renderer spike (R0), the code the device benchmark runs.
-        Pictures marked <b>full size</b> are 1024×600: pixel for pixel what the 7″ screen will show.
-        The plant drawings and the creature bodies are a first pass, made to judge direction and
-        cost; R1 and R2 replace them, so this sheet is the place to say what should change.
+        The screen shows one of two views. The <b>map view</b> holds the whole island; the
+        <b>local view</b> is four times closer and is where plants and animals are worth looking at.
+        Both are painted from the same cells by the same rules, so the local view is the map with
+        what lies between its cells worked out, not another picture.
+      </p>
+      <p>
+        Art pixels are 2 screen pixels, as settled with the painted ground: every picture marked
+        <b>full size</b> is drawn at 512×300 and shown at 1024×600, pixel for pixel what the 7″
+        screen will show. Each section below changes one thing and holds the rest at what I would
+        pick, which is marked. Everything is drawn by the renderer spike (R0); plants and animals
+        are drawn by rule, so that sizes and styles can be compared, and can be redrawn by hand once
+        chosen.
       </p>
       <p class="note" data-live>
         This page is live (drawn with <span id="drawn-with">…</span>): the creatures walk, at many
@@ -167,107 +208,212 @@
         <code>/look.html</code>.
       </p>
 
-      <h2>1. The island from afar</h2>
+      <h2>1. The map view</h2>
       <p>
-        A wide shot shows the whole world. One cell of the simulation is 4 screen pixels, so there
-        is no room for drawings: the picture is a map.
+        The whole world: one cell is 2 art pixels, 4 on the screen. No room for drawings; the
+        picture is a map, and an animal on it is a few pixels at best.
       </p>
+      <h3>M1. Squares (as now)</h3>
       <figure class="screen">
-        <canvas data-picture="wide-ground" aria-label="The whole island, ground only"></canvas>
+        <canvas data-picture="map-squares" aria-label="Map view, one flat square per cell"></canvas>
         <figcaption>
-          <b>Full size.</b> The ground alone: height in stepped tones, the sea in bands of depth.
-          This bitmap, one pixel per cell, is the bottom layer of every shot.
+          <b>Full size.</b> One flat square per cell, the report maps' own picture. Animals drawn as
+          their bodies.
         </figcaption>
+      </figure>
+      <h3>M2. Interpolated</h3>
+      <figure class="screen">
+        <canvas
+          data-picture="map-smooth"
+          aria-label="Map view, interpolated between cells"
+        ></canvas>
+        <figcaption>
+          <b>Full size.</b> The same painter as the local view at a quarter of its size: heights and
+          cover interpolated between cells, so coast, sea bands and relief run as contours rather
+          than steps, and the outline of the shore is one art pixel.
+        </figcaption>
+      </figure>
+      <h3>M3. Interpolated, animals as dots <span class="pick">my pick</span></h3>
+      <figure class="screen">
+        <canvas data-picture="map-markers" aria-label="Map view with animals as dots"></canvas>
+        <figcaption>
+          <b>Full size.</b> The same map with each animal as a dot in its own colour, edged dark, a
+          little bigger for the heavy ones. Bodies come in the local view.
+        </figcaption>
+      </figure>
+
+      <h2>2. The local view: ground</h2>
+      <p>
+        One cell is 8 art pixels. The ground you approved was too square: it read each pixel's cell
+        through a gentle warp, so borders wandered but still followed the cells. Below, the same
+        shore and the same wood four ways. The plants on them are the medium-sized ones of section
+        3.
+      </p>
+      <h3>G1. Warped squares (what you saw)</h3>
+      <figure class="screen">
+        <canvas data-picture="ground-warped-shore" aria-label="Shore, warped squares"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="ground-warped-wood" aria-label="Wood, warped squares"></canvas>
+        <figcaption>
+          <b>Full size.</b> Every pixel takes the cell it falls in, after a warp.
+        </figcaption>
+      </figure>
+      <h3>G2. Irregular tiles</h3>
+      <figure class="screen">
+        <canvas data-picture="ground-tiles-shore" aria-label="Shore, irregular tiles"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="ground-tiles-wood" aria-label="Wood, irregular tiles"></canvas>
+        <figcaption>
+          <b>Full size.</b> Another shape of tile: each cell's centre is nudged off its place and a
+          pixel belongs to the nearest centre, which makes every cell an irregular polygon. Still
+          one flat piece per cell.
+        </figcaption>
+      </figure>
+      <h3>G3. Interpolated</h3>
+      <figure class="screen">
+        <canvas data-picture="ground-smooth-shore" aria-label="Shore, interpolated"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="ground-smooth-wood" aria-label="Wood, interpolated"></canvas>
+        <figcaption>
+          <b>Full size.</b> Nothing follows the cells any more. Height is interpolated between the
+          four nearest cells, so the coast is where it crosses the sea level, the sea's bands are
+          depth contours, the beach is wide where the land is flat, and relief is shaded pixel by
+          pixel. What grows is whichever kind weighs most among the four cells, and it thins out
+          toward the edge of its patch.
+        </figcaption>
+      </figure>
+      <h3>G4. Interpolated and dithered <span class="pick">my pick</span></h3>
+      <figure class="screen">
+        <canvas
+          data-picture="ground-blended-shore"
+          aria-label="Shore, interpolated and dithered"
+        ></canvas>
       </figure>
       <figure class="screen">
         <canvas
-          data-picture="wide-map"
-          aria-label="The whole island with plants and creatures"
+          data-picture="ground-blended-wood"
+          aria-label="Wood, interpolated and dithered"
         ></canvas>
         <figcaption>
-          <b>Full size.</b> The wide shot as it would ship: every vegetated cell in the flat colour
-          of what grows there, and the world's own creatures as the save has them. From here an
-          animal is two to eleven pixels long.
+          <b>Full size.</b> The same, with every transition mixed instead of cut: where two kinds of
+          ground, two tones of relief or two depths of sea meet, their pixels alternate in a fixed
+          pattern over a few pixels. This is the blend between terrain types.
         </figcaption>
       </figure>
 
-      <h2>2. Plants</h2>
+      <h2>3. The local view: plants</h2>
       <p>
-        From close up every vegetated cell gets a drawing, 8 art pixels wide: by form, and by growth
-        (young below half biomass, grown above). Each kind has two drawings, picked by the cell's
-        position, so a meadow is not wallpaper. Low plants that have died back are drawn in dry
-        colours.
+        Grass was as big as a tree. Now grass and lichen are the ground's own texture, with only a
+        small tuft here and there, and what stands is bushes and trees, at three sizes to choose
+        from. The bigger they are, the fewer cells of a wood carry one, or a forest would be a
+        single roof. Each plant has an outline and throws a shadow, and animals pass behind the ones
+        in front of them.
       </p>
-      <div id="plant-sheet"></div>
-      <p class="note">The drawings, six times enlarged. Colours are the report maps' own ramps.</p>
+      <h3>P1. Small: a tree 12 pixels tall, one in every cell of a wood</h3>
+      <div id="plants-small" class="strip"></div>
       <figure class="screen">
-        <canvas data-picture="meadow" aria-label="Close-up of grassland"></canvas>
-        <figcaption>
-          <b>Full size.</b> The most open grassland of this world, in a close-up: one cell is 16
-          screen pixels and a drawing covers it twice enlarged.
-        </figcaption>
+        <canvas data-picture="plants-small-wood" aria-label="Wood, small plants"></canvas>
       </figure>
       <figure class="screen">
-        <canvas data-picture="forest" aria-label="Close-up of forest"></canvas>
+        <canvas data-picture="plants-small-shore" aria-label="Shore, small plants"></canvas>
+      </figure>
+      <h3>P2. Medium: 18 pixels, in six cells of ten <span class="pick">my pick</span></h3>
+      <div id="plants-medium" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="plants-medium-wood" aria-label="Wood, medium plants"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="plants-medium-shore" aria-label="Shore, medium plants"></canvas>
+      </figure>
+      <h3>P3. Large: 24 pixels, in four cells of ten</h3>
+      <div id="plants-large" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="plants-large-wood" aria-label="Wood, large plants"></canvas>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="plants-large-shore" aria-label="Shore, large plants"></canvas>
         <figcaption>
-          <b>Full size.</b> Its densest woodland at the same scale. Grown trees are a cell and a
-          half tall and overlap the row behind. Under the plants the ground is still one flat block
-          per cell, which shows as squares wherever it is bare.
+          <b>Full size.</b> In each strip, three times enlarged: broadleaf grown and young, conifer
+          grown and young, bush grown and young, a tuft of grass; two drawings of each.
         </figcaption>
       </figure>
 
-      <h2>3. Creatures</h2>
+      <h2>4. The local view: creatures</h2>
       <p>
-        A creature is a chain of circles seen from above. The head moves; every segment follows the
-        one in front at a fixed distance, which bends the body by itself. Legs plant their feet and
-        step when the body has left them behind. On that chain goes whatever the genes ask for.
+        Every animal was the same chain of circles with trimmings. The proposal is a body plan per
+        kind of animal, picked by the genes: the number of leg pairs chooses the family, then water,
+        armour and speed the kind within it. The fifteen reference genomes below, each followed by
+        its own camera on the local view's ground and enlarged three times, in three styles.
       </p>
-      <h3>Fifteen specimens</h3>
-      <p>
-        The reference genomes the simulation is tested against, from a mouse to a giant. Each is
-        followed by its own camera at the close-up's scale, then enlarged three times so the pixels
-        can be read: on the screen itself they are a third of this size.
+      <h3>C1. Chains of circles (as now)</h3>
+      <div id="specimens-circles" class="tiles"></div>
+      <h3>C2. Body plans</h3>
+      <p class="note">
+        Discs, wedges and bars instead of circles only: a snout, a shell, a wide carapace with
+        claws, a spindle with a forked tail, a ringed worm.
       </p>
-      <div id="specimens" class="tiles"></div>
+      <div id="specimens-shapes" class="tiles"></div>
+      <h3>C3. Body plans, outlined and lit <span class="pick">my pick</span></h3>
+      <p class="note">
+        The same plans with a dark edge around the whole animal, so that a green one no longer
+        vanishes on grass, and a lighter back toward the light.
+      </p>
+      <div id="specimens-lit" class="tiles"></div>
       <h3>One gene at a time</h3>
       <p>
-        The same plain animal with a single gene at 0, 0.25, 0.5, 0.75 and 1, on plain sand (or sea,
-        for those that live in it). Enlarged twice.
+        The same plain animal in style C3 with a single gene at 0, 0.25, 0.5, 0.75 and 1, on plain
+        sand (or sea, for those that live in it). Enlarged twice; under each, the kind its genes
+        make it.
       </p>
       <div id="sweeps"></div>
-
-      <h2>4. Together</h2>
+      <h3>How big</h3>
       <p>
-        One staged shot of a shore: the fifteen specimens and ten of the world's own herd, placed in
-        view (swimmers in the water). It is drawn three times, with art pixels of 1, 2 and 4 screen
-        pixels. That size is still to be chosen, and it decides both the look and how much the
-        device has to draw.
+        The simulation says how heavy an animal is, not how long it is drawn. The same shore with
+        the animals at their first size, half as big again, and double.
       </p>
       <figure class="screen">
         <canvas
-          data-picture="together-1x"
-          aria-label="Staged shot, art pixels of 1 screen pixel"
-        ></canvas>
-        <figcaption><b>Full size, art pixel = 1 screen pixel.</b> Drawn at 1024×600.</figcaption>
-      </figure>
-      <figure class="screen">
-        <canvas
-          data-picture="together-2x"
-          aria-label="Staged shot, art pixels of 2 screen pixels"
+          data-picture="creatures-1x"
+          aria-label="Shore, animals at their first size"
         ></canvas>
         <figcaption>
-          <b>Full size, art pixel = 2 screen pixels.</b> Drawn at 512×300 and stretched: a quarter
-          of the pixels to fill.
+          <b>Full size. S1, as now:</b> an animal of mass 1 is 1.1 cells long, 9 art pixels.
         </figcaption>
       </figure>
       <figure class="screen">
         <canvas
-          data-picture="together-4x"
-          aria-label="Staged shot, art pixels of 4 screen pixels"
+          data-picture="creatures-1.5x"
+          aria-label="Shore, animals half as big again"
         ></canvas>
         <figcaption>
-          <b>Full size, art pixel = 4 screen pixels.</b> Drawn at 256×150. Small animals are down to
-          a few pixels.
+          <b>Full size. S2, one and a half times</b> <span class="pick">my pick</span>
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="creatures-2x" aria-label="Shore, animals at double size"></canvas>
+        <figcaption>
+          <b>Full size. S3, double.</b> The heaviest are longer than a tree is tall.
+        </figcaption>
+      </figure>
+
+      <h2>5. Together</h2>
+      <h3>A closer local view?</h3>
+      <p>
+        Everything above has 8 art pixels to the cell. This is the same shore with 16: twice the
+        detail in ground, plants and animals, a quarter of the land in sight. It costs more to paint
+        (the ground can no longer be one picture of the whole world), so it is a question, not a
+        pick.
+      </p>
+      <figure class="screen">
+        <canvas
+          data-picture="closer"
+          aria-label="A closer local view, 16 art pixels per cell"
+        ></canvas>
+        <figcaption>
+          <b>Full size.</b> 16 art pixels to the cell: 32 cells across instead of 64.
         </figcaption>
       </figure>
       <h3>Light</h3>
@@ -277,94 +423,118 @@
       </p>
       <div class="lights">
         <figure>
-          <canvas data-picture="light-day" aria-label="Staged shot by day"></canvas>
+          <canvas data-picture="light-day" aria-label="Local view by day"></canvas>
           <figcaption>Day</figcaption>
         </figure>
         <figure>
-          <canvas data-picture="light-dusk" aria-label="Staged shot at dusk"></canvas>
+          <canvas data-picture="light-dusk" aria-label="Local view at dusk"></canvas>
           <figcaption>Dusk</figcaption>
         </figure>
         <figure>
-          <canvas data-picture="light-night" aria-label="Staged shot at night"></canvas>
+          <canvas data-picture="light-night" aria-label="Local view at night"></canvas>
           <figcaption>Night</figcaption>
         </figure>
         <figure>
-          <canvas data-picture="light-dawn" aria-label="Staged shot at dawn"></canvas>
+          <canvas data-picture="light-dawn" aria-label="Local view at dawn"></canvas>
           <figcaption>Dawn</figcaption>
         </figure>
       </div>
-      <p class="note">Half size: the 512×300 drawing shown without stretching.</p>
 
-      <h2>5. Plants on the ground: three ways</h2>
+      <h2>6. What it costs</h2>
       <p>
-        In the close-ups above the plants sit badly on the map: the ground under them keeps the
-        colour of bare soil though the wide shot shows the same land green, every cell carries one
-        drawing dead in its middle, and a square of ground is eight times the size of a plant's
-        pixel. Here are the same two places drawn three ways, all with art pixels of 2 screen
-        pixels, where a plant's drawing is shown at its own size.
+        The board is not on the desk, so this is an estimate: the two views drawn as picked above,
+        measured on the development PC and scaled to the board's processor. An Allwinner H618 scores
+        about 150 in Geekbench 6 on one core and this PC about 3,150: the board is some 21 times
+        slower per core. It is another architecture and another graphics stack, so read the last
+        column as an order of magnitude.
       </p>
-      <h3>A. As now</h3>
-      <figure class="screen">
-        <canvas data-picture="style-wood-now" aria-label="The wood, as now"></canvas>
-      </figure>
-      <figure class="screen">
-        <canvas data-picture="style-shore-now" aria-label="The shore, as now"></canvas>
-        <figcaption>
-          Bare ground, one flat square per cell, and a drawing in every vegetated cell (<span
-            id="count-icons"
-            >…</span
-          >
-          in this world).
-        </figcaption>
-      </figure>
-      <h3>B. Green ground</h3>
-      <figure class="screen">
-        <canvas data-picture="style-wood-green" aria-label="The wood on green ground"></canvas>
-      </figure>
-      <figure class="screen">
-        <canvas data-picture="style-shore-green" aria-label="The shore on green ground"></canvas>
-        <figcaption>
-          The same drawings on the wide shot's colours: each cell in the tone of what grows on it.
-          Costs nothing; a close-up and a wide shot now agree on what is green. The grid and the
-          squares stay.
-        </figcaption>
-      </figure>
-      <h3>C. Painted ground</h3>
-      <figure class="screen">
-        <canvas data-picture="style-wood-painted" aria-label="The wood on painted ground"></canvas>
-      </figure>
-      <figure class="screen">
-        <canvas
-          data-picture="style-shore-painted"
-          aria-label="The shore on painted ground"
-        ></canvas>
-        <figcaption>
-          The ground is painted at the plants' pixel size. Borders between cells wander instead of
-          running straight; grass, lichen and the floor of a wood are patches on the soil, thicker
-          where biomass is higher; the shore keeps the map's dark outline, one pixel wide, with foam
-          beyond it. Only shrubs, trees and a tuft of grown grass here and there stand as drawings
-          (<span id="count-scattered">…</span>), off the middle of their cells and with a shadow.
-          The ground is one picture, repainted when the plants change (once a sim-day).
-        </figcaption>
-      </figure>
-
-      <h2>What is not settled</h2>
+      <div class="wrap">
+        <table class="cost">
+          <tr>
+            <th></th>
+            <th>On the PC</th>
+            <th>At the board's speed</th>
+            <th>Against</th>
+          </tr>
+          <tr>
+            <td>Script per frame, map view (216 animals as dots)</td>
+            <td>0.3 ms</td>
+            <td>3 ms (up to 8)</td>
+            <td rowspan="3">33 ms a frame at 30 fps</td>
+          </tr>
+          <tr>
+            <td>Script per frame, local view (50 animals)</td>
+            <td>0.3 ms</td>
+            <td>4 ms (up to 13)</td>
+          </tr>
+          <tr>
+            <td>Script per frame, local view (all 216 animals alive)</td>
+            <td>0.7 ms</td>
+            <td>12 to 15 ms (up to 26)</td>
+          </tr>
+          <tr>
+            <td>The page's process, local view</td>
+            <td>7 % of a core at 60 fps</td>
+            <td>about 0.7 of a core at 30 fps</td>
+            <td>4 cores, of which the simulation may use ¼</td>
+          </tr>
+          <tr>
+            <td>Painting the ground (both views)</td>
+            <td>0.55 s</td>
+            <td>8 to 10 s</td>
+            <td>once a sim-day; must not hold up frames</td>
+          </tr>
+          <tr>
+            <td>Pixels to fill per frame</td>
+            <td colspan="2">512×300, two to three layers deep: about 0.4 million</td>
+            <td>a Mali-G31 MP2, if Chromium is given it</td>
+          </tr>
+          <tr>
+            <td>WebGL drawn by the processor instead</td>
+            <td>2 to 3 cores</td>
+            <td>out of reach</td>
+            <td>4 cores, 21 times slower</td>
+          </tr>
+          <tr>
+            <td>Chromium's memory</td>
+            <td colspan="2">0.5 to 0.6 GB, plus 10 MB for the painted ground</td>
+            <td>1 to 4 GB by model; simulation and server get 0.3</td>
+          </tr>
+        </table>
+      </div>
+      <p>What follows from it:</p>
       <ul>
-        <li><b>The size of an art pixel</b>: 1, 2 or 4 screen pixels (section 4).</li>
         <li>
-          <b>How close the camera gets.</b> At the close-up used here a mid-sized animal is about 20
-          screen pixels long and a mouse about 11. Portraits like those of section 3 need a camera
-          three times closer.
-        </li>
-        <li><b>How plants sit on the ground</b>: A, B or C of section 5.</li>
-        <li>
-          <b>Creature bodies</b> are circles and stretched squares. Heads, shells and fins drawn as
-          pixel art, and depth (an animal behind a tree), belong to R2.
+          <b>The page's own work fits</b>, with room, as long as only the animals in sight are
+          worked out (which is how these numbers were taken) and the map shows dots.
         </li>
         <li>
-          <b>Colour on the ground.</b> A green animal on grass nearly disappears. That may be right
-          (camouflage) or may need an outline.
+          <b>The ground cannot be repainted in one go on the board</b>: ten seconds without a frame.
+          It has to be painted in the background or a few cells per frame, which is easy to arrange
+          since it changes once a sim-day.
         </li>
+        <li>
+          <b>Everything still hangs on the graphics driver.</b> With the GPU the picture is small
+          work; without it nothing here is fast enough. Reports for this board show the driver
+          loading while Chromium still draws in software, so this is the first thing to try when the
+          board is on the desk.
+        </li>
+        <li><b>A 1 GB board is tight</b> next to the simulation; 2 GB or more is safer.</li>
+      </ul>
+      <p class="note">
+        "At the board's speed" is the same page with its processor throttled 20 to 24 times in
+        Chromium; in brackets, the slowest frame in a hundred. The page's process and the memory are
+        Chromium's own figures on the PC. Sources for the scores: Geekbench 6 uploads for the Orange
+        Pi Zero 3 (same chip) and for the Core Ultra 9 275HX.
+      </p>
+
+      <h2>To choose</h2>
+      <ul>
+        <li><b>Map view</b>: M1, M2 or M3.</li>
+        <li><b>Ground</b> of the local view: G1 to G4.</li>
+        <li><b>Plants</b>: P1, P2 or P3.</li>
+        <li><b>Creatures</b>: style C1, C2 or C3, and size S1, S2 or S3.</li>
+        <li><b>A closer local view</b>, or the one shown throughout.</li>
       </ul>
     </main>
     <script type="module" src="/src/spike/look.ts"></script>
