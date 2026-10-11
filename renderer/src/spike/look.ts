@@ -14,45 +14,15 @@ import { PATTERNS, bodyPlan, kindOf, patternOf } from "./body";
 import type { CellRect } from "./camera";
 import type { Point } from "./chain";
 import type { CreatureLayer } from "./creatures";
-import {
-  parseFixture,
-  type Cast,
-  type CreatureSeed,
-  type Ramp,
-  type WorldFixture,
-} from "./fixture";
+import { parseFixture, type Cast, type CreatureSeed, type WorldFixture } from "./fixture";
 import { MAP_TILE, MID_TILE, paintGround, type Shadow } from "./ground";
 import { heightAt, type Passable } from "./habitat";
 import { LIGHT_ORDER } from "./light";
-import { hexToRgb, type Form, type Stage as Age } from "./pixelart";
-import {
-  CAP_COLOURS,
-  FLOWER_COLOURS,
-  MOSS_COLOUR,
-  PLANT_SCALES,
-  SMALL_SIZES,
-  colourArt,
-  drawSmall,
-  drawStanding,
-  type PlantArt,
-  type PlantScale,
-  type Small,
-  type TreeStyle,
-} from "./plantart";
-import { plantLineUp, standingPlants, type LineUpItem } from "./plants";
-import {
-  CREATURE_SCALES,
-  GROUND,
-  LOCAL_PIXELS,
-  MAP_GROUND,
-  MID_BODY,
-  MID_CREATURE_SCALE,
-  PLANTS,
-  PORTRAIT_PIXELS,
-  TREES,
-  midBody,
-  localBody,
-} from "./proposal";
+import { hexToRgb } from "./pixelart";
+import { colourArt, type PlantArt } from "./plantart";
+import { outIn, standingArts, standingPlants, type StandingArt } from "./plants";
+import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PORTRAIT_PIXELS, localBody } from "./proposal";
+import { seasonRamp, type Season } from "./seasons";
 import { mulberry32, type Random } from "./rng";
 import { findSite, forest, meadow, shore } from "./sites";
 import { Stage, type Picture } from "./stage";
@@ -85,26 +55,20 @@ const SPECIMEN = { width: 112, height: 88, enlarged: 2 };
 const SWATCH = { width: 84, height: 64, enlarged: 2 };
 /** Bare heights (rock, snow) make a poor meadow: land this far above the sea is passed over. */
 const MEADOW_BELOW = 0.2;
-/**
- * The line-up the animals' sizes are judged by: grown trees and bushes in a row on a
- * meadow, the same five animals in front of them. So many cells across and down, the
- * row of feet so far down, each animal kept in a lane of its own below it.
- */
-const LINE_UP = {
-  cells: [16, 6],
-  feet: 3.5,
-  lanes: { top: 4.2, bottom: 5.35, margin: 0.4 },
-  items: [
-    { form: "BROADLEAF", variant: 0, at: 1.5 },
-    { form: "CONIFER", variant: 0, at: 4.1 },
-    { form: "SHRUB", variant: 0, at: 6.5 },
-    { form: "BROADLEAF", variant: 2, at: 9.2 },
-    { form: "CONIFER", variant: 1, at: 11.9 },
-    { form: "SHRUB", variant: 1, at: 14.3 },
-  ] satisfies LineUpItem[],
-} as const;
-/** What each size does to the middle view: a piece of it, so many art pixels, with this many animals. */
-const MID_SAMPLE = { width: 160, height: 100, enlarged: 2, animals: 12 };
+/** The times of year the vegetation is shown in: the four seasons, and winter under snow. */
+interface Time {
+  name: string;
+  season: Season;
+  snow: boolean;
+}
+const TIMES: readonly Time[] = [
+  { name: "spring", season: "spring", snow: false },
+  { name: "summer", season: "summer", snow: false },
+  { name: "autumn", season: "autumn", snow: false },
+  { name: "winter", season: "winter", snow: false },
+  { name: "snow", season: "winter", snow: true },
+];
+const SUMMER: Time = { name: "summer", season: "summer", snow: false };
 /** A sample of each kind of ground: so many cells of it, at the local view's size. */
 const SAMPLE = { cells: [3, 2], enlarged: 2 } as const;
 /** How far from the middle of its picture the animal a local picture is about may go, in cells. */
@@ -311,94 +275,184 @@ function sheet(
   host.append(canvas);
 }
 
-/** The trees and bushes of one style: every drawing of each, grown and young. */
-function treeSheets(
-  host: HTMLElement,
-  style: TreeStyle,
-  scale: PlantScale,
+/** The drawings a layer of plants is made of at one time of year, to pick from by name. */
+function drawingsOf(
   fixture: WorldFixture,
-): void {
-  const detail = LOCAL_PIXELS / MID_TILE;
-  const ground = fixture.palette["GRASS"]?.[1] ?? "#8fbf4f";
-  const standing = (form: Form, age: Age, variant: number, at = detail): Drawing => {
-    const art = drawStanding(form, age, variant, scale, at, style);
-    return { art, pixels: colourArt(art, fixture.palette[form] ?? ["", "", ""]) };
+  time: Time,
+  tile = LOCAL_PIXELS,
+): (key: string) => Drawing[] {
+  const arts = new Map<string, StandingArt>(
+    standingArts(fixture, tile, {
+      close: tile === LOCAL_PIXELS,
+      season: time.season,
+      snow: time.snow,
+    }).map((art) => [art.key, art]),
+  );
+  return (key) => {
+    const found = arts.get(key);
+    if (found === undefined) return [];
+    return [{ art: found.art, pixels: colourArt(found.art, found.ramp, found.accent, found.wood) }];
   };
-  const all = (form: Form): Drawing[] => [
-    ...[0, 1, 2].map((variant) => standing(form, "mature", variant)),
-    ...[0, 1].map((variant) => standing(form, "young", variant)),
-  ];
-  sheet(host, `${style}: broadleaf trees`, all("BROADLEAF"), ground);
-  sheet(host, `${style}: conifers`, all("CONIFER"), ground);
+}
+
+/** The colour a sheet's plants stand on at a time of year: grass, or snow. */
+const groundOf = (fixture: WorldFixture, time: Time): string =>
+  time.snow ? fixture.relief.snow[1] : seasonRamp(fixture.palette, "GRASS", time.season)[1];
+
+const every = (form: string, growth: string): string[] =>
+  [0, 1, 2].map((variant) => `${form}/${growth}/${variant}`);
+
+/** The trees and bushes full grown, in their three builds, and at the middle view's size. */
+function treeSheets(host: HTMLElement, fixture: WorldFixture): void {
+  const near = drawingsOf(fixture, SUMMER);
+  const far = drawingsOf(fixture, SUMMER, MID_TILE);
+  const ground = groundOf(fixture, SUMMER);
   sheet(
     host,
-    `${style}: bushes, and the three at the middle view's size`,
+    "Broadleaf trees and conifers, full grown",
+    [...every("BROADLEAF", "grown"), ...every("CONIFER", "grown")].flatMap(near),
+    ground,
+  );
+  sheet(
+    host,
+    "Bushes, and the three kinds at the middle view's size",
     [
-      ...all("SHRUB"),
-      ...(["BROADLEAF", "CONIFER", "SHRUB"] as const).flatMap((form) =>
-        [0, 1, 2].map((variant) => standing(form, "mature", variant, 1)),
-      ),
+      ...every("SHRUB", "grown").flatMap(near),
+      ...["BROADLEAF", "CONIFER", "SHRUB"].flatMap((form) => every(form, "grown")).flatMap(far),
     ],
     ground,
   );
 }
 
-/** What grows and lies among the trees, on the colour of the ground it is found on. */
-function smallSheets(host: HTMLElement, scale: PlantScale, fixture: WorldFixture): void {
-  const detail = LOCAL_PIXELS / MID_TILE;
-  const ramp = (name: string): Ramp => fixture.palette[name] ?? ["", "", ""];
-  const small = (
-    kind: Small,
-    variant: number,
-    colours: Ramp,
-    accent?: string,
-    wood?: string,
-  ): Drawing => {
-    const [width, height] = SMALL_SIZES[kind];
-    const art = drawSmall(
-      kind,
-      [width * detail, height * detail],
-      mulberry32(31 + variant),
-      variant,
-    );
-    return { art, pixels: colourArt(art, colours, accent, wood) };
-  };
-  const tuft = (age: Age, variant: number, colours: string): Drawing => {
-    const art = drawStanding("GRASS", age, variant, scale, detail);
-    return { art, pixels: colourArt(art, ramp(colours)) };
-  };
-  const flowers = (["daisy", "bell", "spike", "umbel"] as const).flatMap((kind) =>
-    FLOWER_COLOURS.map((accent, colour) => small(kind, colour, ramp("GRASS"), accent)),
+/** Every stage of growth of each kind, and what a fire leaves. */
+function stageSheets(host: HTMLElement, fixture: WorldFixture): void {
+  const near = drawingsOf(fixture, SUMMER);
+  const stages = (form: string): string[] =>
+    ["sprout", "young", "grown", "old"].map((growth) => `${form}/${growth}/0`);
+  sheet(
+    host,
+    "Stages of a broadleaf tree and of a conifer",
+    [...stages("BROADLEAF"), ...stages("CONIFER")].flatMap(near),
+    groundOf(fixture, SUMMER),
   );
+  sheet(
+    host,
+    "Stages of a bush and of grass; dried grass; what a fire leaves",
+    [
+      ...stages("SHRUB"),
+      "GRASS/sprout/0",
+      "GRASS/young/0",
+      "GRASS/grown/0",
+      "dry/0",
+      "stump/1",
+      "snag/0",
+      "snag/1",
+      "log/0",
+    ].flatMap(near),
+    groundOf(fixture, SUMMER),
+  );
+}
+
+/** The vegetation at one time of year: trees, then bushes, grass and what is out. */
+function seasonSheets(host: HTMLElement, fixture: WorldFixture, time: Time): void {
+  const near = drawingsOf(fixture, time);
+  const ground = groundOf(fixture, time);
+  sheet(
+    host,
+    `Trees in ${time.snow ? "winter, under snow" : time.season}`,
+    [
+      ...every("BROADLEAF", "grown"),
+      "BROADLEAF/young/0",
+      "BROADLEAF/sprout/0",
+      "CONIFER/grown/0",
+      "CONIFER/grown/1",
+      "CONIFER/young/0",
+      "CONIFER/sprout/0",
+    ].flatMap(near),
+    ground,
+  );
+  const small = [
+    ...["daisy", "bell", "spike", "umbel"].flatMap((kind) => [
+      `${kind}/0`,
+      `${kind}/2`,
+      `${kind}/3`,
+    ]),
+    "herb/0",
+    "fern/0",
+    "fern/1",
+    "mushroom/0",
+    "mushroom/1",
+    "mushroom/2",
+    "reed/0",
+    "stone/0",
+    "stone/1",
+    "boulder/1",
+    "log/0",
+    "stump/0",
+  ].filter((key) => outIn(time.season, key.split("/")[0] ?? ""));
+  const when = time.snow ? "winter, under snow" : time.season;
+  sheet(
+    host,
+    `Bushes and grass in ${when}`,
+    [
+      ...every("SHRUB", "grown"),
+      "SHRUB/young/0",
+      "SHRUB/sprout/0",
+      "GRASS/grown/0",
+      "GRASS/grown/1",
+      "GRASS/young/0",
+    ].flatMap(near),
+    ground,
+  );
+  sheet(host, `What is out in ${when}`, small.flatMap(near), ground);
+}
+
+/** What grows and lies among the trees, on the colour of the ground it is found on. */
+function smallSheets(host: HTMLElement, fixture: WorldFixture): void {
+  const near = drawingsOf(fixture, SUMMER);
+  const bare = fixture.palette["BARE"]?.[1] ?? "#b3a188";
   sheet(
     host,
     "In the grass: tufts, herbs and four kinds of flower",
     [
-      ...[0, 1, 2].map((variant) => tuft("mature", variant, "GRASS")),
-      tuft("young", 0, "GRASS"),
-      ...[0, 1].map((variant) => tuft("mature", variant, "DORMANT")),
-      ...[0, 1].map((variant) => small("herb", variant, ramp("GRASS"))),
-      ...flowers,
-    ],
-    ramp("GRASS")[1],
+      ...every("GRASS", "grown"),
+      "GRASS/young/0",
+      "dry/0",
+      "dry/1",
+      "herb/0",
+      "herb/1",
+      ...["daisy", "bell", "spike", "umbel"].flatMap((kind) =>
+        [0, 1, 2, 3, 4].map((colour) => `${kind}/${colour}`),
+      ),
+    ].flatMap(near),
+    groundOf(fixture, SUMMER),
   );
-  const rock = fixture.relief.highRock;
   sheet(
     host,
     "Under trees and on bare ground: ferns, mushrooms, reeds, stones, boulders, logs, stumps",
     [
-      ...[0, 1].map((variant) => small("fern", variant, ramp("SHRUB"))),
-      ...[0, 1, 2].map((variant) => small("mushroom", variant, ramp("BARE"), CAP_COLOURS[variant])),
-      ...[0, 1].map((variant) => small("reed", variant, ramp("DORMANT"))),
-      ...[0, 1, 2, 3].map((variant) => small("stone", variant, rock, ramp("LICHEN")[2])),
-      small("boulder", 0, rock),
-      small("boulder", 1, rock, MOSS_COLOUR),
-      small("boulder", 3, rock, ramp("LICHEN")[2]),
-      ...[0, 1].map((variant) => small("log", variant, ramp("BARE"), MOSS_COLOUR)),
-      small("stump", 0, ramp("BARE")),
-      small("stump", 1, ramp("BURNT"), undefined, "#2e2622"),
-    ],
-    ramp("BARE")[1],
+      "SHRUB/sprout/0",
+      "fern/0",
+      "fern/1",
+      "mushroom/0",
+      "mushroom/1",
+      "mushroom/2",
+      "reed/0",
+      "reed/1",
+      "stone/0",
+      "stone/1",
+      "stone/2",
+      "stone/3",
+      "boulder/0",
+      "boulder/1",
+      "boulder/3",
+      "log/0",
+      "log/1",
+      "stump/0",
+      "stump/1",
+      "snag/0",
+    ].flatMap(near),
+    bare,
   );
 }
 
@@ -474,8 +528,6 @@ async function main(): Promise<void> {
     if (found === undefined) throw new Error(`no specimen "${name}"`);
     return found;
   };
-  const large = PLANT_SCALES.find((scale) => scale.name === PLANTS);
-  if (large === undefined) throw new Error(`no plant scale "${PLANTS}"`);
 
   element("world").textContent = fixture.description;
   element("build").textContent =
@@ -533,10 +585,11 @@ async function main(): Promise<void> {
     pixels: number,
     width: number,
     height: number,
-    extra: { calm?: number; shadows?: (cells: CellRect) => Shadow[] } = {},
+    extra: { shadows?: (cells: CellRect) => Shadow[]; time?: Time } = {},
   ): void => {
     const cells = around(centre, width / pixels, height / pixels, PAINT_MARGIN, fixture);
     const shadows = extra.shadows?.(cells);
+    const time = extra.time ?? { season: fixture.season, snow: false };
     stage.addGround(
       name,
       paintGround(fixture, {
@@ -544,7 +597,8 @@ async function main(): Promise<void> {
         style: GROUND,
         grain: true,
         cells,
-        ...(extra.calm === undefined ? {} : { calm: extra.calm }),
+        season: time.season,
+        snow: time.snow,
         ...(shadows === undefined ? {} : { shadows }),
       }),
       pixels,
@@ -553,9 +607,10 @@ async function main(): Promise<void> {
   };
 
   // 1. The map view: the whole world, two art pixels to the cell, animals as dots.
+  const { season } = fixture;
   stage.addGround(
     "map",
-    paintGround(fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false }),
+    paintGround(fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false, season }),
     MAP_TILE,
   );
   const herd = stage.cast(fixture.creatures, 1, MID_BODY);
@@ -568,13 +623,21 @@ async function main(): Promise<void> {
     centre: middle(island),
   });
 
-  // 2. The middle view: eight art pixels to the cell, the large plants, small animals.
+  // 2. The middle view: eight art pixels to the cell, the same trees and bushes as the
+  // local view at a quarter of the size, their shadows on the ground, small animals.
+  const midPlants = standingPlants(fixture, MID_TILE);
   stage.addGround(
     "mid",
-    paintGround(fixture, { tile: MID_TILE, style: GROUND, grain: true }),
+    paintGround(fixture, {
+      tile: MID_TILE,
+      style: GROUND,
+      grain: true,
+      season,
+      shadows: midPlants.shadows(island),
+    }),
     MID_TILE,
   );
-  stage.addPlants("mid", standingPlants(fixture, large, MID_TILE));
+  stage.addPlants("mid", midPlants);
   const midCells = [VIEW.width / MID_TILE, Math.ceil(VIEW.height / MID_TILE)] as const;
   const midShore = middle(findSite(fixture, ...midCells, shore));
   const midWood = middle(findSite(fixture, ...midCells, forest));
@@ -605,7 +668,7 @@ async function main(): Promise<void> {
     wood: middle(findSite(fixture, ...localCells, forest)),
     shore: middle(findSite(fixture, ...localCells, shore)),
   };
-  const near = standingPlants(fixture, large, LOCAL_PIXELS, TREES);
+  const near = standingPlants(fixture, LOCAL_PIXELS, { close: true });
   stage.addPlants("local", near);
   const shadows = (cells: CellRect): Shadow[] => near.shadows(cells);
   /** The players of a local picture: the animal it is about, kept near the middle, and company. */
@@ -636,121 +699,65 @@ async function main(): Promise<void> {
   place("ground", { ...base, zoom: LOCAL_PIXELS, ground: "bare", centre: localSites.meadow });
   groundSamples(element("ground-samples"), fixture);
   // The trees and bushes side by side, then in a wood; what grows among them.
-  treeSheets(element("trees"), TREES, large, fixture);
+  treeSheets(element("trees"), fixture);
   place("local-wood", local("wood"));
-  smallSheets(element("plants-small"), large, fixture);
+  smallSheets(element("plants-small"), fixture);
   place("local-meadow", local("meadow"));
   const shoreline = local("shore");
   place("local-shore", shoreline);
   for (const light of LIGHT_ORDER) place(`light-${light}`, { ...shoreline, light }, 1);
 
-  // How large the animals are. A line-up: grown trees and bushes in a row on a meadow,
-  // and in front of them the same five animals, from the lightest a genome allows to
-  // the heaviest, at each size on offer.
-  const [lineWide, lineTall] = LINE_UP.cells;
-  const lineSite = findSite(fixture, lineWide, Math.ceil(lineTall), (shares) => {
-    // Land all over, for the animals to stand on; what grows there does not show.
-    return -(shares["WATER"] ?? 0);
-  });
-  const lineUp = plantLineUp(
-    fixture,
-    large,
-    LOCAL_PIXELS,
-    TREES,
-    lineSite.x0,
-    lineSite.y0 + LINE_UP.feet,
-    LINE_UP.items,
-  );
-  stage.addPlants("line-up", lineUp);
-  {
-    // The meadow under it: grown grass over a few cells more than are seen, painted
-    // where the line-up stands.
-    const margin = 2;
-    const wide = lineWide + 2 * margin;
-    const tall = Math.ceil(lineTall) + 2 * margin;
-    const meadowWorld: WorldFixture = {
-      ...fixture,
-      width: wide,
-      height: tall,
-      cover: new Uint8Array(wide * tall).fill(Math.max(fixture.coverClasses.indexOf("GRASS"), 0)),
-      biomass: new Uint8Array(wide * tall).fill(255),
-      heights: new Float32Array(wide * tall).fill(fixture.seaLevel + 0.1),
-      creatures: [],
-      casts: [],
-    };
-    const cells = {
-      x0: margin,
-      y0: margin,
-      x1: margin + lineWide,
-      y1: margin + Math.ceil(lineTall),
-    };
+  // 4. The vegetation in every variation: the stages of growth, then each time of year
+  // on a sheet, on the same shore from close and in the same wood from the middle view.
+  stageSheets(element("stages"), fixture);
+  for (const time of TIMES) {
+    seasonSheets(element(`plants-${time.name}`), fixture, time);
+    const options = { season: time.season, snow: time.snow };
+    // From close: the shore, with nobody on it.
+    const close = standingPlants(fixture, LOCAL_PIXELS, { ...options, close: true });
+    stage.addPlants(`local-${time.name}`, close);
+    paint(`shore-${time.name}`, localSites.shore, LOCAL_PIXELS, VIEW.width, VIEW.height, {
+      shadows: (cells) => close.shadows(cells),
+      time,
+    });
+    place(`local-${time.name}`, {
+      ...base,
+      zoom: LOCAL_PIXELS,
+      ground: `shore-${time.name}`,
+      plants: `local-${time.name}`,
+      centre: localSites.shore,
+    });
+    // From the middle view: the wood.
+    const far = standingPlants(fixture, MID_TILE, { ...options, lazy: true });
+    stage.addPlants(`mid-${time.name}`, far);
+    const cells = around(midWood, midCells[0], midCells[1], PAINT_MARGIN, fixture);
     stage.addGround(
-      "line-up",
-      paintGround(meadowWorld, {
-        tile: LOCAL_PIXELS,
+      `mid-${time.name}`,
+      paintGround(fixture, {
+        tile: MID_TILE,
         style: GROUND,
         grain: true,
         cells,
-        shadows: lineUp.shadows(lineSite).map((shadow) => ({
-          ...shadow,
-          x: shadow.x - lineSite.x0 + margin,
-          y: shadow.y - lineSite.y0 + margin,
-        })),
+        ...options,
+        shadows: far.shadows(cells),
       }),
-      LOCAL_PIXELS,
-      lineSite,
+      MID_TILE,
+      cells,
+    );
+    place(
+      `mid-${time.name}`,
+      {
+        ...base,
+        zoom: MID_TILE,
+        ground: `mid-${time.name}`,
+        plants: `mid-${time.name}`,
+        centre: midWood,
+      },
+      1,
     );
   }
-  const sized = cast("sweep-size");
-  const lane = lineWide / sized.creatures.length;
-  const inLanes = sized.creatures.map((seed, index) => {
-    const { top, bottom, margin } = LINE_UP.lanes;
-    const kept = {
-      x0: lineSite.x0 + index * lane + margin,
-      y0: lineSite.y0 + top,
-      x1: lineSite.x0 + (index + 1) * lane - margin,
-      y1: lineSite.y0 + bottom,
-    };
-    return { ...seed, ...middle(kept), pen: kept };
-  });
-  // The same animals in a piece of the middle view, to see what each size does there.
-  const sampleCells = around(
-    midShore,
-    MID_SAMPLE.width / MID_TILE,
-    MID_SAMPLE.height / MID_TILE,
-    0,
-    fixture,
-  );
-  // Animals of the world's own herd, which are of middling mass, kept inside the piece.
-  const inSample = scatter(
-    fixture.creatures.slice(0, MID_SAMPLE.animals),
-    sampleCells,
-    passable,
-    random,
-  ).map((seed) => ({ ...seed, pen: sampleCells }));
-  CREATURE_SCALES.forEach((scale, index) => {
-    place(`size-${index + 1}`, {
-      ...base,
-      width: lineWide * LOCAL_PIXELS,
-      height: lineTall * LOCAL_PIXELS,
-      zoom: LOCAL_PIXELS,
-      ground: "line-up",
-      plants: "line-up",
-      cast: stage.cast(inLanes, 7, localBody(LOCAL_PIXELS, scale)),
-      centre: { x: lineSite.x0 + lineWide / 2, y: lineSite.y0 + lineTall / 2 },
-    });
-    const picture = {
-      ...mid,
-      width: MID_SAMPLE.width,
-      height: MID_SAMPLE.height,
-      cast: stage.cast(inSample, 8, midBody(scale)),
-      centre: midShore,
-    };
-    const note = scale === MID_CREATURE_SCALE ? "as the middle view is now" : "";
-    element("sizes-mid").append(tile(scale.toFixed(2), note, picture, MID_SAMPLE.enlarged));
-  });
 
-  // 4. Creatures up close: each specimen on its own patch of ground, at the local view's size.
+  // 5. Creatures up close: each specimen on its own patch of ground, at the local view's size.
   const roomy: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };
   const standing = scatter(specimens.creatures, roomy, passable, random).map((seed) => ({
     ...seed,

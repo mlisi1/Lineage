@@ -12,9 +12,8 @@ import { MID_TILE, MAP_TILE, paintGround } from "./ground";
 import { GroundPieces, PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";
 import { cycleTint } from "./light";
 import type { Backend } from "./params";
-import { PLANT_SCALES } from "./plantart";
 import { standingPlants, type PlantLayer } from "./plants";
-import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PLANTS, TREES, localBody } from "./proposal";
+import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, localBody } from "./proposal";
 import { mulberry32 } from "./rng";
 import type { Scenario } from "./scenarios";
 
@@ -214,44 +213,50 @@ export class SpikeScene {
     this.app.render();
   }
 
-  /** Build what the chosen look needs, once: the grounds, the plants, the creatures. */
+  /** Build what the chosen look needs, once: the plants, the grounds, the creatures. */
   private propose(): Proposed {
     if (this.proposed !== null) return this.proposed;
+    const { fixture } = this;
+    const { season } = fixture;
+    const whole = { x0: 0, y0: 0, x1: fixture.width, y1: fixture.height };
+    // The plants first: the ground of the two closer views carries their shadows.
+    const standing = standingPlants(fixture, MID_TILE);
+    const nearPlants = standingPlants(fixture, LOCAL_PIXELS, { close: true });
     const started = performance.now();
     const mapGround = groundSprite(
-      paintGround(this.fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false }),
+      paintGround(fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false, season }),
       MAP_TILE,
     );
     const midGround = groundSprite(
-      paintGround(this.fixture, { tile: MID_TILE, style: GROUND, grain: true }),
+      paintGround(fixture, {
+        tile: MID_TILE,
+        style: GROUND,
+        grain: true,
+        season,
+        shadows: standing.shadows(whole),
+      }),
       MID_TILE,
     );
     const paintMs = performance.now() - started;
-    const scale = PLANT_SCALES.find((candidate) => candidate.name === PLANTS);
-    if (scale === undefined) throw new Error(`no plant scale "${PLANTS}"`);
     const cast = (body: BodyOptions): CreatureLayer =>
       new CreatureLayer(
         this.layers.atlas,
-        this.fixture.creatures,
+        fixture.creatures,
         this.layers.passable,
         mulberry32(this.seed),
         body,
       );
-    const nearPlants = standingPlants(this.fixture, scale, LOCAL_PIXELS, TREES);
     this.proposed = {
       mapGround,
       midGround,
-      standing: standingPlants(this.fixture, scale, MID_TILE),
+      standing,
       creatures: cast(MID_BODY),
       paintMs,
-      // The ground of the local view carries the shadows of what stands on it.
-      pieces: new GroundPieces(this.fixture, LOCAL_PIXELS, GROUND, (cells) =>
-        nearPlants.shadows(cells),
-      ),
+      pieces: new GroundPieces(fixture, LOCAL_PIXELS, GROUND, (cells) => nearPlants.shadows(cells)),
       nearPlants,
       nearCreatures: cast(localBody(LOCAL_PIXELS)),
     };
-    const { standing, creatures, pieces, nearCreatures } = this.proposed;
+    const { creatures, pieces, nearCreatures } = this.proposed;
     this.grounds.addChild(mapGround, midGround, pieces.container);
     this.plantLayers.addChild(standing.container, nearPlants.container);
     this.casts.addChild(creatures.container, nearCreatures.container);
