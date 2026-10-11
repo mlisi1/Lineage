@@ -37,10 +37,10 @@ test("the look sheet draws every picture", async ({ page }) => {
   await expect(page.locator("#sweeps figure.tile")).toHaveCount(50);
   await expect(page.locator("#sweeps .sweep").nth(1)).toContainText("spider");
   await expect(page.locator("#sweeps .sweep").nth(5)).toContainText("flippers");
-  // The local view's parts: two sheets of trees and bushes per style, two of small
+  // The local view's parts: three sheets of trees and bushes per style, two of small
   // plants, and a sample of every kind of ground.
   for (const style of ["bundles", "dome", "limbs"]) {
-    await expect(page.locator(`#trees-${style} canvas`)).toHaveCount(2);
+    await expect(page.locator(`#trees-${style} canvas`)).toHaveCount(3);
   }
   await expect(page.locator("#plants-small canvas")).toHaveCount(2);
   await expect(page.locator("#ground-samples figure.tile")).toHaveCount(13);
@@ -97,6 +97,10 @@ test("the look sheet draws every picture", async ({ page }) => {
   }
   // By day the light changes nothing.
   expect(await png(page, "light-day")).toBe(await png(page, "local-shore"));
+  // In a window with room for a full-size picture and the page's margins, nothing sticks
+  // out to the side: the sheets of plants fit the column.
+  await page.setViewportSize({ width: 1100, height: 600 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1100);
 });
 
 test("the look sheet saves itself as one self-contained page", async ({ page }) => {
@@ -146,7 +150,7 @@ test("the saved page can carry the animals moving, as loops that need no script"
   expect(await frames("grazer: beast · herbivore · mass 0.9 · bands")).toBe(2);
   expect(await frames("eyespots")).toBe(2);
   expect(await frames("The ground read over two cells around")).toBe(1);
-  expect(await frames("bundles: broadleaf trees and conifers")).toBe(1);
+  expect(await frames("bundles: broadleaf trees")).toBe(1);
   expect(await frames("Ground: lichen on rock")).toBe(1);
   expect(await frames("The shore at night")).toBe(1);
   const broken = await page.evaluate(

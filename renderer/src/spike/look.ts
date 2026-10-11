@@ -309,12 +309,8 @@ function treeSheets(
     ...[0, 1, 2].map((variant) => standing(form, "mature", variant)),
     ...[0, 1].map((variant) => standing(form, "young", variant)),
   ];
-  sheet(
-    host,
-    `${style}: broadleaf trees and conifers`,
-    [...all("BROADLEAF"), ...all("CONIFER")],
-    ground,
-  );
+  sheet(host, `${style}: broadleaf trees`, all("BROADLEAF"), ground);
+  sheet(host, `${style}: conifers`, all("CONIFER"), ground);
   sheet(
     host,
     `${style}: bushes, and the three at the middle view's size`,
