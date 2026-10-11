@@ -36,6 +36,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import partial
@@ -599,6 +600,16 @@ def describe_host(browser: str) -> dict[str, Any]:
     }
 
 
+def virtual_display(environ: Mapping[str, str]) -> bool:
+    """Whether the session draws to a display that is not there.
+
+    A wlroots compositor (cage, sway, labwc) started with ``WLR_BACKENDS=headless`` runs
+    without a screen: the GPU draws every frame and nothing is shown. That is how the
+    board can be tried over SSH before it has a display; it is not the R0 measurement.
+    """
+    return "headless" in environ.get("WLR_BACKENDS", "").split(",")
+
+
 # --- Command line -----------------------------------------------------------------------
 
 
@@ -714,6 +725,7 @@ def main(argv: list[str] | None = None) -> int:
             "only": args.only,
             "window": list(window),
             "headless": args.headless,
+            "virtual_display": virtual_display(os.environ),
             "sandbox": sandbox,
         },
         "runs": [],

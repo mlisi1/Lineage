@@ -519,6 +519,22 @@ def test_r0_counts_a_larger_display_as_at_least_as_hard(tmp_path: Path) -> None:
     assert on(1280, 480, "wide")["off_spec"] == ["the page was 1280×480, smaller than 1024×600"]
 
 
+def test_r0_does_not_take_a_virtual_display_for_the_screen(tmp_path: Path) -> None:
+    """The board tried over SSH with no display attached: a preview, not the measurement."""
+    source = _bench_evidence(tmp_path, [_bench_run("gpu", 58.0)])
+    path = source / "kiosk-bench.json" if source.is_dir() else source
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    evidence["settings"]["virtual_display"] = True
+    path.write_text(json.dumps(evidence), encoding="utf-8")
+    out = build_report("R0", source, tmp_path / "virtual")
+    doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert doc["off_spec"] == ["the display was a virtual one: the GPU drew, no screen showed it"]
+    assert {a["id"]: a["status"] for a in doc["acceptance"]} == {"R0.1": "FAIL", "R0.2": "PASS"}
+    # What it is good for is still there: what drew the page, and how fast.
+    assert doc["drawn_by"] == "WebGL on Mali-G31 (Panfrost)"
+    assert doc["metrics"]["best.spec-1x.fps_median"] == 58.0
+
+
 def test_r0_best_profile_at_equal_frame_rate_uses_less_cpu(tmp_path: Path) -> None:
     runs = [
         _bench_run("default", 60.1, cpu=310.0, driver="llvmpipe"),

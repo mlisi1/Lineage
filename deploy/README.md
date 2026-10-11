@@ -32,6 +32,10 @@ benchmark and nothing of the project needs to be on the board.
    Where there is no desktop, `lineage-r0@.service` runs it full screen under `cage`,
    from SSH: `sudo systemctl start lineage-r0@<user>` (see the unit's own comments).
 
+   With no display attached at all, `WLR_BACKENDS=headless cage -- python3 kiosk_bench.py
+   …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
+   the report marks as not the R0 measurement.
+
    The screen belongs to the benchmark for about a quarter of an hour: five browser
    profiles, twelve scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
    per profile and writes `kiosk-bench.json` (rewritten after every profile, so an

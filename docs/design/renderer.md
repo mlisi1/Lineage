@@ -428,7 +428,9 @@ or larger) and the best profile reaches 30 fps median in `spec-1x`. A larger dis
 stand in for the 7" screen, which is not bought yet
 ([ADR 0008](../decisions/0008-r0-on-a-stand-in-display.md)): the scene is drawn at the
 same size and stretched further, which is at least as hard. The report names the display
-and says so.
+and says so. Before any display is attached, the same run on a virtual one (the compositor
+started with `WLR_BACKENDS=headless`, over SSH) says whether Chromium draws with the GPU
+and about how fast; the report marks it as not the measurement.
 
 ### What a PC already says (not the acceptance)
 

@@ -250,6 +250,14 @@ def test_server_serves_the_build_and_takes_results(tmp_path: Path) -> None:
         server.server_close()
 
 
+def test_a_compositor_without_a_screen_is_a_virtual_display() -> None:
+    assert kb.virtual_display({"WLR_BACKENDS": "headless"})
+    assert kb.virtual_display({"WLR_BACKENDS": "headless,libinput"})
+    assert not kb.virtual_display({"WLR_BACKENDS": "drm,libinput"})
+    assert not kb.virtual_display({"WAYLAND_DISPLAY": "wayland-0"})
+    assert not kb.virtual_display({})
+
+
 def test_drawn_by_names_the_path_that_ran() -> None:
     hardware = {"gpu": {"api": "webgl", "unmasked_renderer": "Mali-G31", "software": False}}
     assert kb.drawn_by(hardware) == "WebGL on Mali-G31"

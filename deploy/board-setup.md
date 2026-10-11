@@ -10,7 +10,7 @@ corrects this page, and S6 turns it into `setup.sh`.
 
 ## What needs what
 
-| | Steps 1–5: install, check the GPU driver | Steps 6–9: measure |
+| | Steps 1–7: install, check, a first answer | Steps 8–10: measure |
 |---|---|---|
 | microSD card (8 GB or more), reader, the PC | yes | |
 | USB-C supply, 5 V 3 A | yes | yes |
@@ -18,9 +18,9 @@ corrects this page, and S6 turns it into `setup.sh`.
 | **A display on the board's mini-HDMI port** | no | **yes** |
 | USB keyboard on the board | no | no |
 
-A display is not needed to set the board up: that is done over Wi-Fi. It is needed to
-measure: Chromium paces its frames to a display, and the report refuses a run without
-one.
+A display is not needed to set the board up, nor for a first answer: step 7 runs the
+benchmark over SSH on a display that is not there, with the board's GPU doing the
+drawing. It is needed for the measurement that closes R0: frames shown on a screen.
 
 **Which display.** The 7" screen, or until it is bought any HDMI monitor at its own
 resolution. The scene is drawn at the same size and stretched to the page, so a larger
@@ -118,7 +118,7 @@ sudo reboot
 - `chromium`: the browser the kiosk will run.
 - `cage`: a Wayland compositor that shows one application full screen and nothing else,
   which is what a kiosk is.
-- `kmscube`, `mesa-utils`: to see what draws, in step 6.
+- `kmscube`, `mesa-utils`: to see what draws, in step 8.
 
 The benchmark needs Python 3.9 or newer and nothing else. (Trixie has 3.13. The project's
 own 3.11 comes with `uv` when the server goes on the board, in S6.)
@@ -156,9 +156,67 @@ send the output of those two commands and of `uname -r`: the cure is a device-tr
 overlay and depends on the exact image.
 
 A loaded driver is half of it. One forum report has Panfrost loaded and OpenGL still
-drawn by the processor (`llvmpipe`); the next step and the benchmark itself tell.
+drawn by the processor (`llvmpipe`); the benchmark tells, in step 7.
 
-## 6. Connect the display and look
+## 6. Copy the benchmark over
+
+On the PC, in the repository:
+
+```sh
+cd renderer && npm ci && npm run build && cd ..
+ssh lineage@<address> mkdir -p lineage-r0
+scp -r renderer/dist tools/kiosk_bench.py deploy/lineage-r0@.service lineage@<address>:lineage-r0/
+```
+
+## 7. A first answer without a display
+
+The board can be tried before it has a display. `cage` is started with a display that is
+not there: the GPU draws every frame as it would for a screen, and nothing shows it. It
+answers what everything hangs on, whether Chromium draws with the GPU on this board and
+about how fast. The report does not take it for the R0 measurement, and says why.
+
+On the board, over SSH:
+
+```sh
+groups | grep -qw render || sudo usermod -aG render,video "$USER"   # then log out and in
+cd ~/lineage-r0
+WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 \
+  cage -- python3 kiosk_bench.py --dist dist --out kiosk-bench-virtual.json \
+  --profiles default,gpu,gpu-gles --only spec-1x,mid-view,mid-crowd,local-view
+```
+
+**You should see**, after half a minute, a table per browser profile in the terminal;
+the whole takes about three minutes. Under each table the line **"drawn by"** is the
+answer:
+
+- `WebGL on … Mali-G31 (Panfrost)`: Chromium is using the GPU. This is the case R0 can
+  pass in, and the frame rates beside it are close to what a screen will get.
+- `(software, on the CPU)`, or a renderer named `llvmpipe` or `SwiftShader`: it is not,
+  whatever the frame rate says.
+- `2D canvas … (WebGL was not available)`: no WebGL at all.
+
+The display that is not there is 1280×720. To see the result as a report, on the PC:
+
+```sh
+mkdir -p runs/r0-virtual
+scp 'lineage@<address>:lineage-r0/kiosk-bench-virtual.json' 'lineage@<address>:lineage-r0/chromium-*.log' runs/r0-virtual/
+uv run python -m tools.report R0 --runs runs/r0-virtual/kiosk-bench-virtual.json --out runs/r0-virtual
+```
+
+It lands in `runs/`, which is not committed, and its first line says it is not the R0
+measurement.
+
+If `cage` stops with an error naming EGL, GLES or the renderer, the compositor itself
+could not use the GPU: keep the lines. Adding `WLR_RENDERER=pixman` in front makes it
+draw with the processor, which shows whether the rest works.
+
+**Why not `ssh -X`.** Forwarding the browser's window to the PC makes the PC the
+display, and with it goes what is being measured. The board's GPU can only draw for a
+display of its own; for a window on another machine Chromium draws with the processor
+and sends the pictures down the network. The numbers would be those of the processor
+and of the Wi-Fi.
+
+## 8. Connect the display and look
 
 Power the board off (`sudo poweroff`), connect the display to its mini-HDMI port, power
 both.
@@ -186,17 +244,7 @@ sudo timeout 8 kmscube 2>&1 | grep -E 'vendor|renderer'
 `renderer: "Mali-G31 (Panfrost)"`. `llvmpipe` in its place means the processor is
 drawing: note it and go on, the benchmark will say the same with numbers.
 
-## 7. Copy the benchmark over
-
-On the PC, in the repository:
-
-```sh
-cd renderer && npm ci && npm run build && cd ..
-ssh lineage@<address> mkdir -p lineage-r0
-scp -r renderer/dist tools/kiosk_bench.py deploy/lineage-r0@.service lineage@<address>:lineage-r0/
-```
-
-## 8. Run it
+## 9. Run it
 
 On the board:
 
@@ -220,13 +268,8 @@ Leave the board alone meanwhile. `Ctrl-C` leaves the journal; the run goes on.
 When it has finished, the screen goes dark. `sudo systemctl start getty@tty1` brings the
 console back.
 
-While it runs, the first thing to read is the line **"drawn by"** under each profile:
-
-- `WebGL on … Mali-G31 (Panfrost)`: Chromium is using the GPU. This is the case R0 can
-  pass in.
-- `(software, on the CPU)`, or a renderer named `llvmpipe` or `SwiftShader`: it is not,
-  whatever the frame rate says.
-- `2D canvas … (WebGL was not available)`: no WebGL at all.
+While it runs, the first thing to read is the line **"drawn by"** under each profile, as
+in step 7.
 
 If the unit stops at once: `journalctl -u lineage-r0@lineage -n 40` says why. The likely
 ones are no screen connected (`cage` has no output to show on), and `No usable sandbox`
@@ -235,7 +278,7 @@ in `chromium-<profile>.log` (add `--no-sandbox` to the unit's `ExecStart` line).
 The board gets hot. If the temperature column in the tables passes 80 °C the processor is
 slowing itself down and the numbers are a hot board's: put a heatsink on it and run again.
 
-## 9. Bring the result back
+## 10. Bring the result back
 
 On the PC:
 
@@ -255,9 +298,9 @@ it says so, and how many times the screen's pixels it had to fill.
 In the order they are likely:
 
 - **No profile uses the GPU, though step 5 found the driver.** Try other flags without
-  editing anything: change the unit's last words to
-  `kiosk_bench.py --dist dist --profiles gpu --only mid-view --seconds 5 --flags='--use-gl=egl'`
-  (or `--use-angle=gles`), which takes a minute a try. Keep the `chromium-*.log` files:
+  editing anything: end the command of step 7 (or the unit's `ExecStart` line) with
+  `--profiles gpu --only mid-view --seconds 5 --flags='--use-gl=egl'` (or
+  `--use-angle=gles`), which takes a minute a try. Keep the `chromium-*.log` files:
   the lines with `GPU` or `EGL` in them say what Chromium refused.
 - **No picture on the screen at all.** HDMI on this chip is not in the mainline kernel;
   Armbian carries it as patches. If the Armbian image shows nothing on a monitor that
@@ -268,14 +311,15 @@ In the order they are likely:
 - **For the last two, the vendor's image is the other road**: Orange Pi's own Debian for
   the board (from orangepi.org; named like `Orangepizero2w_1.0.x_debian_bookworm_…`),
   where a forum user reports the GPU can be switched on in `orangepi-config` and works
-  well, and an article from 2024 says the open driver does not load. Steps 3 to 9 are the
-  same there; the vendor's images come with a user `orangepi` already made.
+  well, and an article from 2024 says the open driver does not load. Steps 3 to 10 are
+  the same there; the vendor's images come with a user `orangepi` already made.
 - **The GPU is used and it is under 30 frames a second**, or nothing gets it used: that
   is R0's answer, and the next thing is the decision note on a native renderer.
 
 ## What to send back
 
-`kiosk-bench.json`, the `chromium-*.log` files, and what steps 4, 5 and 6 printed.
+`kiosk-bench.json` (or `kiosk-bench-virtual.json` from step 7), the `chromium-*.log`
+files, and what steps 4, 5 and 8 printed.
 
 ## Sources
 

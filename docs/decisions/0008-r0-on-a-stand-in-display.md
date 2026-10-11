@@ -22,6 +22,14 @@ pixels, so a larger display is at least as hard on the board as the screen will 
   measurement.** The report passes its first criterion for it, names the display in its
   header, and says in its summary how many times the screen's pixels the page had.
 - **A smaller page does not count**: it is less work than the screen.
+- **A virtual display does not count either.** The board can be tried over SSH with no
+  display attached, by starting the kiosk's compositor without a screen
+  (`WLR_BACKENDS=headless`): its GPU draws every frame and nothing is shown. The runner
+  records it and the report says it is not the measurement. It is a first answer to
+  whether Chromium draws with the GPU and about how fast, not the proof.
+- **Forwarding the window to the PC (`ssh -X`) is not a way to measure**: the PC becomes
+  the display, Chromium on the board draws with the processor, and the pictures go down
+  the network.
 - Nothing else about the criterion changes: on the ARM board, Chromium as a kiosk on a
   real display (not headless), 30 frames a second median with the best browser profile.
 

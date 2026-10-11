@@ -103,6 +103,8 @@ def off_spec(evidence: dict[str, Any]) -> list[str]:
         reasons.append(f"measured on {machine or 'an unknown machine'}, not on the ARM board")
     if evidence["settings"].get("headless"):
         reasons.append("Chromium ran headless, not as a kiosk on the display")
+    if evidence["settings"].get("virtual_display"):
+        reasons.append("the display was a virtual one: the GPU drew, no screen showed it")
     for width, height in sorted(_page_sizes(evidence)):
         if width < SPEC_VIEWPORT[0] or height < SPEC_VIEWPORT[1]:
             reasons.append(f"the page was {width}×{height}, smaller than 1024×600")
