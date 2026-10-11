@@ -5,8 +5,8 @@ self-contained file. A still copy of `renderer/look.html`, which is the same she
 with the creatures walking (`cd renderer && npm run dev`, then open `/look.html`).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `b16c63297956`
-- 130 pictures, taken after the creatures have walked for 8 s;
+- Renderer build: `f81b78edecad`
+- 144 pictures, taken after the creatures have walked for 8 s;
   those with animals in them are loops of 6 s at 10 frames a second
   (animated PNG: they play in any browser, without a script)
 
