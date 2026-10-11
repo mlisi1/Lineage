@@ -162,7 +162,8 @@ Do not create directories outside this layout without updating this file.
   - `cd renderer && npm run build` — build the pages into `renderer/dist`
   - `cd renderer && npm run look` — write the look sheet (how terrain, plants and creatures
     are drawn) to `reports/R0-look-sheet/`; live at `/look.html` under `npm run dev`
-  - on the board: `python3 kiosk_bench.py --dist dist` (procedure in `deploy/README.md`),
+  - on the board: `python3 kiosk_bench.py --dist dist` (procedure in `deploy/README.md`;
+    from a board in its box, `deploy/board-setup.md`),
     then `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
   - `cd renderer && npm test && npx playwright test`
   - `cd renderer && npm run typecheck && npm run lint`

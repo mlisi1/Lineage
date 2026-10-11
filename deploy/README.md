@@ -5,9 +5,13 @@ backups, Tailscale, log rotation and SD-wear settings. Built in S6.
 
 ## Measuring the renderer spike on the device (R0)
 
-What the board needs: its desktop session running on the 7" screen at 1024×600,
-Chromium (`chromium` or `chromium-browser`), and Python 3.9 or newer. Nothing is
-installed by the benchmark and nothing of the project needs to be on the board.
+**Starting from a board in its box: [`board-setup.md`](board-setup.md)**, which goes from
+flashing the card to the result on the PC, without a keyboard on the board. What follows
+is the procedure itself, for a board that already has a session on its screen.
+
+What the board needs: a graphical session on the 7" screen at 1024×600, Chromium
+(`chromium` or `chromium-browser`), and Python 3.9 or newer. Nothing is installed by the
+benchmark and nothing of the project needs to be on the board.
 
 1. **On the PC**, build the page and copy it over with the runner:
 
@@ -25,8 +29,11 @@ installed by the benchmark and nothing of the project needs to be on the board.
    Over SSH the display has to be named: prefix the command with `DISPLAY=:0` (X11), or
    with `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/$(id -u)` (Wayland).
 
-   The screen belongs to the benchmark for about eight minutes: five browser profiles,
-   eight scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
+   Where there is no desktop, `lineage-r0@.service` runs it full screen under `cage`,
+   from SSH: `sudo systemctl start lineage-r0@<user>` (see the unit's own comments).
+
+   The screen belongs to the benchmark for about a quarter of an hour: five browser
+   profiles, twelve scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
    per profile and writes `kiosk-bench.json` (rewritten after every profile, so an
    interrupted run keeps what it had) and one `chromium-<profile>.log` per profile.
 
