@@ -3,7 +3,7 @@ import { Assets, CanvasSource, Container, Sprite, Texture, type ApplicationOptio
 import { buildAtlas, type Atlas } from "./atlas";
 import type { CellRect } from "./camera";
 import type { WorldFixture } from "./fixture";
-import { paintGround, type GroundStyle } from "./ground";
+import { paintGround, type GroundStyle, type Shadow } from "./ground";
 import type { Pixels } from "./pixelart";
 import { passableIn, type Passable } from "./habitat";
 import { iconPlants, type PlantLayer } from "./plants";
@@ -85,10 +85,12 @@ export class GroundPieces {
   paintMs = 0;
   private readonly pieces = new Map<number, Sprite>();
 
+  /** `shadows` says what throws a shadow onto given cells, if anything does. */
   constructor(
     private readonly fixture: WorldFixture,
     private readonly tile: number,
     private readonly style: GroundStyle,
+    private readonly shadows?: (cells: CellRect) => Shadow[],
   ) {}
 
   /** Paint what `view` needs and is not there yet. */
@@ -114,11 +116,13 @@ export class GroundPieces {
           x1: Math.min(cells.x1 + PIECE_MARGIN, width),
           y1: Math.min(cells.y1 + PIECE_MARGIN, height),
         };
+        const shadows = this.shadows?.(padded);
         const pixels = paintGround(this.fixture, {
           tile: this.tile,
           style: this.style,
           grain: true,
           cells: padded,
+          ...(shadows === undefined ? {} : { shadows }),
         });
         const canvas = document.createElement("canvas");
         canvas.width = (cells.x1 - cells.x0) * this.tile;

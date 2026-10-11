@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CALM_CELLS,
+  CLOSE_FROM_TILE,
   GROUND_STYLES,
   MID_TILE,
   MAP_TILE,
@@ -8,7 +10,7 @@ import {
   type GroundStyle,
 } from "../../src/spike/ground";
 import { hexToRgb, type Pixels } from "../../src/spike/pixelart";
-import { DEPTH, LAND, PALETTE, SEA, SEA_LEVEL, SHORE_OUTLINE, world } from "./worlds";
+import { DEPTH, LAND, MAP, PALETTE, SEA, SEA_LEVEL, SHORE_OUTLINE, world } from "./worlds";
 
 const rows = (letter: string, width: number, height: number): string[] =>
   Array.from({ length: height }, () => letter.repeat(width));
@@ -234,6 +236,198 @@ describe("paintGround", () => {
         }
       }
     }
+  });
+});
+
+describe("the ground of a close view", () => {
+  /** The local view: four times the middle view's pixels to the cell. */
+  const NEAR = 4 * MID_TILE;
+  const near = (extra: Partial<Parameters<typeof paintGround>[1]> = {}) => ({
+    tile: NEAR,
+    style: "blended" as const,
+    grain: true,
+    ...extra,
+  });
+  /** Colours of `image` that are nearer to `colour` than `within` in every channel. */
+  const like = (image: Pixels, colour: string, within = 0): number => {
+    const [r, g, b] = hexToRgb(colour);
+    let found = 0;
+    for (let i = 0; i < image.rgba.length; i += 4) {
+      const near =
+        Math.abs((image.rgba[i] ?? 0) - r) <= within &&
+        Math.abs((image.rgba[i + 1] ?? 0) - g) <= within &&
+        Math.abs((image.rgba[i + 2] ?? 0) - b) <= within;
+      if (near) found += 1;
+    }
+    return found / (image.width * image.height);
+  };
+
+  it("reads what grows over the cells around, so that one odd cell is no patch", () => {
+    expect(NEAR).toBeGreaterThanOrEqual(CLOSE_FROM_TILE);
+    const meadow = rows("g", 9, 9);
+    meadow[4] = "gggg.gggg"; // one bare cell in the grass
+    const fixture = world(meadow, 255);
+    const soil = (image: Pixels): number =>
+      BARE.reduce((sum, tone) => sum + like(image, tone, 12), 0);
+    // As each cell says: a patch of soil a cell wide. Read over two cells around, the
+    // meadow is what it would be without that cell.
+    const whole = world(rows("g", 9, 9), 255);
+    const odd = soil(paintGround(fixture, near({ calm: 0 })));
+    expect(odd).toBeGreaterThan(0.004);
+    expect(odd).toBeGreaterThan(4 * soil(paintGround(whole, near({ calm: 0 }))) + 0.003);
+    expect(soil(paintGround(fixture, near({ calm: CALM_CELLS })))).toBe(
+      soil(paintGround(whole, near({ calm: CALM_CELLS }))),
+    );
+    // A close view is calm unless told otherwise; the middle view never is.
+    const same = (a: Pixels, b: Pixels): boolean => a.rgba.every((value, i) => value === b.rgba[i]);
+    expect(
+      same(paintGround(fixture, near()), paintGround(fixture, near({ calm: CALM_CELLS }))),
+    ).toBe(true);
+    expect(
+      same(
+        paintGround(fixture, local("blended")),
+        paintGround(fixture, { ...local("blended"), calm: 0 }),
+      ),
+    ).toBe(true);
+    // A patch that holds several cells together stays, whatever the calm.
+    const clearing = rows("g", 12, 12).map((row, y) => (y >= 4 && y < 8 ? "gggg....gggg" : row));
+    for (const calm of [1, 2, 3]) {
+      expect(soil(paintGround(world(clearing, 255), near({ calm })))).toBeGreaterThan(0.02);
+    }
+  });
+
+  it("thins growth in gaps cells across, not in specks", () => {
+    const fixture = world(rows("g", 10, 10), 110);
+    /**
+     * Share of soil, and how long a stretch of it is on average along a row, counted in
+     * blocks of four pixels by four so that a pebble or a blade is not a stretch.
+     */
+    const gaps = (image: Pixels): { share: number; run: number } => {
+      const side = 4;
+      const isSoil = (bx: number, by: number): boolean => {
+        let soil = 0;
+        for (let y = by * side; y < (by + 1) * side; y++) {
+          for (let x = bx * side; x < (bx + 1) * side; x++) {
+            const i = (y * image.width + x) * 4;
+            // Soil is as red as it is green; grass, green or dried, is not.
+            if ((image.rgba[i] ?? 0) > (image.rgba[i + 1] ?? 0) - 6) soil += 1;
+          }
+        }
+        return soil >= (side * side) / 2;
+      };
+      let soil = 0;
+      let changes = 0;
+      const across = image.width / side;
+      const down = image.height / side;
+      for (let by = 0; by < down; by++) {
+        for (let bx = 0; bx < across; bx++) {
+          if (isSoil(bx, by)) soil += 1;
+          if (bx > 0 && isSoil(bx, by) !== isSoil(bx - 1, by)) changes += 1;
+        }
+      }
+      return { share: soil / (across * down), run: (side * soil) / Math.max(changes / 2, 1) };
+    };
+    const calm = gaps(paintGround(fixture, near()));
+    const busy = gaps(paintGround(fixture, near({ calm: 0 })));
+    // As much soil shows either way; calm, it shows in stretches a cell long and more,
+    // several times what they were.
+    expect(calm.share).toBeGreaterThan(0.15);
+    expect(calm.share).toBeLessThan(0.75);
+    expect(Math.abs(calm.share - busy.share)).toBeLessThan(0.2);
+    expect(calm.run).toBeGreaterThan(NEAR);
+    expect(calm.run).toBeGreaterThan(2 * busy.run);
+  });
+
+  it("draws what each kind of ground is made of", () => {
+    const colours = (image: Pixels): number => census(image).size;
+    // Grass: blades a tone darker and lighter than the turf, which the middle view has less of.
+    const grass = paintGround(world(rows("g", 6, 6), 255), near());
+    expect(like(grass, GRASS[1])).toBeGreaterThan(0.75);
+    expect(like(grass, GRASS[0])).toBeGreaterThan(0.01);
+    expect(like(grass, GRASS[2])).toBeGreaterThan(0.01);
+    // Lichen is rosettes on the soil, not a colour of the ground: soil still shows.
+    const lichen = paintGround(world(rows("l", 6, 6), 255), near());
+    const LICHEN = PALETTE["LICHEN"] ?? ["", "", ""];
+    expect(like(lichen, BARE[1])).toBeGreaterThan(0.5);
+    expect(like(lichen, LICHEN[2]) + like(lichen, LICHEN[1])).toBeGreaterThan(0.03);
+    expect(like(lichen, "#c9a94a")).toBeGreaterThan(0); // mustard ones among them
+    // The thicker it grows, the more of them.
+    const sparse = paintGround(world(rows("l", 6, 6), 40), near());
+    expect(like(lichen, LICHEN[2])).toBeGreaterThan(1.5 * like(sparse, LICHEN[2]));
+    // Bare rock carries a few as well; bare soil none.
+    const rock = paintGround(
+      world(rows(".", 6, 6), 0, () => SEA_LEVEL + 0.35),
+      near(),
+    );
+    expect(like(rock, LICHEN[2])).toBeGreaterThan(0);
+    expect(like(paintGround(world(rows(".", 6, 6), 0), near()), LICHEN[2])).toBe(0);
+    // Under trees the floor is litter: browner than the trees' own dark, with leaves on it.
+    const [dark] = PALETTE["BROADLEAF"] ?? [""];
+    const wood = paintGround(world(rows("b", 6, 6), 255), near());
+    expect(like(wood, dark)).toBe(0);
+    expect(like(wood, "#b08a4a") + like(wood, "#7a5a34")).toBeGreaterThan(0.005);
+    // Sand has ripples, soil pebbles and cracks: more than one flat colour each.
+    const sand = paintGround(
+      world(rows(".", 6, 6), 0, () => SEA_LEVEL + 0.003),
+      near(),
+    );
+    expect(colours(sand)).toBeGreaterThanOrEqual(3);
+    expect(colours(paintGround(world(rows(".", 6, 6), 0), near()))).toBeGreaterThanOrEqual(3);
+    // Without grain there is none of it.
+    expect(colours(paintGround(world(rows("g", 6, 6), 255), near({ grain: false })))).toBe(1);
+  });
+
+  it("lays shadows on the land, once however many overlap, with a dithered rim", () => {
+    const fixture = world(["~~~~~~~~", ...rows("~......~", 1, 6), "~~~~~~~~"], 0);
+    const plain = paintGround(fixture, near());
+    const one = paintGround(fixture, near({ shadows: [{ x: 4, y: 4, rx: 1.5, ry: 0.8 }] }));
+    const two = paintGround(
+      fixture,
+      near({
+        shadows: [
+          { x: 4, y: 4, rx: 1.5, ry: 0.8 },
+          { x: 4.3, y: 4.1, rx: 1.5, ry: 0.8 },
+        ],
+      }),
+    );
+    const sum = (image: Pixels, x: number, y: number): number => {
+      const i = (y * image.width + x) * 4;
+      return (image.rgba[i] ?? 0) + (image.rgba[i + 1] ?? 0) + (image.rgba[i + 2] ?? 0);
+    };
+    // In the middle of the shadow the ground is darker, and bluer for it.
+    const [cx, cy] = [4 * NEAR, 4 * NEAR];
+    expect(sum(one, cx, cy)).toBeLessThan(sum(plain, cx, cy) * 0.9);
+    // Where both fall it is no darker than under one.
+    expect(sum(two, cx, cy)).toBe(sum(one, cx, cy));
+    // Well outside it nothing changed, and the sea carries no shadow.
+    expect(sum(one, cx, cy + 2 * NEAR)).toBe(sum(plain, cx, cy + 2 * NEAR));
+    const wet = paintGround(fixture, near({ shadows: [{ x: 0.5, y: 0.5, rx: 2, ry: 2 }] }));
+    for (let i = 0; i < NEAR / 2; i++) expect(sum(wet, i, i)).toBe(sum(plain, i, i));
+    // Along its rim shaded and unshaded pixels alternate.
+    let flips = 0;
+    const edge = Math.round(cx + 1.5 * NEAR);
+    for (let x = edge - 8; x < edge + 8; x++) {
+      if (sum(one, x, cy) < sum(plain, x, cy) !== sum(one, x - 1, cy) < sum(plain, x - 1, cy))
+        flips += 1;
+    }
+    expect(flips).toBeGreaterThan(1);
+  });
+
+  it("paints a piece of the world as it paints the whole, a little way in from the piece's edge", () => {
+    // What the pieces of the local view rely on: detail and calm come out the same.
+    const whole = paintGround(MAP, near());
+    const cells = { x0: 6, y0: 2, x1: 14, y1: 10 };
+    const piece = paintGround(MAP, near({ cells }));
+    expect([piece.width, piece.height]).toEqual([8 * NEAR, 8 * NEAR]);
+    // A drawing that starts outside the piece is not in it: allow for the largest of them.
+    const margin = 8;
+    let differing = 0;
+    for (let y = margin; y < piece.height - margin; y++) {
+      for (let x = margin; x < piece.width - margin; x++) {
+        if (at(piece, x, y) !== at(whole, x + cells.x0 * NEAR, y + cells.y0 * NEAR)) differing += 1;
+      }
+    }
+    expect(differing).toBe(0);
   });
 });
 

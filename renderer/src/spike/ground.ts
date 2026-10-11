@@ -14,6 +14,12 @@
  *   tiles     the nearest of the cells' centres, each nudged off its place: irregular tiles
  *   smooth    every value interpolated between the four nearest cells: contours
  *   blended   the same, with every transition dithered instead of cut
+ *
+ * From close, a cell is a large thing, and what the cells say one by one would be a
+ * patchwork. So a close view reads what grows over a few cells around (`calm`), which
+ * gives patches several cells wide, and spends its pixels on what the ground is made of
+ * instead: blades, pebbles, cracks, ripples in the sand, litter under trees, lichen on
+ * rock. It can also be given the shadows of what stands on it.
  */
 import type { CellRect } from "./camera";
 import type { Ramp, WorldFixture } from "./fixture";
@@ -31,6 +37,19 @@ export const GROUND_STYLES: readonly GroundStyle[] = [
 export const MID_TILE = 8;
 export const MAP_TILE = 2;
 
+/** From this many pixels per cell a view is close: calm patches, and detail in them. */
+export const CLOSE_FROM_TILE = 16;
+/** How many cells around a close view reads what grows over, unless told otherwise. */
+export const CALM_CELLS = 2;
+
+/** The shadow of something standing on the ground: an ellipse, in cells. */
+export interface Shadow {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+
 export interface GroundOptions {
   /** Pixels per cell. */
   tile: number;
@@ -42,6 +61,14 @@ export interface GroundOptions {
    * Without it (the map view) every pixel takes the flat colour of what covers it.
    */
   grain: boolean;
+  /**
+   * Cells around over which the interpolated styles read what grows and how the land
+   * slopes: 0 is what each cell says, more gives larger and calmer patches. Left out, a
+   * close view takes `CALM_CELLS` and the others 0.
+   */
+  calm?: number;
+  /** Shadows to lay on the land. */
+  shadows?: readonly Shadow[];
 }
 
 /** The forms that grow, in the order of their class numbers here (1 to 5); 0 is bare. */
@@ -67,8 +94,7 @@ const NUDGE = 0.36;
 /** smooth, blended: the same wander, finer, so contours are not ruled lines. */
 const WOBBLE = 0.22;
 const WOBBLE_FREQUENCY = 1.7;
-/** From this many pixels per cell there is room for a second, finer wander of the same lines. */
-const FINE_FROM_TILE = 16;
+/** A close view has room for a second, finer wander of the same lines. */
 const FINE_WOBBLE = 0.045;
 const FINE_FREQUENCY = 6.3;
 /** Land less than this above the sea is beach. */
@@ -80,9 +106,24 @@ const EDGE_TO = 0.58;
 const MIX_CLASS = 0.7;
 const MIX_SLOPE = 0.5;
 const MIX_DEPTH = 0.3;
-/** Size of the patches growth comes in, in pixels of the local view. */
+/** Size of the patches growth comes in, in pixels of the middle view. */
 const PATCH = 3.6;
-const PEBBLES = 0.012;
+/** In a calm view growth thins in patches this many cells across, with a ragged edge. */
+const CALM_PATCH = 1.6;
+const CALM_RAGGED = 0.07;
+/** How much narrower a calm view's dithered transitions are. */
+const CALM_MIX = 0.4;
+/** How far, in biomass, the line between dried and green growth wanders in a calm view. */
+const DRY_DRIFT = 0.12;
+/** Under trees and bushes a close view shows a floor of litter: mixed this far into their dark. */
+const LITTER = 0x6a5637;
+const FLOOR_LITTER: readonly number[] = [0, 0, 0, 0.18, 0.4, 0.46, 0];
+/** What a shadow is mixed with, how far, and how wide (as a share of it) its dithered rim is. */
+const SHADOW = 0x16203a;
+const SHADOW_MIX = 0.32;
+const SHADOW_RIM = 0.18;
+/** Share of the pixels of bare ground that are a grain darker or lighter. */
+const GRIT = 0.012;
 const WAVES = 0.006;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
@@ -128,6 +169,151 @@ export function valueNoise(x: number, y: number, salt: number): number {
   return top * (1 - sy) + bottom * sy;
 }
 
+/** What a pixel of land is made of, for the detail that goes on it. */
+const MATTER = {
+  sea: 0,
+  sand: 1,
+  soil: 2,
+  rock: 3,
+  snow: 4,
+  lichen: 5,
+  grass: 6,
+  dry: 7,
+  scrub: 8,
+  wood: 9,
+  pines: 10,
+  burnt: 11,
+} as const;
+type Matter = (typeof MATTER)[keyof typeof MATTER];
+
+/**
+ * Detail, as small drawings: one letter per pixel, the last row lowest. `d` and `l` are
+ * a tone darker and lighter than the ground they lie on; the other letters are colours
+ * of their own (see `inks` in `paintGround`).
+ */
+type Motif = readonly string[];
+const BLADES: readonly Motif[] = [
+  ["l..l", ".l.d", ".d.."],
+  ["l.l", "l.d", ".d."],
+  [".l.", "ll.", ".d."],
+  ["l...", ".l.l", ".d.."],
+  ["..l", "l.l", ".d."],
+  ["l", "l"],
+];
+const SPECKS: readonly Motif[] = [["l"], ["d"], ["ll"], ["dd"], ["l.", ".d"]];
+const PEBBLES: readonly Motif[] = [
+  ["ll", "sd"],
+  ["ls.", "ssd"],
+  [".ll.", "lssd", ".dd."],
+  ["l", "d"],
+];
+const CRACKS: readonly Motif[] = [
+  ["d...", ".dd.", "...d"],
+  ["..d", ".d.", "d..", "d.."],
+  ["d....", ".d.dd", "..d.."],
+  ["dd..", "..dd"],
+];
+const RIPPLES: readonly Motif[] = [
+  ["llll..", "..dddd"],
+  ["lll", ".dd"],
+  ["..llll", "ddd..."],
+  ["lllll"],
+];
+const ROSETTES: readonly Motif[] = [
+  [".aa.", "acca", "acca", ".aa."],
+  ["aa.", "aca", ".aa"],
+  [".aaa.", "accca", "aceca", "accca", ".aaa."],
+  ["aa", "aa"],
+  [".a..", "acaa", ".aca", "..a."],
+  ["a.a", ".c.", "a.a"],
+];
+const LEAVES: readonly Motif[] = [["o"], ["o.", ".n"], ["n"], ["oo"], ["m"], ["n.", "no"], ["mm"]];
+const NEEDLES: readonly Motif[] = [["n.", ".n"], [".n", "n."], ["nn"], ["o"], ["n..", ".n."]];
+const TWIGS: readonly Motif[] = [["t..", ".t.", "..t"], ["ttt"], ["..t", "tt."]];
+const ASH: readonly Motif[] = [["w"], ["w.", ".w"], ["d"], ["dd"], ["w"]];
+const DIMPLES: readonly Motif[] = [["dd"], ["ddd"], ["d.", ".d"]];
+const BLOOMS: readonly Motif[] = [["p"], ["p", "d"], ["q"]];
+
+/** What lies on each kind of ground: a motif set and how often a place for one is taken. */
+const DETAIL: Readonly<Record<Matter, readonly (readonly [readonly Motif[], number])[]>> = {
+  [MATTER.sea]: [],
+  [MATTER.sand]: [
+    [RIPPLES, 0.2],
+    [SPECKS, 0.1],
+    [PEBBLES, 0.03],
+  ],
+  [MATTER.soil]: [
+    [PEBBLES, 0.13],
+    [SPECKS, 0.2],
+    [CRACKS, 0.06],
+    [TWIGS, 0.02],
+  ],
+  [MATTER.rock]: [
+    [CRACKS, 0.16],
+    [ROSETTES, 0.14],
+    [PEBBLES, 0.08],
+    [SPECKS, 0.1],
+  ],
+  [MATTER.snow]: [
+    [DIMPLES, 0.12],
+    [SPECKS, 0.05],
+  ],
+  [MATTER.lichen]: [
+    [ROSETTES, 0.62],
+    [CRACKS, 0.04],
+    [PEBBLES, 0.05],
+  ],
+  [MATTER.grass]: [
+    [BLADES, 0.42],
+    [DIMPLES, 0.05],
+    [SPECKS, 0.06],
+    [BLOOMS, 0.025],
+  ],
+  [MATTER.dry]: [
+    [BLADES, 0.4],
+    [SPECKS, 0.12],
+  ],
+  [MATTER.scrub]: [
+    [LEAVES, 0.24],
+    [BLADES, 0.12],
+    [TWIGS, 0.03],
+  ],
+  [MATTER.wood]: [
+    [LEAVES, 0.42],
+    [TWIGS, 0.05],
+    [SPECKS, 0.06],
+  ],
+  [MATTER.pines]: [
+    [NEEDLES, 0.46],
+    [TWIGS, 0.04],
+  ],
+  [MATTER.burnt]: [
+    [ASH, 0.3],
+    [TWIGS, 0.05],
+  ],
+};
+/** Lichen comes grey-green as the palette has it, mustard, or as a chalky crust. */
+const LICHENS: readonly (readonly [Rgb, Rgb, Rgb])[] = [
+  [0xe3cd72, 0xc9a94a, 0x9b7d33],
+  [0xe8e6d4, 0xcfccb6, 0xa8a58f],
+];
+const LEAF_OCHRE = 0xb08a4a;
+const LEAF_BROWN = 0x7a5a34;
+const MOSS = 0x7fa24a;
+const TWIG = 0x5a4632;
+const ASH_PALE = 0xb9b2a8;
+const PETALS: readonly Rgb[] = [0xf4f1e4, 0xf2d24b];
+
+/** Weights of a binomial kernel reaching `reach` cells either side. */
+function kernel(reach: number): number[] {
+  let row = [1];
+  for (let step = 0; step < 2 * reach; step++) {
+    row = [...row, 0].map((value, i) => value + (row[i - 1] ?? 0));
+  }
+  const sum = row.reduce((total, value) => total + value, 0);
+  return row.map((value) => value / sum);
+}
+
 /** Paint the ground of `fixture`: `tile` pixels per cell over the cells asked for. */
 export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixels {
   const { width, height, heights, seaLevel, relief } = fixture;
@@ -135,6 +321,10 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
   const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
   const count = width * height;
   const waterClass = fixture.coverClasses.indexOf("WATER");
+  const interpolated = style === "smooth" || style === "blended";
+  const dithered = style === "blended";
+  const close = tile >= CLOSE_FROM_TILE;
+  const calm = interpolated ? Math.max(0, Math.round(options.calm ?? (close ? CALM_CELLS : 0))) : 0;
 
   // What each cell is: sea or land, what grows on it, how thickly, how it slopes.
   const sea = new Uint8Array(count);
@@ -176,6 +366,54 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
   const sand = bare[2];
   const foam = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, 0.6);
 
+  const clampX = (x: number): number => Math.min(Math.max(x, 0), width - 1);
+  const clampY = (y: number): number => Math.min(Math.max(y, 0), height - 1);
+
+  // A calm view: for every cell a pixel may read, what grows over the cells around it
+  // (the share of each kind and how thickly each grows) and how high the land lies there.
+  const kinds = BURNT + 1;
+  // A pixel reads up to a cell beyond its own, wanders a little, and looks one further for the slope.
+  const FIELD_REACH = 3;
+  const fieldX = rect.x0 - FIELD_REACH;
+  const fieldY = rect.y0 - FIELD_REACH;
+  const fieldWide = rect.x1 - rect.x0 + 2 * FIELD_REACH;
+  const fieldTall = rect.y1 - rect.y0 + 2 * FIELD_REACH;
+  const fieldSize = calm > 0 ? fieldWide * fieldTall : 0;
+  const calmShares = new Float32Array(fieldSize * kinds);
+  const calmGrowth = new Float32Array(fieldSize * kinds);
+  const calmLand = new Uint8Array(fieldSize);
+  const calmHeights = new Float32Array(fieldSize);
+  if (calm > 0) {
+    const weightsOf = kernel(calm);
+    for (let fy = 0; fy < fieldTall; fy++) {
+      for (let fx = 0; fx < fieldWide; fx++) {
+        const at = fy * fieldWide + fx;
+        let level = 0;
+        let landed = 0;
+        for (let ky = -calm; ky <= calm; ky++) {
+          const row = clampY(fieldY + fy + ky) * width;
+          for (let kx = -calm; kx <= calm; kx++) {
+            const cell = row + clampX(fieldX + fx + kx);
+            const weight = (weightsOf[ky + calm] ?? 0) * (weightsOf[kx + calm] ?? 0);
+            level += weight * (heights[cell] ?? 0);
+            if (sea[cell] === 1) continue;
+            const slot = at * kinds + (kind[cell] ?? 0);
+            calmShares[slot] = (calmShares[slot] ?? 0) + weight;
+            calmGrowth[slot] = (calmGrowth[slot] ?? 0) + weight * (biomass[cell] ?? 0);
+            landed += weight;
+          }
+        }
+        calmHeights[at] = level;
+        if (landed <= 0) continue;
+        calmLand[at] = 1;
+        for (let voted = 0; voted < kinds; voted++) {
+          calmShares[at * kinds + voted] = (calmShares[at * kinds + voted] ?? 0) / landed;
+          calmGrowth[at * kinds + voted] = (calmGrowth[at * kinds + voted] ?? 0) / landed;
+        }
+      }
+    }
+  }
+
   // What a pixel is, filled in by one of the two ways of reading the cells.
   let land = false;
   let above = 0; // height over the sea
@@ -186,9 +424,11 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
   let grown = 0;
   let share = 1; // how much of the weight here is `first`'s
   let beach = false;
+  // Where the pixel is, in cells, and what was painted on it.
+  let hereU = 0;
+  let hereV = 0;
+  let withered = false;
 
-  const clampX = (x: number): number => Math.min(Math.max(x, 0), width - 1);
-  const clampY = (y: number): number => Math.min(Math.max(y, 0), height - 1);
   const fromCell = (x: number, y: number): void => {
     const cell = clampY(y) * width + clampX(x);
     land = sea[cell] === 0;
@@ -214,15 +454,29 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
       (heights[row1 + clampX(x0)] ?? 0) * (1 - fx) + (heights[row1 + clampX(x0 + 1)] ?? 0) * fx;
     return top * (1 - fy) + bottom * fy;
   };
-  const weights = new Float32Array(BURNT + 1);
-  const growth = new Float32Array(BURNT + 1);
+  /** The same over the calm view's heights. */
+  const calmHeightAt = (u: number, v: number): number => {
+    const x0 = Math.floor(u);
+    const y0 = Math.floor(v);
+    const fx = u - x0;
+    const fy = v - y0;
+    const at = (y0 - fieldY) * fieldWide + (x0 - fieldX);
+    const top = (calmHeights[at] ?? 0) * (1 - fx) + (calmHeights[at + 1] ?? 0) * fx;
+    const bottom =
+      (calmHeights[at + fieldWide] ?? 0) * (1 - fx) + (calmHeights[at + fieldWide + 1] ?? 0) * fx;
+    return top * (1 - fy) + bottom * fy;
+  };
+  const weights = new Float32Array(kinds);
+  const growth = new Float32Array(kinds);
   const between = (u: number, v: number): void => {
     const level = heightAt(u, v);
     above = level - seaLevel;
     land = above > 0;
-    rise = level - heightAt(u - 1, v - 1);
+    rise =
+      calm > 0 ? calmHeightAt(u, v) - calmHeightAt(u - 1, v - 1) : level - heightAt(u - 1, v - 1);
     beach = above < BEACH;
-    // What grows: each of the four cells around votes for its kind with its nearness.
+    // What grows: each of the four cells around votes with its nearness, for its own kind
+    // or, in a calm view, for the kinds around it by their shares.
     weights.fill(0);
     growth.fill(0);
     const x0 = Math.floor(u);
@@ -233,9 +487,19 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     for (let corner = 0; corner < 4; corner++) {
       const dx = corner & 1;
       const dy = corner >> 1;
+      const weight = (dx === 1 ? fx : 1 - fx) * (dy === 1 ? fy : 1 - fy);
+      if (calm > 0) {
+        const at = (y0 + dy - fieldY) * fieldWide + (x0 + dx - fieldX);
+        if (calmLand[at] !== 1) continue;
+        for (let voted = 0; voted < kinds; voted++) {
+          weights[voted] = (weights[voted] ?? 0) + weight * (calmShares[at * kinds + voted] ?? 0);
+          growth[voted] = (growth[voted] ?? 0) + weight * (calmGrowth[at * kinds + voted] ?? 0);
+        }
+        total += weight;
+        continue;
+      }
       const cell = clampY(y0 + dy) * width + clampX(x0 + dx);
       if (sea[cell] === 1) continue;
-      const weight = (dx === 1 ? fx : 1 - fx) * (dy === 1 ? fy : 1 - fy);
       const voted = kind[cell] ?? 0;
       weights[voted] = (weights[voted] ?? 0) + weight;
       growth[voted] = (growth[voted] ?? 0) + weight * (biomass[cell] ?? 0);
@@ -264,40 +528,61 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
 
   const wide = (rect.x1 - rect.x0) * tile;
   const tall = (rect.y1 - rect.y0) * tile;
+  const originX = rect.x0 * tile;
+  const originY = rect.y0 * tile;
   const colours = new Uint32Array(wide * tall);
   const isLand = new Uint8Array(wide * tall);
-  const interpolated = style === "smooth" || style === "blended";
-  const dithered = style === "blended";
+  // For the detail of a close view: what each pixel is made of, in which tone, how grown.
+  const detailed = grain && close;
+  const matter = new Uint8Array(detailed ? wide * tall : 0);
+  const toned = new Uint8Array(detailed ? wide * tall : 0);
+  const thick = new Uint8Array(detailed ? wide * tall : 0);
   // Patches of growth are as big on the land whatever the tile, so that a view closer
   // than the middle one shows the same patches larger; closer still, their edges, the
   // blades and the foam get detail of their own, a pixel or a few at a time.
   const fine = MID_TILE / tile;
-  const close = tile >= FINE_FROM_TILE;
   const bladeRows = close ? Math.max(2, Math.round(tile / 8)) : 2;
   const dash = Math.max(2, Math.round(tile / 4));
   const surf = Math.max(1, Math.round(tile / 8));
   // Where two kinds meet they mix over as many pixels in every view, not as many cells.
-  const mixClass = MIX_CLASS * Math.min(1, fine);
+  // A calm view's values change over more cells, so its thresholds are mixed over less.
+  const mixClass = MIX_CLASS * Math.min(1, fine) * (calm > 0 ? CALM_MIX : 1);
+  const mixSlope = MIX_SLOPE * (calm > 0 ? CALM_MIX : 1);
 
   /** The colour of growth of class `grows` here, or -1 where the soil shows through. */
-  const cover = (grows: number, step: number, px: number, py: number): Rgb | -1 => {
+  const cover = (grows: number, step: number, px: number, py: number, dither: number): Rgb | -1 => {
+    withered = false;
     if (grows === 0) return -1;
-    const ramp =
-      grows === BURNT
-        ? burnt
-        : (dries[grows - 1] ?? false) && grown < dryBelow
-          ? dry
-          : (ramps[grows - 1] ?? bare);
+    // From close, lichen is not a colour of the ground but rosettes on it (below).
+    if (detailed && grows === 1) return -1;
+    // Where growth has dried: in a calm view the line between dry and green wanders and
+    // is dithered, as every other line is.
+    const drift =
+      calm > 0 ? DRY_DRIFT * (valueNoise(hereU * 1.3, hereV * 1.3, 13) - 0.5 + 0.3 * dither) : 0;
+    withered = grows !== BURNT && (dries[grows - 1] ?? false) && grown + drift < dryBelow;
+    const ramp = grows === BURNT ? burnt : withered ? dry : (ramps[grows - 1] ?? bare);
     // A plant standing on a floor: the floor is a tone darker, for it to stand out on.
     const floor = grows > LOW && grows !== BURNT;
-    const tone = ramp[floor && grain ? Math.max(step - 1, 0) : step] ?? 0;
+    let tone = ramp[floor && grain ? Math.max(step - 1, 0) : step] ?? 0;
     if (!grain) return tone;
-    const [thin, thick] = COVERAGE[grows] ?? [0, 0];
-    const fade = interpolated ? smoothstep(EDGE_FROM, EDGE_TO, share) : 1;
-    const covered = (thin + (thick - thin) * grown) * fade;
-    const patch = valueNoise((px * fine) / PATCH, (py * fine) / PATCH, 5);
-    const ragged = close ? 0.74 * patch + 0.26 * valueNoise(px / PATCH, py / PATCH, 10) : patch;
-    if (ragged >= covered) return -1;
+    if (floor && detailed && !withered) tone = mix(tone, LITTER, FLOOR_LITTER[grows] ?? 0);
+    const [thin, full] = COVERAGE[grows] ?? [0, 0];
+    if (calm > 0) {
+      // Growth thins in patches cells across, and the soil shows in the gaps.
+      const covered = thin + (full - thin) * grown;
+      const patch =
+        (1 - CALM_RAGGED) * valueNoise(hereU / CALM_PATCH, hereV / CALM_PATCH, 5) +
+        CALM_RAGGED * valueNoise(px / PATCH, py / PATCH, 10);
+      if (patch + 0.03 * dither >= covered) return -1;
+      // The detail is drawn over it afterwards.
+      if (detailed) return tone;
+    } else {
+      const fade = interpolated ? smoothstep(EDGE_FROM, EDGE_TO, share) : 1;
+      const covered = (thin + (full - thin) * grown) * fade;
+      const patch = valueNoise((px * fine) / PATCH, (py * fine) / PATCH, 5);
+      const ragged = close ? 0.74 * patch + 0.26 * valueNoise(px / PATCH, py / PATCH, 10) : patch;
+      if (ragged >= covered) return -1;
+    }
     // Blades are two pixels tall: both rows of a pair share one draw.
     const blade = cellHash(px, Math.floor(py / bladeRows), 6);
     if (grows === BURNT) return blade < 0.08 ? shade(tone, 0.7) : tone;
@@ -306,15 +591,26 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     if (blade < lit) return ramp[Math.min(step + 1, 2)] ?? tone;
     return grows === 2 && blade < lit + 0.04 ? (ramp[Math.max(step - 1, 0)] ?? tone) : tone;
   };
+  const MATTER_OF: readonly Matter[] = [
+    MATTER.soil,
+    MATTER.lichen,
+    MATTER.grass,
+    MATTER.scrub,
+    MATTER.wood,
+    MATTER.pines,
+    MATTER.burnt,
+  ];
 
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
       // Position in cells, measured from the middle of the world's first cell.
-      const worldX = rect.x0 * tile + px;
-      const worldY = rect.y0 * tile + py;
+      const worldX = originX + px;
+      const worldY = originY + py;
       const u = (worldX + 0.5) / tile - 0.5;
       const v = (worldY + 0.5) / tile - 0.5;
+      hereU = u;
+      hereV = v;
       if (style === "squares") {
         fromCell(Math.round(u), Math.round(v));
       } else if (style === "warped") {
@@ -364,25 +660,148 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
         continue;
       }
       isLand[at] = 1;
-      const felt = rise + MIX_SLOPE * relief.slope * dither;
+      const felt = rise + mixSlope * relief.slope * dither;
       const step = felt > relief.slope ? 2 : felt < -relief.slope ? 0 : 1;
       // Two kinds side by side: nearer the border, more pixels go to the other.
       const grows = dithered && dither + 1 < 1 - lead / mixClass ? second : first;
-      const growthColour = cover(grows, step, worldX, worldY);
+      const growthColour = cover(grows, step, worldX, worldY, dither);
+      if (detailed) {
+        toned[at] = step;
+        thick[at] = Math.round(grown * 255);
+      }
       if (growthColour !== -1) {
         colours[at] = growthColour;
+        if (detailed) matter[at] = withered ? MATTER.dry : (MATTER_OF[grows] ?? MATTER.soil);
         continue;
       }
-      const soil = above >= relief.snowFrom ? snow : above >= relief.highRockFrom ? rock : bare;
+      const high = above >= relief.snowFrom ? 2 : above >= relief.highRockFrom ? 1 : 0;
+      const soil = high === 2 ? snow : high === 1 ? rock : bare;
       const sandy = interpolated ? above * (1 + 0.6 * dither) < BEACH : beach;
       const base = sandy ? sand : (soil[step] ?? 0);
+      if (detailed) {
+        matter[at] = sandy
+          ? MATTER.sand
+          : grows === 1 && high < 2
+            ? MATTER.lichen
+            : high === 2
+              ? MATTER.snow
+              : high === 1
+                ? MATTER.rock
+                : MATTER.soil;
+        colours[at] = base;
+        continue;
+      }
       const grainHere = grain ? cellHash(worldX, worldY, 8) : 0.5;
       colours[at] =
-        grainHere < PEBBLES
-          ? shade(base, 0.86)
-          : grainHere > 1 - PEBBLES / 2
-            ? shade(base, 1.08)
-            : base;
+        grainHere < GRIT ? shade(base, 0.86) : grainHere > 1 - GRIT / 2 ? shade(base, 1.08) : base;
+    }
+  }
+
+  // The detail of a close view: on a grid of places a few pixels apart, each a little
+  // off its place, a small drawing of what the ground there is made of. A drawing keeps
+  // to its own kind of ground, so borders stay where they were painted.
+  if (detailed) {
+    const grid = Math.max(4, Math.round(tile / 5));
+    const lichenRamp = ramps[0] ?? bare;
+    for (let gy = Math.floor(originY / grid) - 1; gy <= Math.floor((originY + tall) / grid); gy++) {
+      for (
+        let gx = Math.floor(originX / grid) - 1;
+        gx <= Math.floor((originX + wide) / grid);
+        gx++
+      ) {
+        const sx = gx * grid + Math.floor(cellHash(gx, gy, 31) * grid) - originX;
+        const sy = gy * grid + Math.floor(cellHash(gx, gy, 32) * grid) - originY;
+        if (sx < 0 || sy < 0 || sx >= wide || sy >= tall) continue;
+        const site = sy * wide + sx;
+        const made = (matter[site] ?? 0) as Matter;
+        if (made === MATTER.sea) continue;
+        const amount = (thick[site] ?? 0) / 255;
+        // Which drawing, if any: thicker growth has more blades, thicker lichen more rosettes.
+        let pick = cellHash(gx, gy, 33);
+        let motifs: readonly Motif[] | null = null;
+        for (const [set, chance] of DETAIL[made]) {
+          const often =
+            set === BLADES || set === ROSETTES ? chance * (0.45 + 0.75 * amount) : chance;
+          if (pick < often) {
+            motifs = set;
+            break;
+          }
+          pick -= often;
+        }
+        if (motifs === null) continue;
+        const choice = cellHash(gx, gy, 34);
+        const motif = motifs[Math.floor(choice * motifs.length)] ?? [];
+        const base = colours[site] ?? 0;
+        const step = toned[site] ?? 1;
+        const ramp =
+          made === MATTER.grass
+            ? (ramps[1] ?? bare)
+            : made === MATTER.dry
+              ? dry
+              : made === MATTER.rock
+                ? rock
+                : made === MATTER.snow
+                  ? snow
+                  : null;
+        // A tone darker and lighter: the ramp's where the ground has one, else by shading.
+        const darker = ramp !== null && step > 0 ? (ramp[step - 1] ?? base) : shade(base, 0.84);
+        const lighter = ramp !== null && step < 2 ? (ramp[step + 1] ?? base) : shade(base, 1.12);
+        const variety = cellHash(gx, gy, 35);
+        const lichen = variety < 0.66 ? lichenRamp : (LICHENS[variety < 0.8 ? 0 : 1] ?? lichenRamp);
+        const inks: Readonly<Record<string, Rgb>> = {
+          d: darker,
+          l: lighter,
+          s: base,
+          a: lichen[2],
+          c: lichen[1],
+          e: lichen[0],
+          o: LEAF_OCHRE,
+          n: LEAF_BROWN,
+          m: MOSS,
+          t: made === MATTER.burnt ? shade(TWIG, 0.5) : TWIG,
+          w: ASH_PALE,
+          p: PETALS[0] ?? 0xffffff,
+          q: PETALS[1] ?? 0xffffff,
+        };
+        const flipped = cellHash(gx, gy, 36) < 0.5;
+        motif.forEach((row, index) => {
+          const y = sy - (motif.length - 1 - index);
+          if (y < 0 || y >= tall) return;
+          for (let i = 0; i < row.length; i++) {
+            const ink = inks[row.charAt(flipped ? row.length - 1 - i : i)];
+            const x = sx + i - (row.length >> 1);
+            if (ink === undefined || x < 0 || x >= wide) continue;
+            if (matter[y * wide + x] === made) colours[y * wide + x] = ink;
+          }
+        });
+      }
+    }
+  }
+
+  // Shadows of what stands on the land: darker, with a dithered rim, and no darker where
+  // two of them overlap.
+  if (options.shadows !== undefined && options.shadows.length > 0) {
+    const shaded = new Uint8Array(wide * tall);
+    for (const cast of options.shadows) {
+      const cx = cast.x * tile - originX;
+      const cy = cast.y * tile - originY;
+      const rx = Math.max(cast.rx * tile, 1);
+      const ry = Math.max(cast.ry * tile, 1);
+      const top = Math.max(Math.floor(cy - ry * 1.2), 0);
+      const bottom = Math.min(Math.ceil(cy + ry * 1.2), tall - 1);
+      const left = Math.max(Math.floor(cx - rx * 1.2), 0);
+      const right = Math.min(Math.ceil(cx + rx * 1.2), wide - 1);
+      for (let py = top; py <= bottom; py++) {
+        for (let px = left; px <= right; px++) {
+          const at = py * wide + px;
+          if (isLand[at] !== 1 || shaded[at] === 1) continue;
+          const reach = ((px + 0.5 - cx) / rx) ** 2 + ((py + 0.5 - cy) / ry) ** 2;
+          const bayer = BAYER[((originY + py) & 3) * 4 + ((originX + px) & 3)] ?? 0.5;
+          if (reach > 1 + SHADOW_RIM * (2 * bayer - 1)) continue;
+          shaded[at] = 1;
+          colours[at] = mix(colours[at] ?? 0, SHADOW, SHADOW_MIX);
+        }
+      }
     }
   }
 
@@ -437,7 +856,7 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
       }
       if (!grain || distance >= far) continue;
       const chance = distance <= surf ? FOAM_NEAR : FOAM_FAR;
-      if (cellHash(rect.x0 * tile + px, rect.y0 * tile + py, 9) < chance) colours[at] = foam;
+      if (cellHash(originX + px, originY + py, 9) < chance) colours[at] = foam;
     }
   }
 
