@@ -32,6 +32,17 @@ const MARKER_EDGE = 0x1b1b1b;
 const EDGE = 0x1f1a17;
 /** Toward the light: up and to the left. */
 const LIGHT = Math.SQRT1_2;
+/**
+ * Flippers row: so many strokes to a body length travelled, swinging this far (radians)
+ * either side of where they rest, which is a little behind straight out to the side.
+ */
+const STROKES_PER_LENGTH = 1.1;
+const STROKE_SWING = 0.55;
+const FLIPPER_REST = 0.3;
+/** Where along its length a flipper is joined to the body. */
+const FLIPPER_ROOT = 0.12;
+/** How far past the end of the leg the middle of a webbed foot is, in foot radii. */
+const WEB_AHEAD = 0.6;
 
 /** How a layer's creatures are shown: as bodies, as dots on the map, or not at all. */
 export type Showing = "bodies" | "markers" | "hidden";
@@ -40,12 +51,15 @@ interface Leg {
   plan: LegPlan;
   foot: Point;
   target: Point;
+  /** The two bones of a leg; a flipper is one blade, in `upper`. */
   upper: Sprite;
-  lower: Sprite;
+  lower: Sprite | null;
   /** The dark edge round the two bones and the foot, on legs thick enough for one. */
   edges: Sprite[];
   /** The foot at the end of the leg, on legs thick enough to show one. */
   sole: Sprite | null;
+  /** The foot is webbed: a fan that opens the way the leg points. */
+  webbed: boolean;
 }
 
 interface Creature {
@@ -56,6 +70,8 @@ interface Creature {
   heading: number;
   turn: number;
   avoid: 1 | -1;
+  /** How far through a stroke its flippers are, in radians. */
+  stroke: number;
   /** Where it may go, if it is kept somewhere. */
   pen: CreatureSeed["pen"];
   /** One sprite per part of the plan, in the same order. */
@@ -229,26 +245,44 @@ export class CreatureLayer {
       sprite.tint = tint;
       return container.addChild(sprite);
     };
-    const round = (tint: number, radius: number): Sprite => {
-      const sprite = new Sprite({ texture: this.atlas.disc, anchor: 0.5 });
+    /** A foot: round, or with `webbed` a fan (its point where the leg ends). */
+    const round = (tint: number, radius: number, webbed = false): Sprite => {
+      const texture = webbed ? this.atlas.wedge : this.atlas.disc;
+      const sprite = new Sprite({ texture, anchor: 0.5 });
       sprite.tint = tint;
       sprite.scale.set((2 * radius) / DISC_SIZE);
       return container.addChild(sprite);
     };
+    /** A flipper: an oval blade, held near one end; `margin` wider all round for its edge. */
+    const blade = (tint: number, length: number, width: number, margin = 0): Sprite => {
+      const long = length + 2 * margin;
+      const sprite = new Sprite({
+        texture: this.atlas.disc,
+        anchor: { x: (FLIPPER_ROOT * length + margin) / long, y: 0.5 },
+      });
+      sprite.tint = tint;
+      sprite.scale.set(long / DISC_SIZE, (width + 2 * margin) / DISC_SIZE);
+      return container.addChild(sprite);
+    };
     const edges = plan.legs.map((leg): Sprite[] => {
       if (leg.edge === 0) return [];
+      if (leg.fin === 1) return [blade(EDGE, leg.length, leg.thickness, leg.edge)];
       const bones = [bar(EDGE), bar(EDGE)];
-      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge)] : bones;
+      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge, leg.fin > 0)] : bones;
     });
-    const legs = plan.legs.map((leg, index): Leg => ({
-      plan: leg,
-      foot: { x, y },
-      target: { x, y },
-      upper: bar(leg.colour),
-      lower: bar(leg.colour),
-      edges: edges[index] ?? [],
-      sole: leg.foot > 0 ? round(leg.colour, leg.foot) : null,
-    }));
+    const legs = plan.legs.map((leg, index): Leg => {
+      const flipper = leg.fin === 1;
+      return {
+        plan: leg,
+        foot: { x, y },
+        target: { x, y },
+        upper: flipper ? blade(leg.sole, leg.length, leg.thickness) : bar(leg.colour),
+        lower: flipper ? null : bar(leg.colour),
+        edges: edges[index] ?? [],
+        sole: !flipper && leg.foot > 0 ? round(leg.sole, leg.foot, leg.fin > 0) : null,
+        webbed: leg.fin > 0,
+      };
+    });
     const textures: Record<string, [Texture, number]> = {
       disc: [this.atlas.disc, DISC_SIZE],
       wedge: [this.atlas.wedge, DISC_SIZE],
@@ -286,6 +320,7 @@ export class CreatureLayer {
       heading,
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
+      stroke: random() * Math.PI * 2,
       sprites,
       legs,
       inView: true,
@@ -315,6 +350,7 @@ export class CreatureLayer {
     if (!blocked || stuck) {
       head.x += dirX * stride;
       head.y += dirY * stride;
+      creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
     }
     followChain(joints, plan.spacing);
     creature.marker.position.set(head.x, head.y);
@@ -369,6 +405,17 @@ export class CreatureLayer {
     const hip = this.hip;
     hip.x = joint.x + sideX * radius * 0.7;
     hip.y = joint.y + sideY * radius * 0.7;
+    if (leg.lower === null) {
+      // A flipper: it swings about where it is joined, each pair a little after the one in front.
+      const swing = Math.sin(creature.stroke - at * 0.9) * STROKE_SWING;
+      const rotation =
+        (this.angle[at] ?? 0) + side * (Math.PI / 2 + FLIPPER_REST - 0.4 * aim + swing);
+      for (const sprite of [leg.upper, ...leg.edges]) {
+        sprite.position.set(hip.x, hip.y);
+        sprite.rotation = rotation;
+      }
+      return;
+    }
     const out = Math.cos(aim) * length * 0.8;
     const ahead = Math.sin(aim) * length * 0.8;
     const restX = hip.x + sideX * out + forwardX * ahead;
@@ -390,8 +437,14 @@ export class CreatureLayer {
     const edge = 2 * leg.plan.edge;
     if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
     if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
-    soleEdge?.position.set(leg.foot.x, leg.foot.y);
-    leg.sole?.position.set(leg.foot.x, leg.foot.y);
+    // A webbed foot opens ahead of the leg's end, the way the shin points.
+    const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
+    const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
+    for (const sprite of [soleEdge, leg.sole]) {
+      if (sprite === undefined || sprite === null) continue;
+      sprite.position.set(leg.foot.x + Math.cos(shin) * reach, leg.foot.y + Math.sin(shin) * reach);
+      if (leg.webbed) sprite.rotation = shin + Math.PI;
+    }
   }
 
   /** Stretch a white square from `from` to `to`. */

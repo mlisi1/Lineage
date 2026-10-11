@@ -254,20 +254,92 @@ describe("body plans", () => {
           // A beetle's seam and plates are marks too, whatever its pattern.
           (part) => !(part.shape === "bar" && part.colour === plan.parts[0]?.colour),
         );
+        // A back that fades does it in the colours of its masses, not in marks on them.
+        const fades = pattern === "fade" && body === KINDS.beast;
         if (pattern === "plain") expect(marks.length).toBeLessThanOrEqual(1);
-        else expect(marks.length).toBeGreaterThan(0);
+        else if (!fades) expect(marks.length).toBeGreaterThan(0);
         for (const mark of marks) expect(mark.joint).toBeLessThan(plan.joints);
         looks.add(
-          marks.map((m) => [m.shape, m.along.toFixed(3), m.across.toFixed(3), m.colour]).join("|"),
+          [
+            ...marks.map((m) => [m.shape, m.along.toFixed(3), m.across.toFixed(3), m.colour]),
+            ...discs(plan).map((mass) => mass.colour),
+          ].join("|"),
         );
       });
       expect(looks.size).toBe(PATTERNS.length);
     }
-    // False eyes come in a pair, three rings each; a saddle brings a mask over the head.
-    const eyespots = inLayer(bodyPlan(seed({ pattern: 11.5 / 12, jaw: 0 }), SHAPES), LAYER.mark);
-    expect(eyespots).toHaveLength(6);
+    // False eyes come in a pair, three rings each (the middle one shows from close only);
+    // a saddle brings a mask over the head.
+    const eyespots = (pixels: number): number =>
+      inLayer(bodyPlan(seed({ pattern: 11.5 / 12, jaw: 0 }), { ...SHAPES, pixels }), LAYER.mark)
+        .length;
+    expect([eyespots(8), eyespots(32)]).toEqual([4, 6]);
     const saddle = inLayer(bodyPlan(seed({ pattern: 7.5 / 12, jaw: 0 }), SHAPES), LAYER.mark);
     expect(saddle.some((mark) => mark.joint === 0)).toBe(true);
+  });
+
+  it("fade a back in its own masses, from the body's colour to the marking's", () => {
+    const plain = bodyPlan(seed({ ...KINDS.lizard, jaw: 0 }), SHAPES);
+    const faded = bodyPlan(seed({ ...KINDS.lizard, pattern: 8.5 / 12, jaw: 0 }), SHAPES);
+    expect(inLayer(faded, LAYER.mark)).toHaveLength(inLayer(plain, LAYER.mark).length);
+    const colours = (plan: BodyPlan): number[] =>
+      Array.from(
+        { length: plan.joints - 1 },
+        (_, i) => discs(plan).find((mass) => mass.joint === i + 1)?.colour ?? 0,
+      );
+    expect(new Set(colours(plain)).size).toBe(1);
+    // A different colour at every joint, the shoulders as the plain animal's.
+    expect(new Set(colours(faded)).size).toBe(faded.joints - 1);
+    expect(colours(faded)[0]).toBe(colours(plain)[0]);
+    // Under one shell it is the shell that fades, in ovals laid on it.
+    const shell = bodyPlan(seed({ ...KINDS.beetle, pattern: 8.5 / 12, jaw: 0 }), SHAPES);
+    expect(new Set(inLayer(shell, LAYER.mark).map((mark) => mark.colour)).size).toBeGreaterThan(2);
+  });
+
+  it("keep every marking on the mass it is drawn on", () => {
+    // What used to stick out over the outline: bands, stripes and ovals near the end of a shell.
+    for (const kind of ["beetle", "tortoise", "crab"] as const) {
+      PATTERNS.forEach((_, k) => {
+        for (const options of [SHAPES, CLOSE]) {
+          const plan = bodyPlan(
+            seed({ ...KINDS[kind], mass: 8, pattern: (k + 0.5) / 12, jaw: 0, armour: 0.8 }),
+            options,
+          );
+          const shell = inLayer(plan, LAYER.body)
+            .filter((part) => part.shape === "disc")
+            .reduce((best, part) => (part.across > best.across ? part : best));
+          // The shell as it is before the light makes it a little smaller.
+          const a = shell.along / 2 + 1 / options.pixels;
+          const b = shell.across / 2 + 1 / options.pixels;
+          for (const mark of inLayer(plan, LAYER.mark)) {
+            if (mark.joint !== shell.joint) continue;
+            // The corners of the box the marking fills, for a bar; an oval's are rounder.
+            const corner = mark.shape === "disc" ? Math.SQRT1_2 : 1;
+            const cos = Math.abs(Math.cos(mark.turn));
+            const sin = Math.abs(Math.sin(mark.turn));
+            const long = ((mark.along * cos + mark.across * sin) / 2) * corner;
+            const wide = ((mark.along * sin + mark.across * cos) / 2) * corner;
+            const x = Math.abs(mark.forward - shell.forward) + long;
+            const y = Math.abs(mark.side) + wide;
+            expect((x / a) ** 2 + (y / b) ** 2, `${kind} ${PATTERNS[k]}`).toBeLessThanOrEqual(1.02);
+          }
+        }
+      });
+    }
+  });
+
+  it("leave out a marking too small to show", () => {
+    const marks = (pixels: number): number =>
+      inLayer(
+        bodyPlan(seed({ mass: 0.3, pattern: 10.5 / 12, jaw: 0 }), {
+          ...SHAPES,
+          scale: 0.5,
+          pixels,
+        }),
+        LAYER.mark,
+      ).length;
+    expect(marks(8)).toBe(0);
+    expect(marks(64)).toBeGreaterThan(3);
   });
 
   it("show a hunter by its snout", () => {
@@ -307,11 +379,8 @@ describe("body plans", () => {
         expect(edge.colour).toBe(0x1f1a17);
       });
       expect(plain.parts.every((part) => part.lift === 0)).toBe(true);
-      // What is left over is the light on the back, for bodies wide enough to catch it.
-      const lights = lit.parts.filter((part) => part.lift > 0);
-      expect(lit.parts).toHaveLength(plain.parts.length + edges.length + lights.length);
       if (["beast", "tortoise", "beetle", "crab"].includes(plain.kind)) {
-        expect(lights.length).toBeGreaterThan(0);
+        expect(lit.parts.filter((part) => part.lift > 0).length).toBeGreaterThan(0);
       }
       // From this far no leg is thick enough for an edge or a foot.
       expect(lit.legs.every((leg) => leg.edge === 0)).toBe(true);
@@ -321,6 +390,67 @@ describe("body plans", () => {
     }
   });
 
+  it("shade the far side of every mass, and light its back", () => {
+    const plain = bodyPlan(seed({ mass: 4, jaw: 0 }), { ...CLOSE, style: "shapes" });
+    const lit = bodyPlan(seed({ mass: 4, jaw: 0 }), CLOSE);
+    const masses = inLayer(plain, LAYER.body);
+    const shades = inLayer(lit, LAYER.shade);
+    const bodies = inLayer(lit, LAYER.body);
+    // Every mass as it was, in a darker and cooler tone, under the mass itself...
+    expect(shades).toHaveLength(masses.length);
+    shades.forEach((shade, i) => {
+      const mass = masses[i];
+      const [r, g, b] = channels(shade.colour);
+      const [r0, g0, b0] = channels(mass?.colour ?? 0);
+      expect([shade.along, shade.across, shade.lift]).toEqual([mass?.along, mass?.across, 0]);
+      expect(r + g + b).toBeLessThan(r0 + g0 + b0);
+      expect(b / (r + g + b)).toBeGreaterThan(b0 / (r0 + g0 + b0));
+    });
+    // ...which is drawn smaller and toward the light, by as much: between half a pixel
+    // and a pixel and a half, so that the shade shows on the far side only.
+    bodies.forEach((body, i) => {
+      const rim = ((masses[i]?.along ?? 0) - body.along) / 2;
+      expect(rim).toBeGreaterThanOrEqual(0.5 / 32 - 1e-9);
+      expect(rim).toBeLessThanOrEqual(1.5 / 32 + 1e-9);
+      expect(body.lift).toBeCloseTo(rim);
+      expect(body.colour).toBe(masses[i]?.colour);
+    });
+    // The round masses catch the light: a lighter patch, further toward it.
+    const lights = inLayer(lit, LAYER.light);
+    expect(lights.length).toBeGreaterThan(2);
+    for (const light of lights) expect(light.lift).toBeGreaterThan(bodies[0]?.lift ?? 0);
+    // A heavy animal's largest masses gleam as well; a light one's do not.
+    const gleams = (mass: number): number =>
+      inLayer(bodyPlan(seed({ ...KINDS.beetle, mass, jaw: 0 }), CLOSE), LAYER.light).length;
+    expect(gleams(16)).toBeGreaterThan(gleams(1));
+  });
+
+  it("shade the markings too, each on its own", () => {
+    const spots = { ...KINDS.beetle, mass: 12, pattern: 5.5 / 12, jaw: 0 };
+    const flat = inLayer(bodyPlan(seed(spots), { ...CLOSE, style: "shapes" }), LAYER.mark);
+    const lit = inLayer(bodyPlan(seed(spots), CLOSE), LAYER.mark);
+    // A beetle's seam is too thin to shade; every spot comes as three: in shade, itself, lit.
+    const seams = flat.filter((mark) => mark.shape === "bar");
+    const dots = flat.filter((mark) => mark.shape === "disc");
+    expect(seams).toHaveLength(1);
+    expect(dots.length).toBeGreaterThan(1);
+    expect(lit).toHaveLength(seams.length + 3 * dots.length);
+    const first = lit.findIndex((mark) => mark.shape === "disc");
+    const [shade, dot, light] = lit.slice(first, first + 3);
+    const sum = (part: BodyPlan["parts"][number] | undefined): number =>
+      channels(part?.colour ?? 0).reduce((total, value) => total + value, 0);
+    expect(dot?.colour).toBe(dots[0]?.colour);
+    expect(sum(shade)).toBeLessThan(sum(dot));
+    expect(sum(light)).toBeGreaterThan(sum(dot));
+    expect(shade?.along).toBe(dots[0]?.along);
+    expect(dot?.along).toBeLessThan(shade?.along ?? 0);
+    expect(light?.along).toBeCloseTo((dot?.along ?? 0) / 2);
+    expect(light?.lift).toBeGreaterThan(dot?.lift ?? 0);
+    // On a small animal seen from far a spot is too small for any of it.
+    const far = inLayer(bodyPlan(seed({ ...spots, mass: 1 }), LIT), LAYER.mark);
+    expect(far.filter((mark) => mark.shape === "disc")).toHaveLength(dots.length);
+  });
+
   it("add what only shows from close: thin outlines, glints, legs with edges and feet", () => {
     const far = bodyPlan(seed({ mass: 4, sense: 0.8 }), LIT);
     const near = bodyPlan(seed({ mass: 4, sense: 0.8 }), CLOSE);
@@ -328,8 +458,10 @@ describe("body plans", () => {
     expect(near.length).toBe(far.length);
     const edge = (plan: BodyPlan): number =>
       (inLayer(plan, LAYER.outline)[0]?.along ?? 0) -
-      (plan.parts.find((part) => part.layer === LAYER.under || part.layer === LAYER.body)?.along ??
-        0);
+      (inLayer(
+        { ...plan, parts: bodyPlan(seed({ mass: 4, sense: 0.8 }), SHAPES).parts },
+        LAYER.under,
+      )[0]?.along ?? 0);
     expect(edge(far)).toBeCloseTo(2 / 8);
     expect(edge(near)).toBeCloseTo(2 / 32);
     // A glint in each eye, lifted toward the light.
@@ -340,6 +472,40 @@ describe("body plans", () => {
     expect(spriteCount(near)).toBe(near.parts.length + 6 * near.legs.length);
     // And it ambles.
     expect(near.pace).toBeCloseTo(far.pace * 0.35);
+  });
+
+  it("turn legs into fins as the aquatic gene rises", () => {
+    const legs = (aquatic: number, body: Partial<CreatureSeed> = KINDS.beast): BodyPlan["legs"] =>
+      bodyPlan(seed({ ...body, aquatic, jaw: 0 }), CLOSE).legs;
+    // On land: legs, with feet of the legs' own colour.
+    expect(legs(0.2).every((leg) => leg.fin === 0 && leg.sole === leg.colour)).toBe(true);
+    // From 0.3 the feet web, wider with the gene, in a colour that goes toward the fins'.
+    const [some, more] = [legs(0.35), legs(0.48)];
+    expect(some.every((leg) => leg.fin > 0 && leg.fin < 1)).toBe(true);
+    expect(more[0]?.foot).toBeGreaterThan(some[0]?.foot ?? 0);
+    expect(some[0]?.sole).not.toBe(some[0]?.colour);
+    expect(more[0]?.length).toBe(legs(0.2)[0]?.length);
+    // From 0.6, when it lives in the water, they are flippers: shorter blades, far wider
+    // than a leg, each one sprite and its edge.
+    const flippers = bodyPlan(seed({ ...KINDS.tortoise, aquatic: 0.8, jaw: 0 }), CLOSE);
+    const walking = bodyPlan(seed({ ...KINDS.tortoise, jaw: 0 }), CLOSE);
+    expect(flippers.swims).toBe(true);
+    expect(flippers.legs.every((leg) => leg.fin === 1 && leg.edge > 0)).toBe(true);
+    expect(flippers.legs[0]?.length).toBeLessThan(walking.legs[0]?.length ?? 0);
+    expect(flippers.legs[0]?.thickness).toBeGreaterThan(1.4 * (walking.legs[0]?.thickness ?? 0));
+    expect(spriteCount(flippers)).toBe(flippers.parts.length + 2 * flippers.legs.length);
+    // An animal with legs grows no fins at the shoulders beside them; one without does.
+    const wedges = (body: Partial<CreatureSeed>, aquatic: number): number =>
+      bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
+        (part) => part.shape === "wedge" && part.layer === LAYER.under && part.side !== 0,
+      ).length;
+    expect(wedges(KINDS.beast, 0.45) - wedges(KINDS.beast, 0)).toBe(0);
+    expect(wedges(KINDS.fish, 0.9)).toBeGreaterThanOrEqual(2);
+    // With three or four pairs only the last turns, as a water beetle's.
+    const six = legs(0.9, KINDS.beetle);
+    expect(six.map((leg) => leg.fin)).toEqual([0, 0, 0, 0, 1, 1]);
+    const eight = legs(0.45, KINDS.crab);
+    expect(eight.filter((leg) => leg.fin > 0)).toHaveLength(2);
   });
 });
 
