@@ -262,6 +262,66 @@ describe("the styles of tree to choose from", () => {
     }
   });
 
+  it("stand a conifer's trunk under the middle of its crown, at every size", () => {
+    /** How far the middle of the trunk is from the foot, in pixels. */
+    const off = (art: PlantArt): number => {
+      let sum = 0;
+      let n = 0;
+      art.ink.forEach((ink, at) => {
+        if (ink !== INK.trunk && ink !== INK.trunkDark && ink !== INK.trunkLight) return;
+        sum += (at % art.width) + 0.5;
+        n += 1;
+      });
+      expect(n).toBeGreaterThan(0);
+      return Math.abs(sum / n - art.footX);
+    };
+    // The middle view's trees and the local view's: a thinner trunk used to stand left.
+    for (const style of ["first", "bundles", "dome"] as const) {
+      for (const detail of [1, 4]) {
+        for (const stage of ["mature", "young"] as const) {
+          const art = drawStanding("CONIFER", stage, 0, large, detail, style);
+          expect(off(art), `${style} ×${detail} ${stage}`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    expect(off(near("BROADLEAF", 0, "bundles"))).toBeLessThanOrEqual(1);
+  });
+
+  it("set a bush on the ground: neither cut off below it nor floating above", () => {
+    for (const style of TREE_STYLES) {
+      for (const stage of ["mature", "young"] as const) {
+        for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+          const art = near("SHRUB", variant, style, stage);
+          expect(extent(art).bottom).toBeLessThanOrEqual(art.footY);
+          expect(extent(art).bottom).toBeGreaterThanOrEqual(art.footY - 2);
+        }
+      }
+    }
+  });
+
+  it("build a crown of bundles from many small clumps with soft rims", () => {
+    const art = near("BROADLEAF", 0, "bundles");
+    // Soft rims: along the top of the crown the outline rises and falls by a pixel or
+    // two from one column to the next, not by the teeth of a saw.
+    const top: number[] = [];
+    for (let x = 0; x < art.width; x++) {
+      for (let y = 0; y < art.height; y++) {
+        if (inkAt(art, x, y) === INK.none) continue;
+        top.push(y);
+        break;
+      }
+    }
+    const steps = top.slice(1).map((y, i) => Math.abs(y - (top[i] ?? y)));
+    const jumps = steps.filter((step) => step >= 3).length;
+    expect(jumps / steps.length).toBeLessThan(0.12);
+    // The shade between clumps is a line, not a field: the darkest tone stays the
+    // lesser part of the crown, and every tone between has its share.
+    expect(count(art, [INK.deep]) / count(art, FOLIAGE)).toBeLessThan(0.35);
+    for (const tone of [INK.dark, INK.mid, INK.light]) {
+      expect(count(art, [tone]) / count(art, FOLIAGE)).toBeGreaterThan(0.1);
+    }
+  });
+
   it("come in three builds, and adapt to the middle view's size", () => {
     for (const style of TREE_STYLES) {
       const [even, slender, broad] = [0, 1, 2].map((variant) =>

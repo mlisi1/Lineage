@@ -268,8 +268,18 @@ function outline(art: PlantArt): void {
   for (const at of rim) art.ink[at] = INK.outline;
 }
 
-/** A trunk from `from` down to the foot: lit on the left, and flared into roots if thick. */
-function trunk(art: PlantArt, width: number, from: number, height: number): void {
+/**
+ * A trunk from `from` down to the foot: lit on the left, and flared into roots if thick.
+ * As thick as suits a plant `width` wide, standing at `centre` (the middle of that width
+ * unless told otherwise: a conifer's trunk is thinner than its width would give it).
+ */
+function trunk(
+  art: PlantArt,
+  width: number,
+  from: number,
+  height: number,
+  centre = width / 2,
+): void {
   const thick =
     width >= RICH_FROM
       ? Math.max(3, Math.round(width * 0.13))
@@ -278,7 +288,7 @@ function trunk(art: PlantArt, width: number, from: number, height: number): void
         : width >= 8
           ? 2
           : 1;
-  const left = Math.floor(width / 2 - thick / 2);
+  const left = Math.floor(centre - thick / 2);
   for (let y = from; y < height; y++) {
     // Roots: the last rows are a pixel or two wider on each side.
     const flare = thick >= 4 ? Math.max(0, y - (height - 3)) : 0;
@@ -349,7 +359,7 @@ export function drawConifer(size: Size, random: Random): PlantArt {
   const tiers = Math.min(Math.max(Math.round(height / 6.5), 2), 9);
   const tier = crown / tiers;
   const lean = (random() - 0.5) * 0.6;
-  trunk(art, Math.min(width, rich ? width * 0.6 : 9), crown - 1, height);
+  trunk(art, Math.min(width, rich ? width * 0.6 : 9), crown - 1, height, width / 2);
   for (let y = 0; y < crown; y++) {
     const index = Math.min(Math.floor(y / tier), tiers - 1);
     const within = (y - index * tier) / tier;
@@ -469,29 +479,32 @@ const TONES: readonly Ink[] = [INK.deep, INK.dark, INK.mid, INK.light, INK.brigh
 const toneOf = (level: number): Ink =>
   TONES[Math.min(Math.max(Math.round(level), 0), 4)] ?? INK.mid;
 const GOLDEN_ANGLE = 2.39996;
+/** A clump shows its leaves from this radius; they move the line between tones this far. */
+const LEAVES_FROM = 3.5;
+const LEAF_RUFFLE = 0.34;
 const isLeaf = (art: PlantArt, x: number, y: number): boolean =>
   LEAF.includes(inkAt(art, Math.round(x), Math.round(y)));
 
 /**
- * A clump of leaves: a disc whose rim goes in and out, lit from the upper left, with a
- * leaf picked out here and there. `lift` shifts all of its tones: +1 is a tone lighter.
+ * A clump of leaves: a disc with a soft, slightly uneven rim, lit from the upper left.
+ * Its leaves are small slanted dabs a couple of pixels long: they ruffle the line
+ * between two tones and stand out lighter or darker here and there. `lift` shifts all
+ * of its tones: +1 is a tone lighter.
  */
 function clump(art: PlantArt, x: number, y: number, r: number, lift: number, salt: number): void {
-  const scallops = Math.max(5, Math.round(r * 0.9));
   const phase = cellHash(Math.round(x * 7), Math.round(y * 7), salt) * Math.PI * 2;
   for (let py = Math.floor(y - r - 1); py <= Math.ceil(y + r + 1); py++) {
     for (let px = Math.floor(x - r - 1); px <= Math.ceil(x + r + 1); px++) {
       const dx = px + 0.5 - x;
       const dy = py + 0.5 - y;
-      const rim = r * (1 + 0.1 * Math.cos(scallops * Math.atan2(dy, dx) + phase));
+      // Three gentle bulges: side by side, clumps make a bumpy crown, not a saw.
+      const rim = r * (1 + 0.07 * Math.cos(3 * Math.atan2(dy, dx) + phase));
       if (dx * dx + dy * dy > rim * rim) continue;
-      const lit = (dx * LIGHT_X + dy * LIGHT_Y) / r;
-      let level = 2 + lift + (lit > 0.42 ? 1 : lit < -0.4 ? -1 : 0);
-      if (r >= 4) {
-        const leaf = cellHash(px, py, salt);
-        if (leaf < 0.06) level += 1;
-        else if (leaf > 0.94) level -= 1;
-      }
+      const leaf = r >= LEAVES_FROM ? cellHash((px + py) >> 1, (px - py) >> 2, salt) : 0.5;
+      const lit = (dx * LIGHT_X + dy * LIGHT_Y) / r + (leaf - 0.5) * LEAF_RUFFLE;
+      let level = 2 + lift + (lit > 0.4 ? 1 : lit < -0.4 ? -1 : 0);
+      if (leaf < 0.07) level += 1;
+      else if (leaf > 0.93) level -= 1;
       put(art, px, py, toneOf(level));
     }
   }
@@ -519,8 +532,9 @@ interface Clump {
 function heap(art: PlantArt, clumps: Clump[], salt: number): void {
   clumps.sort((a, b) => a.facing - b.facing);
   for (const { x, y, r, facing } of clumps) {
-    cast(art, x + r * 0.14, y + r * 0.24, r + 0.5);
-    clump(art, x, y, r, facing * 0.95, salt);
+    // A thin line of shade under it, no more: a crown is leaves, not scales.
+    cast(art, x + r * 0.06, y + r * 0.14, r + 0.4);
+    clump(art, x, y, r, facing * 0.85 + 0.2, salt);
   }
 }
 
@@ -535,14 +549,14 @@ function bundles(
   random: Random,
   salt: number,
 ): void {
-  const count = Math.max(4, Math.round(((rx * ry) / (r * r)) * 1.75));
+  const count = Math.max(4, Math.round(((rx * ry) / (r * r)) * 1.9));
   const turn = random() * Math.PI * 2;
   const clumps: Clump[] = [];
   for (let k = 0; k < count; k++) {
     const far = Math.sqrt((k + 0.5) / count);
     const angle = turn + k * GOLDEN_ANGLE;
-    const x = cx + Math.cos(angle) * far * Math.max(rx - r * 0.85, 0) + (random() - 0.5) * r * 0.4;
-    const y = cy + Math.sin(angle) * far * Math.max(ry - r * 0.85, 0) + (random() - 0.5) * r * 0.4;
+    const x = cx + Math.cos(angle) * far * Math.max(rx - r * 1.15, 0) + (random() - 0.5) * r * 0.4;
+    const y = cy + Math.sin(angle) * far * Math.max(ry - r * 1.15, 0) + (random() - 0.5) * r * 0.4;
     clumps.push({
       x,
       y,
@@ -699,6 +713,19 @@ function trim(art: PlantArt, height: number): void {
     art.ink.fill(INK.none, y * art.width, (y + 1) * art.width);
 }
 
+/** Move a drawing down until its lowest pixel is on the line it stands on. */
+function settle(art: PlantArt, height: number): void {
+  const foot = height + MARGIN - 1;
+  let lowest = -1;
+  for (let at = art.ink.length - 1; at >= 0 && lowest < 0; at--) {
+    if (art.ink[at] !== INK.none) lowest = Math.floor(at / art.width);
+  }
+  const down = foot - lowest;
+  if (lowest < 0 || down <= 0) return;
+  art.ink.copyWithin(down * art.width, 0, (art.height - down) * art.width);
+  art.ink.fill(INK.none, 0, down * art.width);
+}
+
 /** Where the plant's shadow falls: an ellipse under its foot. */
 const shadowOf = (width: number, reach: number): PlantArt["shadow"] => ({
   rx: Math.max(width * reach, 2),
@@ -721,7 +748,7 @@ function broadleafIn(style: TreeStyle, size: Size, random: Random, salt: number)
         crown / 2,
         width / 2,
         crown / 2,
-        Math.max(2, width * 0.155),
+        Math.max(2, width * 0.12),
         random,
         salt,
       );
@@ -754,12 +781,21 @@ function tiers(
   const tall = crown / count;
   const lean = (random() - 0.5) * 0.08 * width;
   const tooth = Math.max(3, Math.round(width / 9));
-  trunk(art, Math.min(width, Math.max(3, width * 0.5)), Math.round(crown - tall * 0.5), height);
+  // Thinner than a broadleaf's, under the middle of the crown.
+  trunk(
+    art,
+    Math.min(width, Math.max(3, width * 0.5)),
+    Math.round(crown - tall * 0.5),
+    height,
+    width / 2,
+  );
   for (let index = count - 1; index >= 0; index--) {
     const top = index === 0 ? 0 : tall * (index - 0.2);
     const bottom = tall * (index + 1) + (index < count - 1 ? tall * 0.3 : 0);
     const half = (width / 2) * (0.2 + (0.8 * (index + 1)) / count);
     const peak = index === 0 ? 0.03 : 0.3;
+    // The tips of one tier do not hang under those of the next.
+    const shift = Math.floor(cellHash(index, 1, salt) * tooth);
     // Twice: first the tier's shade on what is already below it, then the tier.
     for (const pass of ["shade", "tier"] as const) {
       const drop = pass === "shade" ? Math.max(1, Math.round(tall * 0.14)) : 0;
@@ -770,23 +806,22 @@ function tiers(
           const dx = x + 0.5 - width / 2 - lean * (1 - y / crown);
           if (Math.abs(dx) > reach) continue;
           if (boughs) {
-            // Tips hang lower than the gaps between them.
-            const phase = ((((x + index * 2) % tooth) + tooth) % tooth) / tooth;
-            if (y >= bottom - tall * 0.22 * Math.abs(2 * phase - 1) - 0.5) continue;
+            // Tips hang lower than the gaps between them, some longer than others.
+            const tip = Math.floor((x + shift) / tooth);
+            const phase = ((((x + shift) % tooth) + tooth) % tooth) / tooth;
+            const hang = tall * 0.24 * (0.65 + 0.7 * cellHash(tip, index, salt));
+            if (y >= bottom - hang * Math.abs(2 * phase - 1) - 0.5) continue;
           }
           if (pass === "shade") {
             if (isLeaf(art, x, y + drop)) put(art, x, y + drop, INK.deep);
             continue;
           }
-          const across = dx / half;
-          let level = across < -0.3 ? 3 : across > 0.32 ? 1 : 2;
-          if (along > 0.82) level -= 1;
-          else if (across < -0.5 && along < 0.55) level += 1;
-          if (boughs) {
-            const needle = cellHash(x, y, salt);
-            if (needle < 0.09) level += 1;
-            else if (needle > 0.9) level -= 1;
-          }
+          // A tier is lit on its upper left and in shade under its right hem. Needles
+          // hang: two rows share one draw, which ruffles the line between two tones.
+          const needle = boughs ? cellHash(x, y >> 1, salt) : 0.5;
+          const lit = -(dx / half) * 0.75 - (along - 0.45) * 0.9 + (needle - 0.5) * 0.5;
+          let level = lit > 0.6 ? 4 : lit > 0.2 ? 3 : lit > -0.3 ? 2 : lit > -0.75 ? 1 : 0;
+          if (along > 0.86) level = Math.min(level, 1);
           put(art, x, y, toneOf(level));
         }
       }
@@ -854,16 +889,9 @@ function bushIn(
   const [width, height] = size;
   const art = blank(width, height);
   if (style === "bundles") {
-    bundles(
-      art,
-      width / 2,
-      height * 0.56,
-      width / 2,
-      height * 0.44,
-      Math.max(1.8, height * 0.27),
-      random,
-      salt,
-    );
+    // Clumps down to the ground and no lower: a bush sits on it.
+    const r = Math.max(1.8, height * 0.21);
+    bundles(art, width / 2, height / 2, width / 2, height / 2 - r * 0.2, r, random, salt);
   } else if (style === "dome") {
     dome(art, width / 2, height * 0.62, width / 2, height * 0.6, random, salt, height);
   } else {
@@ -886,6 +914,8 @@ function bushIn(
     }
     heap(art, ends, salt);
   }
+  // Clumps do not always reach the ground: a bush sits on it all the same.
+  settle(art, height);
   if (fruit) berries(art, width, height, random);
   trim(art, height);
   outline(art);
