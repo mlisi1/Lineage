@@ -16,7 +16,7 @@ export function findSite(
   fixture: WorldFixture,
   width: number,
   height: number,
-  score: (shares: Shares) => number,
+  score: (shares: Shares, window: CellRect) => number,
 ): CellRect {
   const classes = fixture.coverClasses;
   let best = -Infinity;
@@ -34,10 +34,11 @@ export function findSite(
       classes.forEach((name, index) => {
         shares[name] = (counts[index] ?? 0) / (width * height);
       });
-      const value = score(shares);
+      const window = { x0, y0, x1: x0 + width, y1: y0 + height };
+      const value = score(shares, window);
       if (value > best) {
         best = value;
-        site = { x0, y0, x1: x0 + width, y1: y0 + height };
+        site = window;
       }
     }
   }

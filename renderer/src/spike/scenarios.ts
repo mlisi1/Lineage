@@ -6,13 +6,16 @@
 
 /** Screen pixels per art pixel: the scene is drawn at 1024/artScale × 600/artScale. */
 export type ArtScale = 1 | 2 | 4;
-/** Wide: the whole island. Close: 4× zoom, panning (a documentary shot). */
-export type Shot = "wide" | "close";
+/**
+ * Wide: the whole island. Close: 4× zoom, panning across it. Follow: closer again, the
+ * camera on one creature wherever it walks.
+ */
+export type Shot = "wide" | "close" | "follow";
 /**
  * Plants as one sprite per cell, as a flat-colour map (one pixel per cell), or not drawn:
- * the spike's first look. "painted" is the look proposed since: the ground painted from
- * the cells (two art pixels per cell in a wide shot, eight in a close one) with, close
- * up, only the plants that stand alone, and the creatures in the proposed style (dots in
+ * the spike's first look. "painted" is the look chosen since: the ground painted from
+ * the cells (two art pixels to the cell in a wide shot, eight in a close one, more when
+ * following) with the plants that stand on it, and the creatures as body plans (dots in
  * a wide shot).
  */
 export type PlantMode = "none" | "sprites" | "map" | "painted";
@@ -111,25 +114,34 @@ export const SCENARIOS: readonly Scenario[] = [
     plants: "painted",
     creatures: CROWD_CREATURES,
     tint: true,
-    about: "The map view as proposed: painted ground, every creature a dot.",
+    about: "The map view: painted ground, every creature a dot.",
   },
   {
-    name: "local-view",
+    name: "mid-view",
     artScale: 2,
     shot: "close",
     plants: "painted",
     creatures: SPEC_CREATURES,
     tint: true,
-    about: "The local view as proposed: painted ground, standing plants, 50 creatures.",
+    about: "The middle view: painted ground, the plants that stand, 50 creatures.",
   },
   {
-    name: "local-crowd",
+    name: "mid-crowd",
     artScale: 2,
     shot: "close",
     plants: "painted",
     creatures: CROWD_CREATURES,
     tint: true,
-    about: "The local view with every creature the sim can hold walking somewhere.",
+    about: "The middle view with every creature the sim can hold walking somewhere.",
+  },
+  {
+    name: "local-view",
+    artScale: 2,
+    shot: "follow",
+    plants: "painted",
+    creatures: SPEC_CREATURES,
+    tint: true,
+    about: "The local view: the camera on one creature, ground painted as it goes.",
   },
 ];
 

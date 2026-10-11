@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   CREATURE_STYLES,
   LAYER,
+  PATTERNS,
   SWIMS_FROM,
   blend,
   bodyPlan,
   colour,
   kindOf,
+  patternOf,
   spriteCount,
   type BodyOptions,
   type BodyPlan,
@@ -36,8 +38,10 @@ function seed(change: Partial<CreatureSeed> = {}): CreatureSeed {
   };
 }
 
-const SHAPES: BodyOptions = { style: "shapes", scale: 1 };
-const LIT: BodyOptions = { style: "lit", scale: 1 };
+const SHAPES: BodyOptions = { style: "shapes", scale: 1, pixels: 8, pace: 1 };
+const LIT: BodyOptions = { style: "lit", scale: 1, pixels: 8, pace: 1 };
+/** The same body seen from close: 32 art pixels to the cell, at an amble. */
+const CLOSE: BodyOptions = { style: "lit", scale: 1, pixels: 32, pace: 0.35 };
 const channels = (rgb: number): [number, number, number] => [
   (rgb >> 16) & 255,
   (rgb >> 8) & 255,
@@ -221,15 +225,52 @@ describe("body plans", () => {
     expect(shell).toBeGreaterThan(plan("tortoise").length * 0.7);
   });
 
-  it("show the pattern five ways, and a hunter by its snout", () => {
-    const marks = (pattern: number): number =>
-      inLayer(bodyPlan(seed({ pattern, jaw: 0 }), SHAPES), LAYER.mark).length;
-    expect(marks(0.1)).toBe(0); // plain
-    expect(marks(0.3)).toBeGreaterThan(0); // a stripe down the back
-    expect(marks(0.7)).toBeGreaterThan(0); // spots
-    expect(marks(0.9)).toBe(2); // a saddle and a mask
-    const banded = bodyPlan(seed({ pattern: 0.5 }), SHAPES);
-    expect(new Set(inLayer(banded, LAYER.body).map((part) => part.colour)).size).toBe(2);
+  it("read the pattern gene as one of twelve markings, in one of four colours", () => {
+    expect(PATTERNS).toHaveLength(12);
+    expect(patternOf(0)).toEqual({ pattern: "plain", shade: 0 });
+    expect(patternOf(1).pattern).toBe("eyespots");
+    expect(patternOf(1).shade).toBeLessThan(1);
+    // Each marking has a twelfth of the gene; how far into it picks the colour.
+    PATTERNS.forEach((pattern, k) => {
+      expect(patternOf((k + 0.5) / 12)).toEqual({ pattern, shade: 0.5 });
+    });
+    expect(patternOf(-3).pattern).toBe("plain");
+    const colours = new Set(
+      [0.1, 0.35, 0.6, 0.85].map(
+        (shade) =>
+          inLayer(bodyPlan(seed({ pattern: (1 + shade) / 12, jaw: 0 }), SHAPES), LAYER.mark)[0]
+            ?.colour,
+      ),
+    );
+    expect(colours.size).toBe(4);
+  });
+
+  it("draw every marking differently, on a back and on a shell", () => {
+    for (const body of [KINDS.beast, KINDS.beetle]) {
+      const looks = new Set<string>();
+      PATTERNS.forEach((pattern, k) => {
+        const plan = bodyPlan(seed({ ...body, pattern: (k + 0.5) / 12, jaw: 0 }), SHAPES);
+        const marks = inLayer(plan, LAYER.mark).filter(
+          // A beetle's seam and plates are marks too, whatever its pattern.
+          (part) => !(part.shape === "bar" && part.colour === plan.parts[0]?.colour),
+        );
+        if (pattern === "plain") expect(marks.length).toBeLessThanOrEqual(1);
+        else expect(marks.length).toBeGreaterThan(0);
+        for (const mark of marks) expect(mark.joint).toBeLessThan(plan.joints);
+        looks.add(
+          marks.map((m) => [m.shape, m.along.toFixed(3), m.across.toFixed(3), m.colour]).join("|"),
+        );
+      });
+      expect(looks.size).toBe(PATTERNS.length);
+    }
+    // False eyes come in a pair, three rings each; a saddle brings a mask over the head.
+    const eyespots = inLayer(bodyPlan(seed({ pattern: 11.5 / 12, jaw: 0 }), SHAPES), LAYER.mark);
+    expect(eyespots).toHaveLength(6);
+    const saddle = inLayer(bodyPlan(seed({ pattern: 7.5 / 12, jaw: 0 }), SHAPES), LAYER.mark);
+    expect(saddle.some((mark) => mark.joint === 0)).toBe(true);
+  });
+
+  it("show a hunter by its snout", () => {
     const snout = (diet: number): number =>
       bodyPlan(seed({ speed: 0.3, diet, jaw: 0 }), SHAPES).parts.filter(
         (part) => part.shape === "wedge" && part.layer === LAYER.body,
@@ -272,8 +313,33 @@ describe("body plans", () => {
       if (["beast", "tortoise", "beetle", "crab"].includes(plain.kind)) {
         expect(lights.length).toBeGreaterThan(0);
       }
-      expect(spriteCount(lit)).toBe(lit.parts.length + 2 * lit.legs.length);
+      // From this far no leg is thick enough for an edge or a foot.
+      expect(lit.legs.every((leg) => leg.edge === 0)).toBe(true);
+      expect(spriteCount(lit)).toBe(
+        lit.parts.length + lit.legs.reduce((sum, leg) => sum + 2 + (leg.foot > 0 ? 1 : 0), 0),
+      );
     }
+  });
+
+  it("add what only shows from close: thin outlines, glints, legs with edges and feet", () => {
+    const far = bodyPlan(seed({ mass: 4, sense: 0.8 }), LIT);
+    const near = bodyPlan(seed({ mass: 4, sense: 0.8 }), CLOSE);
+    // The same animal, as long in cells; its outline is one pixel of its own view.
+    expect(near.length).toBe(far.length);
+    const edge = (plan: BodyPlan): number =>
+      (inLayer(plan, LAYER.outline)[0]?.along ?? 0) -
+      (plan.parts.find((part) => part.layer === LAYER.under || part.layer === LAYER.body)?.along ??
+        0);
+    expect(edge(far)).toBeCloseTo(2 / 8);
+    expect(edge(near)).toBeCloseTo(2 / 32);
+    // A glint in each eye, lifted toward the light.
+    const white = (plan: BodyPlan): number =>
+      plan.parts.filter((part) => part.colour === 0xffffff && part.lift > 0).length;
+    expect([white(far), white(near)]).toEqual([0, 2]);
+    expect(near.legs.every((leg) => leg.edge > 0 && leg.foot > 0)).toBe(true);
+    expect(spriteCount(near)).toBe(near.parts.length + 6 * near.legs.length);
+    // And it ambles.
+    expect(near.pace).toBeCloseTo(far.pace * 0.35);
   });
 });
 
@@ -307,11 +373,11 @@ describe("the committed casts", () => {
     expect(everyone.length).toBeGreaterThan(200);
     for (const style of CREATURE_STYLES) {
       for (const creature of everyone) {
-        const plan = bodyPlan(creature, { style, scale: 1.5 });
+        const plan = bodyPlan(creature, { style, scale: 0.85, pixels: 32, pace: 1 });
         for (const value of [plan.length, plan.spacing, plan.pace, ...plan.radii]) {
           expect(Number.isFinite(value) && value > 0).toBe(true);
         }
-        expect(spriteCount(plan)).toBeLessThan(110);
+        expect(spriteCount(plan)).toBeLessThan(200);
       }
     }
   });

@@ -28,6 +28,8 @@ const SETTLE_REACH = 48;
 const MARKER_CELLS = 1;
 const MARKER_EDGE_CELLS = 0.5;
 const MARKER_EDGE = 0x1b1b1b;
+/** The dark edge of a leg: the colour of the outline round the body. */
+const EDGE = 0x1f1a17;
 /** Toward the light: up and to the left. */
 const LIGHT = Math.SQRT1_2;
 
@@ -40,6 +42,10 @@ interface Leg {
   target: Point;
   upper: Sprite;
   lower: Sprite;
+  /** The dark edge round the two bones and the foot, on legs thick enough for one. */
+  edges: Sprite[];
+  /** The foot at the end of the leg, on legs thick enough to show one. */
+  sole: Sprite | null;
 }
 
 interface Creature {
@@ -50,6 +56,8 @@ interface Creature {
   heading: number;
   turn: number;
   avoid: 1 | -1;
+  /** Where it may go, if it is kept somewhere. */
+  pen: CreatureSeed["pen"];
   /** One sprite per part of the plan, in the same order. */
   sprites: Sprite[];
   legs: Leg[];
@@ -83,7 +91,7 @@ export class CreatureLayer {
   get spriteCount(): number {
     let total = 0;
     for (const creature of this.creatures.slice(0, this.active)) {
-      total += creature.sprites.length + 2 * creature.legs.length;
+      total += creature.container.children.length;
     }
     return total;
   }
@@ -109,12 +117,27 @@ export class CreatureLayer {
     return joints[Math.floor(joints.length / 2)] ?? { x: 0, y: 0 };
   }
 
+  /** The box creature `index`'s body fills, in cells: what must show through what covers it. */
+  box(index: number): CellRect {
+    const creature = this.creatures[index];
+    const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    creature?.joints.forEach((joint, i) => {
+      const radius = creature.plan.radii[i] ?? 0;
+      box.x0 = Math.min(box.x0, joint.x - radius);
+      box.x1 = Math.max(box.x1, joint.x + radius);
+      box.y0 = Math.min(box.y0, joint.y - radius);
+      box.y1 = Math.max(box.y1, joint.y + radius);
+    });
+    return box;
+  }
+
   /**
-   * Stand every creature among the plants: `guests` holds one container per row of
-   * cells, and a creature goes in the row of its lowest point, so that what grows in
-   * front of it covers it. With null they go back to the layer's own container.
+   * Stand every creature among the plants: `guests` holds one container per row,
+   * `rowsPerCell` of them to the cell, and a creature goes in the row of its lowest
+   * point, so that what grows in front of it covers it. With null they go back to the
+   * layer's own container.
    */
-  hostIn(guests: readonly Container[] | null): void {
+  hostIn(guests: readonly Container[] | null, rowsPerCell = 1): void {
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
@@ -122,7 +145,7 @@ export class CreatureLayer {
       if (guests !== null) {
         let lowest = -Infinity;
         for (const joint of creature.joints) lowest = Math.max(lowest, joint.y);
-        const row = Math.min(Math.max(Math.floor(lowest), 0), guests.length - 1);
+        const row = Math.min(Math.max(Math.floor(lowest * rowsPerCell), 0), guests.length - 1);
         host = guests[row] ?? this.container;
       }
       if (creature.container.parent !== host) host.addChild(creature.container);
@@ -200,15 +223,32 @@ export class CreatureLayer {
 
     const container = new Container();
     this.container.addChild(container);
-    // Legs first: the body covers the hips.
-    const legs = plan.legs.map((leg): Leg => {
-      const bone = (): Sprite => {
-        const sprite = new Sprite({ texture: this.atlas.white, anchor: { x: 0, y: 0.5 } });
-        sprite.tint = leg.colour;
-        return container.addChild(sprite);
-      };
-      return { plan: leg, foot: { x, y }, target: { x, y }, upper: bone(), lower: bone() };
+    // Legs first: the body covers the hips. All their edges go under all of the legs.
+    const bar = (tint: number): Sprite => {
+      const sprite = new Sprite({ texture: this.atlas.white, anchor: { x: 0, y: 0.5 } });
+      sprite.tint = tint;
+      return container.addChild(sprite);
+    };
+    const round = (tint: number, radius: number): Sprite => {
+      const sprite = new Sprite({ texture: this.atlas.disc, anchor: 0.5 });
+      sprite.tint = tint;
+      sprite.scale.set((2 * radius) / DISC_SIZE);
+      return container.addChild(sprite);
+    };
+    const edges = plan.legs.map((leg): Sprite[] => {
+      if (leg.edge === 0) return [];
+      const bones = [bar(EDGE), bar(EDGE)];
+      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge)] : bones;
     });
+    const legs = plan.legs.map((leg, index): Leg => ({
+      plan: leg,
+      foot: { x, y },
+      target: { x, y },
+      upper: bar(leg.colour),
+      lower: bar(leg.colour),
+      edges: edges[index] ?? [],
+      sole: leg.foot > 0 ? round(leg.colour, leg.foot) : null,
+    }));
     const textures: Record<string, [Texture, number]> = {
       disc: [this.atlas.disc, DISC_SIZE],
       wedge: [this.atlas.wedge, DISC_SIZE],
@@ -239,6 +279,7 @@ export class CreatureLayer {
 
     return {
       plan,
+      pen: seed.pen,
       container,
       marker,
       joints,
@@ -261,16 +302,16 @@ export class CreatureLayer {
     creature.turn += ((random() * 2 - 1) * TURN_JITTER - creature.turn * TURN_DAMPING) * dtS;
     let dirX = Math.cos(creature.heading);
     let dirY = Math.sin(creature.heading);
-    const blocked = !this.passable(
-      head.x + dirX * LOOK_AHEAD_CELLS,
-      head.y + dirY * LOOK_AHEAD_CELLS,
-      plan.swims,
-    );
+    const { pen } = creature;
+    const free = (x: number, y: number): boolean =>
+      this.passable(x, y, plan.swims) &&
+      (pen === undefined || (x >= pen.x0 && x <= pen.x1 && y >= pen.y0 && y <= pen.y1));
+    const blocked = !free(head.x + dirX * LOOK_AHEAD_CELLS, head.y + dirY * LOOK_AHEAD_CELLS);
     creature.heading += (blocked ? creature.avoid * AVOID_TURN : creature.turn) * dtS;
     dirX = Math.cos(creature.heading);
     dirY = Math.sin(creature.heading);
     const stride = plan.pace * dtS;
-    const stuck = !this.passable(head.x, head.y, plan.swims);
+    const stuck = !free(head.x, head.y);
     if (!blocked || stuck) {
       head.x += dirX * stride;
       head.y += dirY * stride;
@@ -345,6 +386,12 @@ export class CreatureLayer {
     solveKnee(hip, leg.foot, bone, bone, side, this.knee);
     this.place(leg.upper, hip, this.knee, thickness);
     this.place(leg.lower, this.knee, leg.foot, thickness * 0.8);
+    const [upperEdge, lowerEdge, soleEdge] = leg.edges;
+    const edge = 2 * leg.plan.edge;
+    if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
+    if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
+    soleEdge?.position.set(leg.foot.x, leg.foot.y);
+    leg.sole?.position.set(leg.foot.x, leg.foot.y);
   }
 
   /** Stretch a white square from `from` to `to`. */

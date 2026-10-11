@@ -38,23 +38,26 @@ describe("scenarios", () => {
 
   it("cover every art scale, both shots and a full population", () => {
     expect(new Set(SCENARIOS.map((scenario) => scenario.artScale))).toEqual(new Set([1, 2, 4]));
-    expect(new Set(SCENARIOS.map((scenario) => scenario.shot))).toEqual(new Set(["wide", "close"]));
+    expect(new Set(SCENARIOS.map((scenario) => scenario.shot))).toEqual(
+      new Set(["wide", "close", "follow"]),
+    );
     expect(Math.max(...SCENARIOS.map((scenario) => scenario.creatures))).toBe(CROWD_CREATURES);
     expect(SCENARIOS[0]?.name).toBe("floor");
   });
 
-  it("measure the two views of the look proposed since", () => {
+  it("measure the three views of the look chosen since", () => {
     const view = (name: string): (typeof SCENARIOS)[number] | undefined =>
       SCENARIOS.find((scenario) => scenario.name === name);
-    // Art pixels of 2: the whole island in one, a close shot in the other.
+    // Art pixels of 2: the whole island, a region, and one creature from close by.
     expect(view("map-view")).toMatchObject({ artScale: 2, shot: "wide", plants: "painted" });
-    expect(view("local-view")).toMatchObject({
+    expect(view("mid-view")).toMatchObject({
       artScale: 2,
       shot: "close",
       plants: "painted",
       creatures: SPEC_CREATURES,
     });
-    expect(view("local-crowd")?.creatures).toBe(CROWD_CREATURES);
+    expect(view("mid-crowd")?.creatures).toBe(CROWD_CREATURES);
+    expect(view("local-view")).toMatchObject({ artScale: 2, shot: "follow", plants: "painted" });
   });
 
   it("can be selected by name, in table order", () => {

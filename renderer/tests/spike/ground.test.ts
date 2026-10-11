@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   GROUND_STYLES,
-  LOCAL_TILE,
+  MID_TILE,
   MAP_TILE,
   paintGround,
   valueNoise,
@@ -32,7 +32,7 @@ function census(image: Pixels): Map<number, number> {
 }
 const share = (image: Pixels, colour: string): number =>
   (census(image).get(packed(colour)) ?? 0) / (image.width * image.height);
-const local = (style: GroundStyle, grain = true) => ({ tile: LOCAL_TILE, style, grain });
+const local = (style: GroundStyle, grain = true) => ({ tile: MID_TILE, style, grain });
 
 const ISLAND = [...rows("~", 9, 3), ...rows("~~~...~~~", 1, 3), ...rows("~", 9, 3)];
 const BARE = PALETTE["BARE"] ?? ["", "", ""];
@@ -45,7 +45,7 @@ describe("paintGround", () => {
     const fixture = world(["~~~~~~", "~.gb.~", "~.sc.~", "~~~~~~"]);
     for (const style of GROUND_STYLES) {
       const image = paintGround(fixture, local(style));
-      expect([image.width, image.height]).toEqual([6 * LOCAL_TILE, 4 * LOCAL_TILE]);
+      expect([image.width, image.height]).toEqual([6 * MID_TILE, 4 * MID_TILE]);
       for (let i = 3; i < image.rgba.length; i += 4) expect(image.rgba[i]).toBe(255);
       expect([...paintGround(fixture, local(style)).rgba]).toEqual([...image.rgba]);
     }
@@ -109,7 +109,7 @@ describe("paintGround", () => {
       }
       return count;
     };
-    const flat = { tile: LOCAL_TILE, style: "smooth", grain: false } as const;
+    const flat = { tile: MID_TILE, style: "smooth", grain: false } as const;
     expect(land(paintGround(steep, flat))).toBeGreaterThan(land(paintGround(level, flat)) * 1.25);
     // Squares do not care how high the land is.
     const squares = { ...flat, style: "squares" } as const;
@@ -121,14 +121,14 @@ describe("paintGround", () => {
     const rising = world(rows(".", 8, 8), 200, (x, y) => SEA_LEVEL + 0.05 + 0.02 * (x + y));
     const falling = world(rows(".", 8, 8), 200, (x, y) => SEA_LEVEL + 0.4 - 0.02 * (x + y));
     for (const style of ["squares", "smooth"] as const) {
-      const options = { tile: LOCAL_TILE, style, grain: false };
+      const options = { tile: MID_TILE, style, grain: false };
       // Height gained walking toward the light is positive where the land falls away from it.
       expect(at(paintGround(rising, options), 36, 36)).toBe(packed(BARE[2]));
       expect(at(paintGround(falling, options), 36, 36)).toBe(packed(BARE[0]));
     }
     // A sea floor that drops to the east: shallow water first, then band after band.
     const shelf = world(rows("~", 12, 2), 200, (x) => SEA_LEVEL - 0.01 - 0.03 * x);
-    const image = paintGround(shelf, { tile: LOCAL_TILE, style: "smooth", grain: false });
+    const image = paintGround(shelf, { tile: MID_TILE, style: "smooth", grain: false });
     const seen: number[] = [];
     for (let x = 0; x < image.width; x++) {
       const colour = at(image, x, 8);
@@ -140,7 +140,7 @@ describe("paintGround", () => {
   it("turns bare heights to rock and snow", () => {
     const peak = world(rows(".", 4, 4), 200, () => SEA_LEVEL + 0.5);
     const rock = world(rows(".", 4, 4), 200, () => SEA_LEVEL + 0.35);
-    const flat = { tile: LOCAL_TILE, style: "smooth", grain: false } as const;
+    const flat = { tile: MID_TILE, style: "smooth", grain: false } as const;
     expect(at(paintGround(peak, flat), 16, 16)).toBe(packed("#e6edf2"));
     expect(at(paintGround(rock, flat), 16, 16)).toBe(packed("#98928c"));
   });
@@ -196,10 +196,28 @@ describe("paintGround", () => {
         }
         edges.add(first);
       }
-      if (style === "squares") expect([...edges]).toEqual([4 * LOCAL_TILE]);
+      if (style === "squares") expect([...edges]).toEqual([4 * MID_TILE]);
       else expect(edges.size).toBeGreaterThan(2);
-      for (const edge of edges) expect(Math.abs(edge - 4 * LOCAL_TILE)).toBeLessThan(8);
+      for (const edge of edges) expect(Math.abs(edge - 4 * MID_TILE)).toBeLessThan(8);
     }
+  });
+
+  it("gives a closer view a wider shore and finer edges, on the same land", () => {
+    const fixture = world(ISLAND);
+    const mid = paintGround(fixture, local("blended"));
+    const near = paintGround(fixture, { tile: 4 * MID_TILE, style: "blended", grain: true });
+    expect([near.width, near.height]).toEqual([4 * mid.width, 4 * mid.height]);
+    const outline = packed(SHORE_OUTLINE);
+    // Still an outline of one pixel: four times as long, not sixteen times as much.
+    const ratio = (census(near).get(outline) ?? 0) / (census(mid).get(outline) ?? 1);
+    expect(ratio).toBeGreaterThan(3);
+    expect(ratio).toBeLessThan(6.5);
+    // Sand the sea has just left, which the middle view has no room for.
+    const wet = [...census(near).keys()].filter((colour) => !census(mid).has(colour));
+    expect(wet.length).toBeGreaterThan(0);
+    // The land is where it was: as much of the picture is sea.
+    const sea = (image: Pixels): number => share(image, SEA_HERE);
+    expect(Math.abs(sea(near) - sea(mid))).toBeLessThan(0.06);
   });
 
   it("paints part of the world as it paints the whole", () => {
@@ -208,11 +226,11 @@ describe("paintGround", () => {
       const whole = paintGround(fixture, local(style));
       const cells = { x0: 2, y0: 1, x1: 6, y1: 4 };
       const part = paintGround(fixture, { ...local(style), cells });
-      expect([part.width, part.height]).toEqual([4 * LOCAL_TILE, 3 * LOCAL_TILE]);
+      expect([part.width, part.height]).toEqual([4 * MID_TILE, 3 * MID_TILE]);
       // Away from the part's own edge, where the shore's outline has nothing to meet.
       for (let y = 2; y < part.height - 2; y++) {
         for (let x = 2; x < part.width - 2; x++) {
-          expect(at(part, x, y)).toBe(at(whole, x + 2 * LOCAL_TILE, y + LOCAL_TILE));
+          expect(at(part, x, y)).toBe(at(whole, x + 2 * MID_TILE, y + MID_TILE));
         }
       }
     }

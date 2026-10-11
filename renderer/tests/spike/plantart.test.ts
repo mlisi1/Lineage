@@ -5,9 +5,12 @@ import {
   PLANT_SCALES,
   STANDING_VARIANTS,
   colourArt,
+  drawFlower,
   drawStanding,
+  drawStone,
   type PlantArt,
 } from "../../src/spike/plantart";
+import { mulberry32 } from "../../src/spike/rng";
 import { PALETTE } from "./worlds";
 
 const DORMANT = ["LICHEN", "GRASS", "SHRUB"];
@@ -118,6 +121,49 @@ describe("standing plants", () => {
     const plain = drawStanding("BROADLEAF", "mature", 0, scale);
     expect(extent(close).tall).toBe(2 * scale.broadleaf[0][1]);
     expect(count(close, LEAVES)).toBeGreaterThan(count(plain, LEAVES) * 3.5);
+  });
+
+  it("are drawn richer when they are drawn large", () => {
+    const scale = PLANT_SCALES[2];
+    if (scale === undefined) throw new Error("no large scale");
+    // The local view: four times the middle view's pixels to the cell.
+    const far = drawStanding("BROADLEAF", "mature", 0, scale);
+    const near = drawStanding("BROADLEAF", "mature", 0, scale, 4);
+    expect(extent(near).tall).toBe(4 * scale.broadleaf[0][1]);
+    // Bark lit on one side, and leaves picked out: the three tones are all well used.
+    expect(count(far, [INK.trunkLight])).toBe(0);
+    expect(count(near, [INK.trunkLight])).toBeGreaterThan(5);
+    for (const tone of [INK.dark, INK.mid, INK.light]) {
+      expect(count(near, [tone])).toBeGreaterThan(count(near, LEAVES) * 0.12);
+    }
+    // A conifer's tiers end in a fringe: more rim for its size than a smooth cone has.
+    const fir = drawStanding("CONIFER", "mature", 0, scale, 4);
+    expect(count(fir, [INK.outline]) / count(fir, LEAVES)).toBeGreaterThan(0.12);
+    // One bush in three is in berry.
+    const berries = [0, 1, 2].map((variant) =>
+      count(drawStanding("SHRUB", "mature", variant, scale, 4), [INK.accent]),
+    );
+    expect(berries[0]).toBe(0);
+    expect(berries[1]).toBeGreaterThan(8);
+    expect(berries[2]).toBe(0);
+    // Grass up close is a fan of blades, and young grass a shorter one.
+    const grown = extent(drawStanding("GRASS", "mature", 0, scale, 4));
+    const young = extent(drawStanding("GRASS", "young", 0, scale, 4));
+    expect(grown.tall).toBeGreaterThan(10);
+    expect(young.tall).toBeLessThan(grown.tall);
+  });
+
+  it("stand beside flowers and stones up close", () => {
+    const flower = drawFlower([6, 10], mulberry32(31));
+    expect(count(flower, [INK.accent])).toBe(4); // four petals
+    expect(count(flower, [INK.light])).toBe(1); // round a middle
+    expect(count(flower, [INK.dark])).toBeGreaterThan(5); // on a stem
+    const stone = drawStone([10, 6], mulberry32(41));
+    expect(count(stone, LEAVES)).toBeGreaterThan(15);
+    expect(count(stone, [INK.outline])).toBeGreaterThan(10);
+    expect(count(stone, [INK.shadow])).toBeGreaterThan(2);
+    const grey = colourArt(stone, ["#77716c", "#98928c", "#b5b0aa"]);
+    expect(grey.width).toBe(stone.width);
   });
 
   it("take their form's colours, with a see-through shadow", () => {

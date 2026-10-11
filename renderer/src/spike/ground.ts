@@ -27,8 +27,8 @@ export const GROUND_STYLES: readonly GroundStyle[] = [
   "smooth",
   "blended",
 ];
-/** Art pixels per cell in the local view and in the map view. */
-export const LOCAL_TILE = 8;
+/** Art pixels per cell in the middle view and in the map view. */
+export const MID_TILE = 8;
 export const MAP_TILE = 2;
 
 export interface GroundOptions {
@@ -67,6 +67,10 @@ const NUDGE = 0.36;
 /** smooth, blended: the same wander, finer, so contours are not ruled lines. */
 const WOBBLE = 0.22;
 const WOBBLE_FREQUENCY = 1.7;
+/** From this many pixels per cell there is room for a second, finer wander of the same lines. */
+const FINE_FROM_TILE = 16;
+const FINE_WOBBLE = 0.045;
+const FINE_FREQUENCY = 6.3;
 /** Land less than this above the sea is beach. */
 const BEACH = 0.006;
 /** Growth thins out toward the edge of its kind: from this share of the weight to that. */
@@ -264,8 +268,16 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
   const isLand = new Uint8Array(wide * tall);
   const interpolated = style === "smooth" || style === "blended";
   const dithered = style === "blended";
-  // Grain is drawn at the local view's pixel size whatever the tile.
-  const fine = LOCAL_TILE / tile;
+  // Patches of growth are as big on the land whatever the tile, so that a view closer
+  // than the middle one shows the same patches larger; closer still, their edges, the
+  // blades and the foam get detail of their own, a pixel or a few at a time.
+  const fine = MID_TILE / tile;
+  const close = tile >= FINE_FROM_TILE;
+  const bladeRows = close ? Math.max(2, Math.round(tile / 8)) : 2;
+  const dash = Math.max(2, Math.round(tile / 4));
+  const surf = Math.max(1, Math.round(tile / 8));
+  // Where two kinds meet they mix over as many pixels in every view, not as many cells.
+  const mixClass = MIX_CLASS * Math.min(1, fine);
 
   /** The colour of growth of class `grows` here, or -1 where the soil shows through. */
   const cover = (grows: number, step: number, px: number, py: number): Rgb | -1 => {
@@ -283,9 +295,11 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     const [thin, thick] = COVERAGE[grows] ?? [0, 0];
     const fade = interpolated ? smoothstep(EDGE_FROM, EDGE_TO, share) : 1;
     const covered = (thin + (thick - thin) * grown) * fade;
-    if (valueNoise((px * fine) / PATCH, (py * fine) / PATCH, 5) >= covered) return -1;
+    const patch = valueNoise((px * fine) / PATCH, (py * fine) / PATCH, 5);
+    const ragged = close ? 0.74 * patch + 0.26 * valueNoise(px / PATCH, py / PATCH, 10) : patch;
+    if (ragged >= covered) return -1;
     // Blades are two pixels tall: both rows of a pair share one draw.
-    const blade = cellHash(px, py >> 1, 6);
+    const blade = cellHash(px, Math.floor(py / bladeRows), 6);
     if (grows === BURNT) return blade < 0.08 ? shade(tone, 0.7) : tone;
     if (floor) return blade < 0.03 ? (ramp[step] ?? tone) : tone;
     const lit = grows === 2 ? 0.03 + 0.06 * grown : 0.02;
@@ -328,8 +342,12 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
         }
         fromCell(bestX, bestY);
       } else {
-        const du = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 1) - 0.5) * 2 * WOBBLE;
-        const dv = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 2) - 0.5) * 2 * WOBBLE;
+        let du = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 1) - 0.5) * 2 * WOBBLE;
+        let dv = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 2) - 0.5) * 2 * WOBBLE;
+        if (close) {
+          du += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 11) - 0.5) * 2 * FINE_WOBBLE;
+          dv += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 12) - 0.5) * 2 * FINE_WOBBLE;
+        }
         between(u + du, v + dv);
       }
 
@@ -340,14 +358,16 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
         const band = bands.find((candidate) => depth <= candidate.limit) ?? bands[bands.length - 1];
         const base = band?.colour ?? 0;
         colours[at] =
-          grain && cellHash(worldX >> 1, worldY, 7) < WAVES ? mix(base, foam, 0.35) : base;
+          grain && cellHash(Math.floor(worldX / dash), worldY, 7) < WAVES
+            ? mix(base, foam, 0.35)
+            : base;
         continue;
       }
       isLand[at] = 1;
       const felt = rise + MIX_SLOPE * relief.slope * dither;
       const step = felt > relief.slope ? 2 : felt < -relief.slope ? 0 : 1;
       // Two kinds side by side: nearer the border, more pixels go to the other.
-      const grows = dithered && dither + 1 < 1 - lead / MIX_CLASS ? second : first;
+      const grows = dithered && dither + 1 < 1 - lead / mixClass ? second : first;
       const growthColour = cover(grows, step, worldX, worldY);
       if (growthColour !== -1) {
         colours[at] = growthColour;
@@ -366,33 +386,58 @@ export function paintGround(fixture: WorldFixture, options: GroundOptions): Pixe
     }
   }
 
-  // The shore: the map's outline on the last pixel of land, foam on the first of water.
-  const landAt = (px: number, py: number): boolean =>
-    px >= 0 && py >= 0 && px < wide && py < tall && isLand[py * wide + px] === 1;
+  // The shore: the map's outline on the last pixel of land, then foam on the water and
+  // wet sand on the land, as far out as the view is close. `away` is how many pixels a
+  // pixel is from the other side of the shore, counted up to twice that reach.
+  const far = 2 * surf + 1;
+  const away = new Uint8Array(wide * tall).fill(far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
+      const here = isLand[at];
+      const edge =
+        (px > 0 && isLand[at - 1] !== here) ||
+        (px < wide - 1 && isLand[at + 1] !== here) ||
+        (py > 0 && isLand[at - wide] !== here) ||
+        (py < tall - 1 && isLand[at + wide] !== here);
+      if (edge) away[at] = 1;
+    }
+  }
+  // Two sweeps spread the count outward along rows and columns, on each side of the shore.
+  const reach = (at: number, from: number): void => {
+    if (isLand[at] === isLand[from] && (away[from] ?? far) + 1 < (away[at] ?? far)) {
+      away[at] = (away[from] ?? far) + 1;
+    }
+  };
+  for (let py = 0; py < tall; py++) {
+    for (let px = 0; px < wide; px++) {
+      const at = py * wide + px;
+      if (px > 0) reach(at, at - 1);
+      if (py > 0) reach(at, at - wide);
+    }
+  }
+  for (let py = tall - 1; py >= 0; py--) {
+    for (let px = wide - 1; px >= 0; px--) {
+      const at = py * wide + px;
+      if (px < wide - 1) reach(at, at + 1);
+      if (py < tall - 1) reach(at, at + wide);
+    }
+  }
+  for (let py = 0; py < tall; py++) {
+    for (let px = 0; px < wide; px++) {
+      const at = py * wide + px;
+      const distance = away[at] ?? far;
       if (isLand[at] === 1) {
-        const edge =
-          (px > 0 && isLand[at - 1] === 0) ||
-          (px < wide - 1 && isLand[at + 1] === 0) ||
-          (py > 0 && isLand[at - wide] === 0) ||
-          (py < tall - 1 && isLand[at + wide] === 0);
-        if (edge) colours[at] = outline;
+        if (distance === 1) colours[at] = outline;
+        // Sand the sea has just left is darker.
+        else if (grain && close && distance <= surf + 1 && colours[at] === sand) {
+          colours[at] = shade(sand, 0.9);
+        }
         continue;
       }
-      if (!grain) continue;
-      let near = false;
-      for (let dy = -1; dy <= 1 && !near; dy++) {
-        for (let dx = -1; dx <= 1 && !near; dx++) near = landAt(px + dx, py + dy);
-      }
-      const far =
-        !near &&
-        (landAt(px - 2, py) || landAt(px + 2, py) || landAt(px, py - 2) || landAt(px, py + 2));
-      const chance = near ? FOAM_NEAR : far ? FOAM_FAR : 0;
-      if (chance > 0 && cellHash(rect.x0 * tile + px, rect.y0 * tile + py, 9) < chance) {
-        colours[at] = foam;
-      }
+      if (!grain || distance >= far) continue;
+      const chance = distance <= surf ? FOAM_NEAR : FOAM_FAR;
+      if (cellHash(rect.x0 * tile + px, rect.y0 * tile + py, 9) < chance) colours[at] = foam;
     }
   }
 

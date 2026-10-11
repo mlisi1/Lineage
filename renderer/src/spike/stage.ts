@@ -33,6 +33,10 @@ export interface Picture {
   markers: boolean;
   /** Draw only this member of the cast and keep it in the middle. */
   follow: number | null;
+  /** Draw only this member of the cast, the camera staying where `centre` says. */
+  only: number | null;
+  /** The member of the cast the picture is about: plants in front of it show it through. */
+  subject: number | null;
   /** The middle of the picture, in cells, when it follows nobody. */
   centre: Point;
 }
@@ -148,10 +152,12 @@ export class Stage {
       if (layer !== cast) layer.show("hidden");
     }
     if (cast !== null) {
-      cast.show(picture.markers ? "markers" : "bodies", picture.follow);
+      cast.show(picture.markers ? "markers" : "bodies", picture.follow ?? picture.only);
       // Among plants a creature stands in its row, behind what grows in front of it.
-      cast.hostIn(picture.markers || plants === null ? null : plants.guests);
+      const among = picture.markers || plants === null ? null : plants;
+      cast.hostIn(among?.guests ?? null, among?.rowsPerCell);
     }
+    plants?.fade(cast !== null && picture.subject !== null ? cast.box(picture.subject) : null);
     this.tint.visible = picture.light !== "day";
     this.tint.tint = lightTint(picture.light);
 

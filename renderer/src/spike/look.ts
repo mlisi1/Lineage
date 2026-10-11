@@ -10,25 +10,39 @@
  */
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import { ApngWriter, dataUri } from "./apng";
-import { CREATURE_STYLES, bodyPlan, kindOf } from "./body";
+import { PATTERNS, bodyPlan, kindOf, patternOf } from "./body";
 import type { CellRect } from "./camera";
 import type { Point } from "./chain";
 import type { CreatureLayer } from "./creatures";
 import { parseFixture, type Cast, type CreatureSeed, type WorldFixture } from "./fixture";
-import { LOCAL_TILE, MAP_TILE, paintGround, type GroundStyle } from "./ground";
-import type { Passable } from "./habitat";
+import { MAP_TILE, MID_TILE, paintGround } from "./ground";
+import { heightAt, type Passable } from "./habitat";
 import { LIGHT_ORDER } from "./light";
 import { hexToRgb, type Form, type Stage as Age } from "./pixelart";
 import {
-  PROPOSED_BODY as BODY,
-  PROPOSED_GROUND as GROUND,
-  PROPOSED_MAP_GROUND,
-  PROPOSED_PLANTS as PLANTS,
-} from "./proposal";
-import { PLANT_SCALES, colourArt, drawStanding, type PlantScale } from "./plantart";
+  FLOWER,
+  FLOWER_COLOURS,
+  PLANT_SCALES,
+  STONE,
+  colourArt,
+  drawFlower,
+  drawStanding,
+  drawStone,
+  type PlantArt,
+  type PlantScale,
+} from "./plantart";
 import { standingPlants } from "./plants";
+import {
+  GROUND,
+  LOCAL_PIXELS,
+  LOCAL_ZOOMS,
+  MAP_GROUND,
+  MID_BODY,
+  PLANTS,
+  localBody,
+} from "./proposal";
 import { mulberry32, type Random } from "./rng";
-import { findSite, forest, shore } from "./sites";
+import { findSite, forest, meadow, shore } from "./sites";
 import { Stage, type Picture } from "./stage";
 
 /** Replaced by Vite with the commit the page was built from. */
@@ -51,26 +65,28 @@ declare global {
 const ART = 2;
 /** A view: what the screen holds, in art pixels. */
 const VIEW = { width: DESIGN_WIDTH / ART, height: DESIGN_HEIGHT / ART };
-/** The closer local view on offer: twice the art pixels per cell, half the cells in sight. */
-const CLOSER_TILE = 2 * LOCAL_TILE;
-/** The local grounds offered, the first being the one already seen. */
-const GROUNDS: readonly GroundStyle[] = ["warped", "tiles", "smooth", "blended"];
-const SCALES = [1, 1.5, 2];
-/** A portrait: this many art pixels of the local view, shown enlarged. */
-const PORTRAIT = { width: 56, height: 44 };
-const SPECIMEN_ENLARGED = 3;
-const SWEEP_ENLARGED = 2;
-const SHEET_ENLARGED = 3;
-/** Members of the world's own herd that join the specimens in the staged shot. */
+/** Portraits: an animal on its patch of ground, and smaller ones on one flat colour. */
+const SPECIMEN = { width: 112, height: 88, enlarged: 2 };
+/** Bare heights (rock, snow) make a poor meadow: land this far above the sea is passed over. */
+const MEADOW_BELOW = 0.2;
+const SWATCH = { width: 80, height: 64, enlarged: 2 };
+/** The zoom of the smaller portraits: the nearest of the local view's, to fit the largest animal. */
+const SWATCH_PIXELS = LOCAL_ZOOMS[0];
+/** How far from the middle of its picture the animal a local picture is about may go, in cells. */
+const SUBJECT_PEN = { x: 2.2, y: 1.3 };
+const COMPANY_PEN = { x: 5, y: 3 };
+const SPECIMEN_PEN = { x: 0.8, y: 0.55 };
+/** Members of the world's own herd that join the specimens in the middle view's staged shot. */
 const HERD_IN_STAGED_SHOT = 10;
 /** Cells kept clear of a region's edge when placing creatures in it. */
 const PLACING_MARGIN = 3;
 const PLACING_TRIES = 300;
 /** Cells painted beyond a picture's edge, so that the shore's outline has what to meet. */
-const PAINT_MARGIN = 2;
+const PAINT_MARGIN = 1;
 /** Longest step of the animation, so a stalled tab does not teleport anybody. */
 const MAX_STEP_S = 0.1;
 const STILL_STEP_S = 1 / 30;
+const SHEET_ENLARGED = 2;
 
 /** What each swept gene does to the body, in the sheet's words. */
 const SWEEP_NOTES: Readonly<Record<string, readonly [string, string]>> = {
@@ -89,8 +105,15 @@ const SWEEP_NOTES: Readonly<Record<string, readonly [string, string]>> = {
   jaw: ["Jaw", "Tusks, longer with the gene (pincers on insects, claws on crabs)."],
   diet: ["Diet", "A hunter gets a pointed snout, and ivory in place of dark tusks."],
   hue: ["Hue", "Body colour, once round the colour wheel."],
-  pattern: ["Pattern", "Plain, a stripe down the back, bands, spots, or a saddle and mask."],
+  pattern: ["Pattern", "Five of the twelve markings; all of them are in the rows above."],
 };
+
+/** The animals the local view's pictures are about, by specimen name, and their company. */
+const LOCAL_SCENES = {
+  meadow: { subject: "giant", company: ["grazer", "mouse", "random-3"] },
+  wood: { subject: "hunter", company: ["tank", "random-4"] },
+  shore: { subject: "random-2", company: ["frog", "eel", "all-one", "random-1"] },
+} as const;
 
 interface Drawn {
   picture: Picture;
@@ -130,6 +153,10 @@ function packed(colour: string): number {
   return (r << 16) | (g << 8) | b;
 }
 
+const centreOf = (rect: CellRect): [number, number] => [
+  (rect.x0 + rect.x1) / 2,
+  (rect.y0 + rect.y1) / 2,
+];
 const middle = (rect: CellRect): Point => ({
   x: (rect.x0 + rect.x1) / 2,
   y: (rect.y0 + rect.y1) / 2,
@@ -176,7 +203,7 @@ function scatter(
   });
 }
 
-/** "lizard · herbivore · mass 0.9" */
+/** "lizard · herbivore · mass 0.9 · spots" */
 function describe(seed: CreatureSeed, fixture: WorldFixture): string {
   const diet =
     seed.diet <= fixture.herbivoreMaxDiet
@@ -185,11 +212,20 @@ function describe(seed: CreatureSeed, fixture: WorldFixture): string {
         ? "predator"
         : "omnivore";
   const mass = seed.mass >= 10 ? seed.mass.toFixed(0) : seed.mass.toFixed(1);
-  return `${kindOf(seed)} · ${diet} · mass ${mass}`;
+  return `${kindOf(seed)} · ${diet} · mass ${mass} · ${patternOf(seed.pattern).pattern}`;
 }
 
-/** The standing plants of one size, side by side on the colour of the ground. */
+/** A rectangle of cells `x` and `y` either side of `centre`. */
+const pen = (centre: Point, reach: { x: number; y: number }): CellRect => ({
+  x0: centre.x - reach.x,
+  y0: centre.y - reach.y,
+  x1: centre.x + reach.x,
+  y1: centre.y + reach.y,
+});
+
+/** What stands in the local view, side by side on the colour of the ground. */
 function plantStrip(host: HTMLElement, scale: PlantScale, fixture: WorldFixture): void {
+  const detail = LOCAL_PIXELS / MID_TILE;
   const kinds: readonly (readonly [Form, Age])[] = [
     ["BROADLEAF", "mature"],
     ["BROADLEAF", "young"],
@@ -198,23 +234,40 @@ function plantStrip(host: HTMLElement, scale: PlantScale, fixture: WorldFixture)
     ["SHRUB", "mature"],
     ["SHRUB", "young"],
     ["GRASS", "mature"],
+    ["GRASS", "young"],
   ];
-  const arts = kinds.flatMap(([form, age]) =>
-    [0, 1].map((variant) => ({ form, art: drawStanding(form, age, variant, scale) })),
-  );
+  const sized = (size: readonly [number, number]): [number, number] => [
+    Math.round(size[0] * detail),
+    Math.round(size[1] * detail),
+  ];
+  const arts: { art: PlantArt; pixels: ReturnType<typeof colourArt> }[] = [];
+  for (const [form, age] of kinds) {
+    const variants = form === "SHRUB" && age === "mature" ? [0, 1] : [0];
+    for (const variant of variants) {
+      const art = drawStanding(form, age, variant, scale, detail);
+      arts.push({ art, pixels: colourArt(art, fixture.palette[form] ?? ["", "", ""]) });
+    }
+  }
+  FLOWER_COLOURS.forEach((accent, variant) => {
+    const art = drawFlower(sized(FLOWER), mulberry32(31 + variant));
+    arts.push({ art, pixels: colourArt(art, fixture.palette["GRASS"] ?? ["", "", ""], accent) });
+  });
+  for (let variant = 0; variant < 2; variant++) {
+    const art = drawStone(sized(STONE), mulberry32(41 + variant));
+    arts.push({ art, pixels: colourArt(art, fixture.relief.highRock) });
+  }
   const canvas = create("canvas");
-  const wide = arts.reduce((sum, { art }) => sum + art.width + 1, 3);
+  const wide = arts.reduce((sum, { art }) => sum + art.width + 2, 4);
   const tall = Math.max(...arts.map(({ art }) => art.height)) + 2;
   size(canvas, wide, tall, SHEET_ENLARGED);
-  canvas.setAttribute("aria-label", `The ${scale.name} plants`);
+  canvas.setAttribute("aria-label", "What stands in the local view");
   const context = canvas.getContext("2d");
   if (context === null) return;
   context.fillStyle = fixture.palette["GRASS"]?.[1] ?? "#8fbf4f";
   context.fillRect(0, 0, wide, tall);
-  let left = 2;
-  for (const { form, art } of arts) {
+  let left = 3;
+  for (const { art, pixels } of arts) {
     // Through a canvas of its own, so that the shadow darkens the ground instead of replacing it.
-    const pixels = colourArt(art, fixture.palette[form] ?? ["#000000", "#000000", "#000000"]);
     const stamp = create("canvas");
     stamp.width = pixels.width;
     stamp.height = pixels.height;
@@ -222,7 +275,7 @@ function plantStrip(host: HTMLElement, scale: PlantScale, fixture: WorldFixture)
       .getContext("2d")
       ?.putImageData(new ImageData(pixels.rgba, pixels.width, pixels.height), 0, 0);
     context.drawImage(stamp, left, tall - 1 - art.height);
-    left += art.width + 1;
+    left += art.width + 2;
   }
   host.append(canvas);
 }
@@ -241,6 +294,14 @@ async function main(): Promise<void> {
     if (found === undefined) throw new Error(`the fixture has no cast "${name}"`);
     return found;
   };
+  const specimens = cast("specimens");
+  const specimen = (name: string): CreatureSeed => {
+    const found = specimens.creatures[specimens.members.indexOf(name)];
+    if (found === undefined) throw new Error(`no specimen "${name}"`);
+    return found;
+  };
+  const large = PLANT_SCALES.find((scale) => scale.name === PLANTS);
+  if (large === undefined) throw new Error(`no plant scale "${PLANTS}"`);
 
   element("world").textContent = fixture.description;
   element("build").textContent =
@@ -263,10 +324,20 @@ async function main(): Promise<void> {
     watcher.observe(canvas);
   };
   /** A picture the page already has a place for: `<canvas data-picture="name">`. */
-  const place = (name: string, picture: Picture): void => {
+  const place = (name: string, picture: Picture, enlarged = ART): void => {
     const canvas = document.querySelector<HTMLCanvasElement>(`canvas[data-picture="${name}"]`);
     if (canvas === null) throw new Error(`look.html has no picture "${name}"`);
-    show(canvas, picture, ART);
+    show(canvas, picture, enlarged);
+  };
+  const tile = (name: string, note: string, picture: Picture, enlarged: number): HTMLElement => {
+    const figure = create("figure", "tile");
+    const canvas = create("canvas");
+    canvas.setAttribute("aria-label", note === "" ? name : `${name}: ${note}`);
+    const caption = create("figcaption");
+    caption.append(create("b", "", name), create("span", "", note));
+    figure.append(canvas, caption);
+    show(canvas, picture, enlarged);
+    return figure;
   };
   const base = {
     ...VIEW,
@@ -275,158 +346,183 @@ async function main(): Promise<void> {
     cast: null,
     markers: false,
     follow: null,
+    only: null,
+    subject: null,
   } as const;
-
-  // Where the local view looks: a shore with a bit of everything, and the densest wood.
-  const cellsWide = VIEW.width / LOCAL_TILE;
-  const cellsTall = VIEW.height / LOCAL_TILE;
-  const window64 = [cellsWide, Math.ceil(cellsTall)] as const;
-  const sites = {
-    shore: middle(findSite(fixture, ...window64, shore)),
-    wood: middle(findSite(fixture, ...window64, forest)),
+  /** Paint the ground a picture of `width` × `height` art pixels round `centre` needs. */
+  const paint = (name: string, centre: Point, pixels: number, width: number, height: number) => {
+    const cells = around(centre, width / pixels, height / pixels, PAINT_MARGIN, fixture);
+    stage.addGround(
+      name,
+      paintGround(fixture, { tile: pixels, style: GROUND, grain: true, cells }),
+      pixels,
+      cells,
+    );
   };
-  const local = { ...base, zoom: LOCAL_TILE };
 
-  // The grounds: the map, the default local ground everywhere, the others where shown.
+  // 1. The map view: the whole world, two art pixels to the cell, animals as dots.
   stage.addGround(
     "map",
-    paintGround(fixture, { tile: MAP_TILE, style: PROPOSED_MAP_GROUND, grain: false }),
+    paintGround(fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false }),
     MAP_TILE,
   );
-  stage.addGround(
-    GROUND,
-    paintGround(fixture, { tile: LOCAL_TILE, style: GROUND, grain: true }),
-    LOCAL_TILE,
-  );
-  for (const scale of PLANT_SCALES) {
-    stage.addPlants(scale.name, standingPlants(fixture, scale, LOCAL_TILE));
-  }
-
-  // 1. The map view: the whole world, two art pixels to the cell.
-  const herd = stage.cast(fixture.creatures, 1, BODY);
-  const map = { ...base, zoom: MAP_TILE, cast: herd, centre: middle(island) };
-  place("map-squares", { ...map, ground: "map.png" });
-  place("map-smooth", { ...map, ground: "map" });
-  place("map-markers", { ...map, ground: "map", markers: true });
-
-  // 2. The local view's ground, four ways, in two places.
-  for (const style of GROUNDS) {
-    for (const [site, centre] of Object.entries(sites)) {
-      let ground: string = style;
-      if (style !== GROUND) {
-        ground = `${style}-${site}`;
-        const cells = around(centre, cellsWide, cellsTall, PAINT_MARGIN, fixture);
-        const pixels = paintGround(fixture, { tile: LOCAL_TILE, style, grain: true, cells });
-        stage.addGround(ground, pixels, LOCAL_TILE, cells);
-      }
-      place(`ground-${style}-${site}`, { ...local, ground, plants: PLANTS, centre });
-    }
-  }
-
-  // The staged shot's players: the specimens and some of the herd, on the shore.
-  const specimens = cast("specimens");
-  const shoreCells = around(sites.shore, cellsWide, cellsTall, 0, fixture);
-  const players = scatter(
-    [...specimens.creatures, ...fixture.creatures.slice(0, HERD_IN_STAGED_SHOT)],
-    shoreCells,
-    passable,
-    random,
-  );
-  const troupes = new Map(
-    SCALES.map((scale) => [scale, stage.cast(players, 4, { ...BODY, scale })] as const),
-  );
-  const troupe = troupes.get(BODY.scale) ?? null;
-
-  // 3. Plants at three sizes: the drawings, then the wood and the shore.
-  for (const scale of PLANT_SCALES) {
-    plantStrip(element(`plants-${scale.name}`), scale, fixture);
-    const picture = { ...local, ground: GROUND, plants: scale.name };
-    place(`plants-${scale.name}-wood`, { ...picture, centre: sites.wood });
-    place(`plants-${scale.name}-shore`, { ...picture, cast: troupe, centre: sites.shore });
-  }
-
-  // 4. Creatures: the specimens in each style, each followed by its own camera.
-  const tile = (name: string, note: string, picture: Picture, enlarged: number): HTMLElement => {
-    const figure = create("figure", "tile");
-    const canvas = create("canvas");
-    canvas.setAttribute("aria-label", `${name}: ${note}`);
-    const caption = create("figcaption");
-    caption.append(create("b", "", name), create("span", "", note));
-    figure.append(canvas, caption);
-    show(canvas, picture, enlarged);
-    return figure;
-  };
-  const portrait = (layer: CreatureLayer, follow: number): Picture => ({
-    ...local,
-    ...PORTRAIT,
-    ground: GROUND,
-    cast: layer,
-    follow,
+  const herd = stage.cast(fixture.creatures, 1, MID_BODY);
+  place("map", {
+    ...base,
+    zoom: MAP_TILE,
+    ground: "map",
+    cast: herd,
+    markers: true,
     centre: middle(island),
   });
-  const roomy: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };
-  const standing = scatter(specimens.creatures, roomy, passable, random);
-  for (const style of CREATURE_STYLES) {
-    const layer = stage.cast(standing, 2, { ...BODY, style });
-    specimens.creatures.forEach((seed, index) => {
-      const name = specimens.members[index] ?? "";
-      const note = style === "circles" ? "" : describe(seed, fixture);
-      element(`specimens-${style}`).append(
-        tile(name, note, portrait(layer, index), SPECIMEN_ENLARGED),
-      );
-    });
+
+  // 2. The middle view: eight art pixels to the cell, the large plants, small animals.
+  stage.addGround(
+    "mid",
+    paintGround(fixture, { tile: MID_TILE, style: GROUND, grain: true }),
+    MID_TILE,
+  );
+  stage.addPlants("mid", standingPlants(fixture, large, MID_TILE));
+  const midCells = [VIEW.width / MID_TILE, Math.ceil(VIEW.height / MID_TILE)] as const;
+  const midShore = middle(findSite(fixture, ...midCells, shore));
+  const midWood = middle(findSite(fixture, ...midCells, forest));
+  const troupe = stage.cast(
+    scatter(
+      [...specimens.creatures, ...fixture.creatures.slice(0, HERD_IN_STAGED_SHOT)],
+      around(midShore, midCells[0], midCells[1], 0, fixture),
+      passable,
+      random,
+    ),
+    4,
+    MID_BODY,
+  );
+  const mid = { ...base, zoom: MID_TILE, ground: "mid", plants: "mid" };
+  place("mid-shore", { ...mid, cast: troupe, centre: midShore });
+  place("mid-wood", { ...mid, cast: herd, centre: midWood });
+
+  // 3. The local view: one animal from close by, on ground and among plants drawn for it.
+  const localCells = [VIEW.width / LOCAL_PIXELS, Math.ceil(VIEW.height / LOCAL_PIXELS)] as const;
+  const localSites = {
+    // Low ground: up where bare land turns to rock and snow a meadow is not at its best.
+    meadow: middle(
+      findSite(fixture, ...localCells, (shares, window) => {
+        const high = heightAt(fixture, ...centreOf(window)) - fixture.seaLevel > MEADOW_BELOW;
+        return meadow(shares) - (high ? 1 : 0) - 2 * (shares["BARE"] ?? 0);
+      }),
+    ),
+    wood: middle(findSite(fixture, ...localCells, forest)),
+    shore: middle(findSite(fixture, ...localCells, shore)),
+  };
+  for (const pixels of LOCAL_ZOOMS) {
+    stage.addPlants(`local-${pixels}`, standingPlants(fixture, large, pixels, true));
   }
-  // One gene at a time, on one flat colour: sand, or sea for those that swim.
+  /** The players of a local picture: the animal it is about, kept near the middle, and company. */
+  const players = (scene: keyof typeof LOCAL_SCENES): CreatureSeed[] => {
+    const centre = localSites[scene];
+    const { subject, company } = LOCAL_SCENES[scene];
+    const [first] = scatter([specimen(subject)], pen(centre, SUBJECT_PEN), passable, random);
+    const others = scatter(company.map(specimen), pen(centre, COMPANY_PEN), passable, random);
+    return [
+      ...(first === undefined ? [] : [{ ...first, pen: pen(centre, SUBJECT_PEN) }]),
+      ...others.map((seed) => ({ ...seed, pen: pen(centre, COMPANY_PEN) })),
+    ];
+  };
+  const local = (scene: keyof typeof LOCAL_SCENES, pixels: number, name: string): Picture => {
+    const centre = localSites[scene];
+    paint(name, centre, pixels, VIEW.width, VIEW.height);
+    return {
+      ...base,
+      zoom: pixels,
+      ground: name,
+      plants: `local-${pixels}`,
+      cast: stage.cast(seeds[scene], 5, localBody(pixels)),
+      subject: 0,
+      centre,
+    };
+  };
+  const seeds = { meadow: players("meadow"), wood: players("wood"), shore: players("shore") };
+  for (const pixels of LOCAL_ZOOMS)
+    place(`local-${pixels}`, local("meadow", pixels, `meadow-${pixels}`));
+  place("local-wood", local("wood", LOCAL_PIXELS, "wood"));
+  const shoreline = local("shore", LOCAL_PIXELS, "shore");
+  place("local-shore", shoreline);
+  for (const light of LIGHT_ORDER) place(`light-${light}`, { ...shoreline, light }, 1);
+  plantStrip(element("plants-local"), large, fixture);
+
+  // 4. Creatures up close: each specimen on its own patch of ground.
+  const roomy: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };
+  const standing = scatter(specimens.creatures, roomy, passable, random).map((seed) => ({
+    ...seed,
+    pen: pen(seed, SPECIMEN_PEN),
+  }));
+  const portraits = stage.cast(standing, 2, localBody(SWATCH_PIXELS));
+  standing.forEach((seed, index) => {
+    const name = specimens.members[index] ?? "";
+    paint(`specimen-${name}`, seed, SWATCH_PIXELS, SPECIMEN.width, SPECIMEN.height);
+    // The camera holds on the patch; the animal is kept on it.
+    const picture = {
+      ...base,
+      ...SPECIMEN,
+      zoom: SWATCH_PIXELS,
+      ground: `specimen-${name}`,
+      cast: portraits,
+      only: index,
+      centre: { x: seed.x, y: seed.y },
+    };
+    element("specimens").append(tile(name, describe(seed, fixture), picture, SPECIMEN.enlarged));
+  });
+  // On one flat colour (sand, or sea for those that swim), the camera on the animal.
   const sand = packed(fixture.palette["BARE"]?.[2] ?? "#cdbd9f");
   const sea = packed(fixture.sea[Math.floor(fixture.sea.length / 2)] ?? "#3b7fbf");
+  const swatch = (layer: CreatureLayer, seed: CreatureSeed, index: number): Picture => ({
+    ...base,
+    ...SWATCH,
+    zoom: SWATCH_PIXELS,
+    ground: bodyPlan(seed).swims ? sea : sand,
+    cast: layer,
+    follow: index,
+    centre: middle(island),
+  });
+  // Every marking, on two bodies: a beast's back, and a beetle's shell.
+  const plain = cast("sweep-pattern").creatures[0];
+  if (plain !== undefined) {
+    const bodies = {
+      beast: { ...plain, speed: 0.3 },
+      beetle: { ...plain, limbPairs: 3, armour: 0.8, hue: 0.02 },
+    };
+    for (const [kind, body] of Object.entries(bodies)) {
+      // A little further into each marking's share of the gene than the last, to show its colours.
+      const marked = PATTERNS.map((_, k) => ({
+        ...body,
+        pattern: (k + 0.1 + 0.25 * (k % 4)) / PATTERNS.length,
+      }));
+      const layer = stage.cast(
+        scatter(marked, roomy, passable, random),
+        6,
+        localBody(SWATCH_PIXELS),
+      );
+      marked.forEach((seed, k) => {
+        const picture = swatch(layer, seed, k);
+        element(`patterns-${kind}`).append(tile(PATTERNS[k] ?? "", "", picture, SWATCH.enlarged));
+      });
+    }
+  }
   for (const sweep of fixture.casts.filter((candidate) => candidate.name.startsWith("sweep-"))) {
     const gene = sweep.name.slice("sweep-".length);
     const [title, note] = SWEEP_NOTES[gene] ?? [gene, ""];
-    const layer = stage.cast(scatter(sweep.creatures, roomy, passable, random), 3, BODY);
+    const placed = scatter(sweep.creatures, roomy, passable, random);
+    const layer = stage.cast(placed, 3, localBody(SWATCH_PIXELS));
     const row = create("div", "sweep");
     const label = create("div", "gene");
     label.append(create("b", "", title), create("span", "", note));
     const steps = create("div", "steps");
     sweep.creatures.forEach((seed, index) => {
       const value = sweep.members[index] ?? "";
-      const ground = bodyPlan(seed).swims ? sea : sand;
-      const picture = { ...portrait(layer, index), ground };
-      steps.append(tile(value, kindOf(seed), picture, SWEEP_ENLARGED));
+      steps.append(tile(value, kindOf(seed), swatch(layer, seed, index), SWATCH.enlarged));
     });
     row.append(label, steps);
     element("sweeps").append(row);
   }
-  // The same shore with the animals at three sizes.
-  for (const [scale, layer] of troupes) {
-    const picture = { ...local, ground: GROUND, plants: PLANTS, cast: layer };
-    place(`creatures-${scale}x`, { ...picture, centre: sites.shore });
-  }
-
-  // 5. Together: the local view as proposed, a closer one, and the light.
-  const together = {
-    ...local,
-    ground: GROUND,
-    plants: PLANTS,
-    cast: troupe,
-    centre: sites.shore,
-  };
-  for (const light of LIGHT_ORDER) place(`light-${light}`, { ...together, light });
-  const closer = around(
-    sites.shore,
-    VIEW.width / CLOSER_TILE,
-    VIEW.height / CLOSER_TILE,
-    PAINT_MARGIN,
-    fixture,
-  );
-  stage.addGround(
-    "closer",
-    paintGround(fixture, { tile: CLOSER_TILE, style: GROUND, grain: true, cells: closer }),
-    CLOSER_TILE,
-    closer,
-  );
-  const medium = PLANT_SCALES.find((scale) => scale.name === PLANTS) ?? PLANT_SCALES[0];
-  if (medium !== undefined) stage.addPlants("closer", standingPlants(fixture, medium, CLOSER_TILE));
-  place("closer", { ...together, zoom: CLOSER_TILE, ground: "closer", plants: "closer" });
 
   const drawAll = (): void => {
     for (const { picture, context } of drawn) stage.draw(picture, context);

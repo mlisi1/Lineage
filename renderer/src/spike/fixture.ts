@@ -26,6 +26,8 @@ export interface CreatureSeed {
   jaw: number;
   hue: number;
   pattern: number;
+  /** Cells it is kept within, when a picture wants it to stay in frame; the sim sets none. */
+  pen?: { x0: number; y0: number; x1: number; y1: number };
 }
 
 /** Creatures chosen to show the range of bodies; the look sheet places them itself. */

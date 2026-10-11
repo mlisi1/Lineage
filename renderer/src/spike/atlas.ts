@@ -18,7 +18,8 @@ import {
 const SLOT_WIDTH = 10;
 const SLOT_HEIGHT = 14;
 const COLUMNS = 8;
-export const DISC_SIZE = 16;
+/** Big enough to stay round on the largest animal of the closest view. */
+export const DISC_SIZE = 64;
 const WHITE_SIZE = 4;
 
 export interface Atlas {
@@ -51,7 +52,7 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
   }
   const rows = Math.ceil(looks.length / COLUMNS);
   const canvas = document.createElement("canvas");
-  canvas.width = COLUMNS * SLOT_WIDTH;
+  canvas.width = Math.max(COLUMNS * SLOT_WIDTH, 2 * DISC_SIZE + WHITE_SIZE + 8);
   canvas.height = rows * SLOT_HEIGHT + DISC_SIZE + 2;
   const context = canvas.getContext("2d");
   if (context === null) throw new Error("no 2D canvas for the atlas");

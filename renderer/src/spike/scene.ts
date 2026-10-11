@@ -4,16 +4,17 @@
  */
 import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
-import { viewAt } from "./camera";
+import type { BodyOptions } from "./body";
+import { viewAt, type View } from "./camera";
 import { CreatureLayer } from "./creatures";
 import type { WorldFixture } from "./fixture";
-import { LOCAL_TILE, MAP_TILE, paintGround } from "./ground";
-import { PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";
+import { MID_TILE, MAP_TILE, paintGround } from "./ground";
+import { GroundPieces, PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";
 import { cycleTint } from "./light";
 import type { Backend } from "./params";
 import { PLANT_SCALES } from "./plantart";
 import { standingPlants, type PlantLayer } from "./plants";
-import { PROPOSED_BODY, PROPOSED_GROUND, PROPOSED_MAP_GROUND, PROPOSED_PLANTS } from "./proposal";
+import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PLANTS, localBody } from "./proposal";
 import { mulberry32 } from "./rng";
 import type { Scenario } from "./scenarios";
 
@@ -41,10 +42,14 @@ export interface Applied {
 /** What the proposed look adds to the scene, built the first time a scenario asks for it. */
 interface Proposed {
   mapGround: Sprite;
-  localGround: Sprite;
+  midGround: Sprite;
   standing: PlantLayer;
   creatures: CreatureLayer;
   paintMs: number;
+  /** The local view: ground in pieces, the plants drawn for it, the creatures seen from close. */
+  pieces: GroundPieces;
+  nearPlants: PlantLayer;
+  nearCreatures: CreatureLayer;
 }
 
 export class SpikeScene {
@@ -55,8 +60,10 @@ export class SpikeScene {
   private readonly tint: Sprite;
   private proposed: Proposed | null = null;
   private shot: Scenario["shot"] = "wide";
-  /** Creatures shown as dots, as on the proposed map: no bodies to work out. */
+  /** Creatures shown as dots, as on the map: no bodies to work out. */
   private dots = false;
+  /** The ground of the local view, painted as the camera goes. */
+  private pieces: GroundPieces | null = null;
   private timeS = 0;
   private drawnPlants = 0;
   /** The plants and creatures of the scenario in force. */
@@ -124,7 +131,8 @@ export class SpikeScene {
     this.layout();
     this.shot = scenario.shot;
     const painted = scenario.plants === "painted";
-    const close = scenario.shot === "close";
+    const wide = scenario.shot === "wide";
+    const follow = scenario.shot === "follow";
     const proposed = painted ? this.propose() : this.proposed;
     const { ground, map, plants } = this.layers;
     map.visible = scenario.plants === "map";
@@ -132,31 +140,45 @@ export class SpikeScene {
     plants.container.visible = scenario.plants === "sprites";
     this.activePlants = plants.container.visible ? plants : null;
     this.activeCreatures = this.creatures;
+    this.pieces = null;
     if (proposed !== null) {
-      proposed.mapGround.visible = painted && !close;
-      proposed.localGround.visible = painted && close;
-      proposed.standing.container.visible = painted && close;
+      proposed.mapGround.visible = painted && wide;
+      proposed.midGround.visible = painted && !wide && !follow;
+      proposed.standing.container.visible = painted && !wide && !follow;
+      proposed.pieces.container.visible = painted && follow;
+      proposed.nearPlants.container.visible = painted && follow;
       if (painted) {
-        if (close) this.activePlants = proposed.standing;
-        this.activeCreatures = proposed.creatures;
+        if (follow) {
+          this.activePlants = proposed.nearPlants;
+          this.activeCreatures = proposed.nearCreatures;
+          this.pieces = proposed.pieces;
+        } else {
+          if (!wide) this.activePlants = proposed.standing;
+          this.activeCreatures = proposed.creatures;
+        }
       }
     }
-    for (const layer of [this.creatures, proposed?.creatures]) {
+    // On the map a creature is a dot.
+    this.dots = painted && wide;
+    for (const layer of [this.creatures, proposed?.creatures, proposed?.nearCreatures]) {
       if (layer === undefined) continue;
       layer.setCount(layer === this.activeCreatures ? scenario.creatures : 0);
-      // On the proposed map a creature is a dot.
-      layer.show(painted && !close ? "markers" : "bodies");
-      this.dots = painted && !close;
+      layer.show(this.dots ? "markers" : "bodies");
     }
     this.tint.visible = scenario.tint;
     this.tint.scale.set(width / this.tint.texture.width, height / this.tint.texture.height);
+    const before = this.pieces?.paintMs ?? 0;
     this.frame(0);
     return {
       internal: [width, height],
       plant_sprites: this.drawnPlants,
-      creature_sprites:
-        painted && !close ? 2 * scenario.creatures : this.activeCreatures.spriteCount,
-      ground_paint_ms: painted ? (proposed?.paintMs ?? 0) : 0,
+      creature_sprites: this.dots ? 2 * scenario.creatures : this.activeCreatures.spriteCount,
+      // The grounds of the map and the middle view, or the pieces under the first frame.
+      ground_paint_ms: !painted
+        ? 0
+        : follow
+          ? (this.pieces?.paintMs ?? 0) - before
+          : (proposed?.paintMs ?? 0),
     };
   }
 
@@ -164,51 +186,71 @@ export class SpikeScene {
   frame(dtS: number): void {
     this.timeS += dtS;
     const { width, height } = this.app.renderer;
-    const view = viewAt(
-      this.shot,
-      this.timeS,
-      width,
-      height,
-      this.fixture.width,
-      this.fixture.height,
-    );
+    let view: View;
+    if (this.shot === "follow") {
+      // The first creature in the middle of the picture, from close by.
+      const scale = LOCAL_PIXELS;
+      const subject = this.activeCreatures.centre(0);
+      const cells = {
+        x0: subject.x - width / scale / 2,
+        y0: subject.y - height / scale / 2,
+        x1: subject.x + width / scale / 2,
+        y1: subject.y + height / scale / 2,
+      };
+      view = { scale, x: -cells.x0 * scale, y: -cells.y0 * scale, cells };
+      this.pieces?.cover(cells);
+    } else {
+      view = viewAt(this.shot, this.timeS, width, height, this.fixture.width, this.fixture.height);
+    }
     this.world.scale.set(view.scale);
     this.world.position.set(Math.round(view.x), Math.round(view.y));
     this.drawnPlants = this.activePlants?.cull(view.cells) ?? 0;
     this.activeCreatures.update(dtS, view.cells, !this.dots);
     // Among plants a creature stands in its row, behind what grows in front of it.
-    this.activeCreatures.hostIn(this.activePlants?.guests ?? null);
+    this.activeCreatures.hostIn(this.activePlants?.guests ?? null, this.activePlants?.rowsPerCell);
+    // What stands in front of the one the camera is on shows it through.
+    this.activePlants?.fade(this.shot === "follow" ? this.activeCreatures.box(0) : null);
     if (this.tint.visible) this.tint.tint = cycleTint(this.timeS);
     this.app.render();
   }
 
-  /** Build what the proposed look needs, once: both grounds, the plants, the creatures. */
+  /** Build what the chosen look needs, once: the grounds, the plants, the creatures. */
   private propose(): Proposed {
     if (this.proposed !== null) return this.proposed;
     const started = performance.now();
     const mapGround = groundSprite(
-      paintGround(this.fixture, { tile: MAP_TILE, style: PROPOSED_MAP_GROUND, grain: false }),
+      paintGround(this.fixture, { tile: MAP_TILE, style: MAP_GROUND, grain: false }),
       MAP_TILE,
     );
-    const localGround = groundSprite(
-      paintGround(this.fixture, { tile: LOCAL_TILE, style: PROPOSED_GROUND, grain: true }),
-      LOCAL_TILE,
+    const midGround = groundSprite(
+      paintGround(this.fixture, { tile: MID_TILE, style: GROUND, grain: true }),
+      MID_TILE,
     );
     const paintMs = performance.now() - started;
-    const scale = PLANT_SCALES.find((candidate) => candidate.name === PROPOSED_PLANTS);
-    if (scale === undefined) throw new Error(`no plant scale "${PROPOSED_PLANTS}"`);
-    const standing = standingPlants(this.fixture, scale, LOCAL_TILE);
-    const creatures = new CreatureLayer(
-      this.layers.atlas,
-      this.fixture.creatures,
-      this.layers.passable,
-      mulberry32(this.seed),
-      PROPOSED_BODY,
-    );
-    this.grounds.addChild(mapGround, localGround);
-    this.plantLayers.addChild(standing.container);
-    this.casts.addChild(creatures.container);
-    this.proposed = { mapGround, localGround, standing, creatures, paintMs };
+    const scale = PLANT_SCALES.find((candidate) => candidate.name === PLANTS);
+    if (scale === undefined) throw new Error(`no plant scale "${PLANTS}"`);
+    const cast = (body: BodyOptions): CreatureLayer =>
+      new CreatureLayer(
+        this.layers.atlas,
+        this.fixture.creatures,
+        this.layers.passable,
+        mulberry32(this.seed),
+        body,
+      );
+    this.proposed = {
+      mapGround,
+      midGround,
+      standing: standingPlants(this.fixture, scale, MID_TILE),
+      creatures: cast(MID_BODY),
+      paintMs,
+      pieces: new GroundPieces(this.fixture, LOCAL_PIXELS, GROUND),
+      nearPlants: standingPlants(this.fixture, scale, LOCAL_PIXELS, true),
+      nearCreatures: cast(localBody(LOCAL_PIXELS)),
+    };
+    const { standing, creatures, pieces, nearPlants, nearCreatures } = this.proposed;
+    this.grounds.addChild(mapGround, midGround, pieces.container);
+    this.plantLayers.addChild(standing.container, nearPlants.container);
+    this.casts.addChild(creatures.container, nearCreatures.container);
     return this.proposed;
   }
 

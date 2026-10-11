@@ -31,7 +31,7 @@ const PAN_REACH = 0.7;
  * of `worldWidth` × `worldHeight` cells. The wide shot fits the world exactly.
  */
 export function viewAt(
-  shot: Shot,
+  shot: Exclude<Shot, "follow">,
   tS: number,
   width: number,
   height: number,

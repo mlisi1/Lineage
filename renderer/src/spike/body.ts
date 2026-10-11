@@ -23,8 +23,42 @@ export interface BodyOptions {
   style: CreatureStyle;
   /** Drawn size against the first look's: 1 is a body of 1.1 cells at mass 1. */
   scale: number;
+  /**
+   * Art pixels to the cell in the view the body is drawn for. An outline is one of them
+   * wide, and detail smaller than a pixel or two is left out.
+   */
+  pixels: number;
+  /** Walking speed against the first look's hurry: close up, an animal ambles. */
+  pace: number;
 }
-export const FIRST_LOOK: BodyOptions = { style: "circles", scale: 1 };
+export const FIRST_LOOK: BodyOptions = { style: "circles", scale: 1, pixels: 8, pace: 1 };
+
+/**
+ * The markings of the `shapes` and `lit` styles. The pattern gene picks one by twelfths;
+ * how far into its twelfth the gene lies picks the colour the marking is made in.
+ */
+export const PATTERNS = [
+  "plain",
+  "stripe",
+  "twin",
+  "bands",
+  "bars",
+  "spots",
+  "rings",
+  "saddle",
+  "fade",
+  "chevrons",
+  "speckle",
+  "eyespots",
+] as const;
+export type Pattern = (typeof PATTERNS)[number];
+
+/** The marking a pattern gene gives, and how far (0–1) into its share of the gene it lies. */
+export function patternOf(gene: number): { pattern: Pattern; shade: number } {
+  const scaled = Math.min(Math.max(gene, 0), 1) * PATTERNS.length;
+  const index = Math.min(Math.floor(scaled), PATTERNS.length - 1);
+  return { pattern: PATTERNS[index] ?? "plain", shade: Math.min(scaled - index, 0.999) };
+}
 
 /** The body plans of the `shapes` and `lit` styles. */
 export type Kind =
@@ -73,6 +107,10 @@ export interface LegPlan {
   /** Where the foot rests: 0 straight out to the side, positive toward the front (radians). */
   aim: number;
   colour: number;
+  /** Width of a dark edge round the leg, in cells; 0 where the leg is too thin for one. */
+  edge: number;
+  /** Radius of the foot at its end, in cells; 0 where it would not show. */
+  foot: number;
 }
 
 export interface BodyPlan {
@@ -126,8 +164,11 @@ const SATURATION = 0.5;
 const IVORY = 0xf2ead0;
 const EYE = 0x1b1b1b;
 const OUTLINE = 0x1f1a17;
-/** lit: the outline is this wide, in cells: one art pixel of the local view. */
-const OUTLINE_WIDTH = 1 / 8;
+/** A leg gets an edge of its own from this many pixels thick, a foot from this many. */
+const LEG_EDGE_FROM_PX = 2.5;
+const FOOT_FROM_PX = 2;
+/** An eye gets a glint from this many pixels across. */
+const GLINT_FROM_PX = 3;
 
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 const clamp01 = (value: number): number => Math.min(Math.max(value, 0), 1);
@@ -298,7 +339,8 @@ const LEGS: Readonly<Record<Kind, readonly (readonly [number, number, number, nu
 export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK): BodyPlan {
   const base = options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass);
   const swims = seed.aquatic >= SWIMS_FROM;
-  const pace = PACE_BASE + PACE_PER_SPEED * (swims ? seed.swimSpeed : seed.landSpeed);
+  const pace =
+    options.pace * (PACE_BASE + PACE_PER_SPEED * (swims ? seed.swimSpeed : seed.landSpeed));
   const body = colour(seed.hue, 0.55);
   const dark = colour(seed.hue, 0.3);
   const parts: Part[] = [];
@@ -431,6 +473,8 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
           thickness: Math.max((radii[joint] ?? 0) * 0.45, 0.04),
           aim: 0.38,
           colour: dark,
+          edge: 0,
+          foot: 0,
         });
       }
     }
@@ -461,19 +505,11 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
   const shellColour = colour(seed.hue, 0.24);
   const head = radii[0] ?? reference;
 
-  // The trunk: an oval at every joint, long enough to run into the next.
-  const pattern =
-    seed.pattern < 0.2
-      ? "plain"
-      : seed.pattern < 0.4
-        ? "stripe"
-        : seed.pattern < 0.6
-          ? "bands"
-          : seed.pattern < 0.8
-            ? "spots"
-            : "saddle";
-  // Bands are every other segment in the mark's colour; a worm is ringed whatever its pattern.
-  const ring = pattern === "bands" ? mark : kind === "worm" ? blend(body, dark, 0.28) : body;
+  // The trunk: an oval at every joint, long enough to run into the next. A worm is ringed.
+  const { pattern, shade } = patternOf(seed.pattern);
+  const ring = kind === "worm" ? blend(body, dark, 0.28) : body;
+  // Under a shell or a carapace the trunk is not what catches the light.
+  const covered = kind === "tortoise" || kind === "beetle" || kind === "crab";
   for (let i = last; i >= 1; i--) {
     const radius = radii[i] ?? 0;
     part(
@@ -482,9 +518,11 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
       Math.max(2 * radius, spacing * 1.3),
       2 * radius,
       i % 2 === 0 ? ring : body,
-      LAYER.body,
+      covered ? LAYER.under : LAYER.body,
     );
   }
+  // The one mass the markings go on, for the kinds that have one: a shell, a carapace.
+  let canvas: Part | null = null;
 
   // What is particular to the kind: shell, abdomen, carapace, tail.
   if (kind === "tortoise" || kind === "beetle") {
@@ -492,6 +530,7 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
     const along = spacing * (joints - 2) + 1.6 * reference;
     const middle = kind === "tortoise" ? 1 : 2;
     part("disc", middle, along, across, shellColour, LAYER.body, -spacing * 0.5);
+    canvas = parts[parts.length - 1] ?? null;
     part(
       "disc",
       middle,
@@ -550,6 +589,7 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
   } else if (kind === "crab") {
     // Wider than long, eyes on stalks, and the arms that carry the claws.
     part("disc", 1, 2.3 * reference, 3.6 * reference, body, LAYER.body);
+    canvas = parts[parts.length - 1] ?? null;
     part(
       "disc",
       1,
@@ -594,15 +634,7 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
     );
   } else if (kind === "spider") {
     part("disc", 2, 3.1 * reference, 3.0 * reference, body, LAYER.body, -0.2 * reference);
-    part(
-      "disc",
-      2,
-      1.0 * reference,
-      1.1 * reference,
-      pattern === "plain" ? mark : pale,
-      LAYER.mark,
-      -0.3 * reference,
-    );
+    part("disc", 2, 1.0 * reference, 1.1 * reference, mark, LAYER.mark, -0.3 * reference);
   } else if (kind === "insect") {
     // Three parts: head, thorax, and an abdomen that ends in a point.
     part("disc", 3, spacing * 2.3, 2.1 * reference, body, LAYER.body, -spacing * 0.45);
@@ -770,29 +802,153 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
     }
   }
 
-  // The pattern, on a body that is not one shell.
-  if (kind !== "tortoise" && kind !== "beetle" && kind !== "crab") {
-    for (let i = 1; i < last; i++) {
-      const radius = radii[i] ?? 0;
-      if (pattern === "stripe")
-        part("bar", i, spacing * 1.15, Math.max(radius * 0.5, 0.03), mark, LAYER.mark);
-      if (pattern === "spots")
+  // Markings. They go on stations down the back: along the one mass if the kind has
+  // one, else on the widest part at each joint between the head and the tail tip.
+  interface Station {
+    joint: number;
+    forward: number;
+    /** Half the width of the body here, and how far along it this station reaches. */
+    half: number;
+    span: number;
+  }
+  const stations: Station[] = [];
+  const along = (mass: Part): void => {
+    const count = Math.max(1, Math.round(mass.along / spacing));
+    for (let k = 0; k < count; k++) {
+      // From the front of the mass to its back; an oval narrows toward both ends.
+      const t = 0.5 - (k + 0.5) / count;
+      stations.push({
+        joint: mass.joint,
+        forward: mass.forward + t * mass.along,
+        half: (mass.across / 2) * 0.92 * Math.sqrt(Math.max(1 - (2 * t) ** 2, 0.2)),
+        span: mass.along / count,
+      });
+    }
+  };
+  if (canvas !== null) {
+    along(canvas);
+  } else {
+    for (let i = 1; i <= Math.max(last - 1, 1); i++) {
+      const masses = parts.filter(
+        (mass) => mass.joint === i && mass.layer === LAYER.body && mass.shape === "disc",
+      );
+      const widest = masses.reduce<Part | null>(
+        (best, mass) => (best === null || mass.across > best.across ? mass : best),
+        null,
+      );
+      if (widest !== null) along(widest);
+    }
+  }
+  // The colour of the marking: darker, paler, or a colour from across the wheel.
+  const accent =
+    [mark, pale, colour(seed.hue + 0.5, 0.6), colour(seed.hue + 0.33, 0.45)][
+      Math.floor(shade * 4)
+    ] ?? mark;
+  const thin = 1 / options.pixels;
+  stations.forEach((station, index) => {
+    const { joint, forward, half, span } = station;
+    const flip = index % 2 === 0 ? 1 : -1;
+    const dot = (size: number, tint: number, ahead = 0, aside = 0): void =>
+      part("disc", joint, half * size, half * size, tint, LAYER.mark, forward + ahead, aside);
+    switch (pattern) {
+      case "plain":
+      case "saddle":
+        break;
+      case "stripe":
+        part("bar", joint, span * 1.1, Math.max(half * 0.5, thin), accent, LAYER.mark, forward);
+        break;
+      case "twin":
+        pair(
+          "bar",
+          joint,
+          span * 1.1,
+          Math.max(half * 0.3, thin),
+          accent,
+          LAYER.mark,
+          forward,
+          half * 0.5,
+        );
+        break;
+      case "bands":
+        if (index % 2 === 0)
+          part("disc", joint, span * 0.9, half * 1.9, accent, LAYER.mark, forward);
+        break;
+      case "bars":
+        // Two bars across the back, leaning the way a tiger's do.
+        for (const ahead of [0.22, -0.22]) {
+          part(
+            "bar",
+            joint,
+            half * 1.5,
+            Math.max(span * 0.16, thin),
+            accent,
+            LAYER.mark,
+            forward + ahead * span,
+            0,
+            Math.PI / 2 + 0.3 * flip,
+          );
+        }
+        break;
+      case "spots":
+        dot(0.9, accent, 0, half * 0.35 * flip);
+        break;
+      case "rings":
+        dot(1.2, mark, 0, half * 0.25 * flip);
+        dot(0.62, pale, 0, half * 0.25 * flip);
+        break;
+      case "fade":
+        // From the body's colour at the shoulders to the marking's at the tail.
         part(
           "disc",
-          i,
-          radius * 0.95,
-          radius * 0.95,
-          pale,
+          joint,
+          span * 1.25,
+          half * 1.96,
+          blend(body, accent, index / Math.max(stations.length - 1, 1)),
           LAYER.mark,
-          0,
-          i % 2 === 0 ? radius * 0.3 : -radius * 0.3,
+          forward,
         );
+        break;
+      case "chevrons":
+        part("wedge", joint, span * 0.95, half * 1.7, accent, LAYER.mark, forward, 0, Math.PI);
+        break;
+      case "speckle":
+        dot(0.36, mark, span * 0.28, half * 0.5);
+        dot(0.3, pale, -span * 0.1, -half * 0.55);
+        dot(0.34, mark, -span * 0.32, half * 0.15 * flip);
+        break;
+      case "eyespots":
+        break;
     }
-    if (pattern === "saddle") {
-      const at = Math.max(1, Math.round(last / 3));
-      const radius = radii[at] ?? 0;
-      part("disc", at, Math.max(spacing * 1.6, radius * 1.6), radius * 1.5, pale, LAYER.mark);
-      part("disc", 0, head * 1.3, head * 1.5, mark, LAYER.mark, -head * 0.15);
+  });
+  const widest = stations.reduce<Station | null>(
+    (best, station) => (best === null || station.half > best.half ? station : best),
+    null,
+  );
+  if (pattern === "saddle" && stations.length > 0) {
+    const at = stations[Math.floor(stations.length / 3)] ?? stations[0];
+    if (at !== undefined) {
+      part("disc", at.joint, at.span * 1.7, at.half * 1.7, accent, LAYER.mark, at.forward);
+    }
+    // And a mask over the head.
+    part("disc", 0, head * 1.3, head * 1.5, mark, LAYER.mark, -head * 0.15);
+  }
+  if (pattern === "eyespots" && widest !== null) {
+    // Two false eyes on the widest part of the back: dark, pale, and a dark middle.
+    for (const [size, tint] of [
+      [1.05, mark],
+      [0.72, pale],
+      [0.3, mark],
+    ] as const) {
+      pair(
+        "disc",
+        widest.joint,
+        widest.half * size,
+        widest.half * size,
+        tint,
+        LAYER.mark,
+        widest.forward,
+        widest.half * 0.45,
+      );
     }
   }
 
@@ -808,6 +964,20 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
   } else if (kind !== "worm" || seed.sense >= 0.5) {
     const bulge = kind === "hopper" || kind === "fish" ? 0.85 : 0.6;
     pair("disc", 0, sighted, sighted, EYE, LAYER.face, head * 0.3, head * bulge);
+    if (sighted * options.pixels >= GLINT_FROM_PX) {
+      // A glint, on the side of each eye the light comes from.
+      pair(
+        "disc",
+        0,
+        sighted * 0.36,
+        sighted * 0.36,
+        0xffffff,
+        LAYER.face,
+        head * 0.3,
+        head * bulge,
+      );
+      for (const glint of parts.slice(-2)) glint.lift = sighted * 0.22;
+    }
   }
 
   const legs: LegPlan[] = [];
@@ -820,6 +990,8 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
         thickness: Math.max(thick * reference, 0.04),
         aim,
         colour: dark,
+        edge: 0,
+        foot: 0,
       });
     }
   }
@@ -836,7 +1008,7 @@ export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK):
     pace,
     colour: body,
   });
-  if (options.style === "lit") lightUp(plan, light);
+  if (options.style === "lit") lightUp(plan, light, 1 / options.pixels);
   return plan;
 }
 
@@ -846,36 +1018,47 @@ function finish(plan: BodyPlan): BodyPlan {
   return plan;
 }
 
-/** lit: a dark edge around the whole animal, and a lighter back toward the light. */
-function lightUp(plan: BodyPlan, light: number): void {
+/**
+ * lit: a dark edge around the whole animal, `edge` cells wide, and a lighter back toward
+ * the light. Legs thick enough to carry them get an edge and a foot.
+ */
+function lightUp(plan: BodyPlan, light: number, edge: number): void {
   const extra: Part[] = [];
   for (const part of plan.parts) {
     if (part.layer !== LAYER.body && part.layer !== LAYER.under) continue;
     extra.push({
       ...part,
-      along: part.along + 2 * OUTLINE_WIDTH,
-      across: part.across + 2 * OUTLINE_WIDTH,
+      along: part.along + 2 * edge,
+      across: part.across + 2 * edge,
       colour: OUTLINE,
       layer: LAYER.outline,
     });
     // Only the masses of the body catch the light, not what sticks out of it.
     if (part.layer !== LAYER.body || part.shape !== "disc") continue;
     const small = Math.min(part.along, part.across);
-    if (small < 3 * OUTLINE_WIDTH) continue;
+    if (small < 3 * edge) continue;
     extra.push({
       ...part,
-      along: part.along * 0.6,
-      across: part.across * 0.6,
-      colour: blend(part.colour, light, 0.65),
+      along: part.along * 0.5,
+      across: part.across * 0.5,
+      colour: blend(part.colour, light, 0.5),
       layer: LAYER.light,
       lift: small * 0.14,
     });
   }
   plan.parts.push(...extra);
   finish(plan);
+  for (const leg of plan.legs) {
+    if (leg.thickness >= LEG_EDGE_FROM_PX * edge) leg.edge = edge;
+    if (leg.thickness >= FOOT_FROM_PX * edge) leg.foot = leg.thickness * 0.62;
+  }
 }
 
 /** Sprites a creature is made of, without building it. */
 export function spriteCount(plan: BodyPlan): number {
-  return plan.parts.length + 2 * plan.legs.length;
+  let legs = 0;
+  // Two bones a leg, each with its edge if the leg has one, a foot, and the foot's edge.
+  for (const leg of plan.legs)
+    legs += (leg.edge > 0 ? 4 : 2) + (leg.foot > 0 ? (leg.edge > 0 ? 2 : 1) : 0);
+  return plan.parts.length + legs;
 }

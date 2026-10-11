@@ -56,25 +56,29 @@ test("the canvas backend draws the scene and says so", async ({ page }) => {
   await expect(page.getByTestId("drawn-by")).toContainText("Drawn by 2D canvas, on the CPU ·");
 });
 
-test("the views of the proposed look run as scenarios", async ({ page }) => {
-  await page.goto("/spike.html?seconds=0.5&warmup=0.2&only=map-view,local-view");
+test("the three views of the chosen look run as scenarios", async ({ page }) => {
+  await page.goto("/spike.html?seconds=0.5&warmup=0.2&only=map-view,mid-view,local-view");
   const handle = await page.waitForFunction(() => window.__spikeResults, null, { timeout: 30_000 });
   const results = (await handle.jsonValue()) as Results;
   expect(results.error).toBeNull();
-  const [map, local] = results.scenarios;
+  const [map, mid, local] = results.scenarios;
   for (const scenario of results.scenarios) {
     expect(scenario.stalled).toBe(false);
     expect(scenario.frames).toBeGreaterThan(3);
-    // Art pixels of 2 screen pixels, and the grounds painted once for both.
+    // Art pixels of 2 screen pixels, and ground painted for the view.
     expect(scenario.internal).toEqual([512, 300]);
     expect(scenario.ground_paint_ms).toBeGreaterThan(0);
   }
   // On the map every creature is a dot of two squares and nothing grows as a sprite.
   expect(map).toMatchObject({ name: "map-view", plant_sprites: 0, creature_sprites: 2 * 216 });
-  // Up close only some plants stand, far fewer than a sprite per cell would be.
-  expect(local?.plant_sprites).toBeGreaterThan(50);
-  expect(local?.plant_sprites).toBeLessThan(results.world.plant_cells / 8);
-  expect(local?.creature_sprites).toBeGreaterThan(50 * 15);
+  // In the middle view only some plants stand, far fewer than a sprite per cell would be.
+  expect(mid?.name).toBe("mid-view");
+  expect(mid?.plant_sprites).toBeGreaterThan(50);
+  expect(mid?.plant_sprites).toBeLessThan(results.world.plant_cells / 8);
+  expect(mid?.creature_sprites).toBeGreaterThan(50 * 15);
+  // From close a creature has more to it: edges and feet on its legs, glints in its eyes.
+  expect(local?.name).toBe("local-view");
+  expect(local?.creature_sprites).toBeGreaterThan(mid?.creature_sprites ?? Infinity);
 });
 
 test("the spike gives a verdict when the acceptance scenario runs", async ({ page }) => {
