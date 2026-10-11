@@ -27,12 +27,14 @@ The world is a continent, and the screen shows it from three distances
 |---|---|---|---|---|
 | **map** | 2 | all 256 × 150 cells | the continent | a dot |
 | **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 4½ art pixels long |
-| **local** | 32 | 16 × 9 | one animal, and what it walks through | 18 |
+| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 (proposed) |
 
-Nothing is rescaled between the views. An animal is the same 0.55 of a cell long (at
-mass 1) and a grown tree the same three cells tall in the middle view and in the local
-one; the camera is closer, and what it shows is drawn with the detail that distance has
-room for. The plants of the middle view stand in the same places in the local view.
+The land and its plants are not rescaled between the views: a grown tree is three cells
+tall in the middle view and in the local one, and the plants of the middle view stand in
+the same places in the local view; the camera is closer, and what it shows is drawn with
+the detail that distance has room for. Whether the animals keep one size across the
+views is open (see Creatures): the middle view draws them at the size it was found good
+at, and the local view's is being chosen against grown trees.
 
 ### The ground: one painter
 
@@ -61,8 +63,8 @@ foam is a band rather than a line.
 of scrub, then bare). At 8 pixels to the cell that is texture; at 32 it is a patchwork,
 which is what the first local view was. So from 16 pixels to the cell on, the painter
 reads what grows, how thickly, and how the land slopes over the cells around each cell
-(a binomial kernel reaching `calm` cells: 2, with 1 and 3 on offer) before it
-interpolates. A kind of ground then shows only where it holds several cells together;
+(a binomial kernel reaching `calm` cells: 2, chosen over 1 and 3, between which little
+could be told) before it interpolates. A kind of ground then shows only where it holds several cells together;
 growth thins in gaps a cell or two across instead of specks; the line where grass dries
 wanders. The shore is not smoothed: it stays where the heights put it, the same in every
 view and for the animals. Trees and bushes still stand on the cells that grow them.
@@ -104,19 +106,32 @@ little off the middle of its cell:
 Drawing by rule is what lets one plant be drawn at two distances and several styles be
 compared; what is kept can be redrawn by hand in R1. The middle view's trees are the
 first rule (`first`: four lobes on a trunk, a conifer in tiers, its shadow drawn with
-it). For the local view there are three more, written after how pixel-art trees are
-usually built, to choose from:
+it). For the local view three more were written after how pixel-art trees are usually
+built, and **`bundles` was chosen** (T1):
 
 | Style | Broadleaf | Conifer | Bush | After |
 |---|---|---|---|---|
-| `bundles` (T1, proposed) | a crown of many small bundles of leaves packed like a sunflower's seeds, each lit on its own and shading the ones behind it | drooping boughs: tiers with a hem of hanging tips, each shading the one below | a mound of bundles | Slynyrd's Pixelblog 44: one bundle of leaves, repeated and layered by the light |
-| `dome` (T2) | one rounded mass with a bumpy rim, shaded as a whole in five stepped tones whose edges follow a pattern of small bricks | clean tiers, cut straight | a dome | the usual top-down game tree: crown over a short trunk, shadow apart |
-| `limbs` (T3) | a trunk that parts into limbs and twigs, a clump of leaves at each fork and end, air between | whorls of boughs on a trunk that shows | clumps on stems that fan from the foot | Gentree: branches grown by forking, a clump of leaves per end |
+| `bundles` (T1, chosen) | a crown of some thirty-five small bundles of leaves packed like a sunflower's seeds, each lit on its own, with a thin line of shade on the ones behind it | drooping boughs: tiers with a hem of hanging tips, each shading the one below | a mound of bundles | Slynyrd's Pixelblog 44: one bundle of leaves, repeated and layered by the light |
+| `dome` (T2, passed over) | one rounded mass with a bumpy rim, shaded as a whole in five stepped tones | clean tiers, cut straight | a dome | the usual top-down game tree: crown over a short trunk, shadow apart |
+| `limbs` (T3, passed over) | a trunk that parts into limbs and twigs, a clump of leaves at each fork and end | whorls of boughs on a trunk that shows | clumps on stems that fan from the foot | Gentree: branches grown by forking, a clump of leaves per end |
 
 Each style draws every kind in three builds (as the scale has it, slender and tall,
 broad and low) with a different arrangement per drawing, in five tones (the palette's
 three, a cooler one below and a warmer one above), outlined, and adapts to the middle
-view's size, so that once one is chosen the middle view's trees can follow it.
+view's size. Whether the middle view's trees are redrawn as `bundles` is open.
+
+What makes a crown of bundles read as leaves rather than blocks (it was judged blocky
+when its bundles were half as many, twice the size and saw-toothed): a bundle is a disc
+with a soft rim of three gentle bulges, so that many side by side give a bumpy outline;
+its leaves are slanted dabs a couple of pixels long, which ruffle the line between two
+tones and stand out lighter or darker here and there; the shade a bundle throws on those
+behind it is a line, not a field. A conifer's tier is lit on its upper left and in shade
+under its right hem, with needles (two rows to a draw) ruffling the tones; the tips of
+its hem hang to different lengths and not under those of the tier above. A trunk stands
+under the middle of its crown whatever its thickness (a conifer's is thinner than its
+width would give it, and the rule that thinned it used to move it left, in the middle
+view too). A bush is moved down until it sits on the ground, and nothing of a plant is
+drawn below the line it stands on.
 
 **Small plants** (`drawSmall`) are placed by what covers each cell, by hashes of the
 cell, so they are where they were on the next visit:
@@ -168,7 +183,14 @@ benchmark scenarios draw.) The kind follows from the genes, leg pairs first:
 Within a kind the genes still show: size as length (cube root of mass), speed as a
 slimmer build and longer legs, armour short of a shell as plates along the back, sense
 as eye size (ears on a beast), jaw as tusks, pincers or claws, diet as a hunter's
-pointed snout and ivory instead of dark jaws. `BROOD` shows nowhere.
+pointed snout and ivory instead of dark jaws. `BROOD` shows nowhere. Jaws of every kind
+come out from under the head, so that the outline goes round them: drawn over the head
+they left a fringe of stray pixels at the snout.
+
+A **crab** is its carapace: wider than long, a small head in front with eyes on stalks,
+and a pincer on each arm (a palm, and two fingers of different lengths that lean toward
+each other, longer with the jaw gene). The last joint of its chain only steers it and
+is not drawn, and its armour is the carapace itself, not plates laid on it.
 
 **The aquatic gene turns legs into fins.** A body without legs grows fins at the
 shoulders and a tail fin from 0.3. A body with legs grows none beside them: its feet
@@ -176,7 +198,11 @@ web from 0.3, wider with the gene (a fan at the end of each leg, in a colour tha
 toward the fins'), and at 0.6, where the animal lives in the water, its legs are
 flippers: broad blades that row, swinging about where they join the body, each pair a
 little after the one in front. With three or four pairs of legs only the last pair
-turns, as a water beetle's. A flat tail fin comes as before.
+turns, as a water beetle's, into flippers shorter than those of a body that swims with
+all its legs. A webbed foot is an oval paddle set across the end of the leg, little
+wider than the foot it replaces. A fin at the end of the tail comes only on kinds with a
+tail to carry it (lizard, beast; a newt's and an eel's run along it), not under a
+shell.
 
 **Markings.** The pattern gene picks one of twelve by twelfths (plain, stripe, twin
 stripes, bands, bars, spots, rings, saddle and mask, fade, chevrons, speckle, eyespots),
@@ -186,12 +212,16 @@ stations down the back: along the shell or carapace of a kind that has one, else
 widest part at each joint.
 
 A marking never leaves the mass it is on: each is fitted to that mass's oval, and drawn
-smaller where the mass has less room for it (the ends of a shell). On a shell a stripe
-is one long oval that tapers with it. A back that fades does it in the colours of its
-masses, joint by joint; a shell fades in ovals laid on it. A marking too small to show
-(under most of a pixel) is left out, which in the middle view is most of them. A marking
-of 3 pixels and more is shaded as a mass is, on its own: its far edge in shade, and a
-sunlit patch if it is round and large enough.
+smaller where the mass has less room for it (the ends of a shell). What each is made of,
+so that it reads as what it is called: a stripe is ovals that run into each other down a
+back, or one long oval that tapers with a shell; bands are narrow ovals across the back;
+bars are one slanted bar to a place, all leaning the same way; a back fades in the
+colours of its masses, joint by joint, and a shell in three ovals nested toward its
+rear; a saddle brings a mask across the eyes. A marking too small to show (under most
+of a pixel) is left out, which in the middle view is most of them. A marking of 3 pixels
+and more is shaded as a mass is, on its own: its far edge in shade, and a sunlit patch
+if it is round (no more than 2.2 times as long as wide: a patch would cut a band in
+two). Stripes and fades are drawn flat, in their one colour.
 
 **By distance.** On the map a creature is a dot: its colour, edged dark, a little bigger
 for the heavy. In the middle view it is its body, small, hurrying. In the local view the
@@ -199,26 +229,32 @@ same body gets what there is now room for: a glint in each eye, legs with an edg
 feet; and it ambles. Only creatures in sight are worked out.
 
 How long an animal is drawn is the renderer's choice (the simulation knows mass, not
-length): 0.5 × 1.1 cells at mass 1, one number for all views (0.4 and 0.62 are on
-offer). At 0.5 an animal of mass 1 is a fifth as long as a grown tree is tall, and the
-heaviest a genome allows (mass 16) comes to a tree's knee; at the 0.85 before it the
-heaviest was as long as a grown tree is wide. Seen twice as close as the local view (64
-pixels to the cell), the same bodies are portraits, as a bestiary will want them: the
-look sheet draws the markings that way. Kinds change at thresholds, so two animals of
-one species either side of one will look like different kinds; whether that needs
-softening is for R2.
+length): a number times 1.1 cells at mass 1. The middle view draws at 0.5, where it was
+found good: 4½ art pixels at mass 1. For the local view 0.5 and then 0.4 were judged too
+large, the second against a young tree; it is being chosen from 0.2 to 0.5 against a
+line-up of grown trees and bushes, with 0.35 proposed: mass 1 is an eighth as long as a
+grown tree is tall, and the heaviest a genome allows (mass 16) two thirds of a bush's
+height. If the middle view followed, its animals would be 3 pixels long at 0.35 and 2 at
+0.25, dots with an outline; if it keeps 0.5 it draws animals larger than life, as the
+map does with its dots. That is the second half of the choice. Seen from close enough
+that mass 1 is some thirty pixels long, the same bodies are portraits, as a bestiary
+will want them: the look sheet draws the markings that way. Kinds change at thresholds,
+so two animals of one species either side of one will look like different kinds; whether
+that needs softening is for R2.
 
 ## The look sheet
 
 `renderer/look.html` shows the three views as they stand, drawn by the same code as the
 benchmark with the settings of `proposal.ts`, and for what is still open the proposals
 side by side with one marked as the pick: the map; the middle view on a shore and in a
-wood; for the local view the ground alone read over one, two and three cells, a sample
-of every kind of ground, the trees and bushes of each style on a sheet and in a wood,
-the small plants, a meadow with the animals at three sizes, a shore, and the four
-lights; then the fifteen specimen genomes at the local view's size, and every marking on
-two bodies and each gene swept on its own, twice as close. Live, the creatures walk
-(`npm run dev`, then `/look.html`); `npm run look` writes a self-contained copy to
+wood; for the local view its ground alone and a sample of every kind of ground, the
+trees and bushes on sheets and in a wood, the small plants, a meadow, a shore, and the
+four lights; then **the line-up the animals' size is chosen by**: grown trees and
+bushes in a row on a meadow and the same five animals (masses 0.25 to 16) in front of
+them, at six sizes, with a piece of the middle view at each size beneath; then the
+fifteen specimen genomes at the local view's size, and every marking on two bodies and
+each gene swept on its own, as portraits. Live, the creatures walk (`npm run dev`, then
+`/look.html`); `npm run look` writes a self-contained copy to
 [`reports/R0-look-sheet/`](../../reports/R0-look-sheet/README.md) that can be read
 anywhere: creatures walk for a fixed, seeded 8 s, then every picture is saved inline,
 those with animals in them as loops of 6 s (animated PNG, written by `apng.ts`: the first
@@ -226,8 +262,13 @@ frame whole, then only what changed), which play without a script. In the sheet 
 local view's camera holds on the patch its animal is kept on, which is what keeps the
 loops small; in the benchmark it follows the animal.
 
-Still to be chosen there: the style of the local view's trees and bushes (T1 to T3), how
-far around its ground is read (K1 to K3), and the size of the animals (A1 to A3).
+Before a sheet goes out, trees and creatures are looked at enlarged four times, pixel
+by pixel: most of what was mended after the second sight of the local view (a trunk
+beside its crown, tusks without an outline, a crab trailing a joint) cannot be seen at
+the size the sheet shows them and was plain at that one.
+
+Still to be chosen there: the size of the animals in the local view, whether the middle
+view follows it, and whether the middle view's trees are redrawn as `bundles`.
 
 ## What it costs: an estimate for the board
 
@@ -374,8 +415,9 @@ image draws WebGL with the GPU.
 
 ## Open
 
-- **The local view's trees, ground and animal size**: the proposals on the look sheet.
-  Once a style of tree is chosen, the middle view's trees are redrawn in it.
+- **The animals' size in the local view**, and whether the middle view follows it or
+  keeps its own: the line-up on the look sheet.
+- **The middle view's trees**: as they are, or redrawn as `bundles`.
 - **Plant genes in the drawing.** A style's three builds and the kinds of flower are the
   renderer's own variety. The 8-gene plant genome could choose them (R1).
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the

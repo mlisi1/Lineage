@@ -1,7 +1,8 @@
 # 0007 — Three views of the world, and the look chosen for them
 
-- **Status**: accepted; amended the same day after the first sight of the local view
-  (see the end). Open: the style of its trees, how calm its ground, the size of animals
+- **Status**: accepted; amended twice the same day, after the first and the second sight
+  of the local view (see the end). Open: the size of the animals in the local view, and
+  whether the middle view follows it
 - **Date**: 2026-10-11
 
 ## Context
@@ -84,3 +85,32 @@ on the ground. Settled and changed:
 
 Consequence for R1: the painter needs the neighbourhood of a piece (two cells of it) and
 the shadows of the plants on it, so painting off the frame has to carry both.
+
+## Second amendment: after the second sight of the local view
+
+The owner's verdict on the reworked local view: the middle view is good; between the
+ground read over one, two or three cells no difference could be told; the bundles are the
+best trees so far, with a conifer's trunk beside its crown and leaves too blocky; the
+animals still a bit large even at the smallest size offered (0.4), though judged against
+a young tree; creatures fine but for some faults in the drawing.
+
+- **The local view's ground is read over two cells around** (K2).
+- **Trees and bushes of the local view are bundles of leaves** (T1), mended: about twice
+  as many smaller bundles with soft rims and leaves as slanted dabs; conifers lit tier by
+  tier instead of split down the middle; trunks under the middle of their crowns, in
+  the middle view too; bushes that sit on the ground. The other two styles stay in the
+  code as passed over. Whether the middle view's trees follow is left to the owner.
+- **The animals' size is chosen against grown trees**, from 0.2 to 0.5 (0.35 proposed),
+  on a line-up of full-grown trees and bushes with the same five animals at each size.
+- **"One world scale" is in question for the animals.** The middle view was found good
+  at 0.5; at the sizes now on offer for the local view its animals would be two or three
+  pixels long. Either it follows and shows them as dots, or it keeps 0.5 and draws them
+  larger than life, as the map already does. The land and the plants stay at one scale
+  either way. Until chosen, the middle view is drawn at 0.5 and the local view at the
+  proposal.
+- **Creatures are mended** where a close look found faults: jaws come out from under the
+  head and are outlined; a crab ends with its carapace and has pincers; bars, bands,
+  stripes and a shell's fade are made of what reads as each; long markings carry no lit
+  patch; a tail fin only on a tail; webbed feet are paddles.
+- **Looking closely is part of making a sheet**: trees and creatures are checked
+  enlarged four times before it goes out.
