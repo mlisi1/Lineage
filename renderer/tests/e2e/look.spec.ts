@@ -106,12 +106,41 @@ test("the look sheet saves itself as one self-contained page", async ({ page }) 
       [...document.images].filter((image) => !image.complete || image.naturalWidth === 0).length,
   );
   expect(broken).toBe(0);
-  await expect(page.getByText("A still copy")).toBeVisible();
+  await expect(page.getByText("A copy to read anywhere")).toBeVisible();
   await expect(page.getByText("This page is live")).toHaveCount(0);
   // Pixel art stays hard-edged and keeps its enlarged size.
   const tile = page.locator("#specimens-lit img").first();
   expect(await tile.evaluate((image) => getComputedStyle(image).imageRendering)).toBe("pixelated");
   expect((await tile.boundingBox())?.width).toBe(168);
+});
+
+test("the saved page can carry the animals moving, as loops that need no script", async ({
+  page,
+}) => {
+  await open(page, 1);
+  const html = await page.evaluate(() => window.__lookStandalone?.({ seconds: 0.5, fps: 4 }) ?? "");
+  expect(html).not.toContain("<script");
+  await page.setContent(html);
+  /** How many frames the picture with this label holds: an animated PNG says so. */
+  const frames = (label: string): Promise<number> =>
+    page.evaluate((alt) => {
+      const image = document.querySelector<HTMLImageElement>(`img[alt="${alt}"]`);
+      const bytes = atob(image?.src.split(",")[1] ?? "");
+      const at = bytes.indexOf("acTL");
+      if (at < 0) return 1;
+      return [4, 5, 6, 7].reduce((count, i) => count * 256 + bytes.charCodeAt(at + i), 0);
+    }, label);
+  // Animals in the picture: a loop. None, or a light that is only a tint: a still.
+  expect(await frames("Local view by day")).toBe(2);
+  expect(await frames("Map view with animals as dots")).toBe(2);
+  expect(await frames("grazer: beast · herbivore · mass 0.9")).toBe(2);
+  expect(await frames("Wood, medium plants")).toBe(1);
+  expect(await frames("Local view at night")).toBe(1);
+  const broken = await page.evaluate(
+    () =>
+      [...document.images].filter((image) => !image.complete || image.naturalWidth === 0).length,
+  );
+  expect(broken).toBe(0);
 });
 
 test("the still pictures are the same every time", async ({ page }) => {

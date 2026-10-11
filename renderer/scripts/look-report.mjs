@@ -14,6 +14,8 @@ import { preview } from "vite";
 
 /** How long the creatures walk before the pictures are taken. */
 const WALK_SECONDS = 8;
+/** The loops of the pictures with animals in them. */
+const FILM = { seconds: 6, fps: 10 };
 const OUT = new URL("../../reports/R0-look-sheet/", import.meta.url);
 
 const server = await preview({ logLevel: "silent" });
@@ -23,11 +25,12 @@ try {
   if (address === undefined) throw new Error("the preview server gave no address");
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(`${address}look.html?still=${WALK_SECONDS}`);
+  page.setDefaultTimeout(600_000);
   await page.waitForFunction(() => window.__lookReady === true, null, { timeout: 120_000 });
   const failure = await page.locator("#failure").textContent();
   if (failure) throw new Error(`look.html failed: ${failure}`);
 
-  const html = await page.evaluate(() => window.__lookStandalone());
+  const html = await page.evaluate((film) => window.__lookStandalone(film), FILM);
   const world = await page.locator("#world").textContent();
   const build = await page.locator("#build").textContent();
   const pictures = await page.locator("canvas").count();
@@ -40,7 +43,9 @@ try {
     "",
     `- World: ${world}`,
     `- Renderer build: \`${build}\``,
-    `- ${pictures} pictures, taken after the creatures have walked for ${WALK_SECONDS} s`,
+    `- ${pictures} pictures, taken after the creatures have walked for ${WALK_SECONDS} s;`,
+    `  those with animals in them are loops of ${FILM.seconds} s at ${FILM.fps} frames a second`,
+    "  (animated PNG: they play in any browser, without a script)",
     "",
     "Regenerate with `cd renderer && npm run look`; do not edit by hand. It is a view of",
     "the look, not a measurement: nothing here is an acceptance criterion.",

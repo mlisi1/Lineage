@@ -9,6 +9,7 @@
  * look.html; this file fills in the pictures.
  */
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
+import { ApngWriter, dataUri } from "./apng";
 import { CREATURE_STYLES, bodyPlan, kindOf } from "./body";
 import type { CellRect } from "./camera";
 import type { Point } from "./chain";
@@ -37,8 +38,12 @@ declare global {
   interface Window {
     /** Set once every picture has been drawn (the report script waits for it). */
     __lookReady?: boolean;
-    /** The page as one self-contained HTML document, pictures as inline images. */
-    __lookStandalone?: () => string;
+    /**
+     * The page as one self-contained HTML document, pictures as inline images. With
+     * `film`, the pictures with animals in them are loops of that many seconds at that
+     * many frames a second, which play without a script.
+     */
+    __lookStandalone?: (film?: { seconds: number; fps: number }) => Promise<string>;
   }
 }
 
@@ -251,7 +256,8 @@ async function main(): Promise<void> {
   });
   const show = (canvas: HTMLCanvasElement, picture: Picture, enlarged: number): void => {
     size(canvas, picture.width, picture.height, enlarged);
-    const context = canvas.getContext("2d");
+    // A still page's pictures are read back, frame after frame, to be saved.
+    const context = canvas.getContext("2d", { willReadFrequently: still !== null });
     if (context === null) throw new Error("no 2D canvas");
     drawn.push({ picture, context, seen: true });
     watcher.observe(canvas);
@@ -425,6 +431,7 @@ async function main(): Promise<void> {
   const drawAll = (): void => {
     for (const { picture, context } of drawn) stage.draw(picture, context);
   };
+  let filming = false;
   if (still !== null) {
     const steps = Math.round(Math.min(Math.max(Number(still) || 0, 0), 120) / STILL_STEP_S);
     for (let step = 0; step < steps; step++) stage.tick(STILL_STEP_S);
@@ -434,24 +441,52 @@ async function main(): Promise<void> {
     drawAll();
     let last = performance.now();
     const frame = (now: number): void => {
-      stage.tick(Math.min((now - last) / 1000, MAX_STEP_S));
+      const dtS = Math.min((now - last) / 1000, MAX_STEP_S);
       last = now;
+      requestAnimationFrame(frame);
+      if (filming) return; // the film sets the pace while it is being taken
+      stage.tick(dtS);
       // Only what moves and can be seen: a picture without creatures never changes.
       for (const { picture, context, seen } of drawn) {
         if (seen && picture.cast !== null) stage.draw(picture, context);
       }
-      requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   }
 
-  window.__lookStandalone = (): string => {
+  window.__lookStandalone = async (film): Promise<string> => {
+    filming = true;
     drawAll();
+    // The loops: every picture with animals in it by day, all on one clock.
+    const loops = new Map<HTMLCanvasElement, string>();
+    if (film !== undefined) {
+      const moving = drawn.filter(
+        ({ picture }) => picture.cast !== null && picture.light === "day",
+      );
+      const writers = moving.map(
+        ({ picture }) => new ApngWriter(picture.width, picture.height, Math.round(1000 / film.fps)),
+      );
+      const frames = Math.round(film.seconds * film.fps);
+      const steps = Math.max(1, Math.round(1 / film.fps / STILL_STEP_S));
+      for (let frame = 0; frame < frames; frame++) {
+        if (frame > 0) for (let step = 0; step < steps; step++) stage.tick(STILL_STEP_S);
+        for (const [index, { picture, context }] of moving.entries()) {
+          stage.draw(picture, context);
+          const pixels = context.getImageData(0, 0, picture.width, picture.height).data;
+          await writers[index]?.add(pixels);
+        }
+      }
+      moving.forEach(({ context }, index) => {
+        const writer = writers[index];
+        if (writer !== undefined) loops.set(context.canvas, dataUri(writer.finish(), "image/png"));
+      });
+    }
     const copy = document.documentElement.cloneNode(true) as HTMLElement;
     const sources = [...document.querySelectorAll("canvas")];
     [...copy.querySelectorAll("canvas")].forEach((canvas, index) => {
+      const source = sources[index];
       const image = create("img");
-      image.src = sources[index]?.toDataURL("image/png") ?? "";
+      if (source !== undefined) image.src = loops.get(source) ?? source.toDataURL("image/png");
       image.alt = canvas.getAttribute("aria-label") ?? "";
       image.width = canvas.width;
       image.height = canvas.height;
@@ -460,6 +495,7 @@ async function main(): Promise<void> {
     });
     for (const node of copy.querySelectorAll("script, link, [data-live]")) node.remove();
     for (const node of copy.querySelectorAll("[data-still]")) node.removeAttribute("hidden");
+    filming = false;
     return `<!doctype html>\n${copy.outerHTML}\n`;
   };
   window.__lookReady = true;
