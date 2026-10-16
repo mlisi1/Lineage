@@ -151,6 +151,7 @@ Do not create directories outside this layout without updating this file.
     `--set fauna.learning=false` to change one config key for an ablation;
     `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
+    (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off)
   - `cd renderer && npm test && npx playwright test`
   - `cd renderer && npm run typecheck && npm run lint`
 - **Dependencies**: ask before adding any new dependency; record why in the PR/commit.

@@ -125,9 +125,9 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 ## Open
 
-- M5 (in progress, ADR 0009): in the full world, learning improves newborns' early-life
-  feeding by only +1.5 % (median of 12 seeds), against a ≥ 15 % target. Inherited
-  instincts likely leave little to learn; tuning comes next.
+- M5 (in progress, ADR 0009): on a 12-seed probe, newborns with learning eat 21 % more
+  per hour of youth than the same worlds without it (median), and die young less often.
+  The full 20-seed report is still to run.
 
 - Predators mostly persist because hunter species keep arriving: a pack typically lasts
   months, not years, and newborn hunters often starve. The mean diet gene of the
