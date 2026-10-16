@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from lineage_sim.fauna.genome import Gene
 
 from tools import report
 from tools.fastforward import fastforward
@@ -285,7 +286,7 @@ def test_m4_report_has_acceptance_and_creature_maps(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "m4"
     run = fastforward(1.25, [0, 1], run_dir, save_days=1000, snapshot_days=60, jobs=2)
     assert max(float(s["population"].max()) for s in run.series.values()) > 0, "no founders"
-    assert run.series[0]["_final_genes"].shape[1] == 11
+    assert run.series[0]["_final_genes"].shape[1] == len(Gene)
     out = build_report("M4", run_dir, tmp_path / "reports")
     assert out.name == "M4-fauna-evolution"
 
