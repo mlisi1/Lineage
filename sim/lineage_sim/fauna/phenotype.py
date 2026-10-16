@@ -38,12 +38,17 @@ class Phenotype:
     lifespan_h: Values  # hours
     maturity_h: Values  # age at which it can breed, hours
     brood: Values  # young per brood, whole numbers
+    learning_rate: Values  # brain weight change per unit trace per unit reward, per hour
+    exploration: Values  # standard deviation of the noise on each steering drive
 
 
 def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
     g = genes.astype(np.float32)
     size, diet, speed = g[:, Gene.SIZE], g[:, Gene.DIET], g[:, Gene.SPEED]
     armour, aquatic, jaw = g[:, Gene.ARMOUR], g[:, Gene.AQUATIC], g[:, Gene.JAW]
+    # Without lifetime learning (the M4 brain) the learning genes do nothing and cost nothing.
+    learns = 1.0 if cfg.learning else 0.0
+    learning = learns * g[:, Gene.LEARNING]
 
     mass = cfg.mass_min * (cfg.mass_max / cfg.mass_min) ** size
     scaled = mass**cfg.metabolic_exponent
@@ -79,6 +84,7 @@ def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
         + cfg.cost_jaw * jaw
         + cfg.cost_limb_pair * limb_pairs
         + cfg.cost_aquatic * aquatic
+        + cfg.cost_learning * learning
     )
     lifespan_h = 24.0 * cfg.lifespan_base * mass**cfg.lifespan_mass_exponent
 
@@ -104,4 +110,6 @@ def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
         lifespan_h=out(lifespan_h),
         maturity_h=out(cfg.maturity_share * lifespan_h),
         brood=out(1.0 + np.rint(g[:, Gene.BROOD] * (cfg.brood_max - 1))),
+        learning_rate=out(cfg.learning_rate_max * learning),
+        exploration=out(cfg.exploration_max * learns * g[:, Gene.EXPLORATION]),
     )

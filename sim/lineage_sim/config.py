@@ -402,6 +402,16 @@ class FaunaConfig:
     instinct_land: float
     instinct_space: float
     founder_brain_sigma: float
+    learning: bool
+    learning_rate_max: float
+    exploration_max: float
+    trace_hours: float
+    exploration_hours: float
+    baseline_hours: float
+    learned_max: float
+    forget_hours: float
+    cost_learning: float
+    competence_hours: float
     herbivore_max_diet: float
     predator_min_diet: float
 
@@ -431,6 +441,13 @@ class FaunaConfig:
             "brood_max",
             "rare_slots",
             "immigrant_group_size",
+            "exploration_max",
+            "trace_hours",
+            "exploration_hours",
+            "baseline_hours",
+            "learned_max",
+            "forget_hours",
+            "competence_hours",
         )
         for key in positive:
             check(getattr(self, key) > 0, f"{key} must be positive")
@@ -517,12 +534,18 @@ def _calendar(raw: Mapping[str, Any]) -> CalendarConfig:
 
 
 def _numeric_section(raw: Mapping[str, Any], name: str, cls: type[_T]) -> _T:
-    """Build a dataclass of int/float fields from section ``[name]``, checking every key."""
+    """Build a dataclass of int/float/bool fields from section ``[name]``, checking every
+    key."""
     types = {f.name: str(f.type) for f in fields(cast(Any, cls))}
     section = _section(raw, name, frozenset(types))
-    values: dict[str, int | float] = {}
+    values: dict[str, int | float | bool] = {}
     for key, kind in types.items():
         value = section[key]
+        if kind == "bool":
+            if not isinstance(value, bool):
+                raise ConfigError(f"[{name}] {key} must be true or false")
+            values[key] = value
+            continue
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ConfigError(f"[{name}] {key} must be a number")
         if kind == "int":

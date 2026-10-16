@@ -33,7 +33,8 @@ lineage-tools = { workspace = true }
 addopts = "--import-mode=importlib --strict-markers -ra"
 testpaths = ["sim/tests", "server/tests", "device/tests", "tools/tests"]
 # `tools` is a plain directory package run with `python -m tools.<x>` from the repo root.
-pythonpath = ["."]
+# sim/tests: helper modules shared by several test files (fauna_site.py).
+pythonpath = [".", "sim/tests"]
 markers = [
     "slow: long statistical tests, run nightly (`pytest -m slow`)",
 ]
@@ -53,5 +54,6 @@ allowed-confusables = ["–", "—", "×"]
 pythonVersion = "3.11"
 include = ["sim", "server", "device", "tools"]
 strict = ["sim"]
+extraPaths = ["sim/tests"]
 venvPath = "."
 venv = ".venv"

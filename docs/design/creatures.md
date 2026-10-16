@@ -36,8 +36,7 @@ expected values for the cross-language check in R2.
 
 ## Brain
 
-A small neural net per creature, inherited and mutated, never learned during life (M5
-adds learning). It only steers:
+A small neural net per creature, inherited and mutated. It only steers:
 
 - **Senses** (16): energy, plant food underfoot, direction of better food within sense
   range, direction of the nearest prey (when hungry), threat, mate (when ready to breed)
@@ -49,6 +48,30 @@ adds learning). It only steers:
   behaviour come to depend on state.
 - **Roaming**: each creature keeps a heading that drifts slowly, so one with nothing to
   steer by covers ground instead of jittering in place.
+
+## Lifetime learning (M5)
+
+Every creature also learns during its life. What it learns is a **gain on each
+directional sense** (food, prey, threat, mate, land, its own kind): how strongly to
+follow it. Senses are directions on the map, so a gain is the only thing about them
+worth learning on an island with no preferred compass direction (an earlier version
+that let 50 weights learn fitted noise into fixed directions and drifted).
+
+- **Rule**: node perturbation (REINFORCE). Slowly varying noise (`exploration_hours`)
+  is added to the steering drive; an eligibility trace (`trace_hours`) accumulates
+  noise · sensed direction per gain; each tick the gains move along their trace by
+  learning rate × (reward − baseline). Reward is the tick's energy balance from eating
+  and moving, as a share of capacity per hour; the baseline is its running average
+  (`baseline_hours`). Gains fade with `forget_hours` and stay within `learned_max`.
+- **Genes**: `LEARNING` (rate, costs basal burn) and `EXPLORATION` (noise; its cost is
+  noisier steering). Both count toward compatibility and genetic distance.
+- **Not inherited**: newborns start with no learned gains; evolution sees only innate
+  weights (the setting for a Baldwin effect).
+- **Off switch**: `learning = false` is the M4 brain: no noise, no learning, no cost.
+- **Measures**: a creature is *competent* from the first time its day-averaged energy
+  balance stops being negative. When its youth ends (maturity or death) a
+  `JuvenileGrown` event reports what it ate and burnt while young, its competence age
+  and its generation (0: arrived from elsewhere).
 
 ## Life
 

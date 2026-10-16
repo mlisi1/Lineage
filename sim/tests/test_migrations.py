@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from lineage_sim.config import Config
+from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.state import io
 from lineage_sim.state.migrations import MIGRATIONS, migrate
 from lineage_sim.state.schema import SCHEMA_VERSION, StateError, WorldState
@@ -113,8 +114,30 @@ def test_v4_fixture_values(config: Config) -> None:
     world = World.restore(config, state)
     fauna = world.fauna
     assert fauna.count > 50
-    assert fauna.genes.shape == (fauna.count, 11)
+    assert fauna.genes.shape == (fauna.count, GENE_COUNT)
     assert len(set(fauna.ids.tolist())) == fauna.count
+
+
+def test_v4_creatures_wake_up_as_non_learners(config: Config) -> None:
+    world = World.restore(config, io.loads(_fixture(4)))
+    fauna = world.fauna
+    assert fauna.count > 50
+    assert float(np.abs(fauna.genes[:, [Gene.LEARNING, Gene.EXPLORATION]]).max()) == 0.0
+    assert float(np.abs(fauna.learned).max()) == 0.0
+    assert (fauna.generation == 0).all()
+    np.testing.assert_array_equal(fauna.competent_hours, fauna.age_hours)
+    world.step(86_400)  # and they live on
+    assert world.fauna.count > 0
+
+
+def test_v5_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(5))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    fauna = World.restore(config, state).fauna
+    assert fauna.count > 50
+    assert int(fauna.generation.max()) > 0
+    assert float(np.abs(fauna.learned).max()) > 0.0
 
 
 def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -45,6 +45,9 @@ def test_schedule_is_read_only(config: Config) -> None:
         (("[schedule]", "[schedule]\nspecies = 0.0001"), "shorter than 1 ms"),
         (("[schedule]", "[schedul]"), "unknown sections"),
         (("[meta]", "[meta"), "invalid TOML"),
+        (("learning = true", "learning = 1"), "learning must be true or false"),
+        (("exploration_max = 1.0", "exploration_max = true"), "exploration_max must be a number"),
+        (("trace_hours = 2.0", "trace_hours = 0.0"), "trace_hours must be positive"),
     ],
 )
 def test_invalid_config_is_rejected(
@@ -54,3 +57,9 @@ def test_invalid_config_is_rejected(
     assert old in default_config_text
     with pytest.raises(ConfigError, match=message):
         parse_config(default_config_text.replace(old, new, 1))
+
+
+def test_learning_switch(default_config_text: str) -> None:
+    assert parse_config(default_config_text).fauna.learning is True
+    off = parse_config(default_config_text.replace("learning = true", "learning = false", 1))
+    assert off.fauna.learning is False

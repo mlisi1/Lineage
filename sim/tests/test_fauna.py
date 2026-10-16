@@ -6,151 +6,36 @@ import datetime as dt
 import json
 from dataclasses import fields, replace
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
+from fauna_site import COLUMNS, GRAZER, HUNTER, ROWS, TICK_S, Array, Site
+from fauna_site import genes_of as _genes
+from fauna_site import with_gene as _with
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from lineage_sim import clock
-from lineage_sim.config import Config, FaunaConfig
-from lineage_sim.events import CreaturesArrived, OutputEvent, PopulationExtinct
+from lineage_sim.config import Config
+from lineage_sim.events import CreaturesArrived, JuvenileGrown, PopulationExtinct
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype, phenotype
-from lineage_sim.fauna.population import Fauna
-from lineage_sim.flora import Flora
 from lineage_sim.state import io
-from lineage_sim.subsystem import Context
-from lineage_sim.terrain import Terrain
 from lineage_sim.world import World
 from numpy.random import PCG64, Generator
-from numpy.typing import NDArray
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
-TICK_S = 600.0
-# Final state of the default world, seed 42, after 520 days (same as fixture v4).
-GOLDEN_FAUNA_SEED_42 = "5b9e0194728c622dbe30ccc8189f578332cc8439fe7e617cb37bbe8bddf5c051"
+# Final state of the default world, seed 42, after 520 days (same as fixture v5).
+GOLDEN_FAUNA_SEED_42 = "d13495b12923ecfb65220cd6bbc2e28056fc2a7cc5c922984be9841b93260063"
 # …and three days later.
-GOLDEN_AFTER_THREE_DAYS = "4daf4c736681bd38ed4b438ef0b04412914b375843283aa84c6ec274c1dd1484"
+GOLDEN_AFTER_THREE_DAYS = "d082e820247bb2157675c3568d0d15e7092c73782654f49fa8be242fa9c2ddc6"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
-
-ROWS, COLUMNS = 40, 60
-SEA = 0.42
-Array = NDArray[np.float32]
-
-# Hand-made genomes, by gene:
-# SIZE DIET LIMBS SPEED ARMOUR SENSE AQUATIC JAW BROOD HUE PATTERN
-GRAZER = (0.30, 0.05, 0.50, 0.50, 0.20, 0.50, 0.00, 0.50, 0.00, 0.30, 0.30)
-HUNTER = (0.60, 0.90, 0.50, 0.80, 0.10, 0.70, 0.00, 0.90, 0.00, 0.90, 0.90)
-
-
-def _genes(*rows: tuple[float, ...]) -> Array:
-    return np.array(rows, dtype=np.float32)
-
-
-def _with(genome: tuple[float, ...], gene: Gene, value: float) -> tuple[float, ...]:
-    changed = list(genome)
-    changed[gene] = value
-    return tuple(changed)
 
 
 def _body(config: Config, *rows: tuple[float, ...]) -> Phenotype:
     return phenotype(config.fauna, _genes(*rows))
-
-
-class Site:
-    """A frozen terrain with flora and fauna on it; fauna ticks are driven by hand."""
-
-    def __init__(
-        self,
-        config: Config,
-        *,
-        biomass: float = 0.8,
-        water_from: int | None = None,
-        fauna: FaunaConfig | None = None,
-        seed: int = 1,
-    ) -> None:
-        self.config = config
-        # No strangers unless a test asks for them.
-        self.cfg = fauna or replace(config.fauna, immigrant_groups_per_year=0.0)
-        height = np.full((ROWS, COLUMNS), SEA + 0.10, dtype=np.float32)
-        if water_from is not None:
-            height[:, water_from:] = SEA - 0.2
-        self.terrain = Terrain(replace(config.terrain, grid_height=ROWS, grid_width=COLUMNS))
-        self.terrain.set_state(
-            {
-                "height": height,
-                "fertility": np.full((ROWS, COLUMNS), 0.5, dtype=np.float32),
-                "hotspots": np.zeros((0, 7)),
-                "sea_phases": [0.0, 0.0],
-                "sea_level": SEA,
-                "continent_seeds": [1, 2, 3],
-                "roughness_seed": 4,
-            }
-        )
-        self.flora = Flora(config.flora, self.terrain)
-        state = self.flora.get_state()
-        state["biomass"][height > SEA] = biomass
-        state["genome"][:, height > SEA] = 60
-        self.flora.set_state(state)
-        self.fauna = Fauna(self.cfg, self.terrain, self.flora)
-        self.rng = Generator(PCG64(seed))
-        self.t_ms = 0
-
-    def add(
-        self,
-        genome: tuple[float, ...],
-        positions: list[tuple[float, float]],
-        *,
-        energy_share: float = 0.9,
-        age_days: float = 20.0,
-        idle_days: float = 0.0,
-    ) -> NDArray[np.int64]:
-        """Put creatures with ``genome`` at ``positions``; returns their ids."""
-        count = len(positions)
-        genes = np.repeat(_genes(genome), count, axis=0)
-        state = self.fauna.get_state()
-        body = phenotype(self.cfg, genes)
-        ids = np.arange(state["next_id"], state["next_id"] + count, dtype=np.int64)
-        weights = brain.founder_weights(Generator(PCG64(7)), self.cfg, genes)
-        extra: dict[str, Any] = {
-            "positions": np.array(positions, dtype=np.float32),
-            "energy": energy_share * body.capacity,
-            "age_h": np.full(count, age_days * 24.0, dtype=np.float32),
-            "idle_h": np.full(count, idle_days * 24.0, dtype=np.float32),
-            "heading": np.zeros(count, dtype=np.float32),
-            "genes": genes,
-            "weights": weights,
-            "slots": np.zeros(count, dtype=np.uint16),
-            "ids": ids,
-            "origin": np.full(count, len(state["ancestors"]), dtype=np.int32),
-        }
-        for key, value in extra.items():
-            state[key] = np.concatenate([state[key], value])
-        state["ancestors"] = np.concatenate([state["ancestors"], _genes(genome)])
-        state["next_id"] = int(ids[-1]) + 1
-        self.fauna.set_state(state)
-        return ids
-
-    def run(self, hours: float, when: dt.date = dt.date(2026, 6, 1)) -> list[OutputEvent]:
-        outputs: list[OutputEvent] = []
-        for _ in range(round(hours * 3600 / TICK_S)):
-            self.t_ms += int(TICK_S * 1000)
-            unix_ms = clock.date_to_unix_ms(when) + self.t_ms
-            instant = clock.instant(unix_ms, 0, self.config.calendar)
-            outputs += self.fauna.tick(Context(self.t_ms, TICK_S, instant, self.rng))
-        return outputs
-
-    def alive(self, ids: NDArray[np.int64]) -> int:
-        return int(np.isin(ids, self.fauna.ids).sum())
-
-    def energy_share(self, ids: NDArray[np.int64]) -> Array:
-        mask = np.isin(self.fauna.ids, ids)
-        return self.fauna.energy[mask] / self.fauna.body.capacity[mask]
 
 
 # --- Genome -----------------------------------------------------------------------------
@@ -209,7 +94,7 @@ def test_bigger_is_costlier(config: Config) -> None:
 
 
 @pytest.mark.parametrize("gene", [Gene.SPEED, Gene.ARMOUR, Gene.SENSE, Gene.JAW, Gene.AQUATIC,
-                                  Gene.LIMBS])  # fmt: skip
+                                  Gene.LIMBS, Gene.LEARNING])  # fmt: skip
 def test_every_ability_raises_the_resting_burn(config: Config, gene: Gene) -> None:
     body = _body(config, _with(GRAZER, gene, 0.1), _with(GRAZER, gene, 0.9))
     assert float(body.basal_burn[1]) > float(body.basal_burn[0])
@@ -232,6 +117,18 @@ def test_what_each_gene_buys(config: Config) -> None:
     assert float(swim.land_speed[1]) < float(swim.land_speed[0])
     brood = pair(Gene.BROOD)
     assert (float(brood.brood[0]), float(brood.brood[1])) == (1.0, float(config.fauna.brood_max))
+    learning = pair(Gene.LEARNING)
+    assert float(learning.learning_rate[1]) > float(learning.learning_rate[0])
+    exploring = pair(Gene.EXPLORATION)
+    assert float(exploring.exploration[1]) > float(exploring.exploration[0])
+
+
+def test_without_learning_the_learning_genes_do_nothing(config: Config) -> None:
+    off = replace(config.fauna, learning=False)
+    keen = _with(_with(GRAZER, Gene.LEARNING, 1.0), Gene.EXPLORATION, 1.0)
+    body, plain = phenotype(off, _genes(keen)), phenotype(off, _genes(GRAZER))
+    assert float(body.learning_rate[0]) == float(body.exploration[0]) == 0.0
+    assert float(body.basal_burn[0]) == float(plain.basal_burn[0])
 
 
 def test_limbs(config: Config) -> None:
@@ -492,7 +389,7 @@ def test_compatible_pair_breeds(config: Config) -> None:
 
 def test_incompatible_pair_does_not_breed(config: Config) -> None:
     site = Site(config)
-    other = _with(_with(GRAZER, Gene.HUE, 0.95), Gene.PATTERN, 0.95)  # too different
+    other = _with(_with(GRAZER, Gene.HUE, 1.0), Gene.PATTERN, 1.0)  # too different
     assert float(gn.distance(_genes(GRAZER), _genes(other))[0]) > config.fauna.compat_distance
     site.add(GRAZER, [(20.0, 20.0)], idle_days=3.0)
     site.add(other, [(20.4, 20.0)], idle_days=3.0)
@@ -579,6 +476,8 @@ def test_founders_wait_for_plants_and_for_spring(config: Config) -> None:
 
     green = Site(config, fauna=quick)
     outputs = green.run(24.0 * 4)
+    # Founders arrive at random ages; the youngest grow up during these days.
+    outputs = [o for o in outputs if not isinstance(o, JuvenileGrown)]
     assert [type(o) for o in outputs] == [CreaturesArrived]
     arrival = outputs[0]
     assert isinstance(arrival, CreaturesArrived)
@@ -610,14 +509,14 @@ def test_strangers_join_an_inhabited_world(config: Config) -> None:
 
 @pytest.mark.slow
 def test_golden_hash_from_bare_rock(config: Config) -> None:
-    """The whole history, 520 days from creation, is reproducible (and is fixture v4)."""
+    """The whole history, 520 days from creation, is reproducible (and is fixture v5)."""
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(520 * DAY_S)
     assert world.state_hash() == GOLDEN_FAUNA_SEED_42
 
 
 def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v4.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v5.lzma"
     hashes: list[str] = []
     for _ in range(2):
         world = World.restore(config, io.loads(fixture.read_bytes()))
@@ -629,7 +528,7 @@ def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
 
 
 def test_save_load_continue_with_creatures(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v4.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v5.lzma"
     straight = World.restore(config, io.loads(fixture.read_bytes()))
     straight.step(3 * DAY_S)
     assert straight.state_hash() == GOLDEN_AFTER_THREE_DAYS

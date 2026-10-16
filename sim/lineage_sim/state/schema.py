@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # A JSON-like mapping whose leaves may also be NumPy arrays.
 Tree = dict[str, Any]

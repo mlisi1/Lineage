@@ -9,7 +9,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M2 | Terrain generation and dynamics | done | [reports/M2-terrain](../reports/M2-terrain/README.md) |
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
-| M5 | Fauna II: lifetime learning | not started | — |
+| M5 | Fauna II: lifetime learning | in progress: learning rule, genes, schema v5, scenario tests and fork/ablation tooling built; first probe (12 seeds × 2 years) shows a +1.5 % median early-life feeding gain against the ≥ 15 % target, tuning next; report and ADR 0009 still to do | — |
 | M6 | Species, names, phylogeny | not started | — |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |

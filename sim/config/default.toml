@@ -471,6 +471,39 @@ instinct_space = 1.2
 # Standard deviation of the other weights of a founder's brain.
 founder_brain_sigma = 0.1
 
+# --- Lifetime learning (M5) ---
+# Brains also learn during life. Noise is added to the steering drive; an eligibility
+# trace remembers which inputs and which noise went together; the creature's energy
+# balance this tick, above or below its running average, then strengthens or weakens
+# those weights. Only the direct and output weights learn, and what is learned is not
+# inherited: evolution sees only the innate weights. false turns it all off (no noise,
+# no learning, no cost): the M4 brain, and the OFF arm of the M5 ablation.
+learning = true
+# Learning rate per hour at learning gene 1: weight change per unit of trace per unit of
+# reward (reward: energy balance as a share of capacity per hour, minus its average).
+learning_rate_max = 10.0
+# Standard deviation of the noise added to each steering drive at exploration gene 1.
+exploration_max = 1.0
+# Time constant (hours) over which that noise changes: a creature tries a different way
+# for a while (white noise every tick would average out before it went anywhere).
+exploration_hours = 1.0
+# Time constant (hours) over which the eligibility trace fades: how long after an action
+# its consequences still count.
+trace_hours = 2.0
+# Time constant (hours) of the running average energy balance used as the reward baseline.
+baseline_hours = 6.0
+# Largest change learning can make to any one weight.
+learned_max = 3.0
+# Time constant (hours) with which learned changes fade when nothing reinforces them.
+# Without it, weights that no reward depends on random-walk to the limit.
+forget_hours = 72.0
+# Basal-burn cost of the learning gene, like the body costs above (× gene): a brain
+# that learns is expensive tissue.
+cost_learning = 0.2
+# A creature is competent from the first time its energy balance, averaged with this
+# time constant (hours), stops being negative: it feeds itself.
+competence_hours = 24.0
+
 # --- Bookkeeping ---
 # Diet classes for statistics: herbivore up to the first, predator from the second.
 herbivore_max_diet = 0.35
