@@ -2,14 +2,16 @@
 
 Usage::
 
-    uv run python -m tools.report <milestone> --runs runs/<id> [--out reports]
+    uv run python -m tools.report <milestone> --runs runs/<id> [--baseline runs/<id>]
+        [--out reports]
 
 Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metrics.json``,
 ``config.toml`` and ``README.md``. Reports are regenerated, never hand-edited.
 
 Milestones with statistical behaviour have a module in ``tools/milestones/`` providing
 their metrics, acceptance criteria and figures; the others get a generic report with
-every recorded series.
+every recorded series. A milestone whose module sets ``NEEDS_BASELINE`` compares two
+runs (an ablation, M5) and needs ``--baseline``, the run with the mechanism off.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4
+from tools.milestones import m2, m3, m4, m5
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -60,13 +62,14 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4}
+MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4, "M5": m5}
 
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
 CRITERIA: dict[str, list[Criterion]] = {
     "M2": m2.CRITERIA,
     "M3": m3.CRITERIA,
     "M4": m4.CRITERIA,
+    "M5": m5.CRITERIA,
 }
 
 # Display names and units of recorded series; every series a milestone records goes here.
@@ -76,6 +79,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     **m2.SERIES_LABELS,
     **m3.SERIES_LABELS,
     **m4.SERIES_LABELS,
+    **m5.SERIES_LABELS,
 }
 
 
@@ -182,6 +186,7 @@ def render_html(
     acceptance: list[dict[str, Any]],
     metrics: dict[str, float],
     sections: list[Section],
+    compared: tuple[Run, ...] = (),
 ) -> str:
     m = run.manifest
     e = html.escape
@@ -194,6 +199,14 @@ def render_html(
         ("Wall time", f"{m.wall_time_s:g} s"),
         ("Run", f"{m.run_id} (created {m.created_utc}; {m.notes})"),
     ]
+    for other in compared:
+        b = other.manifest
+        header.append(
+            (
+                "Baseline run",
+                f"{b.run_id}, config {b.config_hash}, commit {b.git_commit} ({b.notes})",
+            )
+        )
     header_rows = "".join(_row([e(k), e(v)]) for k, v in header)
 
     if acceptance:
@@ -246,15 +259,24 @@ def render_html(
 """
 
 
-def render_readme(milestone: Milestone, run: Run, acceptance: list[dict[str, Any]]) -> str:
+def render_readme(
+    milestone: Milestone,
+    run: Run,
+    acceptance: list[dict[str, Any]],
+    compared: tuple[Run, ...] = (),
+) -> str:
     m = run.manifest
     lines = [
         f"# {milestone.mid} — {milestone.title}",
         "",
         f"Run `{m.run_id}`: {len(m.seeds)} seeds × {m.sim_years:g} sim-years, "
         f"commit `{m.git_commit}`, config `{m.config_hash}`, wall time {m.wall_time_s:g} s.",
-        "",
     ]
+    lines += [
+        f"Baseline `{b.manifest.run_id}`: config `{b.manifest.config_hash}` ({b.manifest.notes})."
+        for b in compared
+    ]
+    lines += [""]
     if acceptance:
         for a in acceptance:
             measured = "—" if a["value"] is None else f"{a['value']:.4g}"
@@ -268,7 +290,12 @@ def render_readme(milestone: Milestone, run: Run, acceptance: list[dict[str, Any
     return "\n".join(lines) + "\n"
 
 
-def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT) -> Path:
+def build_report(
+    milestone_id: str,
+    run_dir: Path,
+    out_root: Path = DEFAULT_OUT,
+    baseline_dir: Path | None = None,
+) -> Path:
     try:
         milestone = MILESTONES[milestone_id]
     except KeyError:
@@ -277,9 +304,17 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
         ) from None
     run = read_run(run_dir)
     module = MODULES.get(milestone.mid)
+    compared: tuple[Run, ...] = ()
+    if module is not None and getattr(module, "NEEDS_BASELINE", False):
+        if baseline_dir is None:
+            raise ValueError(f"{milestone.mid} compares two runs: pass --baseline runs/<id>")
+        baseline = read_run(baseline_dir)
+        if baseline.manifest.seeds != run.manifest.seeds:
+            raise ValueError("the baseline run must use the same seeds")
+        compared = (baseline,)
     # A milestone module reports its own, curated numbers; the generic per-series spread
     # is for milestones without one.
-    metrics = compute_metrics(run) if module is None else module.metrics(run)
+    metrics = compute_metrics(run) if module is None else module.metrics(run, *compared)
     acceptance: list[dict[str, Any]] = []
     for c in CRITERIA.get(milestone.mid, []):
         value, status = c.evaluate(metrics)
@@ -294,7 +329,7 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
             }
         )
     if module is not None:
-        sections: list[Section] = module.sections(run, run_dir)
+        sections: list[Section] = module.sections(run, run_dir, *compared)
     else:
         sections = generic_sections(run)
 
@@ -317,9 +352,11 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
     )
     (out_dir / "config.toml").write_text(run.config_text, encoding="utf-8")
     (out_dir / "report.html").write_text(
-        render_html(milestone, run, acceptance, metrics, sections), encoding="utf-8"
+        render_html(milestone, run, acceptance, metrics, sections, compared), encoding="utf-8"
     )
-    (out_dir / "README.md").write_text(render_readme(milestone, run, acceptance), encoding="utf-8")
+    (out_dir / "README.md").write_text(
+        render_readme(milestone, run, acceptance, compared), encoding="utf-8"
+    )
     return out_dir
 
 
@@ -327,9 +364,12 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Build a milestone report from a run.")
     parser.add_argument("milestone", help="milestone id, e.g. M3")
     parser.add_argument("--runs", type=Path, required=True, help="run directory, runs/<id>")
+    parser.add_argument(
+        "--baseline", type=Path, help="run with the mechanism off, for ablations (M5)"
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")
     args = parser.parse_args(argv)
-    out_dir = build_report(args.milestone, args.runs, args.out)
+    out_dir = build_report(args.milestone, args.runs, args.out, args.baseline)
     print(f"wrote {out_dir}")
 
 
