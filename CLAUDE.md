@@ -71,7 +71,7 @@ lineage/
 │   │       ├── io.py         # save/load (compressed), atomic writes handled by caller
 │   │       └── migrations/   # vN_to_vN+1.py, one file per bump, never edited after release
 │   ├── config/default.toml   # every tunable lives here, documented inline
-│   └── tests/
+│   └── tests/                # fauna_site.py: hand-built site shared by fauna scenario tests
 ├── tools/                    # dev-only CLIs (not deployed)
 │   ├── fastforward.py        # run N sim-years headless for M seeds → runs/<id>/
 │   ├── report.py             # build a milestone report from runs → reports/<milestone>/
@@ -147,7 +147,9 @@ Do not create directories outside this layout without updating this file.
   - `uv run pytest -m "not slow"` — fast suite (CI on every push)
   - `uv run pytest -m slow` — long statistical tests (nightly)
   - `uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>`
-    (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume)
+    (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume;
+    `--set fauna.learning=false` to change one config key for an ablation;
+    `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
   - `cd renderer && npm test && npx playwright test`
   - `cd renderer && npm run typecheck && npm run lint`
