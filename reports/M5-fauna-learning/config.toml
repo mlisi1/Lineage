@@ -412,13 +412,13 @@ graze_rate = 0.05
 graze_jaw_floor = 0.5
 # Energy in one full cell of plant biomass, and per unit of prey mass.
 plant_energy = 300.0
-meat_energy = 900.0
+meat_energy = 1600.0
 # Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
 diet_exponent = 1.0
 # Plant defence also poisons: energy from plants is multiplied by
 # 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
 # than it gives). Grazers cannot sense defence, only plant form (M5).
-defence_toxicity = 1.0
+defence_toxicity = 0.5
 # Creatures with at least this diet gene hunt. Reach of a bite (cells). Attacks per hour
 # on a prey in reach. Attack power = mass × (jaw_floor + jaw gene); defence = mass ×
 # (1 + armour_strength × armour gene). A hit kills with probability
@@ -506,9 +506,24 @@ learned_max = 3.0
 # Time constant (hours) with which learned changes fade when nothing reinforces them.
 # Without it, weights that no reward depends on random-walk to the limit.
 forget_hours = 72.0
+# Learning from meals (M5, like taste aversion): after each bite of plants the learned
+# gain on that plant form's sense (low or woody growth) moves by learning rate ×
+# meal_learning_gain × share of a full bite × (this bite's value − the creature's usual
+# meal value). Value is the share of the plant's energy really got, after toxins; the
+# usual value is a running average over meal_memory_hours.
+meal_learning_gain = 1.0
+# Weight of trial-and-error learning (node perturbation through steering noise) on all
+# learned gains, × learning rate. 0 leaves learning from meals alone.
+perturbation_gain = 0.25
+meal_memory_hours = 24.0
+# Diet traditions (social learning): at birth a newborn takes on social_copy_max × its
+# SOCIAL gene of its mother's learned plant-form gains (only those). Its own meals then
+# confirm or correct them, and forgetting fades what is never confirmed. Copying is free;
+# whether it pays is left to evolution.
+social_copy_max = 1.0
 # Basal-burn cost of the learning gene, like the body costs above (× gene): a brain
 # that learns is expensive tissue.
-cost_learning = 0.2
+cost_learning = 0.05
 # A creature is competent from the first time its energy balance, averaged with this
 # time constant (hours), stops being negative: it feeds itself.
 competence_hours = 24.0

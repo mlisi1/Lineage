@@ -294,6 +294,50 @@ meal learning and toxicity 0.5, predators fell again (≥ 3 predators in 0.42 of
 - **Diet traditions** (candidate 1 below) were implemented on top: a `SOCIAL` gene folded
   into the unreleased schema v6.
 
+## Where M5 stands after balancing (report at commit 9f40056)
+
+Full report `reports/M5-fauna-learning/` (runs `m5-on`, `m5-off`, 20 seeds × 3 years):
+
+| Measure | Learning on | Learning off | Target |
+|---|---|---|---|
+| M5.1 early-life feeding gain (forks) | +5.1 % (positive in 70 % of seeds) | — | ≥ 15 %: **FAIL** |
+| M5.2 seeds whose time to competence falls | 60 % | 50 % | ≥ 60 %: **PASS**, borderline |
+| M5.3 step cost | 343 ms per sim-day | 315 | ≤ 400: **PASS** |
+| Diet fit, final year (median) | +0.32, positive in 20 of 20 seeds | — | proposed |
+| Both diets present at year 3 / final-year mean (M4.3) | 0.50 / 0.58 | 0.70 / 0.59 | ≥ 0.6 |
+| ≥ 3 predators, years 1–3 | 0.48 | 0.52 | — |
+| `LEARNING` / `EXPLORATION` / `SOCIAL` gene at year 3 | 0.24 / 0.77 / 0.67 | 0.42 / — / 0.64 (drift) | — |
+
+What the plots show:
+
+- **Diet fit** rises within months to about +0.3 and holds for three years; the 10th
+  percentile of seeds stays above 0 after year 1. Learning does what it is for: each
+  grazer learns which plant form is safe where it lives.
+- **Time to competence**: learners no longer reach it later (fading exploration fixed
+  that; both runs at about 12–18 h), but neither curve clearly falls over generations.
+  The M5.2 pass is at the band and the learning-off run gets 50 %, so it is not evidence
+  of a Baldwin effect. As in Ackley & Littman, a Baldwin effect may need far more
+  generations than 3 years.
+- **Predators** boom and bust in both runs. Late in the run there are fewer with learning
+  on (median about 3–5 against 8–16), but they are present about as often.
+- **Evolution of learning**: the learning rate settles low (0.24, selected down from the
+  0.42 of drift), copying (`SOCIAL`) is not selected for or against, and exploration is
+  selected up. Learning persists, but evolution keeps it cheap: the energy at stake in
+  choosing plants is small.
+
+**Proposed criteria (for the owner; CLAUDE.md §8 is unchanged until agreed).** M5.1's
+15 % cannot be reached by diet choice on a balanced island: the local defence difference
+between forms is worth about 6 % of a bite, and higher toxicity starves the predators.
+
+- **M5.1** → *learning tracks the local environment*: final-year diet fit > 0 in ≥ 80 % of
+  seeds (now 100 %). The feeding gain stays as a reported measure.
+- **M5.2** → *genetic assimilation*: the inherited bias on the plant-form senses evolves in
+  the direction the population learns, in ≥ 60 % of seeds (needs a new measure). Time to
+  competence stays as a reported measure.
+- **M5.3** unchanged.
+- **M4.3**: read as the mean over the last year (0.58 now; band 0.6, or 0.55 if the owner
+  accepts that predators are now more cyclic).
+
 ## Candidate features (researched 2026-10-17, owner asked for ideas)
 
 Ranked by fit for the gadget: what they add to evolution, how intriguing the learning

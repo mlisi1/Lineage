@@ -9,7 +9,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M2 | Terrain generation and dynamics | done | [reports/M2-terrain](../reports/M2-terrain/README.md) |
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
-| M5 | Fauna II: lifetime learning | in progress, waiting on the owner's decisions. Revised plan (fading exploration, toxic defence, plant-form senses, schema v6) built and measured: M5.1 +8.7 % FAIL, M5.2 50 % FAIL, M5.3 332 ms PASS. Genes learned the general diet rule; lifetime learning did not catch local exceptions. Decisions in [ADR 0009](decisions/0009-lifetime-learning.md) | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
+| M5 | Fauna II: lifetime learning | in progress, waiting on the owner's decision on the criteria. Balanced and extended (meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, schema v6). Report: M5.1 +5.1 % FAIL (structurally out of reach, see ADR), M5.2 60 % PASS (borderline), M5.3 343 ms PASS; diet fit +0.32 in 20/20 seeds. Proposed criteria in [ADR 0009](decisions/0009-lifetime-learning.md) | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | not started | — |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |
@@ -38,9 +38,9 @@ State at 2026-10-17, for the next session:
     the board measurement (`deploy/board-setup.md`).
   - `m5-lifetime-learning` is branched from `main` and holds M5. It doesn't contain the R0
     commits, so expect conflicts only in shared files (this file, `CLAUDE.md`).
-- **M5 next steps**: two decisions for the owner, set out at the end of
-  [ADR 0009](decisions/0009-lifetime-learning.md): what M5 should show (change the learning
-  rule, make the world harder, or revise the bands), and how M4.3 is read. The owner
+- **M5 next steps**: the owner decides on the proposed criteria (ADR 0009, "Where M5
+  stands after balancing"); then a slow M5 statistical test, and the ADR accepted.
+  Candidate features for later are listed there too. The owner
   chose earlier:
   - the 15 % feeding criterion is measured on forked worlds, as energy eaten per hour of
     youth;
