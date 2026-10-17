@@ -111,6 +111,15 @@ def eligibility(senses: Senses, noise: NDArray[np.float32]) -> Learned:
     )
 
 
+def exploring(
+    exploration: NDArray[np.float32], age_h: NDArray[np.float32], fade_hours: float, floor: float
+) -> NDArray[np.float32]:
+    """Exploration noise at each creature's age: its full ``exploration`` at birth, fading
+    with time constant ``fade_hours`` to ``floor`` of it in adults (play is for the young)."""
+    fade = np.exp(-age_h / np.float32(fade_hours))
+    return (exploration * (floor + (1.0 - floor) * fade)).astype(np.float32)
+
+
 def learn(
     learned: Learned,
     trace: Learned,

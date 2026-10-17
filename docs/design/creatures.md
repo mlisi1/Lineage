@@ -63,6 +63,9 @@ that let 50 weights learn fitted noise into fixed directions and drifted).
   learning rate × (reward − baseline). Reward is the tick's energy balance from eating
   and moving, as a share of capacity per hour; the baseline is its running average
   (`baseline_hours`). Gains fade with `forget_hours` and stay within `learned_max`.
+- **Exploration fades with age** (`exploration_fade_hours`, `exploration_floor`): full
+  at birth, like juvenile play, down to a floor in adults, so grown creatures stop paying
+  for noise they no longer learn much from.
 - **Genes**: `LEARNING` (rate, costs basal burn) and `EXPLORATION` (noise; its cost is
   noisier steering). Both count toward compatibility and genetic distance.
 - **Not inherited**: newborns start with no learned gains; evolution sees only innate

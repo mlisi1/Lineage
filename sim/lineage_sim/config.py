@@ -407,6 +407,8 @@ class FaunaConfig:
     exploration_max: float
     trace_hours: float
     exploration_hours: float
+    exploration_fade_hours: float
+    exploration_floor: float
     baseline_hours: float
     learned_max: float
     forget_hours: float
@@ -444,6 +446,7 @@ class FaunaConfig:
             "exploration_max",
             "trace_hours",
             "exploration_hours",
+            "exploration_fade_hours",
             "baseline_hours",
             "learned_max",
             "forget_hours",
@@ -470,6 +473,7 @@ class FaunaConfig:
             "repro_energy_share",
             "birth_efficiency",
             "rare_gain_probability",
+            "exploration_floor",
             "rare_loss_probability",
             "herbivore_max_diet",
             "predator_min_diet",

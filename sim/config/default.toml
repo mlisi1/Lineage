@@ -487,6 +487,11 @@ exploration_max = 1.0
 # Time constant (hours) over which that noise changes: a creature tries a different way
 # for a while (white noise every tick would average out before it went anywhere).
 exploration_hours = 1.0
+# Exploration fades with age, like juvenile play: full at birth, then toward
+# exploration_floor of it with this time constant (hours). Youths learn while they play;
+# adults stop paying for noise they no longer learn much from.
+exploration_fade_hours = 48.0
+exploration_floor = 0.25
 # Time constant (hours) over which the eligibility trace fades: how long after an action
 # its consequences still count.
 trace_hours = 2.0

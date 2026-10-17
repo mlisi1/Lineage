@@ -4,6 +4,7 @@ fits in a creature's life (not inherited, off means the M4 brain, youth is recor
 from dataclasses import replace
 
 import numpy as np
+import pytest
 from fauna_site import GRAZER, Site
 from fauna_site import with_gene as _with
 from hypothesis import given, settings
@@ -116,8 +117,9 @@ def _food_trial(config: Config, seed: int, *, learning: bool) -> tuple[Array, fl
     """One hungry grazer with no instinct for food, put down again and again at random
     near one patch of grass. Returns the hours it took to reach the food each time (the
     episode's length if it never did) and its learned food gain at the end."""
+    # Full exploration at any age: this scenario tests the learning rule, not its fading.
     cfg = replace(config.fauna, immigrant_groups_per_year=0.0, instinct_food=0.0,
-                  learning=learning)  # fmt: skip
+                  learning=learning, exploration_floor=1.0)  # fmt: skip
     site = Site(config, fauna=cfg, seed=seed)
     rows, columns = np.mgrid[0 : site.flora.biomass.shape[0], 0 : site.flora.biomass.shape[1]]
     patch = np.hypot(columns - CENTRE[0], rows - CENTRE[1]) <= PATCH_RADIUS
@@ -232,3 +234,12 @@ def test_a_youth_that_starves_is_reported(config: Config) -> None:
     assert grown[0].eaten == 0.0
     assert grown[0].burnt > 0.0
     assert grown[0].competent_h == -1.0
+
+
+def test_exploration_fades_with_age() -> None:
+    full = np.full(3, 0.8, dtype=np.float32)
+    age = np.array([0.0, 48.0, 10_000.0], dtype=np.float32)
+    spread = brain.exploring(full, age, 48.0, 0.25)
+    assert float(spread[0]) == pytest.approx(0.8)
+    assert float(spread[1]) == pytest.approx(0.8 * (0.25 + 0.75 * np.exp(-1.0)), rel=1e-5)
+    assert float(spread[2]) == pytest.approx(0.8 * 0.25, rel=1e-5)

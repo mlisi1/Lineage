@@ -27,10 +27,13 @@ from numpy.random import PCG64, Generator
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
-# Final state of the default world, seed 42, after 520 days (same as fixture v5).
+# Fixture v5: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "d13495b12923ecfb65220cd6bbc2e28056fc2a7cc5c922984be9841b93260063"
-# …and three days later.
-GOLDEN_AFTER_THREE_DAYS = "d082e820247bb2157675c3568d0d15e7092c73782654f49fa8be242fa9c2ddc6"
+# The fixture stepped three more days by today's code.
+GOLDEN_AFTER_THREE_DAYS = "47c1bc867c74e1bba850ad2fc3e120635f0756c2d320fcda0da59e1f06feec7d"
+# The default world, seed 42, after 520 days from bare rock with today's code. It equals
+# the fixture only while fauna behaves as it did when the fixture was saved.
+GOLDEN_BARE_ROCK_520_DAYS = "c04846f8f48e9267f83f46e000519863a7d65643e1fa19c02d4cea57e54f3acb"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -509,10 +512,10 @@ def test_strangers_join_an_inhabited_world(config: Config) -> None:
 
 @pytest.mark.slow
 def test_golden_hash_from_bare_rock(config: Config) -> None:
-    """The whole history, 520 days from creation, is reproducible (and is fixture v5)."""
+    """The whole history, 520 days from creation, is reproducible."""
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(520 * DAY_S)
-    assert world.state_hash() == GOLDEN_FAUNA_SEED_42
+    assert world.state_hash() == GOLDEN_BARE_ROCK_520_DAYS
 
 
 def test_golden_hash_of_an_inhabited_world(config: Config) -> None:

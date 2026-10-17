@@ -361,7 +361,10 @@ class Fauna:
             persist = np.float32(np.exp(-hours / cfg.exploration_hours))
             fresh = rng.normal(0.0, 1.0, drive.shape).astype(np.float32)
             self._noise = persist * self._noise + np.sqrt(1.0 - persist**2) * fresh
-            noise = self._noise * body.exploration[:, None]
+            spread = brain.exploring(
+                body.exploration, self._age_h, cfg.exploration_fade_hours, cfg.exploration_floor
+            )
+            noise = self._noise * spread[:, None]
             fade = np.float32(np.exp(-hours / cfg.trace_hours))
             self._trace = fade * self._trace + brain.eligibility(
                 senses, noise / np.float32(cfg.exploration_max)
