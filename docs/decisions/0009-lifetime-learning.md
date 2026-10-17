@@ -1,8 +1,39 @@
 # 0009 — Lifetime learning
 
-- **Status**: proposed (M5 in progress: tuning and report outstanding; accept when the M5
-  report passes)
-- **Date**: 2026-10-16
+- **Status**: proposed. M5 is built and balanced; it awaits the owner's decision on the
+  proposed criteria ("Where M5 stands after balancing"). Accept once they are agreed and
+  the report passes.
+- **Date**: 2026-10-16 (last updated 2026-10-17)
+
+## Current design (summary)
+
+This ADR is written in the order things happened; this section states where they ended.
+
+- **What is learned:** one gain per directional sense (food, prey, threat, mate, land, own
+  kind, low growth, woody growth), added to the sense's direct weights. It is not
+  inherited, except for diet traditions (below).
+- **How, two ways:**
+  - **Learning from meals** (main): after each bite of plants, the gain on that plant
+    form's sense moves by how much better than usual the bite was (`meal_learning_gain`,
+    `meal_memory_hours`).
+  - **Trial and error** (node perturbation, M5's specified mechanism, weight
+    `perturbation_gain` 0.25): exploration noise, an eligibility trace, energy balance
+    against a running baseline.
+  - Both decay with `forget_hours`, within `learned_max`.
+- **Exploration** fades with age (`exploration_fade_hours`, `exploration_floor`).
+- **The world gives learning something to do:** plant defence poisons grazers
+  (`defence_toxicity` 0.5); creatures see plant form, never defence; which form is safe
+  varies between neighbourhoods.
+- **Genes:**
+  - `LEARNING` (rate, costs `cost_learning` 0.05);
+  - `EXPLORATION` (noise);
+  - `SOCIAL` (diet traditions: a newborn takes on part of its mother's plant
+    preferences).
+- **Balance:** `meat_energy` 1 600 keeps predators going in a learning world.
+- **Measures:** time to competence, `JuvenileGrown` youths, forked worlds (learning on vs
+  off), `diet_fit`.
+- **Schema v6** (226 weights, 8 gains, meal value, 14 genes); v6 was amended while
+  unreleased.
 
 ## Context
 
@@ -320,6 +351,23 @@ What the plots show:
   generations than 3 years.
 - **Predators** boom and bust in both runs. Late in the run there are fewer with learning
   on (median about 3–5 against 8–16), but they are present about as often.
+- **Population bottlenecks** (report section of the same name; noticed by the owner).
+  - **Year 1 is the riskiest year.** The lowest population per seed has a median of 51
+    with learning on (40 off), against 83–87 in years 2–3.
+  - **The cause is late landing.** Plants need about 7 months to cover half the land, so
+    the founders land after a median of 8.6 months (mid-September), about three months
+    before their first winter: forty animals of one species, at random ages, meet winter
+    dieback with no time to grow.
+  - **Later dips are winter dips** (the yearly minimum falls in December–February in 70 %
+    of later seed-years with learning on, 83 % off). They rarely reach zero (the 10th
+    percentile stays at 11–17 creatures) because herds enter winter larger and arriving
+    strangers (about six groups a year) bring other genomes: a rescue effect.
+  - **Extinctions are rare in every year** (0–2 of 20 seeds per year); the worst come
+    within the first year or two after landing.
+  - **Possible follow-ups** (not done): let founders land earlier (lower
+    `founder_min_plant_cover`), or let the first group arrive larger. Either would ease
+    the bottleneck of the founders; both change M4's calibration, so they belong with M11
+    tuning.
 - **Evolution of learning**: the learning rate settles low (0.24, selected down from the
   0.42 of drift), copying (`SOCIAL`) is not selected for or against, and exploration is
   selected up. Learning persists, but evolution keeps it cheap: the energy at stake in

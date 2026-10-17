@@ -16,7 +16,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started | — |
-| R0 | Renderer spike on the device | not started | — |
+| R0 | Renderer spike on the device | in progress on branch `r0-renderer-spike` (not merged here; that branch's row is the current one): spike, benchmark and look built; the measurement on the board is pending | on that branch |
 | R1 | Terrain and plants from the state stream | not started | — |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |
@@ -36,19 +36,41 @@ State at 2026-10-17, for the next session:
 - **Branches**:
   - `r0-renderer-spike` holds R0. It is local only (not pushed or merged) and waits for
     the board measurement (`deploy/board-setup.md`).
-  - `m5-lifetime-learning` is branched from `main` and holds M5. It doesn't contain the R0
-    commits, so expect conflicts only in shared files (this file, `CLAUDE.md`).
-- **M5 next steps**: the owner decides on the proposed criteria (ADR 0009, "Where M5
-  stands after balancing"); then a slow M5 statistical test, and the ADR accepted.
-  Candidate features for later are listed there too. The owner
-  chose earlier:
-  - the 15 % feeding criterion is measured on forked worlds, as energy eaten per hour of
+  - `m5-lifetime-learning`, branched from `main`, holds M5. It is local only and does not
+    contain the R0 commits; expect conflicts only in shared files (this file,
+    `CLAUDE.md`).
+- **M5 state**: built and balanced. ADR 0009 opens with a summary of the current design,
+  and "Where M5 stands after balancing" holds the latest numbers and the proposed
+  criteria. The report (`reports/M5-fauna-learning/`) opens with a generated "What the
+  plots show".
+- **Waiting on the owner**:
+  1. Accept or amend the proposed M5 criteria (M5.1 → diet fit; M5.2 → genetic
+     assimilation; M4.3 read as the final-year mean). CLAUDE.md §8 is unchanged until
+     then.
+  2. Whether to add **eat-or-pass** (grazing becomes a decision, which gives meal
+     learning a direct stake), the recommended next feature. Rest (with M8) and
+     strike-or-hold (a later predator pass) come after.
+- **Owner's earlier choices**:
+  - the feeding criterion is measured on forked worlds, as energy eaten per hour of
     youth;
-  - tuning within reason is allowed, provided M4's criteria still pass.
-- **Tests after M5**: the fast suite and all 25 tool tests pass. The slow M4 test fails
-  M4.3 (both diets at year 3 in 45 % of seeds, against ≥ 60 %). ADR 0009 explains why
-  this is mostly a point-measure effect, and the decision it needs.
-- **Local runs** (gitignored): `runs/m5-on`, `runs/m5-off` (the report's runs) and
-  `runs/m5-weak-on`, `runs/m5-weak-off` (`instinct_food` 0.4).
-- **Probe run** `runs/m5-probe1` (gitignored, local): 12 seeds × 2 years with forks, made
-  with `--save-days 1000 --snapshot-days 0 --fork-days 60 --fork-length 28`.
+  - tuning within reason is allowed if M4's criteria still pass;
+  - the agent may make balancing calls autonomously;
+  - sources go in the ADR's References.
+- **Tests on this state**: lint, format, types, the fast suite (396) and all tool tests
+  pass.
+  - The slow M4 test **fails M4.3** as a point measure: both diets at year 3 in 50 % of
+    seeds, against ≥ 60 %. Its final-year mean is 0.58 (learning off 0.59, M4 0.62).
+  - The slow flora test passes.
+- **Before merging M5**:
+  - settle the criteria;
+  - add a slow M5 statistical test;
+  - mark ADR 0009 accepted;
+  - freeze schema v6 (amended while unreleased; frozen from the merge).
+- **Local runs** (gitignored):
+  - `runs/m5-on` and `runs/m5-off` are the report's runs;
+  - `runs/bal-*` are the balance variants (see ADR 0009);
+  - `runs/m5-weak-*` and `runs/m5-probe1` are earlier experiments.
+- **The machine is shared**: the owner runs other simulations here. Check that it is
+  idle before heavy runs, and use `nice` for light work.
+- **Shell**: the owner's shell sources ROS. Prefix Python commands with
+  `env -u PYTHONPATH`.

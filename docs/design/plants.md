@@ -18,7 +18,7 @@ Eight genes, each in `[0, 1]` (stored as a byte), each with a benefit and a cost
 | `SHADE` | seedlings establish under a canopy | slower growth |
 | `SEED` | heavy fruit: lands near, establishes better | no long-range wind dispersal |
 | `EVERGREEN` | keeps its biomass through winter | slower growth |
-| `DEFENCE` | refuses grazers (hook for M4) | slower growth |
+| `DEFENCE` | refuses part of each bite and poisons the rest (M4, M5) | slower growth |
 
 **Rare genes** (starter set; full table in M7): fire-pine (survives fire), nitrogen-fixer
 (needs less fertility, builds soil 3× faster), mangrove (lives in shallow water and
@@ -74,7 +74,9 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 ## Hooks
 
 - `Flora.graze(ys, xs, demand)` for fauna (M4): defended plants refuse part of a bite;
-  grazers on one cell share what is there.
+  grazers on one cell share what is there. What is eaten is also worth less to the grazer
+  (`[fauna] defence_toxicity`, M5), and grazers see plant form, not defence:
+  `Flora.forms()` (cached until the genome changes) and `Flora.defence_at`.
 - `Flora.set_daylight(level)` for presence (M8).
 - `Wildfire.ignite(y, x, t)` for god powers (M8).
 

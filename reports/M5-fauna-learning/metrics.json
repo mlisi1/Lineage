@@ -102,6 +102,21 @@
     "learned_land.mean.median": 0.00035345008654985577,
     "learned_neighbour.mean.median": -0.0002693995484150946,
     "learned_low.mean.median": 0.023493931628763676,
-    "learned_woody.mean.median": -0.027320504188537598
+    "learned_woody.mean.median": -0.027320504188537598,
+    "first_landing.months.median": 8.624229979466119,
+    "population_min.year1.median": 51.0,
+    "population_min.year1.p10": 6.400000000000001,
+    "population_min.year2.median": 83.0,
+    "population_min.year2.p10": 10.900000000000002,
+    "population_min.year3.median": 87.0,
+    "population_min.year3.p10": 16.7,
+    "population_min.winter_share": 0.7,
+    "off.population_min.year1.median": 40.0,
+    "off.population_min.year1.p10": 14.600000000000001,
+    "off.population_min.year2.median": 78.0,
+    "off.population_min.year2.p10": 11.200000000000001,
+    "off.population_min.year3.median": 68.0,
+    "off.population_min.year3.p10": 11.0,
+    "off.population_min.winter_share": 0.825
   }
 }

@@ -1,13 +1,15 @@
 # Creatures
 
-Creatures are individuals: a position, an energy reserve, an age, a body genome, a brain
-and rare-gene slots. Implemented in `lineage_sim/fauna/` (M4); every number below is a
+Creatures are individuals: a position, an energy reserve, an age, a genome, a brain with
+what it has learned, and rare-gene slots. Implemented in `lineage_sim/fauna/` (M4, M5);
+every number below is a
 `[fauna]` key in `sim/config/default.toml`. Fauna ticks every 10 sim-minutes; smooth
 movement between ticks is the renderer's job.
 
-## Body genome
+## Genome
 
-Eleven genes in `[0, 1]`:
+Fourteen genes in `[0, 1]`: eleven body genes, then three for lifetime learning (M5). All
+count toward mate compatibility and genetic distance.
 
 | Gene | Gives | Costs |
 |---|---|---|
@@ -21,6 +23,11 @@ Eleven genes in `[0, 1]`:
 | `JAW` | attack power and grazing rate | energy |
 | `BROOD` | many young per brood | each young starts with less |
 | `HUE`, `PATTERN` | looks; count toward mate compatibility | — |
+| `LEARNING` | learning rate during life | basal burn (`cost_learning`) |
+| `EXPLORATION` | steering noise to learn from, fading with age | noisier steering |
+| `SOCIAL` | share of its mother's plant preferences a newborn takes on | — (free) |
+
+With `learning = false` the three learning genes do nothing and cost nothing.
 
 Sixteen-bit **rare-gene slots** are inherited and occasionally gained or lost; the genes
 and their effects arrive in M7.
@@ -29,7 +36,8 @@ and their effects arrive in M7.
 
 `fauna/phenotype.py` is the single definition of what the genes mean: mass, leg pairs,
 land and swim speed, sense range, resting burn, cost per cell travelled, energy capacity,
-grazing rate, plant and meat efficiency, attack, defence, lifespan, maturity, brood size.
+grazing rate, plant and meat efficiency, attack, defence, lifespan, maturity, brood size,
+learning rate, exploration, and social copying.
 Bigger and better-equipped always burns more. The renderer draws bodies from the same
 values; `sim/tests/fixtures/phenotypes.json` holds 15 specimen genomes with their
 expected values for the cross-language check in R2.
@@ -46,7 +54,8 @@ A small neural net per creature, inherited and mutated. It only steers:
 - **Output**: a steering vector. Speed follows from the body and the ground.
 - **Instincts**: founders arrive with direct sense-to-steering weights (go to food, chase
   prey in proportion to their diet, flee threats, go to a mate, stay on land or in water,
-  keep some distance from their own kind). Evolution changes them; a hidden layer lets
+  keep some distance from their own kind); none for the plant-form senses, whose innate
+  weights evolution sets. Evolution changes them; a hidden layer lets
   behaviour come to depend on state.
 - **Roaming**: each creature keeps a heading that drifts slowly, so one with nothing to
   steer by covers ground instead of jittering in place.
@@ -146,14 +155,15 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 ## Open
 
-- M5 (in progress, ADR 0009): newborns with learning eat 20 % more per hour of youth than
-  in the same worlds without it, but nearly all of that comes from exploration noise
-  rather than from learning. Evolution selects the learning rate down, youths that learn
-  become competent later, and there is no Baldwin effect yet.
+- M5 (in progress, ADR 0009): learning tracks the local plants (diet fit +0.32 in 20 of
+  20 seeds), but the feeding gain it buys is small (+5 %, against an original target of
+  15 %), evolution keeps the learning rate low, and there is no clear Baldwin trend in
+  three years. Proposed criteria await the owner.
+- Predator lineages are cyclic: they persist on the island for up to about 16
+  generations, and are fewer late in learning worlds than in non-learning ones.
 
-- Predators mostly persist because hunter species keep arriving: a pack typically lasts
-  months, not years, and newborn hunters often starve. The mean diet gene of the
-  founders' descendants stays near 0.1: there is no sign of herbivores evolving into
-  predators within three years.
-- Creatures graze every plant form alike; trees are as easy to eat as grass.
+- The mean diet gene of the founders' descendants stays near 0.1 or below: herbivores
+  never evolve into predators (no omnivores in any run); hunters only come from arrivals.
+- Creatures graze every plant form alike (same bite rate); forms differ only through the
+  plants' genes (defence).
 - No aquatic food: swimmers must feed on land.
