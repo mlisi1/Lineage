@@ -168,7 +168,9 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
   15 %), evolution keeps the learning rate low, and there is no clear Baldwin trend in
   three years. Proposed criteria await the owner.
 - Predator lineages are cyclic: they persist on the island for up to about 16
-  generations, and are fewer late in learning worlds than in non-learning ones.
+  generations, and are fewer late in learning worlds than in non-learning ones. Hunters
+  die mostly of starvation (half before maturity); scavenging (carrion) was added for
+  them and has not yet been measured in full worlds.
 
 - The mean diet gene of the founders' descendants stays near 0.1 or below: herbivores
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.

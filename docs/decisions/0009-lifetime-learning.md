@@ -409,6 +409,36 @@ CLAUDE.md §8 is revised accordingly.
   The M4 report module and the slow M4 test use this reading. At this point it is 0.58,
   still short; the next balancing step targets it.
 
+## New action: scavenging (2026-10-18)
+
+The owner asked whether creatures need more actions to perform and learn from. The data
+first ruled two out:
+
+- **Strike or hold, for hunters**: attack costs are 0.2 % of hunters' resting burn, and
+  about 85 % of strikes kill, so deciding not to strike would change almost nothing.
+- **Learning danger from near misses**: prey almost never survive an attack, so there is
+  hardly anything to learn from.
+- **Eat or pass**: at toxicity 0.5 every plant still gives 50–100 % of its energy, so
+  passing rarely pays.
+
+What the data did show: **hunters starve**. In 60-day forks, 509 of 570 hunter deaths
+were starvation, at a median age of 11 days, half before maturity. The meat is
+concentrated in successful hunters. So the action added is **scavenging** (`d13ad12`;
+see creatures.md, "Carrion"), as ADR 0005 suggested for newborn hunters. It should also
+give half-meat diets a niche, and whether omnivores now evolve is one of the things to
+measure. Where carrion lies depends on where hunters hunt, which varies in place and
+time: the kind of thing learning is good at.
+
+**Not yet measured in full worlds** (runs stopped at wrap-up). Next: compare
+`meat_energy` 1 600 and 900 with scavenging, learning on, against M4.3 (final-year mean
+≥ 0.6), predator presence, extinctions and omnivores; then regenerate the M5 report.
+Commands:
+
+```sh
+uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 1000 --snapshot-days 0 --out runs/scav-on
+uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 1000 --snapshot-days 0 --set fauna.meat_energy=900.0 --out runs/scav-on-meat900
+```
+
 ## Candidate features (researched 2026-10-17, owner asked for ideas)
 
 Ranked by fit for the gadget: what they add to evolution, how intriguing the learning
