@@ -412,7 +412,7 @@ graze_rate = 0.05
 graze_jaw_floor = 0.5
 # Energy in one full cell of plant biomass, and per unit of prey mass.
 plant_energy = 300.0
-meat_energy = 900.0
+meat_energy = 1600.0
 # Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
 diet_exponent = 1.0
 # Plant defence also poisons: energy from plants is multiplied by
@@ -514,11 +514,16 @@ forget_hours = 72.0
 meal_learning_gain = 1.0
 # Weight of trial-and-error learning (node perturbation through steering noise) on all
 # learned gains, × learning rate. 0 leaves learning from meals alone.
-perturbation_gain = 1.0
+perturbation_gain = 0.25
 meal_memory_hours = 24.0
+# Diet traditions (social learning): at birth a newborn takes on social_copy_max × its
+# SOCIAL gene of its mother's learned plant-form gains (only those). Its own meals then
+# confirm or correct them, and forgetting fades what is never confirmed. Copying is free;
+# whether it pays is left to evolution.
+social_copy_max = 1.0
 # Basal-burn cost of the learning gene, like the body costs above (× gene): a brain
 # that learns is expensive tissue.
-cost_learning = 0.2
+cost_learning = 0.05
 # A creature is competent from the first time its energy balance, averaged with this
 # time constant (hours), stops being negative: it feeds itself.
 competence_hours = 24.0
