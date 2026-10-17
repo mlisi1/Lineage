@@ -51,6 +51,9 @@ _F = {name: i for i, name in enumerate(FORK_COLUMNS)}
 
 SERIES_LABELS: dict[str, SeriesLabel] = {
     "generation": SeriesLabel("Mean generation", "generations since arrival"),
+    "diet_fit": SeriesLabel(
+        "Diet fit", "correlation of learned plant preference with local plant defence"
+    ),
     **{
         f"learned_{name}": SeriesLabel(f"Learned gain: {name}", "mean gain")
         for name in FOLLOWED_NAMES
@@ -191,6 +194,12 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
         out[f"{arm}energy_share.mean"] = float(np.nanmean(_stack(which, "energy_share")))
         out[f"{arm}step_ms.median"] = float(np.median(_stack(which, "step_ms")[:, 1:]))
         out[f"{arm}generation.end.median"] = float(np.nanmedian(_stack(which, "generation")[:, -1]))
+    fit = _stack(run, "diet_fit")
+    last_year = _times(run) >= run.manifest.sim_years - 1.0
+    out["diet_fit.last_year.median"] = float(np.nanmedian(np.nanmean(fit[:, last_year], axis=1)))
+    out["diet_fit.last_year.share_of_seeds_positive"] = float(
+        np.mean(np.nanmean(fit[:, last_year], axis=1) > 0)
+    )
     for gene in ("learning", "exploration"):
         values = _stack(run, f"gene_{gene}")
         out[f"gene_{gene}.end.median"] = float(np.nanmedian(values[:, -1]))
@@ -298,6 +307,15 @@ def _gene_section(run: Run, baseline: Run) -> Section:
                 ylabel="gene mean, 0–1",
             ),
         )  # fmt: skip
+    body += _svg(
+        "Diet fit: how closely the plant eaters' learned preference (low over woody growth) "
+        "follows how much more defended the woody plants are than the low ones around "
+        "each of them. Positive: they have learned where they live.",
+        figures.time_series_band(
+            times, _stack(run, "diet_fit"), title="Diet fit", xlabel="sim time (years)",
+            ylabel="correlation",
+        ),
+    )  # fmt: skip
     body += _svg(
         "What the living have learned: mean learned gain on each followed sense, median "
         "across seeds. A positive gain means following that sense more than instinct says.",

@@ -51,8 +51,10 @@ from lineage_sim.events import (
     VolcanoErupted,
 )
 from lineage_sim.fauna import brain
+from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import Gene
-from lineage_sim.flora import Cover, Rare
+from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Cover, Rare
+from lineage_sim.flora import Gene as PlantGene
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -92,6 +94,8 @@ YOUTH_COLUMNS = ("day", "generation", "age_h", "eaten", "burnt", "competent_h", 
 # is 1 for the arm with lifetime learning on.
 FORK_COLUMNS = ("fork_day", "learning", *YOUTH_COLUMNS[1:])
 DAY_MS = DAY_S * 1000
+_LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
+_WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
 
 
 def override_config(text: str, assignment: str) -> str:
@@ -116,6 +120,52 @@ def override_config(text: str, assignment: str) -> str:
     changed = "".join(out)
     parse_config(changed)  # fail early on a bad value
     return changed
+
+
+# Diet fit (M5): half-width, in cells, of the neighbourhood whose plants a grazer is
+# compared with; and how many cells of each form it must hold to count.
+FIT_RADIUS = 8
+FIT_MIN_CELLS = 5
+
+
+def _box_sum(grid: np.ndarray, radius: int) -> np.ndarray:
+    """Sum of ``grid`` over the (2 radius + 1)² box around every cell (clipped at edges)."""
+    padded = np.pad(grid.astype(np.float64), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    h, w = grid.shape
+    y0 = np.clip(np.arange(h) - radius, 0, h)
+    y1 = np.clip(np.arange(h) + radius + 1, 0, h)
+    x0 = np.clip(np.arange(w) - radius, 0, w)
+    x1 = np.clip(np.arange(w) + radius + 1, 0, w)
+    return padded[y1][:, x1] - padded[y0][:, x1] - padded[y1][:, x0] + padded[y0][:, x0]
+
+
+def diet_fit(world: World) -> float:
+    """Correlation, over plant eaters living among both plant forms, between what each has
+    learned (gain on low growth minus gain on woody growth) and how much more defended the
+    woody plants are than the low ones around it. Positive: they learned their place."""
+    fauna, flora = world.fauna, world.flora
+    grazer = fauna.genes[:, Gene.DIET] <= fauna.config.herbivore_max_diet
+    if np.count_nonzero(grazer) < 10:
+        return np.nan
+    food = flora.grazeable() > 0.05
+    forms = flora.forms()
+    defence = flora.genes()[PlantGene.DEFENCE]
+    low = food & np.isin(forms, LOW_FORMS)
+    woody = food & np.isin(forms, WOODY_FORMS)
+    n_low, n_woody = _box_sum(low, FIT_RADIUS), _box_sum(woody, FIT_RADIUS)
+    d_low = _box_sum(defence * low, FIT_RADIUS) / np.maximum(n_low, 1)
+    d_woody = _box_sum(defence * woody, FIT_RADIUS) / np.maximum(n_woody, 1)
+    ys = np.clip(np.rint(fauna.positions[:, 1]), 0, defence.shape[0] - 1).astype(np.intp)
+    xs = np.clip(np.rint(fauna.positions[:, 0]), 0, defence.shape[1] - 1).astype(np.intp)
+    mixed = grazer & (n_low[ys, xs] >= FIT_MIN_CELLS) & (n_woody[ys, xs] >= FIT_MIN_CELLS)
+    if np.count_nonzero(mixed) < 10:
+        return np.nan
+    difference = (d_woody - d_low)[ys, xs][mixed]
+    learned = fauna.learned[mixed]
+    preference = learned[:, _LOW_GAIN] - learned[:, _WOODY_GAIN]
+    if difference.std() == 0 or preference.std() == 0:
+        return np.nan
+    return float(np.corrcoef(difference, preference)[0, 1])
 
 
 def youth_row(event: JuvenileGrown) -> list[float]:
@@ -229,6 +279,7 @@ class Probes:
             "genetic_distance": float(fauna.distance_from_ancestors().mean()) if n else np.nan,
             "energy_share": float((fauna.energy / fauna.body.capacity).mean()) if n else np.nan,
             "generation": float(fauna.generation.mean()) if n else np.nan,
+            "diet_fit": diet_fit(world) if n else np.nan,
         }
         for k, sense in enumerate(brain.FOLLOWED):
             name = (sense.name or "").removesuffix("_X").lower()

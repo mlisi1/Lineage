@@ -60,6 +60,7 @@ def _write(tmp_path: Path, name: str, *, learning: bool) -> Path:
             "extinctions": np.zeros_like(times),
             "gene_learning": np.linspace(0.5, 0.7 if learning else 0.5, times.size),
             "gene_exploration": 0.5 * flat,
+            "diet_fit": 0.3 * flat,
             "_youth": _youths(rng, SLOPE_ON if learning else 0.0),
             "_fork": _forks() if learning else np.zeros((0, len(FORK_COLUMNS))),
         }
@@ -144,3 +145,58 @@ def test_m5_report_needs_a_baseline_with_the_same_seeds(tmp_path: Path) -> None:
     write_run(Run(renumbered, other.config_text, series), tmp_path / "runs" / "other")
     with pytest.raises(ValueError, match="same seeds"):
         build_report("M5", on, tmp_path / "reports", tmp_path / "runs" / "other")
+
+
+def test_box_sum_matches_a_brute_force_sum() -> None:
+    from tools.fastforward import _box_sum  # pyright: ignore[reportPrivateUsage]
+
+    grid = np.random.Generator(np.random.PCG64(3)).random((9, 13))
+    boxed = _box_sum(grid, 2)
+    for y, x in ((0, 0), (4, 6), (8, 12), (3, 0)):
+        expected = grid[max(0, y - 2) : y + 3, max(0, x - 2) : x + 3].sum()
+        assert boxed[y, x] == pytest.approx(expected)
+
+
+def test_diet_fit_is_positive_when_preferences_follow_the_plants() -> None:
+    """Grazers that learned to prefer the less defended form where they live give a
+    positive diet fit; the same grazers with their preferences shuffled against the
+    plants give a negative one."""
+    from lineage_sim.config import parse_config
+    from lineage_sim.fauna import brain
+    from lineage_sim.fauna.brain import Sense
+    from lineage_sim.fauna.genome import Gene
+    from lineage_sim.flora import Gene as PlantGene
+    from lineage_sim.state import io
+    from lineage_sim.world import World
+
+    from tools.fastforward import diet_fit
+    from tools.runs import DEFAULT_CONFIG, REPO_ROOT
+
+    config = parse_config(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    fixture = REPO_ROOT / "sim" / "tests" / "fixtures" / "saves" / "v6.lzma"
+    world = World.restore(config, io.loads(fixture.read_bytes()))
+    plants = world.flora.get_state()
+    rows, columns = plants["biomass"].shape
+    left = np.arange(columns)[None, :] < columns // 2
+    # Every cell grows food; low growth and shrubs alternate by column; the left half's
+    # shrubs and the right half's grass are the defended ones.
+    plants["biomass"][:] = 0.8
+    shrub = (np.arange(columns)[None, :] % 2 == 0) & np.ones((rows, 1), dtype=bool)
+    plants["genome"][PlantGene.HEIGHT] = np.where(shrub, 110, 60)
+    defended = np.where(left, shrub, ~shrub)
+    plants["genome"][PlantGene.DEFENCE] = np.where(defended, 230, 0)
+    world.flora.set_state(plants)
+    fauna = world.fauna.get_state()
+    n = fauna["energy"].size
+    xs = np.linspace(20.0, columns - 20.0, n)
+    fauna["positions"] = np.stack([xs, np.full(n, rows / 2.0)], axis=1).astype(np.float32)
+    fauna["genes"][:, Gene.DIET] = 0.05  # all plant eaters
+    low = brain.FOLLOWED.index(Sense.LOW_X)
+    fauna["learned"][:] = 0.0
+    on_left = xs < columns // 2
+    fauna["learned"][:, low] = np.where(on_left, 1.0, -1.0)  # left: shrubs defended, prefer low
+    world.fauna.set_state(fauna)
+    assert diet_fit(world) > 0.9
+    fauna["learned"][:, low] *= -1.0
+    world.fauna.set_state(fauna)
+    assert diet_fit(world) < -0.9
