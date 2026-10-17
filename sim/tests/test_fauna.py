@@ -21,6 +21,7 @@ from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype, phenotype
+from lineage_sim.flora import Gene as FloraGene
 from lineage_sim.state import io
 from lineage_sim.world import World
 from numpy.random import PCG64, Generator
@@ -30,10 +31,10 @@ DAY_S = 86_400
 # Fixture v5: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "d13495b12923ecfb65220cd6bbc2e28056fc2a7cc5c922984be9841b93260063"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "47c1bc867c74e1bba850ad2fc3e120635f0756c2d320fcda0da59e1f06feec7d"
+GOLDEN_AFTER_THREE_DAYS = "0fd00933657dd196b86ac7f421284e09fcef0bcd058a96b39dda95a9c49b8c63"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "c04846f8f48e9267f83f46e000519863a7d65643e1fa19c02d4cea57e54f3acb"
+GOLDEN_BARE_ROCK_520_DAYS = "5c0dbe5de3b4a54d9b70c9ba25453aad8169dea1ba595899a848b6e2395ebea2"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -322,9 +323,31 @@ def test_energy_balance_of_one_tick(config: Config) -> None:
     travelled = float(np.hypot(*(fauna.positions[0] - start[0])))
     eaten = biomass - float(site.flora.biomass.sum(dtype=np.float64))
     burnt = float(body.basal_burn[0]) * hours + float(body.move_cost[0]) * travelled
-    gained = eaten * cfg.plant_energy * float(body.plant_efficiency[0])
+    defence = float(site.flora.genes()[FloraGene.DEFENCE, 20, 20])
+    value = (
+        cfg.plant_energy * float(body.plant_efficiency[0]) * (1 - cfg.defence_toxicity * defence)
+    )
+    gained = eaten * value
     assert eaten > 0
     assert float(fauna.energy[0]) - energy == pytest.approx(gained - burnt, abs=0.02)
+
+
+def test_defended_plants_feed_less(config: Config) -> None:
+    """Defence refuses part of each bite and poisons what is eaten: a day on defended
+    pasture feeds a grazer far less than a day on undefended pasture."""
+
+    def day_on(defence: int) -> float:
+        site = Site(config)
+        plants = site.flora.get_state()
+        plants["genome"][FloraGene.DEFENCE] = defence
+        site.flora.set_state(plants)
+        site.add(GRAZER, [(20.0, 20.0)], energy_share=0.4)
+        site.run(24.0)
+        return float(site.energy_share(site.fauna.ids)[0])
+
+    undefended, defended = day_on(0), day_on(200)
+    assert undefended > 0.4  # it grew fat
+    assert defended < undefended - 0.1
 
 
 def test_starving_creature_dies(config: Config) -> None:

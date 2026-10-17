@@ -373,6 +373,7 @@ class FaunaConfig:
     meat_energy: float
     diet_exponent: float
     attack_min_diet: float
+    defence_toxicity: float
     hunt_below_energy_share: float
     reach_cells: float
     attack_rate: float

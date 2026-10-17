@@ -415,6 +415,10 @@ plant_energy = 300.0
 meat_energy = 900.0
 # Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
 diet_exponent = 1.0
+# Plant defence also poisons: energy from plants is multiplied by
+# 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
+# than it gives). Grazers cannot sense defence, only plant form (M5).
+defence_toxicity = 1.0
 # Creatures with at least this diet gene hunt. Reach of a bite (cells). Attacks per hour
 # on a prey in reach. Attack power = mass × (jaw_floor + jaw gene); defence = mass ×
 # (1 + armour_strength × armour gene). A hit kills with probability

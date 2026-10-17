@@ -374,6 +374,10 @@ class Flora:
         self._biomass[cell_y, cell_x] = np.maximum(left, 0.0).astype(_F)
         return eaten
 
+    def defence_at(self, ys: Index, xs: Index) -> Grid:
+        """Defence gene, in [0, 1], of the plants at cells (ys, xs)."""
+        return self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
+
     def grazeable(self) -> Grid:
         """Biomass grazers can reach in each cell (what they see as food)."""
         return np.maximum(self._biomass - _F(self._cfg.grazing_reserve_biomass), _F(0.0))

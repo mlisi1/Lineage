@@ -81,7 +81,8 @@ that let 50 weights learn fitted noise into fixed directions and drifted).
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
   in water. A creature with no energy left dies (starved, or drowned if in water).
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
-  regrows; defended plants refuse part of each bite.
+  regrows; defended plants refuse part of each bite, and what is eaten is worth less:
+  energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.
 - **Hunting**: a creature with diet ≥ 0.15 attacks the nearest creature of another kind
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the

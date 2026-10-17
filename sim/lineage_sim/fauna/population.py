@@ -386,7 +386,10 @@ class Fauna:
 
         rows, columns = creature.cells_of(self._positions, self._shape)
         eaten = self._flora.graze(rows, columns, creature.appetite(cfg, self._energy, body, hours))
-        meal = (eaten * np.float32(cfg.plant_energy) * body.plant_efficiency).astype(np.float32)
+        # Defended plants are not only harder to bite: what is eaten is worth less (toxins).
+        toxic = np.float32(cfg.defence_toxicity) * self._flora.defence_at(rows, columns)
+        value = np.float32(cfg.plant_energy) * body.plant_efficiency * (np.float32(1.0) - toxic)
+        meal = (eaten * value).astype(np.float32)
         self._energy = self._energy + meal
         self._meal = self._meal + meal
         self._age_h = self._age_h + np.float32(hours)
