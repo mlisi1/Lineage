@@ -168,6 +168,26 @@ def diet_fit(world: World) -> float:
     return float(np.corrcoef(difference, preference)[0, 1])
 
 
+def form_bias(world: World) -> tuple[float, float]:
+    """Mean plant-form bias of the plant eaters, (inherited, learned): how much more they
+    follow low growth than woody growth, from the inherited direct weights and from what
+    they have learned. Shows whether what is learned becomes innate (genetic
+    assimilation) or makes the genes unnecessary (shielding)."""
+    fauna = world.fauna
+    grazer = fauna.genes[:, Gene.DIET] <= fauna.config.herbivore_max_diet
+    if not grazer.any():
+        return np.nan, np.nan
+    weights = fauna.weights[grazer]
+
+    def innate(sense_x: int) -> np.ndarray:
+        # Mean of the two direct weights a gain on this sense adds to (x from x, y from y).
+        return (weights[:, sense_x] + weights[:, brain.SENSE_COUNT + sense_x + 1]) / 2.0
+
+    inherited = innate(int(Sense.LOW_X)) - innate(int(Sense.WOODY_X))
+    learned = fauna.learned[grazer, _LOW_GAIN] - fauna.learned[grazer, _WOODY_GAIN]
+    return float(inherited.mean()), float(learned.mean())
+
+
 def youth_row(event: JuvenileGrown) -> list[float]:
     return [event.t_ms / DAY_MS, event.generation, event.age_h, event.eaten, event.burnt,
             event.competent_h, float(event.died)]  # fmt: skip
@@ -281,6 +301,9 @@ class Probes:
             "generation": float(fauna.generation.mean()) if n else np.nan,
             "diet_fit": diet_fit(world) if n else np.nan,
         }
+        row["form_bias_inherited"], row["form_bias_learned"] = (
+            form_bias(world) if n else (np.nan, np.nan)
+        )
         for k, sense in enumerate(brain.FOLLOWED):
             name = (sense.name or "").removesuffix("_X").lower()
             row[f"learned_{name}"] = float(fauna.learned[:, k].mean()) if n else np.nan

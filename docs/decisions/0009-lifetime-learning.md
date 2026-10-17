@@ -386,6 +386,27 @@ between forms is worth about 6 % of a bite, and higher toxicity starves the pred
 - **M4.3**: read as the mean over the last year (0.58 now; band 0.6, or 0.55 if the owner
   accepts that predators are now more cyclic).
 
+## Criteria adopted (owner: "if you think those are reasonable changes, go on", 2026-10-17)
+
+CLAUDE.md §8 is revised accordingly.
+
+- **M5.1 → learning tracks the local environment**: final-year diet fit positive in
+  ≥ 80 % of seeds. The original "early-life feeding ≥ 15 %" is still measured and
+  reported. Choosing plants is worth a few percent of a bite on a balanced island, so 15 %
+  is out of reach without starving the predators.
+- **M5.2 unchanged** (time to competence trends down in ≥ 60 % of seeds). The proposed
+  replacement, *genetic assimilation*, is **not adopted**: the data show the opposite.
+  - At year 3, grazers' inherited bias toward low growth is +0.117 with learning off
+    (positive in 70 % of seeds) and only +0.015 with learning on (53 %), while the
+    learners' learned bias is +0.062 (89 %).
+  - Learning shields the genes (Ackley & Littman). The report now shows this ("Diet
+    bias: born with, or learned") and says so in "What the plots show".
+- **M5.3 unchanged.**
+- **M4.3 reading**: both diets present, **mean over the final year**, band unchanged
+  (≥ 60 %). One day at year 3 swung between 0.50 and 0.65 for the same configuration.
+  The M4 report module and the slow M4 test use this reading. At this point it is 0.58,
+  still short; the next balancing step targets it.
+
 ## Candidate features (researched 2026-10-17, owner asked for ideas)
 
 Ranked by fit for the gadget: what they add to evolution, how intriguing the learning

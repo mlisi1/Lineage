@@ -1,13 +1,17 @@
 """M5 — Fauna II: lifetime learning. Metrics, acceptance criteria, report sections.
 
-Acceptance (CLAUDE.md §8): learning ON improves early-life feeding success by ≥ 15 %;
-time to competence trends down over generations in ≥ 60 % of seeds; step cost within
-budget.
+Acceptance (CLAUDE.md §8, revised 2026-10-17, ADR 0009): learning tracks the local
+environment (final-year diet fit positive in ≥ 80 % of seeds); time to competence trends
+down over generations in ≥ 60 % of seeds; step cost within budget. Early-life feeding
+success (the original M5.1, ≥ 15 %) is still measured and reported.
 
 Two runs make this report: the main run has learning on and was forked
 (``fastforward --fork-days``); the baseline is the same seeds with
 ``--set fauna.learning=false``. Readings used here (ADR 0009):
 
+- **Diet fit** is the correlation, over plant eaters among both plant forms, between
+  what each has learned (low over woody growth) and how much more defended the woody
+  plants around it are (``fastforward.diet_fit``); its final-year mean per seed.
 - **Early-life feeding success** is the energy a youth eats per hour of youth (from
   birth to maturity, or to death before it), pooled over the youths of every fork of a
   seed. It is compared between the fork's two arms, which start from the same state, for
@@ -42,7 +46,7 @@ STEP_BUDGET_MS = m4.STEP_BUDGET_MS
 MIN_YOUTHS = 20  # youths a generation needs for its median competence time to count
 MIN_GENERATIONS = 5  # counted generations a seed needs for a trend
 MAX_GENERATION_SHOWN = 60
-ON, OFF = style.CATEGORICAL[0], style.CATEGORICAL[3]
+ON, OFF, LEARNED = style.CATEGORICAL[0], style.CATEGORICAL[3], style.CATEGORICAL[2]
 FOLLOWED_NAMES = tuple(
     (sense.name or "").removesuffix("_X").lower() for sense in brain.FOLLOWED
 )  # fmt: skip
@@ -64,10 +68,10 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
 CRITERIA: list[Criterion] = [
     Criterion(
         "M5.1",
-        "Early-life feeding success, learning on vs off in the same forked worlds: energy "
-        "eaten per hour of youth, median gain across seeds",
-        "fork.intake_rate.gain.median",
-        low=0.15,
+        "Learning tracks the local environment: share of seeds whose final-year diet fit "
+        "(learned plant preference against the local plant defence) is positive",
+        "diet_fit.last_year.share_of_seeds_positive",
+        low=0.8,
     ),
     Criterion(
         "M5.2",
@@ -209,6 +213,21 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
         )
     for name in FOLLOWED_NAMES:
         out[f"learned_{name}.mean.median"] = float(np.nanmedian(_stack(run, f"learned_{name}")))
+    for arm, which in (("", run), ("off.", baseline)):
+        inherited = (
+            _stack(which, "form_bias_inherited")
+            if "form_bias_inherited" in which.series[which.manifest.seeds[0]]
+            else None
+        )
+        if inherited is not None:
+            out[f"{arm}form_bias_inherited.end.median"] = float(np.nanmedian(inherited[:, -1]))
+            out[f"{arm}form_bias_inherited.end.share_positive"] = float(
+                np.mean(inherited[:, -1] > 0)
+            )
+    if "form_bias_learned" in run.series[run.manifest.seeds[0]]:
+        learned = _stack(run, "form_bias_learned")
+        out["form_bias_learned.end.median"] = float(np.nanmedian(learned[:, -1]))
+        out["form_bias_learned.end.share_positive"] = float(np.mean(learned[:, -1] > 0))
     out["first_landing.months.median"] = float(np.median(first_landing_years(run)) * 12.0)
     for arm, which in (("", run), ("off.", baseline)):
         minima = yearly_minimum(which)
@@ -390,6 +409,24 @@ def _gene_section(run: Run, baseline: Run) -> Section:
             ylabel="correlation",
         ),
     )  # fmt: skip
+    if "form_bias_inherited" in run.series[run.manifest.seeds[0]]:
+        body += _svg(
+            "How much more the plant eaters follow low growth than woody growth: the bias "
+            "they are born with (inherited weights), with learning on and off, and what "
+            "the learners add during life. If the inherited bias rises with learning on, "
+            "what is learned is becoming innate (genetic assimilation); if it stays lower "
+            "than with learning off, learning makes the genes unnecessary (shielding).",
+            figures.compare_bands(
+                times,
+                {
+                    "inherited, learning on": (_stack(run, "form_bias_inherited"), ON),
+                    "inherited, learning off": (_stack(baseline, "form_bias_inherited"), OFF),
+                    "learned, learning on": (_stack(run, "form_bias_learned"), LEARNED),
+                },
+                title="Diet bias: born with, or learned", xlabel="sim time (years)",
+                ylabel="bias toward low growth (weight)",
+            ),
+        )  # fmt: skip
     body += _svg(
         "What the living have learned: mean learned gain on each followed sense, median "
         "across seeds. A positive gain means following that sense more than instinct says.",
@@ -454,6 +491,37 @@ def _interpretation_section(run: Run, baseline: Run) -> Section:
     )
     step, step_off = m["step_ms.median"], m["off.step_ms.median"]
     generations = m["generation.end.median"]
+    born_on = m.get("form_bias_inherited.end.median", np.nan)
+    born_off = m.get("off.form_bias_inherited.end.median", np.nan)
+    learned_bias = m.get("form_bias_learned.end.median", np.nan)
+    if not np.isfinite(born_on) or not np.isfinite(born_off):
+        shielding_head, shielding_text = (
+            "Born with, or learned?",
+            "These runs did not record the inherited and learned diet bias.",
+        )
+    elif born_on < born_off - 0.03:
+        shielding_head = "Learning shields the genes."
+        shielding_text = (
+            f"Plant eaters' inherited bias toward low growth ends at {born_on:+.3f} with "
+            f"learning on and {born_off:+.3f} with it off (positive in "
+            f"{_share(m['form_bias_inherited.end.share_positive'])} and "
+            f"{_share(m['off.form_bias_inherited.end.share_positive'])} of seeds), while "
+            f"the learners' learned bias is {learned_bias:+.3f}. Without learning, "
+            "selection writes the diet rule into the genes; with learning, creatures pick "
+            "it up during life, so selection on the genes relaxes: the opposite of a "
+            "Baldwin effect, which Ackley &amp; Littman call shielding."
+        )
+    else:
+        shielding_head = (
+            "What is learned becomes innate."
+            if born_on > born_off + 0.03
+            else "Learning neither shields nor speeds the genes."
+        )
+        shielding_text = (
+            f"Plant eaters' inherited bias toward low growth ends at {born_on:+.3f} with "
+            f"learning on and {born_off:+.3f} with it off; the learned bias is "
+            f"{learned_bias:+.3f}."
+        )
 
     def gene_reading(on: float, off: float) -> str:
         if on < off - 0.1:
@@ -530,6 +598,10 @@ def _interpretation_section(run: Run, baseline: Run) -> Section:
             "(it spreads grazers over more pasture); a high learning rate costs more than "
             "the little food it wins. As Ackley &amp; Littman found, once inherited "
             "behaviour is good enough, genes for learning lose value (shielding).",
+        ),
+        (
+            shielding_head,
+            shielding_text,
         ),
         (
             f"No Baldwin trend in {run.manifest.sim_years:g} years.",

@@ -63,6 +63,9 @@ def _write(tmp_path: Path, name: str, *, learning: bool) -> Path:
             "gene_exploration": 0.5 * flat,
             "gene_social": 0.5 * flat,
             "diet_fit": 0.3 * flat,
+            # Shielding: the inherited bias grows less where creatures learn it.
+            "form_bias_inherited": (0.02 if learning else 0.12) * flat,
+            "form_bias_learned": (0.06 if learning else 0.0) * flat,
             "_youth": _youths(rng, SLOPE_ON if learning else 0.0),
             "_fork": _forks() if learning else np.zeros((0, len(FORK_COLUMNS))),
         }
@@ -136,6 +139,8 @@ def test_m5_report_passes_and_names_the_baseline(tmp_path: Path) -> None:
     assert page.count("<figure") >= 11
     assert "Population bottlenecks" in page
     assert "What the plots show" in page
+    assert "Learning shields the genes." in page
+    assert "the bias they are born with" in page
     assert "Baseline `off`" in (out / "README.md").read_text(encoding="utf-8")
 
 

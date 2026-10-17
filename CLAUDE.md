@@ -279,17 +279,23 @@ needs a note in `docs/decisions/`.
   extinction events.
 - **Accept**: total extinction in `[< 20%]` of seed-years; trait distributions drift
   measurably from ancestors (mean genetic distance rising); both herbivores and predators
-  present at year 3 in `[≥ 60%]` of seeds.
+  present during year 3 in `[≥ 60%]` of seeds (mean over the final year, not one day:
+  predator packs boom and bust within months; ADR 0009).
 
 ### M5 — Fauna II: lifetime learning
 - **Deliver**: reward-modulated policy update with eligibility traces and exploration
-  noise; learning-rate and exploration genes; "time to competence" metric.
+  noise; learning-rate and exploration genes; "time to competence" metric. (As built,
+  ADR 0009: learning from meals, diet traditions, plant-form senses, hunters that learn
+  which prey to strike.)
 - **Tests**: unit (update rule on a toy bandit improves reward), scenario (a single
   creature in a food field learns to approach food within N steps), determinism.
 - **Report**: ablation learning ON vs OFF (same seeds): survival, mean energy, time to
   competence across generations (Baldwin effect plot), learning-rate gene trajectory.
-- **Accept**: learning ON improves early-life feeding success by `[≥ 15%]`; time to
+- **Accept**: learning tracks the local environment: final-year diet fit (learned plant
+  preference against local plant defence) positive in `[≥ 80%]` of seeds; time to
   competence trends down over generations in `[≥ 60%]` of seeds; step cost within budget.
+  Early-life feeding gain (originally `[≥ 15%]`, out of reach on a balanced island) and
+  shielding versus genetic assimilation are reported. Revised 2026-10-17 (ADR 0009).
 
 ### M6 — Species, names, phylogeny
 - **Deliver**: daily genome clustering with persistent ids, speciation/extinction
