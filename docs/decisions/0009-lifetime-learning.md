@@ -265,6 +265,28 @@ learns in 60 episodes.
   state: folded into schema v6, which has never been released (this branch is
   unmerged), so the v5→v6 migration and `v6.lzma` were amended rather than a v7 added.
 
+## Candidate features (researched 2026-10-17, owner asked for ideas)
+
+Ranked by fit for the gadget: what they add to evolution, how intriguing the learning
+becomes to watch, and the risk to the predator–prey balance.
+
+1. **Diet traditions (social learning).** Youths take on their mother's learned plant
+   preferences during a weaning window, weighted by an evolvable gene, and keep learning
+   from their own meals. In rats, juveniles acquire adults' food preferences (Galef), most
+   strongly at weaning, and the effect lasts. Rogers' paradox predicts copying pays only
+   alongside individual learning, so the mix is left to evolution. Herds would carry local
+   food cultures: captions and chronicle material. *Planned next.*
+2. **Learning danger without dying.** A prey that survives an attack learns to flee harder
+   (threat gain), and an attacked creature alerts nearby kin (alarm). This addresses the
+   "death cannot teach" gap, but it makes prey harder to catch, so only once predators are
+   robust.
+3. **Cover refuge.** Prey in dense woody growth are harder to kill: a structural
+   stabiliser of coexistence (Křivan; the PeerJ refuge study), and a second currency for
+   learning plant form (grass feeds, cover protects).
+4. **Evolved rewards.** Inherited weights on reward components (energy, safety, mates), as
+   in Ackley & Littman's evaluation network and Singh, Lewis & Barto's optimal rewards.
+   Brings Baldwin, shielding and goal-regression dynamics. Research-heavy.
+
 ## References
 
 What each source contributed to the decisions above. Links were checked on 2026-10-17;
@@ -327,4 +349,25 @@ details not confirmed from the source itself are marked.
 - **Rikvold, P. A. (2009). Complex dynamics in coevolution models with ratio-dependent
   functional response.** <https://arxiv.org/abs/0910.4915>. In an individual-based
   coevolution model, adaptive foraging enhances coexistence.
+- **Galef, B. G. Social learning of food preferences in rats** (lab work since 1969;
+  reviews 1982 and 2004). <https://experts.mcmaster.ca/scholarly-works/2167372>.
+  Juveniles acquire adults' food preferences; social influence is strongest at weaning;
+  a single 30-minute interaction lasts at least a month; it is weaker in unstable
+  environments. Basis for candidate 1. (Abstracts and metadata only; full texts not
+  read.)
+- **Rogers, A. (1988), "Rogers' paradox"**, as presented in Acerbi et al.'s
+  individual-based cultural evolution notes.
+  <https://acerbialberto.com/IBM-cultevo/rogers-paradox.html>. Cheap social learning
+  alone does not raise mean fitness at equilibrium, because it only recycles information;
+  it pays when combined with individual learning. Spatial heterogeneity and migration
+  favour individual learning.
+- **Singh, S., Lewis, R. L., Barto, A. G. & Sorg, J. (2010). Intrinsically motivated
+  reinforcement learning: an evolutionary perspective.** *IEEE TAMD*.
+  <https://web.eecs.umich.edu/~baveja/Papers/IMRLIEEETAMDFinal.pdf>. The optimal reward,
+  for a given fitness and distribution of environments, need not resemble fitness
+  itself. Basis for candidate 4.
+- **Reggia, J. et al. Conditions enabling the evolution of inter-agent signaling.**
+  <https://langev.com/pdf/reggia01conditionsEnabling.pdf>. Selection on survival alone
+  favoured predator alarm signals more than survival plus food success. Basis for
+  candidate 2.
 
