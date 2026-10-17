@@ -68,6 +68,11 @@ that let 50 weights learn fitted noise into fixed directions and drifted).
   learning rate × (reward − baseline). Reward is the tick's energy balance from eating
   and moving, as a share of capacity per hour; the baseline is its running average
   (`baseline_hours`). Gains fade with `forget_hours` and stay within `learned_max`.
+- **Learning from meals** (associative, like taste aversion): after each bite of plants,
+  the learned gain on that plant form's sense (low or woody growth) moves by how much
+  better or worse the bite was than the creature's usual meal (`meal_learning_gain`,
+  `meal_memory_hours`). One clear signal per bite: this, not the steering noise, is what
+  lets a creature pick up which form is safe where it lives.
 - **Exploration fades with age** (`exploration_fade_hours`, `exploration_floor`): full
   at birth, like juvenile play, down to a floor in adults, so grown creatures stop paying
   for noise they no longer learn much from.

@@ -413,6 +413,8 @@ class FaunaConfig:
     baseline_hours: float
     learned_max: float
     forget_hours: float
+    meal_learning_gain: float
+    meal_memory_hours: float
     cost_learning: float
     competence_hours: float
     herbivore_max_diet: float
@@ -451,6 +453,7 @@ class FaunaConfig:
             "baseline_hours",
             "learned_max",
             "forget_hours",
+            "meal_memory_hours",
             "competence_hours",
         )
         for key in positive:

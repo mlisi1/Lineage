@@ -114,6 +114,7 @@ class Site:
             "trace": np.zeros((count, brain.LEARNED_COUNT), dtype=np.float32),
             "noise": np.zeros((count, brain.OUTPUTS), dtype=np.float32),
             "baseline": -body.basal_burn / body.capacity,
+            "meal_value": np.full(count, np.nan, dtype=np.float32),
             "balance": -body.basal_burn,
             "competent_h": np.full(count, -1.0, dtype=np.float32),
             "young_eaten": np.zeros(count, dtype=np.float32),

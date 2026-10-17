@@ -125,6 +125,36 @@ def exploring(
     return (exploration * (floor + (1.0 - floor) * fade)).astype(np.float32)
 
 
+def taste(
+    learned: Learned,
+    gain_index: NDArray[np.intp],
+    bite: NDArray[np.float32],
+    value: NDArray[np.float32],
+    expected: NDArray[np.float32],
+    rate: NDArray[np.float32],
+    hours: float,
+    limit: float,
+    memory_hours: float,
+) -> tuple[Learned, NDArray[np.float32]]:
+    """Learning from meals (associative, like taste aversion): the learned gain on the
+    sense of the food just eaten (``gain_index``, -1 for none) moves by rate × how much
+    was bitten (share of a full bite) × how much better this food was than usual
+    (``value`` minus ``expected``). ``expected`` is each creature's running average meal
+    value over ``memory_hours``, NaN before its first meal. Returns both updated."""
+    ate = bite > 0
+    expected = np.where(ate & np.isnan(expected), value, expected).astype(np.float32)
+    surprise = np.where(ate, value - expected, 0.0).astype(np.float32)
+    rows = np.nonzero(ate & (gain_index >= 0))[0]
+    learned = learned.copy()
+    if rows.size:
+        step = rate[rows] * bite[rows] * surprise[rows] * np.float32(hours)
+        columns = gain_index[rows]
+        learned[rows, columns] = np.clip(learned[rows, columns] + step, -limit, limit)
+    follow = np.float32(1.0 - np.exp(-hours / memory_hours))
+    expected = np.where(ate, expected + follow * bite * surprise, expected).astype(np.float32)
+    return learned, expected
+
+
 def learn(
     learned: Learned,
     trace: Learned,

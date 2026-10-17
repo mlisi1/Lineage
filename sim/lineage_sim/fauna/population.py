@@ -59,6 +59,9 @@ _GOLDEN_ANGLE = 2.399963
 _FOUNDING_SEASONS = (Season.SPRING, Season.SUMMER)
 # Plant biomass a cell needs for newcomers to land on it.
 _LANDING_BIOMASS = 0.3
+# Learned gains on the plant-form senses, which meals teach.
+_LOW_GAIN = brain.FOLLOWED.index(brain.Sense.LOW_X)
+_WOODY_GAIN = brain.FOLLOWED.index(brain.Sense.WOODY_X)
 
 
 class Death(IntEnum):
@@ -114,8 +117,11 @@ class Fauna:
         # Exploration noise on each steering drive, in units of the creature's own
         # exploration: it persists for about exploration_hours, so a creature tries a
         # different way for a while rather than jittering.
-        self._noise = np.zeros((0, brain.OUTPUTS), dtype=np.float32)
+        self._noise: NDArray[np.float32] = np.zeros((0, brain.OUTPUTS), dtype=np.float32)
         self._baseline = np.zeros(0, dtype=np.float32)
+        # Running average value of its plant meals (share of the plant energy it really
+        # got, after toxins); NaN before its first meal.
+        self._meal_value = np.zeros(0, dtype=np.float32)
         # How it fends for itself: energy balance per hour averaged over about a day, the
         # age at which that stopped being negative (-1: not yet), and what it ate and
         # burnt while young.
@@ -289,6 +295,7 @@ class Fauna:
             "trace": self._trace.copy(),
             "noise": self._noise.copy(),
             "baseline": self._baseline.copy(),
+            "meal_value": self._meal_value.copy(),
             "balance": self._balance.copy(),
             "competent_h": self._competent_h.copy(),
             "young_eaten": self._young_eaten.copy(),
@@ -316,6 +323,7 @@ class Fauna:
         self._trace = np.array(tree["trace"], dtype=np.float32).reshape(gains)
         self._noise = np.array(tree["noise"], dtype=np.float32).reshape(-1, brain.OUTPUTS)
         self._baseline = np.array(tree["baseline"], dtype=np.float32)
+        self._meal_value = np.array(tree["meal_value"], dtype=np.float32)
         self._balance = np.array(tree["balance"], dtype=np.float32)
         self._competent_h = np.array(tree["competent_h"], dtype=np.float32)
         self._young_eaten = np.array(tree["young_eaten"], dtype=np.float32)
@@ -365,7 +373,9 @@ class Fauna:
             # does not learn).
             persist = np.float32(np.exp(-hours / cfg.exploration_hours))
             fresh = rng.normal(0.0, 1.0, drive.shape).astype(np.float32)
-            self._noise = persist * self._noise + np.sqrt(1.0 - persist**2) * fresh
+            self._noise = (persist * self._noise + np.sqrt(1.0 - persist**2) * fresh).astype(
+                np.float32
+            )
             spread = brain.exploring(
                 body.exploration, self._age_h, cfg.exploration_fade_hours, cfg.exploration_floor
             )
@@ -397,6 +407,21 @@ class Fauna:
         meal = (eaten * value).astype(np.float32)
         self._energy = self._energy + meal
         self._meal = self._meal + meal
+        if cfg.learning:
+            # Learning from meals: was the plant form just eaten better than usual?
+            forms = self._flora.forms()[rows, columns]
+            gain_index = np.select(
+                [np.isin(forms, LOW_FORMS), np.isin(forms, WOODY_FORMS)],
+                [_LOW_GAIN, _WOODY_GAIN],
+                -1,
+            ).astype(np.intp)
+            full_bite = body.graze_rate * np.float32(hours)
+            bite = np.clip(eaten / np.maximum(full_bite, 1e-9), 0.0, 1.0).astype(np.float32)
+            self._learned, self._meal_value = brain.taste(
+                self._learned, gain_index, bite, (np.float32(1.0) - toxic).astype(np.float32),
+                self._meal_value, body.learning_rate * np.float32(cfg.meal_learning_gain),
+                hours, cfg.learned_max, cfg.meal_memory_hours,
+            )  # fmt: skip
         self._age_h = self._age_h + np.float32(hours)
         self._idle_h = self._idle_h + np.float32(hours)
 
@@ -601,6 +626,7 @@ class Fauna:
         self._learned, self._trace = self._learned[keep], self._trace[keep]
         self._noise = self._noise[keep]
         self._baseline, self._balance = self._baseline[keep], self._balance[keep]
+        self._meal_value = self._meal_value[keep]
         self._competent_h = self._competent_h[keep]
         self._young_eaten, self._young_burnt = self._young_eaten[keep], self._young_burnt[keep]
         self._body = phenotype(self._cfg, self._genes)
@@ -646,6 +672,7 @@ class Fauna:
         resting = -self._body.basal_burn[old:]
         self._baseline = np.concatenate([self._baseline, resting / self._body.capacity[old:]])
         self._balance = np.concatenate([self._balance, resting])
+        self._meal_value = np.concatenate([self._meal_value, np.full(count, np.nan, np.float32)])
         self._competent_h = np.concatenate([self._competent_h, np.full(count, -1.0, np.float32)])
         zeros = np.zeros(count, dtype=np.float32)
         self._young_eaten = np.concatenate([self._young_eaten, zeros])

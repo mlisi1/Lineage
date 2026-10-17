@@ -245,3 +245,23 @@ learns in 60 episodes.
    carry the diet rule, and lifetime learning adds little; record it and move to M6.
 3. **M4.3's reading** (unchanged): see above.
 
+## Balancing (owner: "you are free to make the calls", 2026-10-17)
+
+- **Plant toxicity starved the food chain.** Learning-off worlds, 20 seeds × 3 years:
+
+  | `defence_toxicity` | Both diets at year 3 | Both, final-year mean | ≥ 3 predators, years 1–3 | Extinct seed-years |
+  |---|---|---|---|---|
+  | M4 report (no toxicity) | 0.70 | 0.62 | 0.61 | 0.05 |
+  | 0 | 0.75 | 0.55 | 0.54 | 0.02 |
+  | **0.5 (adopted)** | 0.80 | 0.62 | 0.57 | 0.00 |
+  | 1.0 | 0.40 | 0.50 | 0.43 | 0.05 |
+
+  At 1.0 leaner herbivores could not feed the predators. 0.5 restores M4's balance and
+  keeps a diet signal (a defended plant gives 55–95 % of its energy).
+- **Learning from meals added** (option 1 above, adopted). In the plant-form scenario at
+  the learning gene evolved populations carry (0.3), the right preference is now learned
+  in 16 of 16 trials in both worlds, against 56–88 % with node perturbation alone, and
+  time on the safe plants rises to 86–91 %. Its running average is new per-creature
+  state: folded into schema v6, which has never been released (this branch is
+  unmerged), so the v5→v6 migration and `v6.lzma` were amended rather than a v7 added.
+

@@ -178,8 +178,8 @@ GRASS_HEIGHT, SHRUB_HEIGHT = 60, 110  # plant genome values: grass and shrub for
 DEFENDED = 230  # plant defence gene value: refuses most of a bite, poisons the rest
 LOW = brain.FOLLOWED.index(Sense.LOW_X)
 WOODY = brain.FOLLOWED.index(Sense.WOODY_X)
-# A form learner at the highest learning rate its genes allow (learning_rate_max).
-FORM_LEARNER = _with(_with(GRAZER, Gene.LEARNING, 1.0), Gene.EXPLORATION, 1.0)
+# A form learner with the learning gene evolved populations carry (about 0.3).
+FORM_LEARNER = _with(_with(GRAZER, Gene.LEARNING, 0.3), Gene.EXPLORATION, 1.0)
 
 
 def _form_trial(
@@ -233,9 +233,10 @@ def test_a_creature_learns_which_plant_form_is_safe(config: Config) -> None:
         on = np.array(
             [_form_trial(config, s, woody_defended=woody_defended, learning=True) for s in trials]
         )
-        assert np.mean(np.sign(on[:, 0]) == sign) >= 0.75, (woody_defended, on[:, 0].round(2))
+        assert np.mean(np.sign(on[:, 0]) == sign) >= 0.9, (woody_defended, on[:, 0].round(2))
         # …and spends more of its time on the safe plants as it learns.
-        assert float(on[:, 2].mean()) > float(on[:, 1].mean()) + 0.03, (woody_defended, on)
+        assert float(on[:, 2].mean()) > float(on[:, 1].mean()) + 0.05, (woody_defended, on)
+        assert float(on[:, 2].mean()) > 0.8, (woody_defended, on)
     off = _form_trial(config, 0, woody_defended=True, learning=False)
     assert off[0] == 0.0
 
@@ -314,3 +315,30 @@ def test_exploration_fades_with_age() -> None:
     assert float(spread[0]) == pytest.approx(0.8)
     assert float(spread[1]) == pytest.approx(0.8 * (0.25 + 0.75 * np.exp(-1.0)), rel=1e-5)
     assert float(spread[2]) == pytest.approx(0.8 * 0.25, rel=1e-5)
+
+
+def test_tasting_learns_which_food_is_better_than_usual() -> None:
+    """A creature that has been eating food of value 0.5 finds a better (0.9) and a worse
+    (0.1) bite: the gain on the better food's sense rises, the worse one's falls, and a
+    creature that ate nothing learns nothing."""
+    learned = np.zeros((3, brain.LEARNED_COUNT), dtype=np.float32)
+    expected = np.array([0.5, 0.5, np.nan], dtype=np.float32)
+    low, woody = brain.FOLLOWED.index(Sense.LOW_X), brain.FOLLOWED.index(Sense.WOODY_X)
+    gain_index = np.array([low, woody, low], dtype=np.intp)
+    bite = np.array([1.0, 1.0, 0.0], dtype=np.float32)
+    value = np.array([0.9, 0.1, 0.9], dtype=np.float32)
+    rate = np.full(3, 2.0, dtype=np.float32)
+    after, usual = brain.taste(learned, gain_index, bite, value, expected, rate, 0.5, 3.0, 24.0)
+    assert float(after[0, low]) == pytest.approx(2.0 * 0.4 * 0.5)
+    assert float(after[1, woody]) == pytest.approx(-2.0 * 0.4 * 0.5)
+    assert float(np.abs(after[2]).max()) == 0.0  # nothing eaten
+    assert np.isnan(usual[2])
+    assert 0.5 < float(usual[0]) < 0.9  # the usual moves toward what was eaten
+    assert 0.1 < float(usual[1]) < 0.5
+    # A first meal only sets what is usual: nothing to compare it with yet.
+    first, usual_first = brain.taste(
+        learned, gain_index, np.ones(3, np.float32), value,
+        np.full(3, np.nan, np.float32), rate, 0.5, 3.0, 24.0,
+    )  # fmt: skip
+    assert float(np.abs(first).max()) == 0.0
+    np.testing.assert_allclose(usual_first, value)
