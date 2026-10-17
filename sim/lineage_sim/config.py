@@ -414,6 +414,7 @@ class FaunaConfig:
     learned_max: float
     forget_hours: float
     meal_learning_gain: float
+    perturbation_gain: float
     meal_memory_hours: float
     cost_learning: float
     competence_hours: float

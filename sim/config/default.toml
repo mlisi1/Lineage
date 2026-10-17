@@ -512,6 +512,9 @@ forget_hours = 72.0
 # meal value). Value is the share of the plant's energy really got, after toxins; the
 # usual value is a running average over meal_memory_hours.
 meal_learning_gain = 1.0
+# Weight of trial-and-error learning (node perturbation through steering noise) on all
+# learned gains, × learning rate. 0 leaves learning from meals alone.
+perturbation_gain = 1.0
 meal_memory_hours = 24.0
 # Basal-burn cost of the learning gene, like the body costs above (× gene): a brain
 # that learns is expensive tissue.

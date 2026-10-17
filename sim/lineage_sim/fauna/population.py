@@ -463,7 +463,8 @@ class Fauna:
             reward = per_hour / body.capacity
             advantage = (reward - self._baseline).astype(np.float32)
             self._learned = brain.learn(
-                self._learned, self._trace, advantage, body.learning_rate, hours,
+                self._learned, self._trace, advantage,
+                body.learning_rate * np.float32(cfg.perturbation_gain), hours,
                 cfg.learned_max, cfg.forget_hours,
             )  # fmt: skip
             follow = np.float32(1.0 - np.exp(-hours / cfg.baseline_hours))
