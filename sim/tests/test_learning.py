@@ -14,6 +14,7 @@ from lineage_sim.events import JuvenileGrown
 from lineage_sim.fauna import brain
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import Gene
+from lineage_sim.flora import Gene as FloraGene
 from numpy.random import PCG64, Generator
 from numpy.typing import NDArray
 
@@ -167,6 +168,76 @@ def test_a_creature_learns_to_approach_food(config: Config) -> None:
     assert float(late_on.mean()) < float(early_on.mean()) - 0.3, (early_on, late_on)
     # …and much faster than a creature that cannot learn.
     assert float(late_on.mean()) < float(late_off.mean()) - 1.0, (late_on, late_off)
+
+
+# --- Scenario: a creature learns which plant form is safe to eat ------------------------
+
+FORM_EPISODES = 60
+FORM_EPISODE_H = 4.0
+GRASS_HEIGHT, SHRUB_HEIGHT = 60, 110  # plant genome values: grass and shrub forms
+DEFENDED = 230  # plant defence gene value: refuses most of a bite, poisons the rest
+LOW = brain.FOLLOWED.index(Sense.LOW_X)
+WOODY = brain.FOLLOWED.index(Sense.WOODY_X)
+# A form learner at the highest learning rate its genes allow (learning_rate_max).
+FORM_LEARNER = _with(_with(GRAZER, Gene.LEARNING, 1.0), Gene.EXPLORATION, 1.0)
+
+
+def _form_trial(
+    config: Config, seed: int, *, woody_defended: bool, learning: bool
+) -> tuple[float, float, float]:
+    """One hungry grazer put down again and again between a patch of grass and a patch
+    of shrubs of equal biomass; one of the two forms is defended, and the creature can
+    see form but not defence. Patches swap sides at random. Returns its learned
+    preference (gain on low growth minus gain on woody growth) and its share of time on
+    the safe patch over the first and the last 15 episodes."""
+    cfg = replace(config.fauna, immigrant_groups_per_year=0.0, learning=learning,
+                  exploration_floor=1.0)  # fmt: skip
+    site = Site(config, fauna=cfg, seed=seed)
+    rows, columns = np.mgrid[0 : site.flora.biomass.shape[0], 0 : site.flora.biomass.shape[1]]
+    site.add(FORM_LEARNER, [(30.0, 20.0)])
+    place = Generator(PCG64(500 + seed))
+    safe_share: list[float] = []
+    for _ in range(FORM_EPISODES):
+        side = 1.0 if place.random() < 0.5 else -1.0
+        low = np.hypot(columns - (30.0 - 4.0 * side), rows - 20.0) <= 2.5
+        woody = np.hypot(columns - (30.0 + 4.0 * side), rows - 20.0) <= 2.5
+        defended = woody if woody_defended else low
+        plants = site.flora.get_state()
+        plants["biomass"][:] = np.where(low | woody, 0.8, 0.0)
+        plants["genome"][FloraGene.HEIGHT] = np.where(woody, SHRUB_HEIGHT, GRASS_HEIGHT)
+        plants["genome"][FloraGene.DEFENCE] = np.where(defended, DEFENDED, 0)
+        site.flora.set_state(plants)
+        state = site.fauna.get_state()
+        state["positions"][0] = (30.0 + place.normal(0.0, 0.5), 20.0 + place.normal(0.0, 2.0))
+        state["energy"][0] = 0.4 * float(site.fauna.body.capacity[0])
+        state["heading"][0] = place.uniform(0.0, 2.0 * np.pi)
+        site.fauna.set_state(state)
+        safe = unsafe = 0
+        for _ in range(round(FORM_EPISODE_H * 6)):
+            site.run(1.0 / 6.0)
+            x, y = site.fauna.positions[0]
+            cell = (round(float(y)), round(float(x)))
+            unsafe += int(defended[cell])
+            safe += int((low | woody)[cell] and not defended[cell])
+        safe_share.append(safe / max(1, safe + unsafe))
+    learned = site.fauna.learned[0]
+    preference = float(learned[LOW] - learned[WOODY])
+    return preference, float(np.mean(safe_share[:15])), float(np.mean(safe_share[-15:]))
+
+
+def test_a_creature_learns_which_plant_form_is_safe(config: Config) -> None:
+    """Seeing only form, a creature learns to prefer the form that is not defended here,
+    whichever it is: the preference is learned from the place, not built in."""
+    trials = range(12)
+    for woody_defended, sign in ((True, 1.0), (False, -1.0)):
+        on = np.array(
+            [_form_trial(config, s, woody_defended=woody_defended, learning=True) for s in trials]
+        )
+        assert np.mean(np.sign(on[:, 0]) == sign) >= 0.75, (woody_defended, on[:, 0].round(2))
+        # …and spends more of its time on the safe plants as it learns.
+        assert float(on[:, 2].mean()) > float(on[:, 1].mean()) + 0.03, (woody_defended, on)
+    off = _form_trial(config, 0, woody_defended=True, learning=False)
+    assert off[0] == 0.0
 
 
 # --- Learning in a creature's life ------------------------------------------------------

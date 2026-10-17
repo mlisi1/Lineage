@@ -38,9 +38,11 @@ expected values for the cross-language check in R2.
 
 A small neural net per creature, inherited and mutated. It only steers:
 
-- **Senses** (16): energy, plant food underfoot, direction of better food within sense
+- **Senses** (20): energy, plant food underfoot, direction of better food within sense
   range, direction of the nearest prey (when hungry), threat, mate (when ready to breed)
-  and creature of its own kind, direction of land, being in water, crowding.
+  and creature of its own kind, direction of land, being in water, crowding, and (M5)
+  where there is more low growth (lichen, grass) and more woody growth (shrub, trees).
+  A creature sees plant form, never plant defence.
 - **Output**: a steering vector. Speed follows from the body and the ground.
 - **Instincts**: founders arrive with direct sense-to-steering weights (go to food, chase
   prey in proportion to their diet, flee threats, go to a mate, stay on land or in water,
@@ -52,8 +54,11 @@ A small neural net per creature, inherited and mutated. It only steers:
 ## Lifetime learning (M5)
 
 Every creature also learns during its life. What it learns is a **gain on each
-directional sense** (food, prey, threat, mate, land, its own kind): how strongly to
-follow it. Senses are directions on the map, so a gain is the only thing about them
+directional sense** (food, prey, threat, mate, land, its own kind, low growth, woody
+growth): how strongly to follow it. The plant-form gains are where learning can beat
+instinct: which form is safe to eat depends on the place (defence differs between
+forms from region to region), so genes can only carry a general bias, held in the
+inherited weights on those senses, and learning corrects it locally. Senses are directions on the map, so a gain is the only thing about them
 worth learning on an island with no preferred compass direction (an earlier version
 that let 50 weights learn fitted noise into fixed directions and drifted).
 

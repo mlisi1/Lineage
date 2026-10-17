@@ -28,13 +28,13 @@ from numpy.random import PCG64, Generator
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
-# Fixture v5: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "d13495b12923ecfb65220cd6bbc2e28056fc2a7cc5c922984be9841b93260063"
+# Fixture v6: the default world, seed 42, after 520 days, as saved by the code of its day.
+GOLDEN_FAUNA_SEED_42 = "06d12249b04cde9c1816687ac0559cd455809eff28e835256a2f9d91ff037372"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "0fd00933657dd196b86ac7f421284e09fcef0bcd058a96b39dda95a9c49b8c63"
+GOLDEN_AFTER_THREE_DAYS = "e270d329c099bcbd43ef3253ec4b00d6fd276ef9ccd767ab6a85a9002b2ba4a4"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "5c0dbe5de3b4a54d9b70c9ba25453aad8169dea1ba595899a848b6e2395ebea2"
+GOLDEN_BARE_ROCK_520_DAYS = "a84a94c15d792c7b41702df7c7b8a29af51ffc98d985f751acd69e593e8a709f"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -542,7 +542,7 @@ def test_golden_hash_from_bare_rock(config: Config) -> None:
 
 
 def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v5.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v6.lzma"
     hashes: list[str] = []
     for _ in range(2):
         world = World.restore(config, io.loads(fixture.read_bytes()))
@@ -554,7 +554,7 @@ def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
 
 
 def test_save_load_continue_with_creatures(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v5.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v6.lzma"
     straight = World.restore(config, io.loads(fixture.read_bytes()))
     straight.step(3 * DAY_S)
     assert straight.state_hash() == GOLDEN_AFTER_THREE_DAYS

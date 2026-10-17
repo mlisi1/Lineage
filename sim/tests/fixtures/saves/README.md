@@ -11,6 +11,7 @@ One save per released schema version (`vN.lzma`). **Never edit or delete these**
 | `v3.lzma` | 3 | Default M3 world (terrain, flora, fire): seed 42, epoch 2026-03-01 00:00 UTC, stepped 200 days |
 | `v4.lzma` | 4 | Default M4 world (terrain, flora, fire, fauna): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 | `v5.lzma` | 5 | Default M5 world (creatures learn during life): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
+| `v6.lzma` | 6 | Default M5 world, revised (creatures see plant form, defence poisons): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 
 When bumping the schema to vN+1, add `vN+1.lzma` saved by the new code, alongside the
 `vN_to_vN+1.py` migration and its test.

@@ -34,7 +34,7 @@ from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype, phenotype
-from lineage_sim.flora import Flora
+from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora
 from lineage_sim.rng import FAUNA
 from lineage_sim.state.schema import Tree
 from lineage_sim.subsystem import Context
@@ -332,6 +332,9 @@ class Fauna:
         cfg, body = self._cfg, self._body
         land = self._terrain.land.astype(np.float32)
         biomass = self._flora.grazeable()
+        forms = self._flora.forms()
+        low = np.where(np.isin(forms, LOW_FORMS), biomass, np.float32(0.0)).astype(np.float32)
+        woody = np.where(np.isin(forms, WOODY_FORMS), biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
         senses = creature.sense(
             cfg,
@@ -344,6 +347,8 @@ class Fauna:
             self._compatible,
             self._kills,
             biomass,
+            low,
+            woody,
             land,
             offsets,
             distance,

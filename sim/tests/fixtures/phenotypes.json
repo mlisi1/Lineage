@@ -88,7 +88,7 @@
     "lifespan_h": 1425.068603515625,
     "maturity_h": 213.7602996826172,
     "brood": 1.0,
-    "learning_rate": 2.5,
+    "learning_rate": 0.75,
     "exploration": 0.75
    }
   },
@@ -126,7 +126,7 @@
     "lifespan_h": 763.67529296875,
     "maturity_h": 114.55130004882812,
     "brood": 1.0,
-    "learning_rate": 5.0,
+    "learning_rate": 1.5,
     "exploration": 0.25
    }
   },
@@ -164,7 +164,7 @@
     "lifespan_h": 2160.0,
     "maturity_h": 324.0,
     "brood": 4.0,
-    "learning_rate": 7.5,
+    "learning_rate": 2.25,
     "exploration": 1.0
    }
   },
@@ -202,7 +202,7 @@
     "lifespan_h": 1284.3436279296875,
     "maturity_h": 192.65155029296875,
     "brood": 3.0,
-    "learning_rate": 10.0,
+    "learning_rate": 3.0,
     "exploration": 0.5
    }
   },
@@ -278,7 +278,7 @@
     "lifespan_h": 763.67529296875,
     "maturity_h": 114.55130004882812,
     "brood": 4.0,
-    "learning_rate": 2.5,
+    "learning_rate": 0.75,
     "exploration": 0.75
    }
   },
@@ -316,7 +316,7 @@
     "lifespan_h": 1581.2125244140625,
     "maturity_h": 237.181884765625,
     "brood": 2.0,
-    "learning_rate": 5.0,
+    "learning_rate": 1.5,
     "exploration": 0.25
    }
   },
@@ -354,7 +354,7 @@
     "lifespan_h": 1157.515380859375,
     "maturity_h": 173.6273193359375,
     "brood": 3.0,
-    "learning_rate": 7.5,
+    "learning_rate": 2.25,
     "exploration": 1.0
    }
   },
@@ -392,7 +392,7 @@
     "lifespan_h": 940.1946411132812,
     "maturity_h": 141.02920532226562,
     "brood": 4.0,
-    "learning_rate": 10.0,
+    "learning_rate": 3.0,
     "exploration": 0.5
    }
   },
@@ -468,7 +468,7 @@
     "lifespan_h": 1987.6053466796875,
     "maturity_h": 298.14080810546875,
     "brood": 2.0,
-    "learning_rate": 2.5,
+    "learning_rate": 0.75,
     "exploration": 0.75
    }
   },
@@ -506,7 +506,7 @@
     "lifespan_h": 1521.5390625,
     "maturity_h": 228.23086547851562,
     "brood": 2.0,
-    "learning_rate": 5.0,
+    "learning_rate": 1.5,
     "exploration": 0.25
    }
   },
@@ -544,7 +544,7 @@
     "lifespan_h": 1435.4781494140625,
     "maturity_h": 215.3217315673828,
     "brood": 2.0,
-    "learning_rate": 7.5,
+    "learning_rate": 2.25,
     "exploration": 1.0
    }
   },
@@ -582,7 +582,7 @@
     "lifespan_h": 967.968017578125,
     "maturity_h": 145.19520568847656,
     "brood": 2.0,
-    "learning_rate": 10.0,
+    "learning_rate": 3.0,
     "exploration": 0.5
    }
   }

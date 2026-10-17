@@ -183,3 +183,19 @@ uv run python -m tools.report M5 --runs runs/m5-on --baseline runs/m5-off
 
 The three-arm fork screen (`runs/m5-on/saves/*.lzma`, 90-day forks) was a scratch script.
 Turning it into a tool is part of option (a) or (b).
+
+## Implementation notes (revised plan)
+
+- **Steps 1–3 are in**: exploration fades with age (48 h time constant, 25 % floor),
+  defended plants poison grazers (`defence_toxicity` = 1.0), creatures see low and woody
+  growth (senses 16–19, learned gains 7–8), and schema v6 brings the migration and the
+  `v6.lzma` fixture. Founders have no instinct for the form senses.
+- **`learning_rate_max` lowered from 10 to 3.** In the plant-form scenario, an effective
+  rate of 10 per hour was unstable: the learned preference had the right sign in only
+  56 % of 16 trials, and time on the safe form did not rise. At 1–3 it had the right
+  sign in 81–100 %, and time on the safe form rose by 5–14 points. The food scenario
+  still passes at 3.
+- **ADR 0005's "202 weights" was a miscount**: the v5 brain had 186 (32 direct, 128
+  hidden inputs, 8 hidden biases, 16 outputs, 2 output biases). Corrected there; v6
+  has 226.
+

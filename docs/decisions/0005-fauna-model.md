@@ -18,7 +18,7 @@ herbivores and predators both present at year 3 in at least 60 % of seeds.
   make statistical runs impractical and the device does not need it (the renderer
   interpolates).
 - **The brain only steers.** Eating, attacking and breeding follow from where a creature
-  is and its state. This keeps the net tiny (202 weights) and leaves a clean place for
+  is and its state. This keeps the net tiny (186 weights) and leaves a clean place for
   M5's learning.
 - **Founders arrive with instincts.** Random brains cannot forage; evolution from them
   would take far longer than the targets allow.

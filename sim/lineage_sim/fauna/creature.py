@@ -119,6 +119,8 @@ def sense(
     compatible: Flags,
     kills: Flags,
     biomass: NDArray[np.float32],
+    low: NDArray[np.float32],
+    woody: NDArray[np.float32],
     land: NDArray[np.float32],
     offsets: NDArray[np.float32],
     distance: NDArray[np.float32],
@@ -126,7 +128,8 @@ def sense(
     """Everything the brains perceive this tick. ``offsets`` and ``distance`` come from
     `separations` of the same positions; ``ready`` marks creatures able to breed now
     (only they look for a mate) and ``hungry`` those with room for a meal (only they
-    look for prey)."""
+    look for prey). ``low`` and ``woody`` are ``biomass`` split by plant form: a
+    creature sees which plants grow where, not how well they feed it."""
     n = positions.shape[0]
     senses = np.zeros((n, SENSE_COUNT), dtype=np.float32)
     rows, columns = cells_of(positions, (biomass.shape[0], biomass.shape[1]))
@@ -135,6 +138,11 @@ def sense(
     senses[:, Sense.FOOD_X], senses[:, Sense.FOOD_Y] = smell_food(
         biomass, positions, biomass[rows, columns], body.sense_range
     )
+    for field, sense_x, sense_y in ((low, Sense.LOW_X, Sense.LOW_Y),
+                                    (woody, Sense.WOODY_X, Sense.WOODY_Y)):  # fmt: skip
+        senses[:, sense_x], senses[:, sense_y] = smell_food(
+            field, positions, field[rows, columns], body.sense_range
+        )
     senses[:, Sense.LAND_X], senses[:, Sense.LAND_Y] = _gradient(land, positions)
     senses[:, Sense.IN_WATER] = 1.0 - land[rows, columns]
 

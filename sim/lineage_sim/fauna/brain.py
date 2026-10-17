@@ -9,14 +9,15 @@ threats, stay on land…); the hidden layer lets evolution make behaviour depend
 for example hunt only when hungry. All weights are inherited and mutate.
 
 Lifetime learning (M5) tunes how strongly a creature follows each of its directional
-senses (`FOLLOWED`: food, prey, threat, mate, land, its own kind). A learned gain adds
-to both of a sense's direct weights (x from x, y from y): every sense is a direction on
-the map, so a gain is the only thing about it worth learning on an island with no
-preferred compass direction. Learning is node perturbation, a form of REINFORCE: noise
-is added to the steering drive, an eligibility trace accumulates noise · sensed
-direction for every gain, and the update moves each gain along its trace in proportion
-to how much better than usual the creature is doing (its reward minus a running
-baseline). Learned gains are kept apart from the innate weights and are not inherited.
+senses (`FOLLOWED`: food, prey, threat, mate, land, its own kind, low and woody plants).
+A learned gain adds to both of a sense's direct weights (x from x, y from y): every
+sense is a direction on the map, so a gain is the only thing about it worth learning on
+an island with no preferred compass direction. Learning is node perturbation, a form of
+REINFORCE: noise is added to the steering drive, an eligibility trace accumulates noise
+· sensed direction for every gain, and the update moves each gain along its trace in
+proportion to how much better than usual the creature is doing (its reward minus a
+running baseline). Learned gains are kept apart from the innate weights and are not
+inherited.
 """
 
 from __future__ import annotations
@@ -51,6 +52,10 @@ class Sense(IntEnum):
     CROWD = 13  # share of the population cap within sense range
     NEIGHBOUR_X = 14  # nearest creature of its own kind
     NEIGHBOUR_Y = 15
+    LOW_X = 16  # where grazeable low growth (lichen, grass) increases (M5)
+    LOW_Y = 17
+    WOODY_X = 18  # where grazeable woody growth (shrub, trees) increases (M5)
+    WOODY_Y = 19
 
 
 SENSE_COUNT = len(Sense)
@@ -64,7 +69,7 @@ WEIGHT_COUNT = _DIRECT + _HIDDEN_W + HIDDEN + _OUT_W + OUTPUTS
 # Directional senses whose gains are learned during life, by their x component (the y
 # component is the next sense).
 FOLLOWED = (Sense.FOOD_X, Sense.PREY_X, Sense.THREAT_X, Sense.MATE_X, Sense.LAND_X,
-            Sense.NEIGHBOUR_X)  # fmt: skip
+            Sense.NEIGHBOUR_X, Sense.LOW_X, Sense.WOODY_X)  # fmt: skip
 LEARNED_COUNT = len(FOLLOWED)
 _FOLLOW_X = np.array(FOLLOWED, dtype=np.intp)
 _FOLLOW_Y = _FOLLOW_X + 1
