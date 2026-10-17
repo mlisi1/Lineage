@@ -373,6 +373,11 @@ class FaunaConfig:
     meat_energy: float
     diet_exponent: float
     attack_min_diet: float
+    carcass_share: float
+    carrion_decay_hours: float
+    scavenge_rate: float
+    carrion_scent_cells: int
+    instinct_scavenge: float
     defence_toxicity: float
     hunt_below_energy_share: float
     reach_cells: float
@@ -452,6 +457,7 @@ class FaunaConfig:
             "trace_hours",
             "exploration_hours",
             "exploration_fade_hours",
+            "carrion_decay_hours",
             "baseline_hours",
             "learned_max",
             "forget_hours",
@@ -480,6 +486,7 @@ class FaunaConfig:
             "birth_efficiency",
             "rare_gain_probability",
             "exploration_floor",
+            "carcass_share",
             "social_copy_max",
             "rare_loss_probability",
             "herbivore_max_diet",

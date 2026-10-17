@@ -29,12 +29,12 @@ from numpy.random import PCG64, Generator
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v6: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "5f4f00194ad84912c37af6f0eb6328d421e0e7b2b4cda37061b98449260ceb59"
+GOLDEN_FAUNA_SEED_42 = "58a70db57eea635532ad0a456a3b66ccc91e8545748494c50a336bac3bca108d"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "6368c829973196263ebbd9d0d47f0fe93b5a22399ebf18c6150ca9954a2d0f26"
+GOLDEN_AFTER_THREE_DAYS = "b75bacf04d78859771d55aee330f115f924a8a98d1ca688fe495075f99277f51"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "5f4f00194ad84912c37af6f0eb6328d421e0e7b2b4cda37061b98449260ceb59"
+GOLDEN_BARE_ROCK_520_DAYS = "58a70db57eea635532ad0a456a3b66ccc91e8545748494c50a336bac3bca108d"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -602,3 +602,114 @@ def test_days_with_creatures_keep_every_invariant(config: Config, seed: int) -> 
         tally = fauna.tally
         assert n == 12 + tally.arrivals + tally.births - tally.deaths
         assert sum(fauna.diet_counts()) == n
+
+
+# --- Carrion -------------------------------------------------------------------------------
+
+SCAVENGER = _with(GRAZER, Gene.DIET, 0.5)  # digests meat about as well as plants
+
+
+def test_a_kill_leaves_what_the_hunter_could_not_eat(config: Config) -> None:
+    site = Site(config)
+    prey = site.add(GRAZER, [(20.5, 20.0)])
+    site.add(HUNTER, [(20.0, 20.0)], energy_share=0.6)  # hungry, but without room for all
+    body = site.fauna.body
+    prey_mass = float(body.mass[0])
+    site.run(6.0)
+    assert site.alive(prey) == 0
+    left = float(site.fauna.carrion.sum())
+    assert 0.0 < left < prey_mass  # part was eaten, the rest lies there (rotting a little)
+
+
+def test_the_starved_leave_a_carcass_and_the_drowned_do_not(config: Config) -> None:
+    starving = Site(config, biomass=0.0)
+    starving.add(GRAZER, [(20.0, 20.0)], energy_share=0.01)
+    mass = float(starving.fauna.body.mass[0])
+    starving.run(3.0)
+    assert starving.fauna.count == 0
+    share = config.fauna.carcass_share
+    # Rotting for at most a couple of hours since.
+    assert float(starving.fauna.carrion.sum()) == pytest.approx(share * mass, rel=0.05)
+    assert float(starving.fauna.carrion.max()) > 0.0
+
+    sea = Site(config, water_from=0)
+    sea.add(GRAZER, [(20.0, 20.0)], energy_share=0.01)
+    sea.run(3.0)
+    assert sea.fauna.tally.drowned == 1
+    assert float(sea.fauna.carrion.sum()) == 0.0
+
+
+def test_carrion_rots(config: Config) -> None:
+    site = Site(config, biomass=0.0)
+    site.add(GRAZER, [(10.0, 10.0)])  # someone alive, so the fauna ticks
+    state = site.fauna.get_state()
+    state["carrion"][30, 40] = 2.0
+    site.fauna.set_state(state)
+    site.run(config.fauna.carrion_decay_hours)
+    assert float(site.fauna.carrion[30, 40]) == pytest.approx(2.0 * np.exp(-1.0), rel=0.02)
+
+
+def test_meat_eaters_scavenge_and_plant_eaters_do_not(config: Config) -> None:
+    def fed_on_carrion(genome: tuple[float, ...]) -> tuple[float, float]:
+        site = Site(config, biomass=0.0)  # nothing else to eat
+        site.add(genome, [(20.0, 20.0)], energy_share=0.3)
+        state = site.fauna.get_state()
+        state["carrion"][20, 20] = 5.0
+        state["weights"][:] = 0.0  # stay put on the carcass
+        site.fauna.set_state(state)
+        before = float(site.energy_share(site.fauna.ids)[0])
+        site.run(2.0)
+        return float(site.energy_share(site.fauna.ids)[0]) - before, float(
+            site.fauna.carrion[20, 20]
+        )
+
+    gained, left = fed_on_carrion(SCAVENGER)
+    assert gained > 0.05
+    assert left < 5.0 * np.exp(-2.0 / config.fauna.carrion_decay_hours) - 0.1
+    gained_grazer, left_grazer = fed_on_carrion(GRAZER)
+    assert gained_grazer < 0.0  # it only burns
+    assert left_grazer == pytest.approx(5.0 * np.exp(-2.0 / config.fauna.carrion_decay_hours))
+
+
+def test_carrion_is_sensed_in_its_direction(config: Config) -> None:
+    site = Site(config, biomass=0.0)
+    site.add(SCAVENGER, [(20.0, 20.0)])
+    state = site.fauna.get_state()
+    state["carrion"][20, 24] = 3.0  # four cells east
+    site.fauna.set_state(state)
+    fauna = site.fauna
+    offsets, distance = creature.separations(fauna.positions)
+    land = site.terrain.land.astype(np.float32)
+    zero = np.zeros_like(site.flora.biomass)
+    senses = creature.sense(
+        fauna.config, fauna.positions, fauna.energy, fauna.body, fauna.adult, fauna.ready,
+        fauna.hungry, np.zeros((1, 1), bool), np.zeros((1, 1), bool), zero, zero, zero,
+        creature.spread(fauna.carrion, config.fauna.carrion_scent_cells), land, offsets,
+        distance,
+    )  # fmt: skip
+    assert float(senses[0, Sense.CARRION_X]) > 0.1
+    assert abs(float(senses[0, Sense.CARRION_Y])) < 0.05
+
+
+def test_spread_keeps_the_amount_away_from_edges() -> None:
+    field = np.zeros((20, 30), dtype=np.float32)
+    field[10, 15] = 9.0
+    scent = creature.spread(field, 1)
+    assert float(scent[10, 15]) == pytest.approx(1.0)
+    assert float(scent[9, 14]) == pytest.approx(1.0)
+    assert float(scent[10, 17]) == 0.0
+    assert float(scent.sum()) == pytest.approx(9.0)
+
+
+def test_the_scent_follows_the_carrion(config: Config) -> None:
+    """The scent kept up to date as carrion is left, eaten and rots equals the carrion
+    spread out afresh."""
+    site = Site(config, biomass=0.0)
+    site.add(SCAVENGER, [(20.0, 20.0)], energy_share=0.3)
+    site.add(GRAZER, [(30.0, 25.0), (2.0, 2.0)], energy_share=0.02)  # will starve
+    site.run(12.0)
+    fauna = site.fauna
+    assert float(fauna.carrion.sum()) > 0.0
+    fresh = creature.spread(fauna.carrion, config.fauna.carrion_scent_cells)
+    kept = fauna.get_state()["scent"]
+    np.testing.assert_allclose(kept, fresh, atol=1e-5)

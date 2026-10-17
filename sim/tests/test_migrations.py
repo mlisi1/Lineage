@@ -155,7 +155,7 @@ def test_invalid_version_is_rejected() -> None:
 
 
 def test_v5_brains_steer_as_before_after_the_upgrade(config: Config) -> None:
-    """v5 → v6 inserts zero weights for the plant-form senses: the old brain's drive is
+    """v5 → v6 inserts zero weights for the plant-form and carrion senses: the old brain's drive is
     unchanged, whatever the new senses say."""
     raw = io.loads(_fixture(5))  # already upgraded to the current version by loading
     fauna = World.restore(config, raw).fauna
@@ -163,7 +163,8 @@ def test_v5_brains_steer_as_before_after_the_upgrade(config: Config) -> None:
     rng = np.random.Generator(np.random.PCG64(2))
     senses = rng.normal(0.0, 0.5, (fauna.count, brain.SENSE_COUNT)).astype(np.float32)
     quiet = senses.copy()
-    quiet[:, [Sense.LOW_X, Sense.LOW_Y, Sense.WOODY_X, Sense.WOODY_Y]] = 0.0
+    quiet[:, [Sense.LOW_X, Sense.LOW_Y, Sense.WOODY_X, Sense.WOODY_Y, Sense.CARRION_X,
+              Sense.CARRION_Y]] = 0.0  # fmt: skip
     np.testing.assert_array_equal(brain.think(weights, senses), brain.think(weights, quiet))
     assert fauna.learned.shape == (fauna.count, brain.LEARNED_COUNT)
 

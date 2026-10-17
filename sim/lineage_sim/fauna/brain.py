@@ -56,6 +56,8 @@ class Sense(IntEnum):
     LOW_Y = 17
     WOODY_X = 18  # where grazeable woody growth (shrub, trees) increases (M5)
     WOODY_Y = 19
+    CARRION_X = 20  # where there is more carrion (remains of the dead) to scavenge
+    CARRION_Y = 21
 
 
 SENSE_COUNT = len(Sense)
@@ -69,7 +71,7 @@ WEIGHT_COUNT = _DIRECT + _HIDDEN_W + HIDDEN + _OUT_W + OUTPUTS
 # Directional senses whose gains are learned during life, by their x component (the y
 # component is the next sense).
 FOLLOWED = (Sense.FOOD_X, Sense.PREY_X, Sense.THREAT_X, Sense.MATE_X, Sense.LAND_X,
-            Sense.NEIGHBOUR_X, Sense.LOW_X, Sense.WOODY_X)  # fmt: skip
+            Sense.NEIGHBOUR_X, Sense.LOW_X, Sense.WOODY_X, Sense.CARRION_X)  # fmt: skip
 LEARNED_COUNT = len(FOLLOWED)
 _FOLLOW_X = np.array(FOLLOWED, dtype=np.intp)
 _FOLLOW_Y = _FOLLOW_X + 1
@@ -183,6 +185,7 @@ def founder_weights(rng: Generator, cfg: FaunaConfig, genes: Genes) -> Weights:
     instincts = (
         (Sense.FOOD_X, Sense.FOOD_Y, cfg.instinct_food * (1.0 - diet)),
         (Sense.PREY_X, Sense.PREY_Y, cfg.instinct_prey * diet),
+        (Sense.CARRION_X, Sense.CARRION_Y, cfg.instinct_scavenge * diet),
         (Sense.THREAT_X, Sense.THREAT_Y, np.full(n, -cfg.instinct_flee)),
         (Sense.MATE_X, Sense.MATE_Y, np.full(n, cfg.instinct_mate)),
         # Land animals head for land, swimmers for water.

@@ -129,6 +129,11 @@ class Fauna:
         self._competent_h = np.zeros(0, dtype=np.float32)
         self._young_eaten = np.zeros(0, dtype=np.float32)
         self._young_burnt = np.zeros(0, dtype=np.float32)
+        # Remains of the dead, in units of meat mass per cell; they rot away.
+        self._carrion = np.zeros(self._shape, dtype=np.float32)
+        # Its scent: carrion spread over carrion_scent_cells (creature.spread), kept up to
+        # date as carrion is left, eaten and rots, rather than recomputed every tick.
+        self._scent = np.zeros(self._shape, dtype=np.float32)
         self._next_id = 1
         self._arrival_at_h = -1.0  # sim hour founders are due; negative: none scheduled
         self.tally = Tally()
@@ -138,6 +143,7 @@ class Fauna:
         self._kills: Flags = np.zeros((0, 0), dtype=np.bool_)
         self._in_water: Flags = np.zeros(0, dtype=np.bool_)  # where each stood this tick
         self._meal = np.zeros(0, dtype=np.float32)  # energy eaten this tick
+        self._leftover = np.zeros(0, dtype=np.float32)  # meat mass a kill left, per victim
         self._grown: list[OutputEvent] = []  # youths that ended this tick
         # Pairwise offsets and distances for the current positions; None when stale.
         self._apart: tuple[NDArray[np.float32], NDArray[np.float32]] | None = None
@@ -201,6 +207,11 @@ class Fauna:
         return self._competent_h
 
     @property
+    def carrion(self) -> NDArray[np.float32]:
+        """Remains of the dead on each cell, in units of meat mass."""
+        return self._carrion
+
+    @property
     def body(self) -> Phenotype:
         return self._body
 
@@ -255,6 +266,10 @@ class Fauna:
 
         before = self._energy.copy()
         self._meal = np.zeros(self.count, dtype=np.float32)
+        self._leftover = np.zeros(self.count, dtype=np.float32)
+        rot = np.float32(np.exp(-hours / self._cfg.carrion_decay_hours))
+        self._carrion *= rot
+        self._scent *= rot
         self._live(rng, hours)
         dead = self._hunt(rng, hours)
         # The tick's own balance, before any breeding: what eating and moving earned.
@@ -300,6 +315,8 @@ class Fauna:
             "competent_h": self._competent_h.copy(),
             "young_eaten": self._young_eaten.copy(),
             "young_burnt": self._young_burnt.copy(),
+            "carrion": self._carrion.copy(),
+            "scent": self._scent.copy(),
             "next_id": self._next_id,
             "arrival_at_h": self._arrival_at_h,
             "tally": {name: int(value) for name, value in vars(self.tally).items()},
@@ -328,6 +345,8 @@ class Fauna:
         self._competent_h = np.array(tree["competent_h"], dtype=np.float32)
         self._young_eaten = np.array(tree["young_eaten"], dtype=np.float32)
         self._young_burnt = np.array(tree["young_burnt"], dtype=np.float32)
+        self._carrion = np.array(tree["carrion"], dtype=np.float32).reshape(self._shape)
+        self._scent = np.array(tree["scent"], dtype=np.float32).reshape(self._shape)
         self._next_id = int(tree["next_id"])
         self._arrival_at_h = float(tree["arrival_at_h"])
         self.tally = Tally(**cast(dict[str, int], tree["tally"]))
@@ -357,6 +376,7 @@ class Fauna:
             biomass,
             low,
             woody,
+            np.maximum(self._scent, np.float32(0.0)),
             land,
             offsets,
             distance,
@@ -422,8 +442,27 @@ class Fauna:
                 self._meal_value, body.learning_rate * np.float32(cfg.meal_learning_gain),
                 hours, cfg.learned_max, cfg.meal_memory_hours,
             )  # fmt: skip
+        self._scavenge(rows, columns, hours)
         self._age_h = self._age_h + np.float32(hours)
         self._idle_h = self._idle_h + np.float32(hours)
+
+    def _scavenge(self, rows: NDArray[np.intp], columns: NDArray[np.intp], hours: float) -> None:
+        """Creatures that digest meat eat the carrion where they stand."""
+        cfg, body = self._cfg, self._body
+        eats_meat = self._genes[:, Gene.DIET] >= cfg.attack_min_diet
+        on_carrion = self._carrion[rows, columns] > 0
+        who = np.nonzero(eats_meat & on_carrion)[0]
+        if who.size == 0:
+            return
+        value = np.float32(cfg.meat_energy) * body.meat_efficiency[who]
+        room = np.maximum(body.capacity[who] - self._energy[who], 0.0) / value
+        bite = np.float32(cfg.scavenge_rate * hours) * body.mass[who] ** np.float32(
+            cfg.metabolic_exponent
+        )
+        got = creature.share_out(self._carrion, rows[who], columns[who], np.minimum(bite, room))
+        creature.stamp(self._scent, rows[who], columns[who], -got, cfg.carrion_scent_cells)
+        self._energy[who] += got * value
+        self._meal[who] += got * value
 
     def _hunt(self, rng: Generator, hours: float) -> NDArray[np.int8]:
         """Hunters attack the nearest prey in reach. Returns each creature's cause of
@@ -448,10 +487,14 @@ class Fauna:
             if dead[hunter] >= 0 or dead[victim] >= 0 or kill_roll[hunter] >= chance[k]:
                 continue
             dead[victim] = Death.KILLED
-            meal = cfg.meat_energy * float(body.mass[victim]) * float(body.meat_efficiency[hunter])
+            value = cfg.meat_energy * float(body.meat_efficiency[hunter])
+            meal = value * float(body.mass[victim])
             room = float(body.capacity[hunter]) - float(self._energy[hunter])
-            self._energy[hunter] += np.float32(min(meal, max(room, 0.0)))
-            self._meal[hunter] += np.float32(min(meal, max(room, 0.0)))
+            eaten = min(meal, max(room, 0.0))
+            self._energy[hunter] += np.float32(eaten)
+            self._meal[hunter] += np.float32(eaten)
+            # What the hunter could not eat is left for scavengers.
+            self._leftover[victim] = np.float32(float(body.mass[victim]) - eaten / value)
         return dead
 
     def _learn(self, gained: Values, hours: float, t_ms: int) -> None:
@@ -609,6 +652,29 @@ class Fauna:
             self._apart = creature.separations(self._positions)
         return self._apart
 
+    def _leave_remains(self, dead: NDArray[np.int8]) -> None:
+        """The dead leave carrion on land: what a hunter left of its kill, and a share of
+        the body of those that starved or died of age. The drowned are lost to the sea."""
+        cfg = self._cfg
+        remains = np.where(
+            dead == Death.KILLED,
+            self._leftover,
+            np.where(
+                (dead == Death.STARVED) | (dead == Death.OLD_AGE),
+                np.float32(cfg.carcass_share) * self._body.mass,
+                0.0,
+            ),
+        ).astype(np.float32)
+        who = np.nonzero(remains > 0)[0]
+        if who.size:
+            rows, columns = creature.cells_of(self._positions[who], self._shape)
+            on_land = self._terrain.land[rows, columns]
+            np.add.at(self._carrion, (rows[on_land], columns[on_land]), remains[who][on_land])
+            creature.stamp(
+                self._scent, rows[on_land], columns[on_land], remains[who][on_land],
+                cfg.carrion_scent_cells,
+            )  # fmt: skip
+
     def _bury(self, dead: NDArray[np.int8], t_ms: int) -> None:
         """Remove the dead and count them by cause."""
         gone = dead >= 0
@@ -616,6 +682,7 @@ class Fauna:
             return
         died_young = gone & (self._age_h < self._body.maturity_h)
         self._grown += self._youth_ended(np.nonzero(died_young)[0], t_ms, died=True)
+        self._leave_remains(dead)
         causes = np.bincount(dead[gone], minlength=len(Death))
         self.tally.starved += int(causes[Death.STARVED])
         self.tally.old_age += int(causes[Death.OLD_AGE])
@@ -708,6 +775,7 @@ class Fauna:
         self._kills = creature.can_kill(self._genes, self._body, self._compatible, cfg)
         self._in_water = np.zeros(self.count, dtype=np.bool_)
         self._meal = np.zeros(self.count, dtype=np.float32)
+        self._leftover = np.zeros(self.count, dtype=np.float32)
         self._apart = None
 
     # -- arrivals --

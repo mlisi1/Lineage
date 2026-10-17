@@ -32,8 +32,10 @@ This ADR is written in the order things happened; this section states where they
 - **Balance:** `meat_energy` 1 600 keeps predators going in a learning world.
 - **Measures:** time to competence, `JuvenileGrown` youths, forked worlds (learning on vs
   off), `diet_fit`.
-- **Schema v6** (226 weights, 8 gains, meal value, 14 genes); v6 was amended while
-  unreleased.
+- **Scavenging** (an action added 2026-10-18): carrion from the dead, eaten by meat
+  eaters, smelled through a scent; a carrion sense with a learned gain.
+- **Schema v6** (22 senses, 246 weights, 9 gains, meal value, 14 genes, carrion and its
+  scent); v6 was amended while unreleased.
 
 ## Context
 

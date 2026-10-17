@@ -46,11 +46,12 @@ expected values for the cross-language check in R2.
 
 A small neural net per creature, inherited and mutated. It only steers:
 
-- **Senses** (20): energy, plant food underfoot, direction of better food within sense
+- **Senses** (22): energy, plant food underfoot, direction of better food within sense
   range, direction of the nearest prey (when hungry), threat, mate (when ready to breed)
   and creature of its own kind, direction of land, being in water, crowding, and (M5)
-  where there is more low growth (lichen, grass) and more woody growth (shrub, trees).
-  A creature sees plant form, never plant defence.
+  where there is more low growth (lichen, grass), more woody growth (shrub, trees) and
+  more carrion (smelled through its scent). A creature sees plant form, never plant
+  defence.
 - **Output**: a steering vector. Speed follows from the body and the ground.
 - **Instincts**: founders arrive with direct sense-to-steering weights (go to food, chase
   prey in proportion to their diet, flee threats, go to a mate, stay on land or in water,
@@ -64,7 +65,7 @@ A small neural net per creature, inherited and mutated. It only steers:
 
 Every creature also learns during its life. What it learns is a **gain on each
 directional sense** (food, prey, threat, mate, land, its own kind, low growth, woody
-growth): how strongly to follow it. The plant-form gains are where learning can beat
+growth, carrion): how strongly to follow it. The plant-form gains are where learning can beat
 instinct: which form is safe to eat depends on the place (defence differs between
 forms from region to region), so genes can only carry a general bias, held in the
 inherited weights on those senses, and learning corrects it locally. Senses are directions on the map, so a gain is the only thing about them
@@ -113,6 +114,13 @@ networks, predator–prey coexistence): ADR 0009, "References".
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Carrion**: the dead leave remains on land, in units of meat mass: what a hunter could
+  not eat of its kill, and `carcass_share` of the body of those that starved or died of
+  age (the drowned are lost). Remains rot (`carrion_decay_hours`). Creatures that digest
+  meat (diet gene ≥ 0.15) eat carrion where they stand (`scavenge_rate`), and smell it
+  through a scent spread over `carrion_scent_cells`. It feeds young and unlucky hunters
+  between kills, and gives half-meat diets a niche. Founders arrive with an instinct for
+  carrion in proportion to their diet.
 - **Breeding**: two adults whose genomes differ by at most `compat_distance`, close
   together, both well fed and past their cooldown, have a brood. Each parent invests
   energy; the young share it. Genes cross over and mutate. An adult that finds no mate

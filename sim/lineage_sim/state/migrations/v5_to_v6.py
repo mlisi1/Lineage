@@ -1,10 +1,12 @@
-"""v5 → v6. Creatures see plant form (M5, revised plan in ADR 0009).
+"""v5 → v6. Creatures see plant form and carrion (M5, revised plan in ADR 0009).
 
-Brains gain four senses after the sixteen of v5: where low growth and where woody growth
-increase (x, y each). Their weights are inserted as zeros, in the direct block (2 × 16 →
-2 × 20) and in the hidden layer's input block (8 × 16 → 8 × 20), so a v5 creature steers
-exactly as before until mutation brings the new senses in. Learned gains and their traces
-gain the two new followed senses, at zero, and each creature gains a running average
+Brains gain six senses after the sixteen of v5: where low growth, woody growth and
+carrion increase (x, y each). Their weights are inserted as zeros, in the direct block
+(2 × 16 → 2 × 22) and in the hidden layer's input block (8 × 16 → 8 × 22), so a v5
+creature steers exactly as before until mutation brings the new senses in. Learned gains
+and their traces gain the three new followed senses, at zero; the world gains an empty
+carrion grid and its scent (the size of the terrain); and each creature gains a running
+average
 meal value, NaN until its next meal (it has tasted nothing yet). Genomes gain the SOCIAL
 gene (after the thirteen of v5), at 0: v5 creatures pass on no diet traditions until
 mutation brings them in.
@@ -19,10 +21,10 @@ import numpy as np
 from lineage_sim.state.schema import Tree
 
 # Values of this version, written out so the migration never depends on current code.
-_OLD_SENSES, _NEW_SENSES = 16, 20
+_OLD_SENSES, _NEW_SENSES = 16, 22
 _OUTPUTS, _HIDDEN = 2, 8
 _OLD_WEIGHTS = 186
-_OLD_GAINS, _NEW_GAINS = 6, 8
+_OLD_GAINS, _NEW_GAINS = 6, 9
 _OLD_GENES = 13
 
 
@@ -69,5 +71,7 @@ def migrate(tree: Tree) -> Tree:
         "learned": _widen_gains(fauna["learned"]),
         "trace": _widen_gains(fauna["trace"]),
         "meal_value": np.full(weights.shape[0], np.nan, dtype=np.float32),
+        "carrion": np.zeros(np.asarray(subsystems["terrain"]["height"]).shape, np.float32),
+        "scent": np.zeros(np.asarray(subsystems["terrain"]["height"]).shape, np.float32),
     }
     return {**tree, "schema_version": 6, "subsystems": {**subsystems, "fauna": upgraded}}
