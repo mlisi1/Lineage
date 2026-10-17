@@ -133,22 +133,45 @@ M4's brain only steers, and founders arrive with strong instincts (ADR 0005).
 
 ## Consequences and next steps
 
-M5 is **not** done: M5.2 fails, and M5.1 passes only through exploration. These need the
-owner:
+M5 is **not** done: M5.2 fails, and M5.1 passes only through exploration.
 
-1. **What M5 should show.** Options:
-   - **(a) Change the learning rule.** A reward that also counts danger avoided and mates
-     found, or exploration that falls with age so youths stop paying for noise once
-     competent.
-   - **(b) Make learning cheaper or the world harder to get by on instinct.** For example
-     patchier food, or food that moves between seasons.
-   - **(c) Accept what the simulation shows**: on this island, exploration pays and lifetime
-     learning does not. Revise the M5 bands in this ADR.
-2. **M4.3's reading.** Keep it as a point value at year 3 (it now fails at 45 %), or
-   read it as the mean over the last year (0.59, still just below 0.6). Either way the
-   band needs a decision.
-3. **Once 1 and 2 are settled**: tune or revise, regenerate the report, add a slow M5
-   statistical test in `sim/tests/`, and set this ADR to accepted.
+**Why learning does not pay.** Learning beats instinct only when the right behaviour changes
+within a lifetime, or differs between individuals, in ways genes cannot predict. On this
+island, how strongly to follow food, flee or keep distance is the same answer for
+everyone, everywhere, so evolution fixes it in the innate weights and learning only adds
+noise.
+
+**Revised plan (agreed with the owner, 2026-10-17):** give learning something genes
+cannot fully encode, and leave the bands alone until that has been tried.
+
+1. **Exploration fades with age**, like juvenile play: full while young, down to a floor
+   in adults. Youths that learn now become competent later (17–25 h against 11–15 h)
+   because they pay for noise.
+2. **Plant defence costs the grazer energy** (toxins), on top of refusing part of the bite,
+   so a defended plant can cost more than it gives.
+3. **Creatures see plant form, not defence.**
+   - New directional senses: where there is more grazeable *low* growth (lichen, grass) and
+     more *woody* growth (shrub, trees).
+   - A learned gain on each, with the other learned gains.
+   - The innate starting preference is the brain's inherited direct weights on these
+     senses (founders start at 0), the channel through which genetic assimilation, the
+     Baldwin effect, can act.
+   - Learned values are not inherited.
+
+   *Why the cue is form and not defence:* a creature that could sense defence would have
+   it fixed in its genes ("avoid defence"), and learning would lose again. Form is visible
+   and its value is hidden and local. In the final worlds of `m5-on`, woody growth is more
+   defended on average (0.34 against 0.26: a general rule for genes), but which form is
+   more defended varies between 32×32 regions in about half the seeds (woody more
+   defended in 24–56 % of regions in 9 of 20 seeds): local exceptions only learning can
+   catch.
+4. **Schema v6** with a migration (weights gain zero columns for the new senses), scenario
+   tests (a creature learns to avoid a defended form; the preference is local), then the
+   full ON/OFF report.
+
+**Still open: how M4.3 is read.** Recommended: the mean over the last year instead of one
+day at year 3, band kept at 0.6 (0.59 with M5's code, so still just below), and predator
+persistence logged as an M11 tuning item. Not changed until the owner agrees.
 
 To reproduce:
 
