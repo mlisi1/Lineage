@@ -199,3 +199,49 @@ Turning it into a tool is part of option (a) or (b).
   hidden inputs, 8 hidden biases, 16 outputs, 2 output biases). Corrected there; v6
   has 226.
 
+## Results of the revised plan (2026-10-17)
+
+Full report regenerated (`reports/M5-fauna-learning/`, runs `m5-on`, `m5-off`, 20 seeds ×
+3 years, commit ca48803):
+
+| Criterion | First report | Revised world | Target |
+|---|---|---|---|
+| M5.1 early-life feeding gain | +20.5 % PASS | **+8.7 %** FAIL (positive in 18 of 20 seeds) | ≥ 15 % |
+| M5.2 seeds whose time to competence falls | 40 % FAIL | **50 %** FAIL (off: 45 %) | ≥ 60 % |
+| M5.3 step cost | 202 ms PASS | **332 ms** PASS (off: 309) | ≤ 400 ms |
+
+What changed and what did not:
+
+- **Genes picked up the general rule.** The inherited weights on the form senses evolved
+  toward low growth (+0.07) and away from woody growth (−0.13), matching "woody is usually
+  more defended" (the genetic half of the design works).
+- **Learning did not pick up the local exceptions.**
+  - Learned gains stay small (mean |gain| 0.07–0.09, against 1–2 in the scenarios).
+  - Learned preferences do not correlate with the local defence difference (median
+    correlation 0.02 across seeds).
+  - Three-arm fork screen on the final worlds: learning adds −0.9 % beyond exploration
+    (positive in 9 of 19 seeds), and −1.6 % with `defence_toxicity` 2.0.
+- **The learning gene is now slightly favoured** (0.37 against 0.32 with learning off),
+  and exploration strongly (0.85 against 0.62).
+- **Costs**: step cost +65 % (two more smelled fields per creature per tick; the OFF arm
+  pays it too), extinct seed-years 6.7 % (off: 5 %), up from 0 %.
+
+**Why.** The learning signal is too weak for the rule. Node perturbation learns from one
+scalar, the energy balance, through steering noise. In real worlds the local defence
+difference between forms is 0.1–0.3, so the energy difference is small beside the
+noise of grazing in a herd, and a youth has about 150 hours to detect it. In the
+scenarios the contrast is 0.9 against 0, with nothing else going on, and the same rule
+learns in 60 episodes.
+
+## Open decisions (for the owner)
+
+1. **Associative learning of food value** (recommended next). Learn the value of each
+   plant form from every bite, rather than from steering noise: after each meal, move
+   the gain on the form eaten toward how much energy that bite gave against its usual
+   yield. This is still reward-modulated learning (M5's deliverable). It is biologically
+   ordinary (conditioned taste aversion), and gets one clear signal per bite instead of
+   one diluted signal per tick. Node perturbation stays for the other senses.
+2. **Accept and revise the bands** (option c): on this island exploration pays, genes
+   carry the diet rule, and lifetime learning adds little; record it and move to M6.
+3. **M4.3's reading** (unchanged): see above.
+

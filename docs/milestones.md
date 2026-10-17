@@ -9,7 +9,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M2 | Terrain generation and dynamics | done | [reports/M2-terrain](../reports/M2-terrain/README.md) |
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
-| M5 | Fauna II: lifetime learning | in progress, waiting on the owner's decisions: full report run. M5.1 feeding +20.5 % PASS (but the gain comes from exploration, not learning), M5.2 Baldwin trend 40 % FAIL, M5.3 step 202 ms PASS; tuning tried without success; the M4.3 re-check fails as a point measure (45 %). Decisions listed in [ADR 0009](decisions/0009-lifetime-learning.md) | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
+| M5 | Fauna II: lifetime learning | in progress, waiting on the owner's decisions. Revised plan (fading exploration, toxic defence, plant-form senses, schema v6) built and measured: M5.1 +8.7 % FAIL, M5.2 50 % FAIL, M5.3 332 ms PASS. Genes learned the general diet rule; lifetime learning did not catch local exceptions. Decisions in [ADR 0009](decisions/0009-lifetime-learning.md) | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | not started | — |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |

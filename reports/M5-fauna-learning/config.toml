@@ -415,6 +415,10 @@ plant_energy = 300.0
 meat_energy = 900.0
 # Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
 diet_exponent = 1.0
+# Plant defence also poisons: energy from plants is multiplied by
+# 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
+# than it gives). Grazers cannot sense defence, only plant form (M5).
+defence_toxicity = 1.0
 # Creatures with at least this diet gene hunt. Reach of a bite (cells). Attacks per hour
 # on a prey in reach. Attack power = mass × (jaw_floor + jaw gene); defence = mass ×
 # (1 + armour_strength × armour gene). A hit kills with probability
@@ -481,12 +485,17 @@ founder_brain_sigma = 0.1
 learning = true
 # Learning rate per hour at learning gene 1: weight change per unit of trace per unit of
 # reward (reward: energy balance as a share of capacity per hour, minus its average).
-learning_rate_max = 10.0
+learning_rate_max = 3.0
 # Standard deviation of the noise added to each steering drive at exploration gene 1.
 exploration_max = 1.0
 # Time constant (hours) over which that noise changes: a creature tries a different way
 # for a while (white noise every tick would average out before it went anywhere).
 exploration_hours = 1.0
+# Exploration fades with age, like juvenile play: full at birth, then toward
+# exploration_floor of it with this time constant (hours). Youths learn while they play;
+# adults stop paying for noise they no longer learn much from.
+exploration_fade_hours = 48.0
+exploration_floor = 0.25
 # Time constant (hours) over which the eligibility trace fades: how long after an action
 # its consequences still count.
 trace_hours = 2.0
