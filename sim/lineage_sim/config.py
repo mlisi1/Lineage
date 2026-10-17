@@ -414,6 +414,7 @@ class FaunaConfig:
     learned_max: float
     forget_hours: float
     meal_learning_gain: float
+    social_copy_max: float
     perturbation_gain: float
     meal_memory_hours: float
     cost_learning: float
@@ -479,6 +480,7 @@ class FaunaConfig:
             "birth_efficiency",
             "rare_gain_probability",
             "exploration_floor",
+            "social_copy_max",
             "rare_loss_probability",
             "herbivore_max_diet",
             "predator_min_diet",

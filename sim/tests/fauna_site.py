@@ -28,9 +28,10 @@ Array = NDArray[np.float32]
 
 # Hand-made genomes, by gene:
 # SIZE DIET LIMBS SPEED ARMOUR SENSE AQUATIC JAW BROOD HUE PATTERN LEARNING EXPLORATION
+# SOCIAL
 # (These do not learn: M5's scenarios in test_learning.py give the last two genes.)
-GRAZER = (0.30, 0.05, 0.50, 0.50, 0.20, 0.50, 0.00, 0.50, 0.00, 0.30, 0.30, 0.00, 0.00)
-HUNTER = (0.60, 0.90, 0.50, 0.80, 0.10, 0.70, 0.00, 0.90, 0.00, 0.90, 0.90, 0.00, 0.00)
+GRAZER = (0.30, 0.05, 0.50, 0.50, 0.20, 0.50, 0.00, 0.50, 0.00, 0.30, 0.30, 0.00, 0.00, 0.00)
+HUNTER = (0.60, 0.90, 0.50, 0.80, 0.10, 0.70, 0.00, 0.90, 0.00, 0.90, 0.90, 0.00, 0.00, 0.00)
 
 
 def genes_of(*rows: tuple[float, ...]) -> Array:

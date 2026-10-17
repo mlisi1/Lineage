@@ -118,9 +118,11 @@ def _food_trial(config: Config, seed: int, *, learning: bool) -> tuple[Array, fl
     """One hungry grazer with no instinct for food, put down again and again at random
     near one patch of grass. Returns the hours it took to reach the food each time (the
     episode's length if it never did) and its learned food gain at the end."""
-    # Full exploration at any age: this scenario tests the learning rule, not its fading.
+    # Full exploration at any age and trial-and-error learning at full weight: this
+    # scenario tests that rule, not its fading or its weight in the default world.
     cfg = replace(config.fauna, immigrant_groups_per_year=0.0, instinct_food=0.0,
-                  learning=learning, exploration_floor=1.0)  # fmt: skip
+                  learning=learning, exploration_floor=1.0,
+                  perturbation_gain=1.0)  # fmt: skip
     site = Site(config, fauna=cfg, seed=seed)
     rows, columns = np.mgrid[0 : site.flora.biomass.shape[0], 0 : site.flora.biomass.shape[1]]
     patch = np.hypot(columns - CENTRE[0], rows - CENTRE[1]) <= PATCH_RADIUS
@@ -259,7 +261,12 @@ def test_what_is_learned_is_not_inherited(config: Config) -> None:
     site.run(1.0 / 6.0)  # one tick: they breed
     young = ~np.isin(fauna.ids, parents)
     assert young.any()
-    assert float(np.abs(fauna.learned[young]).max()) == 0.0  # born knowing nothing
+    # Born knowing nothing of its own; with SOCIAL 0 (bar mutation) it carries at most a
+    # trace of its mother's plant preferences.
+    forms = [brain.FOLLOWED.index(Sense.LOW_X), brain.FOLLOWED.index(Sense.WOODY_X)]
+    others = [k for k in range(brain.LEARNED_COUNT) if k not in forms]
+    assert float(np.abs(fauna.learned[young][:, others]).max()) == 0.0
+    assert float(np.abs(fauna.learned[young][:, forms]).max()) < 0.01
     assert float(np.abs(fauna.learned[~young]).sum(axis=1).min()) > 0.0
     assert (fauna.generation[young] == 1).all()
     assert (fauna.generation[~young] == 0).all()
@@ -342,3 +349,33 @@ def test_tasting_learns_which_food_is_better_than_usual() -> None:
     )  # fmt: skip
     assert float(np.abs(first).max()) == 0.0
     np.testing.assert_allclose(usual_first, value)
+
+
+def test_newborns_take_on_part_of_their_mothers_plant_preferences(config: Config) -> None:
+    """Diet traditions: a newborn starts with its SOCIAL gene's share of its mother's
+    learned plant-form gains, and nothing else she learned."""
+    low, woody = brain.FOLLOWED.index(Sense.LOW_X), brain.FOLLOWED.index(Sense.WOODY_X)
+    food = brain.FOLLOWED.index(Sense.FOOD_X)
+
+    def newborn(social: float, learning: bool = True) -> NDArray[np.float32]:
+        cfg = replace(config.fauna, learning=learning, immigrant_groups_per_year=0.0,
+                      asexual_after_days=0.0)  # fmt: skip
+        site = Site(config, fauna=cfg)
+        site.add(_with(GRAZER, Gene.SOCIAL, social), [(20.0, 20.0)], energy_share=0.9,
+                 idle_days=10.0)  # fmt: skip
+        state = site.fauna.get_state()
+        state["learned"][0, [low, woody, food]] = (2.0, -1.0, 1.5)
+        site.fauna.set_state(state)
+        site.run(1.0 / 6.0)  # one tick: alone and ready, she clones herself
+        assert site.fauna.count == 2
+        return site.fauna.learned[1]
+
+    keen = newborn(1.0)
+    # Her own share of the mutated SOCIAL gene, near 1.
+    assert float(keen[low]) == pytest.approx(2.0, rel=0.1)
+    assert float(keen[woody]) == pytest.approx(-1.0, rel=0.1)
+    assert float(keen[food]) == 0.0  # only plant preferences are passed on
+    half = newborn(0.5)
+    assert 0.8 < float(half[low]) < 1.2
+    assert float(np.abs(newborn(0.0)).max()) < 0.2  # mutation can give it a little
+    assert float(np.abs(newborn(1.0, learning=False)).max()) == 0.0

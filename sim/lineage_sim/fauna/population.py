@@ -507,7 +507,8 @@ class Fauna:
     def _breed(
         self, rng: Generator, dead: NDArray[np.int8]
     ) -> tuple[NDArray[np.float32], Values, NDArray[np.float32], NDArray[np.float32],
-               NDArray[np.uint16], NDArray[np.int32], NDArray[np.int32]] | None:  # fmt: skip
+               NDArray[np.uint16], NDArray[np.int32], NDArray[np.int32],
+               NDArray[np.float32]] | None:  # fmt: skip
         """Pair ready adults (or let the lonely clone). Returns the newborns' arrays."""
         cfg, body, n = self._cfg, self._body, self.count
         ready = (dead < 0) & self.ready
@@ -592,7 +593,15 @@ class Fauna:
         self.tally.births += total
         self.tally.clones += int(counts[cloned].sum())
         generation = np.maximum(self._generation[mother], self._generation[father]) + 1
-        return positions, energy, genes, weights, slots, self._origin[mother], generation
+        # Diet traditions: a newborn takes on part of its mother's learned plant
+        # preferences (its SOCIAL gene); nothing else it learned is passed on.
+        learned = np.zeros((total, brain.LEARNED_COUNT), dtype=np.float32)
+        copied = phenotype(cfg, genes).social[:, None]
+        forms = [_LOW_GAIN, _WOODY_GAIN]
+        learned[:, forms] = (copied * self._learned[mother][:, forms]).astype(np.float32)
+        return (
+            positions, energy, genes, weights, slots, self._origin[mother], generation, learned,
+        )  # fmt: skip
 
     def _separations(self) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """Pairwise offsets and distances, computed once per set of positions."""
@@ -644,6 +653,7 @@ class Fauna:
         slots: NDArray[np.uint16],
         origin: NDArray[np.int32],
         generation: NDArray[np.int32],
+        learned: NDArray[np.float32] | None = None,
     ) -> None:
         cfg, count, old = self._cfg, int(energy.size), self.count
         ids = np.arange(self._next_id, self._next_id + count, dtype=np.int64)
@@ -665,9 +675,10 @@ class Fauna:
         self._generation = np.concatenate([self._generation, generation]).astype(np.int32)
         self._body = phenotype(cfg, self._genes)
         self._apart = None
-        # Newcomers know nothing yet, and expect to burn their resting metabolism.
+        # Newcomers have learned nothing of their own (newborns may carry a share of their
+        # mother's plant preferences), and expect to burn their resting metabolism.
         nothing = np.zeros((count, brain.LEARNED_COUNT), dtype=np.float32)
-        self._learned = np.concatenate([self._learned, nothing])
+        self._learned = np.concatenate([self._learned, nothing if learned is None else learned])
         self._trace = np.concatenate([self._trace, nothing])
         self._noise = np.concatenate([self._noise, np.zeros((count, brain.OUTPUTS), np.float32)])
         resting = -self._body.basal_burn[old:]

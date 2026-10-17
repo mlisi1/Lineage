@@ -5,7 +5,9 @@ increase (x, y each). Their weights are inserted as zeros, in the direct block (
 2 × 20) and in the hidden layer's input block (8 × 16 → 8 × 20), so a v5 creature steers
 exactly as before until mutation brings the new senses in. Learned gains and their traces
 gain the two new followed senses, at zero, and each creature gains a running average
-meal value, NaN until its next meal (it has tasted nothing yet).
+meal value, NaN until its next meal (it has tasted nothing yet). Genomes gain the SOCIAL
+gene (after the thirteen of v5), at 0: v5 creatures pass on no diet traditions until
+mutation brings them in.
 """
 
 from __future__ import annotations
@@ -21,6 +23,12 @@ _OLD_SENSES, _NEW_SENSES = 16, 20
 _OUTPUTS, _HIDDEN = 2, 8
 _OLD_WEIGHTS = 186
 _OLD_GAINS, _NEW_GAINS = 6, 8
+_OLD_GENES = 13
+
+
+def _widen_genes(genes: np.ndarray) -> np.ndarray:
+    genes = np.asarray(genes, dtype=np.float32).reshape(-1, _OLD_GENES)
+    return np.concatenate([genes, np.zeros((genes.shape[0], 1), dtype=np.float32)], axis=1)
 
 
 def _widen_senses(block: np.ndarray, rows: int) -> np.ndarray:
@@ -56,6 +64,8 @@ def migrate(tree: Tree) -> Tree:
     upgraded = {
         **fauna,
         "weights": widened,
+        "genes": _widen_genes(fauna["genes"]),
+        "ancestors": _widen_genes(fauna["ancestors"]),
         "learned": _widen_gains(fauna["learned"]),
         "trace": _widen_gains(fauna["trace"]),
         "meal_value": np.full(weights.shape[0], np.nan, dtype=np.float32),

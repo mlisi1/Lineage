@@ -35,6 +35,7 @@ class Gene(IntEnum):
     PATTERN = 10  # body pattern (and mate recognition)
     LEARNING = 11  # how fast the brain learns during life
     EXPLORATION = 12  # how much it tries out while steering, so it has something to learn from
+    SOCIAL = 13  # how much of its mother's learned plant preferences a newborn takes on
 
 
 GENE_COUNT = len(Gene)

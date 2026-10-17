@@ -200,7 +200,7 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
     out["diet_fit.last_year.share_of_seeds_positive"] = float(
         np.mean(np.nanmean(fit[:, last_year], axis=1) > 0)
     )
-    for gene in ("learning", "exploration"):
+    for gene in ("learning", "exploration", "social"):
         values = _stack(run, f"gene_{gene}")
         out[f"gene_{gene}.end.median"] = float(np.nanmedian(values[:, -1]))
         out[f"gene_{gene}.off.end.median"] = float(
@@ -293,7 +293,11 @@ def _baldwin_section(run: Run, baseline: Run) -> Section:
 def _gene_section(run: Run, baseline: Run) -> Section:
     times = _times(run)
     body = ""
-    for gene, what in (("learning", "learning rate"), ("exploration", "exploration")):
+    for gene, what in (
+        ("learning", "learning rate"),
+        ("exploration", "exploration"),
+        ("social", "social (diet traditions)"),
+    ):
         body += _svg(
             f"Mean {what} gene of the living. With learning off the gene does nothing and "
             "drifts.",

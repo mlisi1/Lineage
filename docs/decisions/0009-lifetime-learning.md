@@ -265,6 +265,35 @@ learns in 60 episodes.
   state: folded into schema v6, which has never been released (this branch is
   unmerged), so the v5→v6 migration and `v6.lzma` were amended rather than a v7 added.
 
+## Balancing with learning on (2026-10-17)
+
+The default world runs with learning on, so it is the one M4's criteria apply to. With
+meal learning and toxicity 0.5, predators fell again (≥ 3 predators in 0.42 of years
+1–3, against 0.57 with learning off).
+
+- **What it is not.** In 30-day forks from balanced worlds, kills, grazer movement and
+  spacing, and hunter-to-prey distances were the same with learning on and off. The
+  decline builds over months, at the population level.
+- **What did not help** (learning-on runs, 20 seeds × 3 years; ≥ 3 predators in years
+  1–3):
+  - trial-and-error at 0.25: 0.34;
+  - plus a higher `attack_rate` (3.5): 0.34, with kills down to 1 127, since every
+    attempt costs the hunter energy;
+  - meal learning alone: 0.47.
+- **What did:**
+  - richer meat (`meat_energy` 900 → 1 600): 0.46;
+  - plus cheaper learning (`cost_learning` 0.2 → 0.05): **0.52**, with both diets at year
+    3 in 0.65 of seeds (final-year mean 0.56), diet fit +0.33 (positive in all seeds),
+    and the `LEARNING` gene selected down less (0.29).
+
+  Hunters live on the energetic edge, so a few percent of basal burn for a learning gene
+  tipped lineages over.
+- **Adopted:** `meat_energy` 1 600, `cost_learning` 0.05, `perturbation_gain` 0.25 (trial
+  and error never paid in a real world; kept at a quarter as M5's specified mechanism).
+  M4.3's final-year mean (0.56) is still just below 0.6.
+- **Diet traditions** (candidate 1 below) were implemented on top: a `SOCIAL` gene folded
+  into the unreleased schema v6.
+
 ## Candidate features (researched 2026-10-17, owner asked for ideas)
 
 Ranked by fit for the gadget: what they add to evolution, how intriguing the learning
@@ -275,7 +304,7 @@ becomes to watch, and the risk to the predator–prey balance.
    from their own meals. In rats, juveniles acquire adults' food preferences (Galef), most
    strongly at weaning, and the effect lasts. Rogers' paradox predicts copying pays only
    alongside individual learning, so the mix is left to evolution. Herds would carry local
-   food cultures: captions and chronicle material. *Planned next.*
+   food cultures: captions and chronicle material. *Implemented (SOCIAL gene).*
 2. **Learning danger without dying.** A prey that survives an attack learns to flee harder
    (threat gain), and an attacked creature alerts nearby kin (alarm). This addresses the
    "death cannot teach" gap, but it makes prey harder to catch, so only once predators are

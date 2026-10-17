@@ -60,6 +60,7 @@ def _write(tmp_path: Path, name: str, *, learning: bool) -> Path:
             "extinctions": np.zeros_like(times),
             "gene_learning": np.linspace(0.5, 0.7 if learning else 0.5, times.size),
             "gene_exploration": 0.5 * flat,
+            "gene_social": 0.5 * flat,
             "diet_fit": 0.3 * flat,
             "_youth": _youths(rng, SLOPE_ON if learning else 0.0),
             "_fork": _forks() if learning else np.zeros((0, len(FORK_COLUMNS))),
@@ -131,7 +132,7 @@ def test_m5_report_passes_and_names_the_baseline(tmp_path: Path) -> None:
     page = (out / "report.html").read_text(encoding="utf-8")
     assert "Baseline run" in page
     assert "off, config" in page
-    assert page.count("<figure") >= 8
+    assert page.count("<figure") >= 10
     assert "Baseline `off`" in (out / "README.md").read_text(encoding="utf-8")
 
 

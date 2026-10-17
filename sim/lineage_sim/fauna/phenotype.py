@@ -40,6 +40,7 @@ class Phenotype:
     brood: Values  # young per brood, whole numbers
     learning_rate: Values  # brain weight change per unit trace per unit reward, per hour
     exploration: Values  # standard deviation of the noise on each steering drive
+    social: Values  # share of its mother's learned plant preferences a newborn takes on
 
 
 def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
@@ -112,4 +113,5 @@ def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
         brood=out(1.0 + np.rint(g[:, Gene.BROOD] * (cfg.brood_max - 1))),
         learning_rate=out(cfg.learning_rate_max * learning),
         exploration=out(cfg.exploration_max * learns * g[:, Gene.EXPLORATION]),
+        social=out(cfg.social_copy_max * learns * g[:, Gene.SOCIAL]),
     )

@@ -73,10 +73,14 @@ that let 50 weights learn fitted noise into fixed directions and drifted).
   better or worse the bite was than the creature's usual meal (`meal_learning_gain`,
   `meal_memory_hours`). One clear signal per bite: this, not the steering noise, is what
   lets a creature pick up which form is safe where it lives.
+- **Diet traditions** (social learning): at birth a newborn takes on its `SOCIAL` gene's
+  share of its mother's learned plant preferences (only those). Its own meals confirm or
+  correct them; forgetting fades what is never confirmed. Copying is free; whether it
+  pays is left to evolution (Rogers' paradox: it pays only alongside learning one's own).
 - **Exploration fades with age** (`exploration_fade_hours`, `exploration_floor`): full
   at birth, like juvenile play, down to a floor in adults, so grown creatures stop paying
   for noise they no longer learn much from.
-- **Genes**: `LEARNING` (rate, costs basal burn) and `EXPLORATION` (noise; its cost is
+- **Genes**: `SOCIAL` (diet traditions, free); `LEARNING` (rate, costs basal burn) and `EXPLORATION` (noise; its cost is
   noisier steering). Both count toward compatibility and genetic distance.
 - **Not inherited**: newborns start with no learned gains; evolution sees only innate
   weights (the setting for a Baldwin effect).
