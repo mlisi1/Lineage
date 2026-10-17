@@ -86,6 +86,9 @@ that let 50 weights learn fitted noise into fixed directions and drifted).
   `JuvenileGrown` event reports what it ate and burnt while young, its competence age
   and its generation (0: arrived from elsewhere).
 
+Background and references (Baldwin effect, when learning evolves, evolved plastic
+networks, predator–prey coexistence): ADR 0009, "References".
+
 ## Life
 
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals

@@ -265,3 +265,66 @@ learns in 60 episodes.
   state: folded into schema v6, which has never been released (this branch is
   unmerged), so the v5→v6 migration and `v6.lzma` were amended rather than a v7 added.
 
+## References
+
+What each source contributed to the decisions above. Links were checked on 2026-10-17;
+details not confirmed from the source itself are marked.
+
+- **Hinton, G. E. & Nowlan, S. J. (1987). How learning can guide evolution.** *Complex
+  Systems* 1. <https://www.cs.toronto.edu/~hinton/absps/evolution.htm>. The original
+  computational Baldwin effect: learning smooths the fitness landscape, and what is
+  learned can later become innate. It is why learned values here are not inherited and
+  why innate weights stay evolvable.
+- **Ackley, D. & Littman, M. (1991/1992). Interactions between learning and evolution.**
+  In *Artificial Life II*, SFI Studies in the Sciences of Complexity, pp. 487–509.
+  <https://www.cs.utexas.edu/~shivaram/readings/b2hd-AckleyLittman1992.html>. Its
+  findings explain three of ours:
+  - learning plus evolution beat either alone;
+  - a Baldwin effect appeared only over millions of steps, far more generations than our
+    3-year runs;
+  - **shielding**: once the innate behaviour is good, learning genes lose their value and
+    drift, as our `LEARNING` gene does.
+
+  Its rewards come from an *evolved* evaluation network (inherited goals), the route to
+  learning about danger without dying first; that is a candidate for later work. Its
+  carnivores were hand-coded, and its population still died out after predator-prey
+  "implosions".
+- **Stephens, D. W. (1991). Change, regularity, and value in the evolution of animal
+  learning.** (*Behavioral Ecology*; venue recalled, not confirmed.) Learning pays when
+  what matters changes between generations or places but stays regular within a
+  lifetime. This is the reason steering gains did not pay here (their best value is the
+  same everywhere) and plant preferences can (defence differs between neighbourhoods).
+- **Dunlap, A. S. & Stephens, D. W. (2009). Components of change in the evolution of
+  learning and unlearned preference.** *Proc. R. Soc. B* 276. doi:10.1098/rspb.2009.0602.
+  <https://profiles.umsl.edu/en/publications/components-of-change-in-the-evolution-of-learning-and-unlearned-p/>.
+  Whether learning or a fixed preference evolves depends on the reliability of
+  experience and on how certain the best action is.
+- **Dunlap, A. S. & Stephens, D. W. (2014). Experimental evolution of prepared
+  learning.** *PNAS* 111: 11750–11755. <https://pmc.ncbi.nlm.nih.gov/articles/PMC4136563>.
+  In 40 fly lines over 40 generations, learning of a cue–quinine pairing tracked that
+  cue's reliability. It supports a visible cue (plant form) with a hidden, locally
+  reliable consequence (defence) as the right thing to learn.
+- **Dunlap, A. S., Austin, M. W. & Figueiredo, A. (2019). Components of change and the
+  evolution of learning in theory and experiment.**
+  <https://www.journals.uchicago.edu/doi/pdfplus/10.1086/706252>. Asks for "change" to be
+  defined and measured; here it is the spatial variation of defence between plant forms
+  (ADR above, and the `diet_fit` measure).
+- **Soltoggio, A., Stanley, K. O. & Risi, S. (2018). Born to learn: the inspiration,
+  progress, and future of evolved plastic artificial neural networks.** *Neural
+  Networks* 108: 48–67. <https://arxiv.org/abs/1703.10371>. A review of evolved plastic
+  networks; background for keeping innate weights evolved and only a few plastic gains.
+- **Yaeger, L. Polyworld.** <https://en.wikipedia.org/wiki/Polyworld>. The closest similar
+  project: evolved neural agents with Hebbian plasticity that eat, mate and prey on one
+  another; small populations (hundreds), like ours.
+- **Křivan, V. (2013). Behavioral refuges and predator–prey coexistence.** *J. Theor.
+  Biol.* <https://fix.prf.jcu.cz/~krivan/clanky/Krivan-JTB-2013.pdf>. Optimal foraging and
+  prey anti-predator behaviour promote coexistence, and sigmoidal (type III) functional
+  responses stabilise. A candidate if predator balance needs a structural fix (a cover
+  refuge).
+- **Individual-based refuge study, PeerJ (2017), article 2993.**
+  <https://peerj.com/articles/2993>. More refuge allowed predator and prey to coexist by
+  weakening interaction strength, and predators died out in the smallest patches.
+- **Rikvold, P. A. (2009). Complex dynamics in coevolution models with ratio-dependent
+  functional response.** <https://arxiv.org/abs/0910.4915>. In an individual-based
+  coevolution model, adaptive foraging enhances coexistence.
+
