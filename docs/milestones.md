@@ -9,7 +9,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M2 | Terrain generation and dynamics | done | [reports/M2-terrain](../reports/M2-terrain/README.md) |
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
-| M5 | Fauna II: lifetime learning | in progress on branch `m5-lifetime-learning`: learning rule, genes, schema v5, scenario tests and fork/ablation tooling built; report module built (`tools/milestones/m5.py`, `tools.report --baseline`). First probe (12 seeds × 2 years): early-life feeding, measured as energy eaten per hour of youth, +21 % median against the ≥ 15 % target. Next: the full 20-seed run and report, then a slow test. See [ADR 0009](decisions/0009-lifetime-learning.md) | — |
+| M5 | Fauna II: lifetime learning | in progress, waiting on the owner's decisions: full report run. M5.1 feeding +20.5 % PASS (but the gain comes from exploration, not learning), M5.2 Baldwin trend 40 % FAIL, M5.3 step 202 ms PASS; tuning tried without success; the M4.3 re-check fails as a point measure (45 %). Decisions listed in [ADR 0009](decisions/0009-lifetime-learning.md) | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | not started | — |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |
@@ -31,24 +31,24 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-State at 2026-10-16, for the next session:
+State at 2026-10-17, for the next session:
 
 - **Branches**:
   - `r0-renderer-spike` holds R0. It is local only (not pushed or merged) and waits for
     the board measurement (`deploy/board-setup.md`).
   - `m5-lifetime-learning` is branched from `main` and holds M5. It doesn't contain the R0
     commits, so expect conflicts only in shared files (this file, `CLAUDE.md`).
-- **M5 next steps**: listed under "Consequences and next steps" in
-  [ADR 0009](decisions/0009-lifetime-learning.md). The owner chose:
+- **M5 next steps**: two decisions for the owner, set out at the end of
+  [ADR 0009](decisions/0009-lifetime-learning.md): what M5 should show (change the learning
+  rule, make the world harder, or revise the bands), and how M4.3 is read. The owner
+  chose earlier:
   - the 15 % feeding criterion is measured on forked worlds, as energy eaten per hour of
-    youth (not eaten ÷ burnt, which the report still shows);
-  - tuning within reason is allowed, provided M4's criteria still pass and the changes are
-    recorded in the ADR.
-- **Not yet re-checked after M5**: the slow M4 statistical test
-  (`uv run pytest -m slow -k fauna`). Adding two genes loosens mate compatibility
-  slightly.
-- **Not run since the report tooling changed**: the report tests that fast-forward
-  (`tools/tests/test_report.py` without `-k`), skipped while other simulations used the
-  machine. The rest of `test_report.py` and `test_m5_report.py` pass.
+    youth;
+  - tuning within reason is allowed, provided M4's criteria still pass.
+- **Tests after M5**: the fast suite and all 25 tool tests pass. The slow M4 test fails
+  M4.3 (both diets at year 3 in 45 % of seeds, against ≥ 60 %). ADR 0009 explains why
+  this is mostly a point-measure effect, and the decision it needs.
+- **Local runs** (gitignored): `runs/m5-on`, `runs/m5-off` (the report's runs) and
+  `runs/m5-weak-on`, `runs/m5-weak-off` (`instinct_food` 0.4).
 - **Probe run** `runs/m5-probe1` (gitignored, local): 12 seeds × 2 years with forks, made
   with `--save-days 1000 --snapshot-days 0 --fork-days 60 --fork-length 28`.

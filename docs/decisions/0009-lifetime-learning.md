@@ -80,26 +80,83 @@ M4's brain only steers, and founders arrive with strong instincts (ADR 0005).
   | Step cost | 176 ms per sim-day | ≤ 400 ms |
   | `LEARNING` gene at year 2 | 0.22–0.84 across seeds | — |
 
+- **Full M5 report** (`reports/M5-fauna-learning/`, runs `m5-on` and `m5-off`, 20 seeds ×
+  3 years, default config, commit a5692db):
+
+  | Criterion | Measured | Target | Result |
+  |---|---|---|---|
+  | M5.1 early-life feeding, energy eaten per hour of youth | +20.5 % (all 20 seeds positive) | ≥ 15 % | PASS |
+  | M5.2 seeds whose time to competence falls over generations | 40 % (off: 50 %) | ≥ 60 % | FAIL |
+  | M5.3 step cost | 202 ms per sim-day (off: 193) | ≤ 400 ms | PASS |
+
+- **The feeding gain comes from exploring, not from learning.** Each seed's final world
+  was forked for 90 days into three arms (learning on, exploration only with
+  `learning_rate_max = 0`, off), comparing youths born in the first 60 days (a median of
+  443 per arm and seed):
+  - exploration only vs off: +21 % intake;
+  - learning on vs exploration only: −1 % (positive in 8 of 20 seeds).
+
+  Exploration noise spreads youths over more pasture. Learning on top adds nothing.
+- **Evolution selects against learning.**
+  - The `LEARNING` gene falls to 0.28 with learning on, against 0.52 drifting with it off.
+  - `EXPLORATION` rises to 0.65, against 0.45.
+  - Learned gains stay near zero (food gain 0.02 on average).
+- **No Baldwin effect.**
+  - Youths that learn take *longer* to become competent: 17–25 h against 11–15 h, in
+    every generation. Noise wastes energy early, so the running balance turns positive
+    later.
+  - More of them get there in the end (86 % against 80 %).
+  - Neither curve falls over generations.
+- **Side effects in whole worlds** (medians per seed, 3 years, ON vs OFF):
+  - drowned: 862 against 370 (noise drives land animals into the water);
+  - births without a mate: 3 091 against 1 931 (explorers spread apart);
+  - starved: 3 901 against 4 752.
+
+  The mean population over the last two years is similar (187 against 191). The year-3
+  values differ (136 against 199.5), but the run ends in midwinter.
+- **Tuning tried** (bounded, within the owner's allowance; nothing adopted, the config is
+  unchanged):
+  - **Learning rate, trace and forgetting** (fork screen, learning beyond exploration):
+    `learning_rate_max` 30 → −3.5 %, 100 → −10 %; with `trace_hours` 6 → −0.5 %; with
+    `forget_hours` 500 → −0.1 %. A faster rule only adds noise.
+  - **Weaker food instinct** (`instinct_food` 0.4, full 20-seed ON/OFF pair):
+    - M5.1: +13.1 % (FAIL);
+    - M5.2: 25 % (FAIL);
+    - creatures learn more (food gain 0.10), but `LEARNING` is still selected down
+      (0.29 against 0.43).
+- **M4 re-check** (`pytest -m slow -k fauna`, M5 code, defaults): **fails M4.3**. Both
+  diets are present at year 3 in 45 % of seeds, against ≥ 60 %. This is mostly the point
+  measure: averaged over the last year the share is 0.59 with learning on, 0.59 with it
+  off, and 0.62 in the M4 report. Predator packs last months, so one day swings it. The
+  same reading with learning off gives 0.60. The other M4 criteria hold: no extinctions,
+  drift rising in 85–100 % of seeds.
+
 ## Consequences and next steps
 
-1. **Run the full M5 report** (20 seeds × 3 years, needs the machine's cores free):
+M5 is **not** done: M5.2 fails, and M5.1 passes only through exploration. These need the
+owner:
 
-   ```sh
-   uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 30 --snapshot-days 60 --fork-days 60 --fork-length 28 --out runs/m5-on
-   uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 30 --snapshot-days 60 --set fauna.learning=false --out runs/m5-off
-   uv run python -m tools.report M5 --runs runs/m5-on --baseline runs/m5-off
-   ```
+1. **What M5 should show.** Options:
+   - **(a) Change the learning rule.** A reward that also counts danger avoided and mates
+     found, or exploration that falls with age so youths stop paying for noise once
+     competent.
+   - **(b) Make learning cheaper or the world harder to get by on instinct.** For example
+     patchier food, or food that moves between seasons.
+   - **(c) Accept what the simulation shows**: on this island, exploration pays and lifetime
+     learning does not. Revise the M5 bands in this ADR.
+2. **M4.3's reading.** Keep it as a point value at year 3 (it now fails at 45 %), or
+   read it as the mean over the last year (0.59, still just below 0.6). Either way the
+   band needs a decision.
+3. **Once 1 and 2 are settled**: tune or revise, regenerate the report, add a slow M5
+   statistical test in `sim/tests/`, and set this ADR to accepted.
 
-   The report module (`tools/milestones/m5.py`, criteria M5.1–M5.3) is built and tested
-   on synthetic runs. Read the plots, especially whether time to competence also falls
-   with learning off (that would point to ecology, not a Baldwin effect).
-2. **Tune only if a criterion fails.** Options, roughly in order:
-   - weaker newborn instincts (`instinct_*`);
-   - a higher learning rate in youth;
-   - exploration that falls with age;
-   - a reward that also counts danger avoided.
+To reproduce:
 
-   Re-check M4's criteria after each change (`uv run pytest -m slow -k fauna`).
-3. **Add a slow M5 statistical test** in `sim/tests/` alongside the M4 one.
-4. **Update this ADR** with the report's numbers and set its status to accepted once the
-   report passes.
+```sh
+uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 30 --snapshot-days 60 --fork-days 60 --fork-length 28 --out runs/m5-on
+uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 30 --snapshot-days 60 --set fauna.learning=false --out runs/m5-off
+uv run python -m tools.report M5 --runs runs/m5-on --baseline runs/m5-off
+```
+
+The three-arm fork screen (`runs/m5-on/saves/*.lzma`, 90-day forks) was a scratch script.
+Turning it into a tool is part of option (a) or (b).

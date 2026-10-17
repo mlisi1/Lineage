@@ -125,9 +125,10 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 ## Open
 
-- M5 (in progress, ADR 0009): on a 12-seed probe, newborns with learning eat 21 % more
-  per hour of youth than the same worlds without it (median), and die young less often.
-  The full 20-seed report is still to run.
+- M5 (in progress, ADR 0009): newborns with learning eat 20 % more per hour of youth than
+  in the same worlds without it, but nearly all of that comes from exploration noise
+  rather than from learning. Evolution selects the learning rate down, youths that learn
+  become competent later, and there is no Baldwin effect yet.
 
 - Predators mostly persist because hunter species keep arriving: a pack typically lasts
   months, not years, and newborn hunters often starve. The mean diet gene of the
