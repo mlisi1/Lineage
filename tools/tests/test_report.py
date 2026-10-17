@@ -1,5 +1,6 @@
 """The report tool turns a (dummy) run into a valid, self-contained report."""
 
+import html
 import json
 import math
 from html.parser import HTMLParser
@@ -322,3 +323,12 @@ def test_creatures_are_drawn_by_diet() -> None:
                                   scale=3)  # fmt: skip
     assert big[10, 7].tolist() == [255, 255, 255]  # centre of the 3×3 block
     assert big[9, 6].tolist() == [27, 27, 27]  # its outline
+
+
+def test_figure_alt_text_is_escaped_once() -> None:
+    from tools.milestones.base import figure_html
+
+    caption = html.escape("the founders' winter & <b>")  # captions arrive HTML-safe
+    page = figure_html(caption, "data:image/svg+xml;base64,AA==")
+    alt = page.split('alt="', 1)[1].split('"', 1)[0]
+    assert alt == "the founders&#x27; winter &amp; &lt;b&gt;"

@@ -55,6 +55,7 @@ def _write(tmp_path: Path, name: str, *, learning: bool) -> Path:
             "population": 100.0 * flat + (20.0 if learning else 0.0),
             "energy_share": 0.6 * flat,
             "predators": 5.0 * flat,
+            "deaths_killed": np.linspace(0.0, 100.0, times.size),
             "step_ms": (180.0 if learning else 160.0) * flat,
             "generation": np.linspace(0.0, GENERATIONS, times.size),
             "extinctions": np.zeros_like(times),
@@ -132,7 +133,9 @@ def test_m5_report_passes_and_names_the_baseline(tmp_path: Path) -> None:
     page = (out / "report.html").read_text(encoding="utf-8")
     assert "Baseline run" in page
     assert "off, config" in page
-    assert page.count("<figure") >= 10
+    assert page.count("<figure") >= 11
+    assert "Population bottlenecks" in page
+    assert "What the plots show" in page
     assert "Baseline `off`" in (out / "README.md").read_text(encoding="utf-8")
 
 

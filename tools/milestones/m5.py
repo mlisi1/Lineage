@@ -27,6 +27,7 @@ import html
 from pathlib import Path
 
 import numpy as np
+from lineage_sim.config import ConfigError, parse_config
 from lineage_sim.fauna import brain
 from matplotlib.figure import Figure
 
@@ -208,7 +209,54 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
         )
     for name in FOLLOWED_NAMES:
         out[f"learned_{name}.mean.median"] = float(np.nanmedian(_stack(run, f"learned_{name}")))
+    out["first_landing.months.median"] = float(np.median(first_landing_years(run)) * 12.0)
+    for arm, which in (("", run), ("off.", baseline)):
+        minima = yearly_minimum(which)
+        for year in range(minima.shape[1]):
+            out[f"{arm}population_min.year{year + 1}.median"] = float(np.nanmedian(minima[:, year]))
+            out[f"{arm}population_min.year{year + 1}.p10"] = float(
+                np.nanpercentile(minima[:, year], 10)
+            )
+        out[f"{arm}population_min.winter_share"] = winter_share_of_minima(which)
     return out
+
+
+def first_landing_years(run: Run) -> np.ndarray:
+    """Per seed: sim-years until the first creatures lived on the island."""
+    times = _times(run)
+    return np.array([times[np.argmax(p > 0)] for p in _stack(run, "population")])
+
+
+def yearly_minimum(run: Run) -> np.ndarray:
+    """[seed, year]: lowest population in each sim-year, counted from the first landing
+    (NaN for a year before it)."""
+    times, first = _times(run), first_landing_years(run)
+    population = _stack(run, "population")
+    years = max(1, round(run.manifest.sim_years))
+    out = np.full((population.shape[0], years), np.nan)
+    for row, (values, landed) in enumerate(zip(population, first, strict=True)):
+        for year in range(years):
+            inside = (times > year) & (times <= year + 1) & (times >= landed)
+            if inside.any():
+                out[row, year] = values[inside].min()
+    return out
+
+
+def winter_share_of_minima(run: Run) -> float:
+    """Share of seed-years after the first whose lowest population falls in December to
+    February (worlds start on 1 January)."""
+    times = _times(run)
+    population = _stack(run, "population")
+    winters = total = 0
+    for values in population:
+        for year in range(1, max(1, round(run.manifest.sim_years))):
+            inside = (times > year) & (times <= year + 1)
+            if not inside.any():
+                continue
+            month = (_times(run)[inside][np.argmin(values[inside])] % 1.0) * 12.0
+            winters += int(month < 2.0 or month >= 11.0)
+            total += 1
+    return winters / total if total else np.nan
 
 
 # --- Sections ---------------------------------------------------------------------------
@@ -290,6 +338,28 @@ def _baldwin_section(run: Run, baseline: Run) -> Section:
     return Section("Time to competence across generations", body)
 
 
+def _bottleneck_section(run: Run, baseline: Run) -> Section:
+    minima_on, minima_off = yearly_minimum(run), yearly_minimum(baseline)
+    years = minima_on.shape[1]
+    labels = [f"year {y + 1}, {arm}" for y in range(years) for arm in ("on", "off")]
+    values = [m[:, y][np.isfinite(m[:, y])] for y in range(years) for m in (minima_on, minima_off)]
+    landed = float(np.median(first_landing_years(run)) * 12.0)
+    winter = winter_share_of_minima(run)
+    body = _svg(
+        f"Lowest population in each sim-year, per seed (counted from the first landing), "
+        f"learning on and off: median and 10–90 % band across seeds. Founders land after "
+        f"a median of {landed:.1f} months, once plants cover half the land, which leaves "
+        f"them a few months before their first winter: year 1 is the bottleneck of the founders. "
+        f"Later dips are winter dips (the lowest point of the year falls in December to "
+        f"February in {winter:.0%} of later seed-years, learning on): larger herds and "
+        f"arriving strangers carry the island through them.",
+        figures.bars_with_spread(
+            labels, values, title="Population bottlenecks", ylabel="lowest population (creatures)"
+        ),
+    )
+    return Section("Population bottlenecks", body)
+
+
 def _gene_section(run: Run, baseline: Run) -> Section:
     times = _times(run)
     body = ""
@@ -352,11 +422,155 @@ def _cost_section(run: Run, baseline: Run) -> Section:
     )
 
 
+def _share(value: float) -> str:
+    return f"{value:.0%}"
+
+
+def _interpretation_section(run: Run, baseline: Run) -> Section:
+    """What the plots show, in words. Every number is computed from these runs; where a
+    reading depends on the data, the wording follows it."""
+    m = metrics(run, baseline)
+    times = _times(run)
+    late = times >= run.manifest.sim_years - 0.5
+    pred_on = float(np.median(_stack(run, "predators")[:, late]))
+    pred_off = float(np.median(_stack(baseline, "predators")[:, late]))
+    kills_on = float(np.median(_stack(run, "deaths_killed")[:, -1]))
+    kills_off = float(np.median(_stack(baseline, "deaths_killed")[:, -1]))
+    present = lambda r: float((_stack(r, "predators")[:, times >= 1.0] >= 3).mean())  # noqa: E731
+    fit, fit_seeds = m["diet_fit.last_year.median"], m["diet_fit.last_year.share_of_seeds_positive"]
+    gain, gain_seeds = (
+        m["fork.intake_rate.gain.median"],
+        m["fork.intake_rate.gain.share_of_seeds_positive"],
+    )
+    falling, falling_off = (
+        m["competence.share_of_seeds_falling"],
+        m["competence_off.share_of_seeds_falling"],
+    )
+    learning, learning_off = m["gene_learning.end.median"], m["gene_learning.off.end.median"]
+    social, social_off = m["gene_social.end.median"], m["gene_social.off.end.median"]
+    exploring, exploring_off = (
+        m["gene_exploration.end.median"],
+        m["gene_exploration.off.end.median"],
+    )
+    step, step_off = m["step_ms.median"], m["off.step_ms.median"]
+    generations = m["generation.end.median"]
+
+    def gene_reading(on: float, off: float) -> str:
+        if on < off - 0.1:
+            return f"selected down ({on:.2f} against {off:.2f} drifting with learning off)"
+        if on > off + 0.1:
+            return f"selected up ({on:.2f} against {off:.2f} drifting with learning off)"
+        return f"neither favoured nor disfavoured ({on:.2f} against {off:.2f} drifting)"
+
+    baldwin = (
+        "That is no better than the learning-off run, so it is not evidence of a Baldwin "
+        "effect: neither curve clearly falls. A Baldwin effect needs learning to pay first "
+        "and then many generations (in Ackley &amp; Littman's world, millions of steps); "
+        f"{run.manifest.sim_years:g} years give about {generations:.0f}."
+        if falling <= falling_off + 0.15
+        else "That is clearly more than the learning-off run: a sign that inherited "
+        "behaviour is catching up with what is learned (a Baldwin effect)."
+    )
+    years = max(1, round(run.manifest.sim_years))
+    first_min = m["population_min.year1.median"]
+    later_min = [m[f"population_min.year{y}.median"] for y in range(2, years + 1)]
+    later_p10 = [m[f"population_min.year{y}.p10"] for y in range(2, years + 1)]
+    try:
+        founders = f"{parse_config(run.config_text).fauna.founder_count}"
+    except ConfigError:
+        founders = "the founding"
+
+    def span(values: list[float]) -> str:
+        low, high = min(values), max(values)
+        return f"{low:.0f}" if round(low) == round(high) else f"{low:.0f}–{high:.0f}"
+
+    riskiest = bool(later_min) and first_min < min(later_min)
+    items = [
+        (
+            "Year 1 is the riskiest year." if riskiest else "The first year.",
+            f"The lowest population of a seed's first year has a median of "
+            f"{first_min:.0f} creatures"
+            + (f", against {span(later_min)} in later years. " if later_min else ". ")
+            + "Plants need months to cover half the land, so founders land only after a "
+            f"median of {m['first_landing.months.median']:.1f} months, a few months before "
+            f"their first winter: {founders} animals of one species, at random ages, meet "
+            "the winter dieback of the plants with no time to grow.",
+        ),
+    ]
+    if later_p10:
+        items.append(
+            (
+                "Later dips are winter dips, and they rarely reach zero.",
+                f"In later years the lowest point falls in December to February in "
+                f"{_share(m['population_min.winter_share'])} of seed-years. Herds go into "
+                "winter larger, and strangers keep arriving with other genomes, a rescue "
+                f"effect; the 10th percentile of yearly minima is {span(later_p10)} "
+                f"creatures, and {_share(m['extinct_seed_years.share'])} of seed-years see "
+                "an extinction.",
+            )
+        )
+    items += [
+        (
+            "Learning works, but buys little food.",
+            f"The diet fit (learned plant preference against the local plants) has a "
+            f"final-year median of {fit:+.2f}, positive in {_share(fit_seeds)} of seeds: "
+            "each grazer learns which plant form is safe where it lives. Yet newborns in "
+            f"the forked worlds eat only {gain:+.1%} more per hour of youth (positive in "
+            f"{_share(gain_seeds)} of seeds). On a balanced island the local difference "
+            "between plant forms is worth a few percent of a bite; stronger toxins would "
+            "make it larger but starve the predators. Eaten ÷ burnt barely moves "
+            f"({m['fork.eaten_per_burnt.gain.median']:+.1%}): learners eat more and also "
+            "live longer, so they burn more.",
+        ),
+        (
+            "Evolution keeps learning cheap.",
+            f"The learning-rate gene is {gene_reading(learning, learning_off)}; exploration "
+            f"is {gene_reading(exploring, exploring_off)}; copying the mother's diet "
+            f"(SOCIAL) is {gene_reading(social, social_off)}. Exploration pays by itself "
+            "(it spreads grazers over more pasture); a high learning rate costs more than "
+            "the little food it wins. As Ackley &amp; Littman found, once inherited "
+            "behaviour is good enough, genes for learning lose value (shielding).",
+        ),
+        (
+            f"No Baldwin trend in {run.manifest.sim_years:g} years.",
+            f"Time to competence falls over generations in {_share(falling)} of seeds "
+            f"with learning on, {_share(falling_off)} with it off. {baldwin}",
+        ),
+        (
+            "Predators boom and bust.",
+            f"Predator numbers cycle in both runs: hunters arrive, multiply on the herds, "
+            f"and crash. Seeds have at least three predators in {_share(present(run))} of "
+            f"the time after year 1 with learning on, {_share(present(baseline))} off; in "
+            f"the last half year the median is {pred_on:.0f} with learning on against "
+            f"{pred_off:.0f} off, and kills per seed are {kills_on:.0f} against "
+            f"{kills_off:.0f}. Learning prey are not harder to catch: in 30-day forks from "
+            "the same worlds, kills and the movement and spacing of grazers do not change "
+            "(ADR 0009). The gap builds over months at the level of populations, and the "
+            "richer meat of this configuration only partly offsets it.",
+        ),
+        (
+            "Learning has a modest running cost.",
+            f"A whole sim-day takes {step:.0f} ms with learning on and {step_off:.0f} ms "
+            "off; most of the cost of M5 is the plant-form senses, which every creature "
+            "computes either way.",
+        ),
+    ]
+    body = (
+        '<p class="note">Written by the report tool from the numbers of these two runs; '
+        "the discussion behind it is in docs/decisions/0009-lifetime-learning.md.</p><ul>"
+        + "".join(f"<li><strong>{head}</strong> {text}</li>" for head, text in items)
+        + "</ul>"
+    )
+    return Section("What the plots show", body)
+
+
 def sections(run: Run, run_dir: Path, baseline: Run) -> list[Section]:
     style.apply_style()
     return [
+        _interpretation_section(run, baseline),
         _fork_section(run),
         _ablation_section(run, baseline),
+        _bottleneck_section(run, baseline),
         _baldwin_section(run, baseline),
         _gene_section(run, baseline),
         _cost_section(run, baseline),
