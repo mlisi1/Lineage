@@ -444,6 +444,26 @@ and says so. Before any display is attached, the same run on a virtual one (the 
 started with `WLR_BACKENDS=headless`, over SSH) says whether Chromium draws with the GPU
 and about how fast; the report marks it as not the measurement.
 
+### What the board says
+
+Measured on the board with a 2560×1440 monitor standing in for the screen
+([report](../../reports/R0-renderer-spike/README.md), ADR 0008 and 0010). Chromium draws
+with the GPU (Panfrost) under every GPU profile; `gpu-gles` was best by a little CPU.
+
+- **The three views pass.** map-view, mid-view and local-view sit at the refresh rate
+  (about 60 fps). mid-crowd holds 30.0: its script takes 24 ms a frame, more than a
+  60 Hz frame and less than two, so every frame waits for the second refresh. It passes
+  with about 9 ms to spare; R2's bodies must not cost much more than the spike's.
+- **A 1024×600 canvas stretched to 2K costs a refresh.** `floor`, which draws nearly
+  nothing at 1024×600, holds 30 on the monitor and 62 on the virtual display; the views
+  at 512×300 hold 60. On the 7" screen the stretch is six times smaller.
+- **Pauses in local-view** (1% low under 1 fps) are ground painted on the frame: R1
+  paints it off the frame (ADR 0007).
+- **A sprite in every cell hangs the GPU** (ADR 0010): 1.8 fps is the kernel's timeout.
+- **Heat:** the GPU profiles stay under 78 °C; the software and canvas profiles, run
+  last, pass 80 °C and slow the board down. A heatsink belongs in the enclosure.
+- Chromium's processes take about 530 MB (PSS) beside the system on the 2 GB board.
+
 ### What a PC already says (not the acceptance)
 
 Trial runs on a development PC, headless, with WebGL drawn in software:
