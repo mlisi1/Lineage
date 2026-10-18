@@ -6,7 +6,7 @@ self-contained file. A still copy of `renderer/land.html`
 (`cd renderer && npm run dev`, then open `/land.html`).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `501de0ea5c63-dirty`
+- Renderer build: `72678a2eb306-dirty`
 - 108 pictures
 
 Regenerate with `cd renderer && npm run land`; do not edit by hand. It is a view of

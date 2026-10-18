@@ -3,14 +3,15 @@
  * own. Two so far:
  *
  *   maps   the report maps' palette (`tools/viz/pixelmap.py`), as the R0 spike chose it
- *   cosy   after Stardew Valley (R1 proposal, ADR 0013): warmer and more saturated
+ *   cosy   after Stardew Valley (R1 proposal, ADR 0014): warmer and more saturated
  *          greens, earth that is orange-brown rather than grey, a bright teal sea, shade
  *          toward violet and light toward gold, outlines in each thing's own darkest tone
  *          taken toward plum rather than grey. The creatures' `cosy` palette (R2) is the
- *          same idea, and the two share the plum and the violet.
+ *          same idea; the plum, the violet and the gold come from `palette.ts`.
  *
  * Seen from above as before: the look changes colours and edges, not the camera.
  */
+import * as TONES from "./palette";
 import { MAP_SEASONS, type SeasonTones } from "./plants/seasons";
 import type { LandPalette, Ramp } from "./terrain/land";
 
@@ -116,9 +117,10 @@ export const MAPS: Look = {
   },
 };
 
-/** The plum outlines and the violet shade lean toward, shared with the creatures' cosy look. */
-const PLUM: Rgb = [43, 22, 48];
-const VIOLET: Rgb = [58, 36, 102];
+const rgbOf = (colour: number): Rgb => [colour >> 16, (colour >> 8) & 255, colour & 255];
+/** The plum outlines lean toward, the violet of shade, the gold of light: shared with the creatures. */
+const PLUM = rgbOf(TONES.PLUM);
+const VIOLET = rgbOf(TONES.SHADE);
 
 const ramp = (dark: string, mid: string, light: string): Ramp => [dark, mid, light];
 
@@ -174,7 +176,7 @@ export const COSY: Look = {
     twig: 0x7a4c2c,
     ash: 0xc8bcb8,
     petals: [0xfff6e8, 0xffd84a],
-    shadow: 0x3a2466,
+    shadow: TONES.SHADE,
     shadowMix: 0.3,
     foamMix: 0.75,
     sand: 0xe8cc94,
@@ -183,7 +185,7 @@ export const COSY: Look = {
     outline: (dark) => toward(shaded(dark, 0.5), PLUM, 0.4),
     deep: VIOLET,
     deepMix: 0.3,
-    bright: [255, 236, 130],
+    bright: rgbOf(TONES.GOLD),
     brightMix: 0.38,
     wood: { BROADLEAF: "#8a5a34", CONIFER: "#94583a", SHRUB: "#80563a" },
     core: "#f0c030",
