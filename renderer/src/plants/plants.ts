@@ -533,6 +533,72 @@ export function standingArts(
   return arts;
 }
 
+/** The drawings of a layer packed into one texture, shared by the layers that want the same ones. */
+interface Sheet {
+  drawings: Map<string, Drawing>;
+  /** Height in cells of the tallest drawing. */
+  tall: number;
+  /** One layer fewer uses it: the last to go destroys its texture. */
+  release: () => void;
+}
+interface SharedSheet {
+  drawings: Map<string, Drawing>;
+  source: CanvasSource;
+  tall: number;
+  users: number;
+}
+/** Sheets by the palette they are coloured from, then by what they hold. */
+const SHEETS = new WeakMap<object, Map<string, SharedSheet>>();
+
+/**
+ * The sheet of drawings for a layer of `tile` art pixels to the cell, in `look`, in the
+ * seasons `shown`, with and without snow as `snows` says: drawn once and shared, so that
+ * laying the plants out again each day does not draw them again (about a second on the
+ * board for the local view). `arts` draws them when no layer has them yet.
+ */
+function sheetOf(
+  land: Land,
+  tile: number,
+  look: Look,
+  close: boolean,
+  shown: readonly Season[],
+  snows: readonly boolean[],
+  arts: () => StandingArt[],
+): Sheet {
+  let byKey = SHEETS.get(land.palette);
+  if (byKey === undefined) {
+    byKey = new Map();
+    SHEETS.set(land.palette, byKey);
+  }
+  const key = [tile, look.name, close, shown.join("+"), snows.join("+")].join("|");
+  let shared = byKey.get(key);
+  if (shared === undefined) {
+    const drawn = arts();
+    shared = {
+      ...strip(drawn, look.plants),
+      tall: Math.max(...drawn.map(({ art }) => art.height)) / tile,
+      users: 0,
+    };
+    byKey.set(key, shared);
+  }
+  const mine = shared;
+  const sheets = byKey;
+  mine.users += 1;
+  let released = false;
+  return {
+    drawings: mine.drawings,
+    tall: mine.tall,
+    release: () => {
+      if (released) return;
+      released = true;
+      mine.users -= 1;
+      if (mine.users > 0) return;
+      mine.source.destroy();
+      sheets.delete(key);
+    },
+  };
+}
+
 /**
  * The plants that stand alone, drawn by rule with `tile` art pixels to the cell: every
  * tree and bush as far grown as its biomass says, in the season's leaves, blossom or
@@ -552,19 +618,26 @@ export function standingPlants(
   const anySnow = snowCells?.some((depth) => depth >= PLANT_SNOW_FROM) ?? false;
   // Every drawing in each season some of the plants are in, with snow and without where
   // some lies: named "season:key" and "season+snow:key".
-  const arts = (time === undefined ? [season] : seasonsInPlay(time)).flatMap((shown) =>
-    (snowCells === undefined ? [options.snow === true] : anySnow ? [false, true] : [false]).flatMap(
-      (snowy) =>
-        standingArts(land, tile, { ...options, season: shown, snow: snowy }).map((art) => ({
+  const shown = time === undefined ? [season] : seasonsInPlay(time);
+  const snows =
+    snowCells === undefined ? [options.snow === true] : anySnow ? [false, true] : [false];
+  const look = options.look ?? DEFAULT_LOOK;
+  const sheet = sheetOf(land, tile, look, close, shown, snows, () =>
+    // Every drawing in each season some of the plants are in, with snow and without where
+    // some lies: named "season:key" and "season+snow:key".
+    shown.flatMap((when) =>
+      snows.flatMap((snowy) =>
+        standingArts(land, tile, { ...options, season: when, snow: snowy }).map((art) => ({
           ...art,
-          key: `${shown}${snowy && snowCells !== undefined ? "+snow" : ""}:${art.key}`,
+          key: `${when}${snowy && snowCells !== undefined ? "+snow" : ""}:${art.key}`,
         })),
+      ),
     ),
   );
   /** The name of drawing `key` in `shown`, with snow on it if its cell (x, y) has snow. */
   const named = (shown: Season, x: number, y: number, key: string): string =>
     `${shown}${(snowCells?.[y * land.width + x] ?? 0) >= PLANT_SNOW_FROM ? "+snow" : ""}:${key}`;
-  const { drawings, source } = strip(arts, (options.look ?? DEFAULT_LOOK).plants);
+  const { drawings } = sheet;
   const aboveSea = (x: number, y: number): number =>
     (land.heights[y * land.width + x] ?? 0) - land.seaLevel;
   /** The season the ground of cell (x, y) is in, and the season of the plant standing on it. */
@@ -717,7 +790,7 @@ export function standingPlants(
     return out;
   };
 
-  const tall = Math.max(...arts.map(({ art }) => art.height)) / tile;
+  const { tall } = sheet;
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
@@ -750,6 +823,6 @@ export function standingPlants(
     // Close up, plants and animals are large enough to be sorted four rows to the cell.
     close ? { tall, rowsPerCell: 4 } : { tall, eager: options.lazy !== true },
   );
-  layer.own(source);
+  layer.own({ destroy: () => sheet.release() });
   return layer;
 }

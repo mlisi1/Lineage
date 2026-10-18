@@ -215,12 +215,14 @@ export class Landscape {
       void this.built.map.repaint(request, 5);
       return;
     }
+    performance.mark(`lineage:plants:${name}`);
     const plants = standingPlants(land, TILES[name], {
       look,
       time,
       close: name === "local",
       lazy: name === "middle",
     });
+    performance.measure(`lineage:plants:${name}`, `lineage:plants:${name}`);
     if (name === "middle") {
       if (this.built.middle === null) {
         this.built.middle = {

@@ -244,7 +244,9 @@ export class PieceGround {
     };
     const version = this.landVersion;
     piece.asked = version;
+    performance.mark("lineage:shadows");
     const shadows = shadowsOf(padded);
+    performance.measure("lineage:shadows", "lineage:shadows");
     this.painter
       .paint(
         {

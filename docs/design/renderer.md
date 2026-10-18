@@ -523,8 +523,25 @@ of the camera. Where there is no worker the same code runs on the page's thread.
 **A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
 plants out again for the day and repaints the grounds of the views that have been
 shown; the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
-growth, a fire's scar or the turn of the season comes over the land gently. A plant
-layer owns the texture its drawings are packed into and destroys it with itself.
+growth, a fire's scar or the turn of the season comes over the land gently. The
+drawings a plant layer is made of depend only on the view, the look, the seasons in play
+and the snow, not on the land: they are drawn once and shared by the layers that want
+the same ones, and destroyed with the last of them.
+
+Measured on the development PC with the page's processor throttled 21 times (the board's
+speed, as in the estimate below; the GPU is not throttled), a new day arriving while the
+view is shown:
+
+| | Laying out the plants | Longest gap between frames |
+|---|---|---|
+| middle view, ground painted on the page's thread | not measured | 19.5 s |
+| middle view, painted in the worker, drawings drawn again each day | 181 ms | 0.50 s |
+| middle view, worker, drawings shared | 7 ms | 0.32 s |
+| local view, worker, drawings drawn again each day | 1 030 ms | 1.38 s |
+| local view, worker, drawings shared | 24 ms | 0.22 s |
+
+What is left once a day is the middle view's shadows for the whole island and the
+upload of the new picture; still to be measured on the board.
 
 **The cosy look** (ADR 0014, `src/looks.ts`, `plants/cosyart.ts`): the colours are the
 palette's; shade leans toward violet and light toward gold, as on the creatures

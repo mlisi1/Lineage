@@ -9,14 +9,17 @@
  *   ?source=ws://host/stream   the server's stream instead of the recording (S1)
  *   ?every=1000                wall milliseconds between the recording's messages (0: all
  *                              at once, the last day; the default is 1000)
+ *   ?painter=inline            paint the ground on the page's thread, not in a worker (to
+ *                              compare: the frames stop while it paints)
  *
  * The camera's moves between views and who it follows are R3; creatures are R2.
  */
 import { Application, Container } from "pixi.js";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
+import type { Message } from "./protocol";
 import { Recording, SocketSource, type Source } from "./stream";
-import { makePainter } from "./terrain/painter";
+import { InlinePainter, makePainter } from "./terrain/painter";
 
 /** Screen pixels per art pixel (ADR 0007). */
 const ART = 2;
@@ -30,6 +33,8 @@ declare global {
   interface Window {
     /** True once the view shows the latest day, fully painted (the visual tests wait for it). */
     __sceneSettled?: () => boolean;
+    /** Hand the scene a message as if the stream had sent it (tests and measurements). */
+    __receive?: (message: Message) => void;
   }
 }
 
@@ -68,7 +73,9 @@ async function start(): Promise<void> {
 
   const world = new Container({ isRenderGroup: true });
   app.stage.addChild(world);
-  const landscape = new Landscape(makePainter());
+  const landscape = new Landscape(
+    params.get("painter") === "inline" ? new InlinePainter() : makePainter(),
+  );
   world.addChild(landscape.container);
 
   const socket = params.get("source");
@@ -78,6 +85,7 @@ async function start(): Promise<void> {
   source.listen((message) => landscape.receive(message));
 
   window.__sceneSettled = () => landscape.settled;
+  window.__receive = (message) => landscape.receive(message);
   // The view first, so that the first land is laid out for it alone.
   landscape.show(view, { x0: 0, y0: 0, x1: 0, y1: 0 });
   app.ticker.add((ticker) => {
