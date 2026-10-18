@@ -94,6 +94,9 @@ def test_m6_report(tmp_path: Path) -> None:
     assert "What the plots show" in page
     assert "Phylogeny of seed" in page
     assert "Maleku" in page
+    assert "By diet class" in page
+    assert metrics["predators.splits"] == 0  # the split-born species here are grazers
+    assert metrics["herbivores.splits"] == 4 * 2
 
 
 def test_largest_burst_counts_daughters_close_in_time() -> None:

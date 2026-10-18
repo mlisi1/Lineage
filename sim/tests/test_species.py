@@ -32,7 +32,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "saves"
 EPOCH = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400.0
 LINK = 0.10
-CFG = SpeciesConfig(link_distance=LINK, min_members=5, split_days=7.0)
+CFG = SpeciesConfig(link_distance=LINK, min_members=5, predator_min_members=3, split_days=7.0)
 
 
 @dataclass
@@ -214,6 +214,25 @@ def test_a_divided_species_splits_once_after_split_days(config: Config) -> None:
     assert (labels[12:] == 2).all()
     assert census.species.record(2).name[:4] == census.species.record(1).name[:4]
     assert born(census.tick(30)) == []  # and never splits again
+
+
+def test_a_small_predator_pack_splits_where_a_herd_would_not(config: Config) -> None:
+    """Predators have their own cap, so their species split from smaller groups."""
+    small = SpeciesConfig(link_distance=LINK, min_members=8, predator_min_members=4, split_days=1.0)
+
+    def pack(diet: float) -> int:
+        census = Census(config, small)
+        census.species = Species(small, census.herd, predator_min_diet=0.65)
+        near = group(0.3, 5)
+        far = group(0.6, 5, seed=1)
+        near[:, Gene.DIET] = far[:, Gene.DIET] = diet
+        census.herd.add(near, origin=0)
+        census.tick()  # one species, its centroid's diet now known
+        census.herd.add(far, origin=0)
+        return len(born(census.tick(3)))
+
+    assert pack(0.9) == 1  # hunters: two groups of 5 make two species
+    assert pack(0.1) == 0  # grazers: groups of 5 are strays
 
 
 def test_a_short_separation_does_not_split(config: Config) -> None:

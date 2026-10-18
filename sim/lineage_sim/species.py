@@ -9,7 +9,9 @@ A species is a cluster of genomes: creatures linked, directly or through others,
 genetic steps of at most ``link_distance`` (all genes). It is finer than the mating
 distance (`FaunaConfig.compat_distance`): a whole island's herd can interbreed through
 intermediates, but it is not one species once it holds distinct clusters (ADR 0012).
-When a species' members fall into separate groups of at least ``min_members`` that stay apart for
+When a species' members fall into separate groups of at least ``min_members`` (fewer,
+``predator_min_members``, for a predator species, whose numbers have their own cap) that
+stay apart for
 ``split_days``, the largest group keeps the species and every other group becomes a
 daughter species. A species dies with its last member. Ids are never reused: species
 ``k`` is row ``k - 1`` of every record array, so the parent of a species always has a
@@ -167,8 +169,11 @@ def daughter_name(
 class Species:
     """The species subsystem. Read the phylogeny through `records`."""
 
-    def __init__(self, cfg: SpeciesConfig, population: Population) -> None:
+    def __init__(
+        self, cfg: SpeciesConfig, population: Population, predator_min_diet: float = 1.0
+    ) -> None:
         self._cfg = cfg
+        self._predator_diet = predator_min_diet
         self._population = population
         # Living creatures known at the last census, by id (sorted), and their species.
         self._creatures: Ids = np.zeros(0, dtype=np.int64)
@@ -356,10 +361,13 @@ class Species:
             members = np.flatnonzero(labels == species_id)
             groups = np.zeros(0, dtype=np.intp)
             group_of = np.zeros(0, dtype=np.intp)
-            if members.size >= 2 * cfg.min_members:
+            # Predators are few (their own cap): their groups count from fewer members.
+            predator = self._centroid[row, Gene.DIET] >= self._predator_diet
+            least = cfg.predator_min_members if predator else cfg.min_members
+            if members.size >= 2 * least:
                 group_of = components(gn.distance_matrix(genes[members]) <= cfg.link_distance)
                 roots, sizes = np.unique(group_of, return_counts=True)
-                big = sizes >= cfg.min_members
+                big = sizes >= least
                 # Largest first; equal sizes by their first member.
                 groups = roots[big][np.lexsort((roots[big], -sizes[big]))]
             if groups.size < 2:

@@ -36,7 +36,7 @@ def default_subsystems(config: Config) -> list[Subsystem]:
     flora = Flora(config.flora, terrain)
     fire = Wildfire(config.flora, flora, terrain)
     fauna = Fauna(config.fauna, terrain, flora)
-    species = Species(config.species, fauna)
+    species = Species(config.species, fauna, config.fauna.predator_min_diet)
     return [terrain, flora, fire, fauna, species]
 
 

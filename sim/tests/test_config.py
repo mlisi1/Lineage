@@ -46,6 +46,10 @@ def test_schedule_is_read_only(config: Config) -> None:
         (("[schedule]", "[schedule]\nchronicle = true"), "positive number of seconds"),
         (("[schedule]", "[schedule]\nchronicle = 0.0001"), "shorter than 1 ms"),
         (("min_members = 8", "min_members = 0"), "min_members must be at least 1"),
+        (
+            ("predator_min_members = 5", "predator_min_members = 0"),
+            "min_members must be at least 1",
+        ),
         (("link_distance = 0.035", "link_distance = 0.0"), "link_distance must be within"),
         (("split_days = 3.0", "split_days = -1.0"), "split_days must not be negative"),
         (("min_members = 8", "min_members = 8.5"), "min_members must be an integer"),

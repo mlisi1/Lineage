@@ -204,6 +204,9 @@ def metrics(run: Run) -> dict[str, float]:
         ),
         "inhabited.months.median": float(np.median(seeds["months"])),
     }
+    for kind, values in by_diet(run).items():
+        out[f"{kind}.splits"] = values["split"]
+        out[f"{kind}.seeds_with_splits"] = values["seeds_with_splits"]
     for kind, values in lived.items():
         if values.size:
             out[f"lifespan_days.{kind}.median"] = float(np.median(values))
@@ -306,6 +309,59 @@ def _rates_section(run: Run) -> Section:
         fig.tight_layout()
         body += _svg("Lifespans of species, pooled over all seeds, log scale.", fig)
     return Section("Speciation and extinction", body)
+
+
+def by_diet(run: Run) -> dict[str, dict[str, float]]:
+    """Per founding diet class, pooled over seeds: species, how they began, size, depth."""
+    limits = _diet_limits(run)
+    out: dict[str, dict[str, float]] = {}
+    for kind in m4.DIETS:
+        species = arrived = split = depth = 0
+        peaks: list[float] = []
+        seeds_split = 0
+        for seed in run.manifest.seeds:
+            table = phylogeny(run, seed)
+            parent = {int(r[_P["id"]]): int(r[_P["parent"]]) for r in table}
+            mine = [r for r in table if _diet_class(float(r[_P["diet"]]), limits) == kind]
+            species += len(mine)
+            splits_here = sum(1 for r in mine if r[_P["parent"]] > 0)
+            split += splits_here
+            seeds_split += splits_here > 0
+            arrived += len(mine) - splits_here
+            peaks += [float(r[_P["peak"]]) for r in mine]
+            for r in mine:
+                k, up = 0, int(r[_P["parent"]])
+                while up:
+                    k, up = k + 1, parent[up]
+                depth = max(depth, k)
+        out[kind] = {
+            "species": float(species),
+            "arrived": float(arrived),
+            "split": float(split),
+            "seeds_with_splits": float(seeds_split),
+            "peak.median": float(np.median(peaks)) if peaks else np.nan,
+            "depth.max": float(depth),
+        }
+    return out
+
+
+def _diet_section(run: Run) -> Section:
+    rows = "".join(
+        f"<tr><td>{kind}</td><td>{v['species']:.0f}</td><td>{v['arrived']:.0f}</td>"
+        f"<td>{v['split']:.0f}</td><td>{v['seeds_with_splits']:.0f}</td>"
+        f"<td>{v['peak.median']:.0f}</td><td>{v['depth.max']:.0f}</td></tr>"
+        for kind, v in by_diet(run).items()
+    )
+    body = (
+        '<p class="note">Every species of every seed, by the diet class of its founding mean '
+        "genome. Depth is how many splits separate a species from its root. Predator "
+        "species split from smaller groups (<code>predator_min_members</code>) because "
+        "their numbers have their own cap.</p>"
+        '<div class="wrap"><table><tr><th>Founding diet</th><th>Species</th><th>Arrived</th>'
+        "<th>Born by a split</th><th>Seeds with a split</th><th>Median peak members</th>"
+        f"<th>Deepest descent</th></tr>{rows}</table></div>"
+    )
+    return Section("By diet class", body)
 
 
 def _tree_order(table: np.ndarray) -> list[int]:
@@ -491,5 +547,6 @@ def sections(run: Run, run_dir: Path) -> list[Section]:
         _interpretation_section(run),
         _count_section(run),
         _rates_section(run),
+        _diet_section(run),
         _tree_section(run),
     ]
