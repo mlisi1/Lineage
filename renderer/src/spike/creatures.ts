@@ -8,6 +8,7 @@ import { Container, Sprite, type Texture } from "pixi.js";
 import { DISC_SIZE, type Atlas } from "./atlas";
 import {
   FIRST_LOOK,
+  LAYER,
   bodyPlan,
   type BodyOptions,
   type BodyPlan,
@@ -15,6 +16,7 @@ import {
 } from "../creatures/body";
 import type { CellRect } from "./camera";
 import { followChain, solveKnee, type Point } from "../creatures/chain";
+import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
 import type { Random } from "./rng";
@@ -56,6 +58,15 @@ const WEB_WIDE = 1.2;
 /** How a layer's creatures are shown: as bodies, as dots on the map, or not at all. */
 export type Showing = "bodies" | "markers" | "hidden";
 
+/**
+ * How they move: `wander` roams freely (the benchmark, which has no sim behind it);
+ * `anchored` keeps each near the place the sim gives it (`anchor`), with life of its own
+ * between sim ticks (`motion.ts`).
+ */
+export type Life = "wander" | "anchored";
+/** At a full breath the chest is this much wider. */
+const BREATH_WIDENS = 0.08;
+
 interface Leg {
   plan: LegPlan;
   foot: Point;
@@ -88,6 +99,13 @@ interface Creature {
   legs: Leg[];
   /** Within the view of the last update, so worth drawing. */
   inView: boolean;
+  /** With anchored life: where the sim has it and what it is doing there. */
+  motion: Motion | null;
+  /** Its mass, which sets how slowly it breathes. */
+  mass: number;
+  /** The joint at its widest, which breathes; and how far into a breath it started. */
+  chest: number;
+  breathOffset: number;
 }
 
 export class CreatureLayer {
@@ -103,6 +121,8 @@ export class CreatureLayer {
   private readonly dirX = new Float32Array(16);
   private readonly dirY = new Float32Array(16);
   private readonly angle = new Float32Array(16);
+  /** Seconds since the layer began: the clock breaths keep. */
+  private clock = 0;
 
   constructor(
     private readonly atlas: Atlas,
@@ -110,7 +130,36 @@ export class CreatureLayer {
     private readonly passable: Passable,
     private readonly random: Random,
     private readonly body: BodyOptions = FIRST_LOOK,
+    private readonly life: Life = "wander",
   ) {}
+
+  /**
+   * Where the sim now has creature `index`, in cells. An anchored creature walks there
+   * (or is put there, if too far to walk); a wandering one ignores it.
+   */
+  anchor(index: number, x: number, y: number): void {
+    const creature = this.creatures[index];
+    const motion = creature?.motion;
+    const head = creature?.joints[0];
+    if (creature === undefined || motion === undefined || motion === null || head === undefined) {
+      return;
+    }
+    const { plan } = creature;
+    const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
+    if (reanchor(motion, walker, x, y)) {
+      // Put there: the body comes along in a line behind the head.
+      creature.joints.forEach((joint, i) => {
+        joint.x = x - Math.cos(creature.heading) * plan.spacing * i;
+        joint.y = y - Math.sin(creature.heading) * plan.spacing * i;
+      });
+    }
+  }
+
+  /** Where the sim has creature `index` (anchored), or where its head is (wandering). */
+  anchorOf(index: number): Point | null {
+    const creature = this.creatures[index];
+    return creature?.motion?.anchor ?? creature?.joints[0] ?? null;
+  }
 
   /** Number of sprites the active creatures are made of. */
   get spriteCount(): number {
@@ -183,10 +232,11 @@ export class CreatureLayer {
    * they are shown as dots: the others walk on as a head and a chain.
    */
   update(dtS: number, view?: CellRect, posed = true): void {
+    this.clock += dtS;
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
-      const head = this.wander(creature, dtS);
+      const head = creature.motion === null ? this.wander(creature, dtS) : this.live(creature, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -326,6 +376,10 @@ export class CreatureLayer {
 
     return {
       plan,
+      motion: this.life === "anchored" ? newMotion({ x, y }, heading) : null,
+      chest: plan.radii.indexOf(Math.max(...plan.radii)),
+      breathOffset: random(),
+      mass: seed.mass,
       pen: seed.pen,
       container,
       marker,
@@ -338,6 +392,21 @@ export class CreatureLayer {
       legs,
       inView: true,
     };
+  }
+
+  /** Anchored: live near where the sim has it, and pull the chain after the head. */
+  private live(creature: Creature, dtS: number): Point {
+    const { plan, joints, motion } = creature;
+    const head = joints[0] ?? { x: 0, y: 0 };
+    if (motion === null) return head;
+    const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
+    const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
+    const stride = drive(motion, walker, dtS, this.random, free);
+    creature.heading = walker.heading;
+    creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
+    followChain(joints, plan.spacing);
+    creature.marker.position.set(head.x, head.y);
+    return head;
   }
 
   /** Walk the head on and pull the chain after it. Returns the head. */
@@ -401,6 +470,12 @@ export class CreatureLayer {
         joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT,
       );
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
+      // The chest breathes: its masses (not what lies on them) widen and narrow.
+      if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
+        const full = breath(this.clock, creature.mass, creature.breathOffset);
+        const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
+        sprite.scale.y = (part.across / texels) * (1 + BREATH_WIDENS * full);
+      }
     }
     for (const leg of creature.legs) this.walk(creature, leg, dtS);
   }

@@ -268,6 +268,19 @@ and more is shaded as a mass is, on its own: its far edge in shade, and a sunlit
 if it is round (no more than 2.2 times as long as wide: a patch would cut a band in
 two). Stripes and fades are drawn flat, in their one colour.
 
+**Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
+fraction of a cell every ten minutes, which watched in real time is stillness. A layer
+whose creatures are `anchored` keeps each near the place the sim last gave it (its
+anchor, `CreatureLayer.anchor`) and gives it life of its own there: a new anchor is
+walked to (at up to twice its pace when more than three leashes behind; put there at
+once when more than 12 cells away, a new arrival or a cut), and in between it pauses
+1½–5 s looking about (its head turns up to 0.7 rad either side), then strolls, at a
+little over half its pace, to a place within its leash (0.4 cells and 0.6 of its body
+length) that its body can stand on. Its chest breathes: the masses at its widest joint
+widen by up to 8 %, a breath taking 2.4 s at mass 1, slower with the fourth root of mass.
+Where it is drawn is the renderer's; where it is, is the sim's. The benchmark has no sim
+behind it and keeps the spike's free wandering (`wander`).
+
 **By distance.** On the map a creature is a dot: its colour, edged dark, a little bigger
 for the heavy. In the middle view it is its body, small, hurrying. In the local view the
 same body gets what there is now room for: a glint in each eye, legs with an edge and
@@ -526,11 +539,8 @@ image draws WebGL with the GPU.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: see the cost above.
-- **Creature motion between sim ticks.** The simulation moves a creature a few cells per
-  hour and ticks every ten minutes. Watched in real time that is stillness, most of all
-  in the local view, so the renderer needs cosmetic life of its own (idling, breathing,
-  small wandering around the true position) without contradicting the simulation.
-  Belongs to R2/R3.
+- **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
+  what remains is R3's: which animal the camera follows, and when it cuts.
 - **Kinds at their thresholds**: see Creatures.
 - **Seasons**: the standing plants have one drawing each; bare, flowering and snowed-on
   ones belong to R1.

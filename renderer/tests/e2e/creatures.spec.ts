@@ -17,6 +17,7 @@ test("the creature sheet checks the phenotype and draws both styles", async ({ p
   for (const id of ["local-meadow", "local-shore", "mid"]) {
     await expect(page.locator(`#${id} canvas`)).toHaveCount(2);
   }
+  await expect(page.locator("#ticks canvas")).toHaveCount(1);
   await expect(page.locator("#specimens .specimen")).toHaveCount(15);
   await expect(page.locator("#specimens canvas")).toHaveCount(60);
   await expect(page.locator("#patterns canvas")).toHaveCount(24);

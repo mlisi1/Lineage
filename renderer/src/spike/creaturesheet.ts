@@ -66,6 +66,12 @@ const HERD_IN_MID = 10;
 const PAINT_MARGIN = 1;
 const MAX_STEP_S = 0.1;
 const STILL_STEP_S = 1 / 30;
+/**
+ * The stand-in for the sim's ticks in the sheet: every this many seconds (the sim's ten
+ * minutes, sped up so a loop holds a few), each animal's place moves up to this far.
+ */
+const SIM_TICK_S = 3;
+const SIM_STEP_CELLS = 1.6;
 /** The local view's scenes: who is in each. */
 const SCENES = {
   meadow: ["grazer", "giant", "mouse", "hunter", "random-3", "tank"],
@@ -274,6 +280,63 @@ async function main(): Promise<void> {
         ART,
       );
     });
+  }
+
+  // Between sim ticks: the same meadow, its animals anchored to places a stand-in for the
+  // sim moves on every few seconds, as the sim does every ten minutes.
+  {
+    const centre = sites.meadow;
+    const players = scatter(SCENES.meadow.map(specimen), pen(centre, SCENE_PEN), passable, random);
+    const anchored = stage.cast(
+      players,
+      7,
+      { style: "cosy", scale: CREATURE_SCALE, pixels: LOCAL_PIXELS, pace: 0.35 },
+      "anchored",
+    );
+    const sim = mulberry32(77);
+    const places = players.map((seed) => ({ x: seed.x, y: seed.y }));
+    let sinceTick = 0;
+    stage.onTick((dtS) => {
+      sinceTick += dtS;
+      if (sinceTick < SIM_TICK_S) return;
+      sinceTick -= SIM_TICK_S;
+      places.forEach((place, index) => {
+        // A step of up to a cell or so, where the body can live and within the scene.
+        const player = players[index];
+        const swims = player === undefined ? false : bodyPlan(player).swims;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const angle = sim() * 2 * Math.PI;
+          const x = place.x + Math.cos(angle) * SIM_STEP_CELLS * sim();
+          const y = place.y + Math.sin(angle) * SIM_STEP_CELLS * sim();
+          const inside =
+            Math.abs(x - centre.x) < SCENE_PEN.x && Math.abs(y - centre.y) < SCENE_PEN.y;
+          if (inside && passable(x, y, swims)) {
+            place.x = x;
+            place.y = y;
+            break;
+          }
+        }
+        anchored.anchor(index, place.x, place.y);
+      });
+    });
+    const figure = create("figure", "screen");
+    const canvas = create("canvas");
+    canvas.setAttribute("aria-label", "the meadow, anchored to the sim's places");
+    figure.append(canvas, create("figcaption", "", "cosy, anchored: life between sim ticks"));
+    element("ticks").append(figure);
+    show(
+      canvas,
+      {
+        ...base,
+        zoom: LOCAL_PIXELS,
+        ground: "meadow",
+        plants: "local",
+        cast: anchored,
+        subject: 0,
+        centre,
+      },
+      ART,
+    );
   }
 
   // 2. The middle view: the specimens and some of the herd on a shore.

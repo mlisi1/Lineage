@@ -8,7 +8,7 @@ import type { Atlas } from "./atlas";
 import type { BodyOptions } from "../creatures/body";
 import type { CellRect } from "./camera";
 import type { Point } from "../creatures/chain";
-import { CreatureLayer } from "./creatures";
+import { CreatureLayer, type Life } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
 import type { Passable } from "./habitat";
 import { PIXEL_ART, groundSprite, loadWorldLayers } from "./layers";
@@ -53,6 +53,7 @@ export class Stage {
   private readonly tint: Sprite;
   private readonly flat: Sprite;
   private readonly casts: CreatureLayer[] = [];
+  private readonly listeners: ((dtS: number) => void)[] = [];
 
   private constructor(
     private readonly app: Application,
@@ -111,8 +112,13 @@ export class Stage {
   }
 
   /** Put creatures on the stage, each where its seed says. Seen only in pictures that cast them. */
-  cast(seeds: readonly CreatureSeed[], seed: number, body?: BodyOptions): CreatureLayer {
-    const layer = new CreatureLayer(this.atlas, seeds, this.passable, mulberry32(seed), body);
+  cast(
+    seeds: readonly CreatureSeed[],
+    seed: number,
+    body?: BodyOptions,
+    life: Life = "wander",
+  ): CreatureLayer {
+    const layer = new CreatureLayer(this.atlas, seeds, this.passable, mulberry32(seed), body, life);
     layer.setCount(seeds.length);
     layer.show("hidden");
     this.casts.push(layer);
@@ -120,8 +126,14 @@ export class Stage {
     return layer;
   }
 
+  /** Called with every tick before the creatures move: a stand-in for the sim's ticks. */
+  onTick(listener: (dtS: number) => void): void {
+    this.listeners.push(listener);
+  }
+
   /** Move every creature on by `dtS` seconds. */
   tick(dtS: number): void {
+    for (const listener of this.listeners) listener(dtS);
     for (const layer of this.casts) layer.update(dtS);
   }
 
