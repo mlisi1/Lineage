@@ -46,11 +46,11 @@ import { Stage, type Picture } from "./stage";
 /** Replaced by Vite with the commit the page was built from. */
 declare const __BUILD_COMMIT__: string;
 
-/** The styles compared, the one in use first. */
+/** The styles compared: R0's, then the one chosen in R2 (ADR 0013). */
 const STYLES: readonly CreatureStyle[] = ["lit", "cosy"];
 const STYLE_NAMES: Readonly<Record<string, string>> = {
-  lit: "lit (now)",
-  cosy: "cosy (Stardew proposal)",
+  lit: "lit (R0)",
+  cosy: "cosy (chosen, ADR 0013)",
 };
 /** Screen pixels per art pixel, as on the desk. */
 const ART = 2;

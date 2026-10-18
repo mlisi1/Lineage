@@ -41,6 +41,8 @@ const SHAPES: BodyOptions = { style: "shapes", scale: 1, pixels: 8, pace: 1 };
 const LIT: BodyOptions = { style: "lit", scale: 1, pixels: 8, pace: 1 };
 /** The same body seen from close: 32 art pixels to the cell, at an amble. */
 const CLOSE: BodyOptions = { style: "lit", scale: 1, pixels: 32, pace: 0.35 };
+/** The chosen style (ADR 0013), from close. */
+const COSY: BodyOptions = { style: "cosy", scale: 1, pixels: 32, pace: 0.35 };
 const channels = (rgb: number): [number, number, number] => [
   (rgb >> 16) & 255,
   (rgb >> 8) & 255,
@@ -151,6 +153,57 @@ describe("the first look: a chain of circles", () => {
     expect(bodyPlan(seed({ aquatic: SWIMS_FROM })).swims).toBe(true);
     const fish = bodyPlan(seed({ aquatic: 1, landSpeed: 0.5, swimSpeed: 4 }));
     expect(fish.pace).toBeGreaterThan(bodyPlan(seed({ aquatic: 0.5, landSpeed: 0.5 })).pace);
+  });
+});
+
+describe("the cosy style (ADR 0013)", () => {
+  const shadows = (plan: BodyPlan): BodyPlan["parts"] => inLayer(plan, LAYER.ground);
+
+  it("is lit's body plan, with one see-through shadow on the ground and nothing else see-through", () => {
+    for (const kind of Object.keys(KINDS) as Kind[]) {
+      const lit = bodyPlan(seed(KINDS[kind]), CLOSE);
+      const cosy = bodyPlan(seed(KINDS[kind]), COSY);
+      expect([cosy.kind, cosy.joints, cosy.length]).toEqual([lit.kind, lit.joints, lit.length]);
+      expect(cosy.legs.map((leg) => leg.joint)).toEqual(lit.legs.map((leg) => leg.joint));
+      expect(shadows(lit)).toHaveLength(0);
+      const [shadow, ...more] = shadows(cosy);
+      expect(more).toHaveLength(0);
+      expect(shadow?.alpha).toBeGreaterThan(0);
+      expect(shadow?.alpha).toBeLessThan(1);
+      expect(cosy.parts.filter((part) => (part.alpha ?? 1) < 1)).toEqual([shadow]);
+      // Under everything, a little away from the light (down and to the right).
+      expect(cosy.parts[0]).toBe(shadow);
+      expect(shadow?.lift).toBeLessThan(0);
+      // What it costs: the shadow, and a glint in each eye where lit's eyes are too small for one.
+      const glints = (plan: BodyPlan): number =>
+        inLayer(plan, LAYER.face).filter((part) => part.colour === 0xffffff).length;
+      expect(glints(cosy)).toBeGreaterThanOrEqual(glints(lit));
+      expect(spriteCount(cosy)).toBe(spriteCount(lit) + 1 + glints(cosy) - glints(lit));
+      expect(spriteCount(cosy)).toBeLessThanOrEqual(spriteCount(lit) + 3);
+    }
+  });
+
+  it("outlines each animal in its own dark colour, where lit uses one for all", () => {
+    const outline = (hue: number, options: BodyOptions): number =>
+      bodyPlan(seed({ hue }), options).outline;
+    expect(outline(0.1, CLOSE)).toBe(outline(0.6, CLOSE));
+    expect(outline(0.1, COSY)).not.toBe(outline(0.6, COSY));
+    for (const hue of [0, 0.25, 0.5, 0.75]) {
+      // Dark: no channel above a third of full.
+      for (const channel of channels(outline(hue, COSY))) expect(channel).toBeLessThan(86);
+      const plan = bodyPlan(seed({ hue }), COSY);
+      for (const part of inLayer(plan, LAYER.outline)) expect(part.colour).toBe(plan.outline);
+    }
+  });
+
+  it("is more saturated than lit, and has larger eyes", () => {
+    const spread = (rgb: number): number => Math.max(...channels(rgb)) - Math.min(...channels(rgb));
+    const lit = bodyPlan(seed({ hue: 0.3 }), CLOSE);
+    const cosy = bodyPlan(seed({ hue: 0.3 }), COSY);
+    expect(spread(cosy.colour)).toBeGreaterThan(spread(lit.colour));
+    const eye = (plan: BodyPlan): number =>
+      Math.max(...inLayer(plan, LAYER.face).map((part) => part.along));
+    expect(eye(cosy)).toBeGreaterThan(eye(lit));
   });
 });
 
