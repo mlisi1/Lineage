@@ -5,9 +5,11 @@ species it was given. A newcomer takes the species of its genetically nearest re
 a labelled creature of its lineage (`Fauna.origin`, the arrival it descends from through
 its mother). Creatures of a lineage the island has not seen found a new root species.
 
-A species is the creatures that can interbreed, directly or through others: genomes
-within the mating distance (`FaunaConfig.compat_distance`, all genes). When a species'
-members fall into separate groups of at least ``min_members`` that stay apart for
+A species is a cluster of genomes: creatures linked, directly or through others, by
+genetic steps of at most ``link_distance`` (all genes). It is finer than the mating
+distance (`FaunaConfig.compat_distance`): a whole island's herd can interbreed through
+intermediates, but it is not one species once it holds distinct clusters (ADR 0012).
+When a species' members fall into separate groups of at least ``min_members`` that stay apart for
 ``split_days``, the largest group keeps the species and every other group becomes a
 daughter species. A species dies with its last member. Ids are never reused: species
 ``k`` is row ``k - 1`` of every record array, so the parent of a species always has a
@@ -165,9 +167,8 @@ def daughter_name(
 class Species:
     """The species subsystem. Read the phylogeny through `records`."""
 
-    def __init__(self, cfg: SpeciesConfig, link_distance: float, population: Population) -> None:
+    def __init__(self, cfg: SpeciesConfig, population: Population) -> None:
         self._cfg = cfg
-        self._link = link_distance
         self._population = population
         # Living creatures known at the last census, by id (sorted), and their species.
         self._creatures: Ids = np.zeros(0, dtype=np.int64)
@@ -228,6 +229,19 @@ class Species:
             return np.zeros(creature_ids.shape, dtype=np.int64)
         at = np.minimum(np.searchsorted(self._creatures, creature_ids), self._creatures.size - 1)
         return np.where(self._creatures[at] == creature_ids, self._labels[at], 0).astype(np.int64)
+
+    def labels_now(self) -> Ids:
+        """Species of every living creature right now, row for row with the population:
+        its census label, or for one born since, the species of its nearest relative (as
+        the next census will most likely give it). 0 for creatures of a lineage with no
+        species yet (strangers who landed since the census). Changes nothing."""
+        population = self._population
+        return self._label_newcomers(
+            population.genes,
+            population.origin.astype(np.int64),
+            self.species_of(population.ids),
+            t_ms=-1,
+        )
 
     # -- subsystem interface --
 
@@ -311,7 +325,8 @@ class Species:
     def _label_newcomers(
         self, genes: NDArray[np.float32], lineage: Ids, labels: Ids, t_ms: int
     ) -> Ids:
-        """Give every creature without a species the species of its nearest relative."""
+        """Give every creature without a species the species of its nearest relative. A
+        new lineage founds a species at ``t_ms``; with ``t_ms`` < 0 it is left at 0."""
         labels = labels.copy()
         unknown = np.flatnonzero(labels == 0)
         for line in np.unique(lineage[unknown]).tolist():
@@ -328,7 +343,8 @@ class Species:
                 near = _distances(genes[rows], self._centroid[alive]).argmin(axis=1)
                 labels[rows] = alive[near] + 1
                 continue
-            labels[rows] = self._new_species(0, int(line), t_ms)
+            if t_ms >= 0:
+                labels[rows] = self._new_species(0, int(line), t_ms)
         return labels
 
     def _split(self, genes: NDArray[np.float32], labels: Ids, ctx: Context) -> Ids:
@@ -341,7 +357,7 @@ class Species:
             groups = np.zeros(0, dtype=np.intp)
             group_of = np.zeros(0, dtype=np.intp)
             if members.size >= 2 * cfg.min_members:
-                group_of = components(gn.distance_matrix(genes[members]) <= self._link)
+                group_of = components(gn.distance_matrix(genes[members]) <= cfg.link_distance)
                 roots, sizes = np.unique(group_of, return_counts=True)
                 big = sizes >= cfg.min_members
                 # Largest first; equal sizes by their first member.

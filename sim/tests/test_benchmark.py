@@ -103,7 +103,7 @@ def test_bench_species_census(benchmark: Any, config: Config) -> None:
     context = world._context(world.species, 86_400.0)  # pyright: ignore[reportPrivateUsage]
 
     def census() -> None:
-        Species(config.species, config.fauna.compat_distance, world.fauna).tick(context)
+        Species(config.species, world.fauna).tick(context)
 
     benchmark.pedantic(census, rounds=20, iterations=1)
     assert benchmark.stats.stats.median < SPECIES_CENSUS_BUDGET_S

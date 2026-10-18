@@ -508,10 +508,13 @@ class FaunaConfig:
 class SpeciesConfig:
     """``[species]``; units and intent of every key are documented in default.toml."""
 
+    link_distance: float
     min_members: int
     split_days: float
 
     def __post_init__(self) -> None:
+        if not 0 < self.link_distance <= 1:
+            raise ConfigError("[species] link_distance must be within (0, 1]")
         if self.min_members < 1:
             raise ConfigError("[species] min_members must be at least 1")
         if self.split_days < 0:

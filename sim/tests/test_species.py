@@ -32,7 +32,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "saves"
 EPOCH = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400.0
 LINK = 0.10
-CFG = SpeciesConfig(min_members=5, split_days=7.0)
+CFG = SpeciesConfig(link_distance=LINK, min_members=5, split_days=7.0)
 
 
 @dataclass
@@ -73,7 +73,7 @@ class Census:
     def __init__(self, config: Config, cfg: SpeciesConfig = CFG) -> None:
         self.calendar = config.calendar
         self.herd = Herd()
-        self.species = Species(cfg, LINK, self.herd)
+        self.species = Species(cfg, self.herd)
         self.day = 0
 
     def tick(self, days: int = 1) -> list[OutputEvent]:
@@ -254,6 +254,18 @@ def test_extinction_is_reported_once(config: Config) -> None:
     assert census.species.alive_count == 1
 
 
+def test_labels_now_resolves_newborns_without_changing_anything(config: Config) -> None:
+    census = Census(config)
+    census.herd.add(group(0.3, 10), origin=0)
+    census.tick()
+    before = io.encode(census.species.get_state())
+    census.herd.add(group(0.3, 3, seed=7), origin=0)  # born since the census
+    census.herd.add(group(0.8, 4, seed=8), origin=1)  # strangers landed since
+    np.testing.assert_array_equal(census.species.labels_now(), [1] * 13 + [0] * 4)
+    assert io.encode(census.species.get_state()) == before
+    assert census.species.count == 1
+
+
 def test_orphans_join_their_lineages_living_species(config: Config) -> None:
     """Young born after the last census whose parents all died since join the species of
     their lineage still on record, rather than founding a new one."""
@@ -276,7 +288,7 @@ def test_orphans_join_their_lineages_living_species(config: Config) -> None:
 def test_small_noise_never_splits_a_species(
     config: Config, seed: int, spread: float, churn: int
 ) -> None:
-    """Genomes scattered by less than the mating distance stay one species while members
+    """Genomes scattered by much less than the link distance stay one species while members
     die and are born every day."""
     census = Census(config)
     rng = Generator(PCG64(seed))
@@ -298,7 +310,7 @@ def test_state_round_trip(config: Config) -> None:
     census.herd.add(group(0.7, 10, seed=2), origin=1)
     census.tick(3)
     tree = census.species.get_state()
-    copy = Species(CFG, LINK, census.herd)
+    copy = Species(CFG, census.herd)
     copy.set_state(io.decode(io.encode(tree)))
     assert io.encode(copy.get_state()) == io.encode(tree)
     assert [r.name for r in copy.records()] == [r.name for r in census.species.records()]
