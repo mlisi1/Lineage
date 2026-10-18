@@ -1,4 +1,4 @@
-"""Creature genome: body genes in [0, 1], brain weights, and rare-gene slots.
+"""Creature genome: genes in [0, 1] (body and learning), brain weights, rare-gene slots.
 
 Genomes are rows of arrays, one row per creature, so every function here works on a
 whole population at once.
@@ -20,7 +20,7 @@ Slots = NDArray[np.uint16]  # shape (creatures,): one bit per rare-gene slot
 
 
 class Gene(IntEnum):
-    """The body genes. Each is in [0, 1]; the phenotype gives each a benefit and a cost."""
+    """The genes. Each is in [0, 1]; the phenotype gives each a benefit and a cost."""
 
     SIZE = 0  # body mass
     DIET = 1  # 0 eats plants … 1 eats meat
@@ -33,6 +33,9 @@ class Gene(IntEnum):
     BROOD = 8  # 0 one large young … 1 many small ones
     HUE = 9  # body colour (and mate recognition)
     PATTERN = 10  # body pattern (and mate recognition)
+    LEARNING = 11  # how fast the brain learns during life
+    EXPLORATION = 12  # how much it tries out while steering, so it has something to learn from
+    SOCIAL = 13  # how much of its mother's learned plant preferences a newborn takes on
 
 
 GENE_COUNT = len(Gene)
@@ -43,7 +46,7 @@ def random_genes(rng: Generator, count: int) -> Genes:
 
 
 def distance(a: Genes, b: Genes) -> NDArray[np.float32]:
-    """Mean absolute difference per body gene between matching rows of ``a`` and ``b``."""
+    """Mean absolute difference per gene between matching rows of ``a`` and ``b``."""
     return np.abs(a - b).mean(axis=-1).astype(np.float32)
 
 

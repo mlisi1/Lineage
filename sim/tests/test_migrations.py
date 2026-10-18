@@ -6,6 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 from lineage_sim.config import Config
+from lineage_sim.fauna import brain
+from lineage_sim.fauna.brain import Sense
+from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.state import io
 from lineage_sim.state.migrations import MIGRATIONS, migrate
 from lineage_sim.state.schema import SCHEMA_VERSION, StateError, WorldState
@@ -113,8 +116,30 @@ def test_v4_fixture_values(config: Config) -> None:
     world = World.restore(config, state)
     fauna = world.fauna
     assert fauna.count > 50
-    assert fauna.genes.shape == (fauna.count, 11)
+    assert fauna.genes.shape == (fauna.count, GENE_COUNT)
     assert len(set(fauna.ids.tolist())) == fauna.count
+
+
+def test_v4_creatures_wake_up_as_non_learners(config: Config) -> None:
+    world = World.restore(config, io.loads(_fixture(4)))
+    fauna = world.fauna
+    assert fauna.count > 50
+    assert float(np.abs(fauna.genes[:, [Gene.LEARNING, Gene.EXPLORATION]]).max()) == 0.0
+    assert float(np.abs(fauna.learned).max()) == 0.0
+    assert (fauna.generation == 0).all()
+    np.testing.assert_array_equal(fauna.competent_hours, fauna.age_hours)
+    world.step(86_400)  # and they live on
+    assert world.fauna.count > 0
+
+
+def test_v5_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(5))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    fauna = World.restore(config, state).fauna
+    assert fauna.count > 50
+    assert int(fauna.generation.max()) > 0
+    assert float(np.abs(fauna.learned).max()) > 0.0
 
 
 def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,3 +152,27 @@ def test_migration_must_advance_version(monkeypatch: pytest.MonkeyPatch) -> None
 def test_invalid_version_is_rejected() -> None:
     with pytest.raises(StateError, match="invalid schema_version"):
         migrate({"schema_version": "1"})
+
+
+def test_v5_brains_steer_as_before_after_the_upgrade(config: Config) -> None:
+    """v5 → v6 inserts zero weights for the plant-form and carrion senses: the old brain's drive is
+    unchanged, whatever the new senses say."""
+    raw = io.loads(_fixture(5))  # already upgraded to the current version by loading
+    fauna = World.restore(config, raw).fauna
+    weights = fauna.weights
+    rng = np.random.Generator(np.random.PCG64(2))
+    senses = rng.normal(0.0, 0.5, (fauna.count, brain.SENSE_COUNT)).astype(np.float32)
+    quiet = senses.copy()
+    quiet[:, [Sense.LOW_X, Sense.LOW_Y, Sense.WOODY_X, Sense.WOODY_Y, Sense.CARRION_X,
+              Sense.CARRION_Y]] = 0.0  # fmt: skip
+    np.testing.assert_array_equal(brain.think(weights, senses), brain.think(weights, quiet))
+    assert fauna.learned.shape == (fauna.count, brain.LEARNED_COUNT)
+
+
+def test_v6_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(6))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    fauna = World.restore(config, state).fauna
+    assert fauna.count > 50
+    assert fauna.weights.shape == (fauna.count, brain.WEIGHT_COUNT)

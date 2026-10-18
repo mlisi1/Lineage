@@ -92,8 +92,9 @@ CRITERIA: list[Criterion] = [
     ),
     Criterion(
         "M4.3",
-        f"Share of seeds with ≥ {PRESENT} herbivores and ≥ {PRESENT} predators at the end",
-        "both_diets.share_of_seeds",
+        f"Share of seeds with ≥ {PRESENT} herbivores and ≥ {PRESENT} predators, mean over "
+        "the final year",
+        "both_diets.last_year.mean_share_of_seeds",
         low=0.6,
     ),
     Criterion(

@@ -55,5 +55,6 @@ def figure_html(caption: str, uri: str, *, pixel: bool = False) -> str:
     The caption may contain markup (a colour legend); the alt text drops it.
     """
     kind = ' class="pixel"' if pixel else ""
-    alt = html.escape(re.sub(r"<[^>]+>", "", caption), quote=True)
+    # The caption is already escaped: unescape the text before escaping it as an attribute.
+    alt = html.escape(html.unescape(re.sub(r"<[^>]+>", "", caption)), quote=True)
     return f'<figure{kind}><img src="{uri}" alt="{alt}"><figcaption>{caption}</figcaption></figure>'

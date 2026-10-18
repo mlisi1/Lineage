@@ -373,6 +373,12 @@ class FaunaConfig:
     meat_energy: float
     diet_exponent: float
     attack_min_diet: float
+    carcass_share: float
+    carrion_decay_hours: float
+    scavenge_rate: float
+    carrion_scent_cells: int
+    instinct_scavenge: float
+    defence_toxicity: float
     hunt_below_energy_share: float
     reach_cells: float
     attack_rate: float
@@ -402,6 +408,22 @@ class FaunaConfig:
     instinct_land: float
     instinct_space: float
     founder_brain_sigma: float
+    learning: bool
+    learning_rate_max: float
+    exploration_max: float
+    trace_hours: float
+    exploration_hours: float
+    exploration_fade_hours: float
+    exploration_floor: float
+    baseline_hours: float
+    learned_max: float
+    forget_hours: float
+    meal_learning_gain: float
+    social_copy_max: float
+    perturbation_gain: float
+    meal_memory_hours: float
+    cost_learning: float
+    competence_hours: float
     herbivore_max_diet: float
     predator_min_diet: float
 
@@ -431,6 +453,16 @@ class FaunaConfig:
             "brood_max",
             "rare_slots",
             "immigrant_group_size",
+            "exploration_max",
+            "trace_hours",
+            "exploration_hours",
+            "exploration_fade_hours",
+            "carrion_decay_hours",
+            "baseline_hours",
+            "learned_max",
+            "forget_hours",
+            "meal_memory_hours",
+            "competence_hours",
         )
         for key in positive:
             check(getattr(self, key) > 0, f"{key} must be positive")
@@ -453,6 +485,9 @@ class FaunaConfig:
             "repro_energy_share",
             "birth_efficiency",
             "rare_gain_probability",
+            "exploration_floor",
+            "carcass_share",
+            "social_copy_max",
             "rare_loss_probability",
             "herbivore_max_diet",
             "predator_min_diet",
@@ -517,12 +552,18 @@ def _calendar(raw: Mapping[str, Any]) -> CalendarConfig:
 
 
 def _numeric_section(raw: Mapping[str, Any], name: str, cls: type[_T]) -> _T:
-    """Build a dataclass of int/float fields from section ``[name]``, checking every key."""
+    """Build a dataclass of int/float/bool fields from section ``[name]``, checking every
+    key."""
     types = {f.name: str(f.type) for f in fields(cast(Any, cls))}
     section = _section(raw, name, frozenset(types))
-    values: dict[str, int | float] = {}
+    values: dict[str, int | float | bool] = {}
     for key, kind in types.items():
         value = section[key]
+        if kind == "bool":
+            if not isinstance(value, bool):
+                raise ConfigError(f"[{name}] {key} must be true or false")
+            values[key] = value
+            continue
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ConfigError(f"[{name}] {key} must be a number")
         if kind == "int":

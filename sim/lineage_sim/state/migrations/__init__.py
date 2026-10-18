@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from lineage_sim.state.migrations import v0_to_v1, v1_to_v2, v2_to_v3, v3_to_v4
+from lineage_sim.state.migrations import v0_to_v1, v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6
 from lineage_sim.state.schema import SCHEMA_VERSION, StateError, Tree
 
 # from_version -> function producing a tree of from_version + 1
@@ -18,6 +18,8 @@ MIGRATIONS: dict[int, Callable[[Tree], Tree]] = {
     1: v1_to_v2.migrate,
     2: v2_to_v3.migrate,
     3: v3_to_v4.migrate,
+    4: v4_to_v5.migrate,
+    5: v5_to_v6.migrate,
 }
 
 

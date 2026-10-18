@@ -2,14 +2,16 @@
 
 Usage::
 
-    uv run python -m tools.report <milestone> --runs runs/<id> [--out reports]
+    uv run python -m tools.report <milestone> --runs runs/<id> [--baseline runs/<id>]
+        [--out reports]
 
 Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metrics.json``,
 ``config.toml`` and ``README.md``. Reports are regenerated, never hand-edited.
 
 Milestones with statistical behaviour have a module in ``tools/milestones/`` providing
 their metrics, acceptance criteria and figures; the others get a generic report with
-every recorded series.
+every recorded series. A milestone whose module sets ``NEEDS_BASELINE`` compares two
+runs (an ablation, M5) and needs ``--baseline``, the run with the mechanism off.
 
 Milestones measured on the device (R0) are built from the file the device benchmark
 wrote instead of a run: ``--runs`` is that file or the directory holding it. The file is
@@ -29,7 +31,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4, r0
+from tools.milestones import m2, m3, m4, m5, r0
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -66,7 +68,7 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4}
+MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4, "M5": m5}
 
 # Milestones measured on the device rather than by fast-forward: the module reads its
 # own evidence file and provides the header, metrics and sections from it.
@@ -77,6 +79,7 @@ CRITERIA: dict[str, list[Criterion]] = {
     "M2": m2.CRITERIA,
     "M3": m3.CRITERIA,
     "M4": m4.CRITERIA,
+    "M5": m5.CRITERIA,
     "R0": r0.CRITERIA,
 }
 
@@ -87,6 +90,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     **m2.SERIES_LABELS,
     **m3.SERIES_LABELS,
     **m4.SERIES_LABELS,
+    **m5.SERIES_LABELS,
 }
 
 
@@ -348,7 +352,12 @@ def _build_device_report(milestone: Milestone, source: Path, out_dir: Path) -> N
     (out_dir / module.EVIDENCE).write_text(json.dumps(evidence, indent=1) + "\n", encoding="utf-8")
 
 
-def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT) -> Path:
+def build_report(
+    milestone_id: str,
+    run_dir: Path,
+    out_root: Path = DEFAULT_OUT,
+    baseline_dir: Path | None = None,
+) -> Path:
     try:
         milestone = MILESTONES[milestone_id]
     except KeyError:
@@ -364,13 +373,31 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
         return out_dir
     run = read_run(run_dir)
     module = MODULES.get(milestone.mid)
+    compared: tuple[Run, ...] = ()
+    if module is not None and getattr(module, "NEEDS_BASELINE", False):
+        if baseline_dir is None:
+            raise ValueError(f"{milestone.mid} compares two runs: pass --baseline runs/<id>")
+        baseline = read_run(baseline_dir)
+        if baseline.manifest.seeds != run.manifest.seeds:
+            raise ValueError("the baseline run must use the same seeds")
+        compared = (baseline,)
     # A milestone module reports its own, curated numbers; the generic per-series spread
     # is for milestones without one.
-    metrics = compute_metrics(run) if module is None else module.metrics(run)
+    metrics = compute_metrics(run) if module is None else module.metrics(run, *compared)
     if module is not None:
-        sections: list[Section] = module.sections(run, run_dir)
+        sections: list[Section] = module.sections(run, run_dir, *compared)
     else:
         sections = generic_sections(run)
+    header, summary = run_header(run), run_summary(run)
+    for other in compared:
+        b = other.manifest
+        header.append(
+            (
+                "Baseline run",
+                f"{b.run_id}, config {b.config_hash}, commit {b.git_commit} ({b.notes})",
+            )
+        )
+        summary += f"\nBaseline `{b.run_id}`: config `{b.config_hash}` ({b.notes})."
 
     out_dir.mkdir(parents=True, exist_ok=True)
     m = run.manifest
@@ -382,9 +409,7 @@ def build_report(milestone_id: str, run_dir: Path, out_root: Path = DEFAULT_OUT)
         "sim_years": m.sim_years,
         "wall_time_s": m.wall_time_s,
     }
-    _write_report(
-        out_dir, milestone, run_header(run), run_summary(run), provenance, metrics, sections
-    )
+    _write_report(out_dir, milestone, header, summary, provenance, metrics, sections)
     (out_dir / "config.toml").write_text(run.config_text, encoding="utf-8")
     return out_dir
 
@@ -398,9 +423,12 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="run directory, runs/<id>; for R0 the device benchmark file or its directory",
     )
+    parser.add_argument(
+        "--baseline", type=Path, help="run with the mechanism off, for ablations (M5)"
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")
     args = parser.parse_args(argv)
-    out_dir = build_report(args.milestone, args.runs, args.out)
+    out_dir = build_report(args.milestone, args.runs, args.out, args.baseline)
     print(f"wrote {out_dir}")
 
 

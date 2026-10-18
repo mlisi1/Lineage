@@ -51,20 +51,39 @@ def _gradient(field: NDArray[np.float32], positions: Positions) -> tuple[Values,
     return along_x, along_y
 
 
-def smell_food(
-    food: NDArray[np.float32], positions: Positions, here: Values, reach: Values
-) -> tuple[Values, Values]:
-    """Direction in which there is more food than underfoot, out to the sense range.
+SmellPoints = list[tuple[float, NDArray[np.float32], Index, Index]]
 
-    Nearer food pulls harder; the result is 0 on uniform ground.
-    """
-    shape = (food.shape[0], food.shape[1])
-    pull = np.zeros_like(positions)
+
+def smell_points(positions: Positions, reach: Values, shape: tuple[int, int]) -> SmellPoints:
+    """The cells each creature smells, as (ring, direction, rows, columns) per sample.
+    They depend only on where creatures are and how far they sense, so one set serves
+    every field smelled in a tick."""
+    points: SmellPoints = []
     for ring in _SMELL_RINGS:
         for direction in _COMPASS:
             rows, columns = cells_of(positions + direction * (ring * reach)[:, None], shape)
-            better = np.maximum(food[rows, columns] - here, 0.0) / np.float32(ring)
-            pull += direction * better[:, None]
+            points.append((ring, direction, rows, columns))
+    return points
+
+
+def smell_food(
+    food: NDArray[np.float32],
+    positions: Positions,
+    here: Values,
+    reach: Values,
+    points: SmellPoints | None = None,
+) -> tuple[Values, Values]:
+    """Direction in which there is more food than underfoot, out to the sense range.
+
+    Nearer food pulls harder; the result is 0 on uniform ground. ``points`` are
+    `smell_points` of the same positions and reach, if already computed.
+    """
+    if points is None:
+        points = smell_points(positions, reach, (food.shape[0], food.shape[1]))
+    pull = np.zeros_like(positions)
+    for ring, direction, rows, columns in points:
+        better = np.maximum(food[rows, columns] - here, 0.0) / np.float32(ring)
+        pull += direction * better[:, None]
     # A direction with a strength in [0, 1): comparable to the other directional senses.
     strength = np.hypot(pull[:, 0], pull[:, 1])
     scale = np.tanh(strength * np.float32(_SMELL_GAIN)) / np.maximum(strength, 1e-6)
@@ -119,6 +138,9 @@ def sense(
     compatible: Flags,
     kills: Flags,
     biomass: NDArray[np.float32],
+    low: NDArray[np.float32],
+    woody: NDArray[np.float32],
+    carrion: NDArray[np.float32],
     land: NDArray[np.float32],
     offsets: NDArray[np.float32],
     distance: NDArray[np.float32],
@@ -126,15 +148,23 @@ def sense(
     """Everything the brains perceive this tick. ``offsets`` and ``distance`` come from
     `separations` of the same positions; ``ready`` marks creatures able to breed now
     (only they look for a mate) and ``hungry`` those with room for a meal (only they
-    look for prey)."""
+    look for prey). ``low`` and ``woody`` are ``biomass`` split by plant form: a
+    creature sees which plants grow where, not how well they feed it."""
     n = positions.shape[0]
     senses = np.zeros((n, SENSE_COUNT), dtype=np.float32)
     rows, columns = cells_of(positions, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.ENERGY] = energy / body.capacity
     senses[:, Sense.FOOD_HERE] = biomass[rows, columns]
+    points = smell_points(positions, body.sense_range, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.FOOD_X], senses[:, Sense.FOOD_Y] = smell_food(
-        biomass, positions, biomass[rows, columns], body.sense_range
+        biomass, positions, biomass[rows, columns], body.sense_range, points
     )
+    for field, sense_x, sense_y in ((low, Sense.LOW_X, Sense.LOW_Y),
+                                    (woody, Sense.WOODY_X, Sense.WOODY_Y),
+                                    (carrion, Sense.CARRION_X, Sense.CARRION_Y)):  # fmt: skip
+        senses[:, sense_x], senses[:, sense_y] = smell_food(
+            field, positions, field[rows, columns], body.sense_range, points
+        )
     senses[:, Sense.LAND_X], senses[:, Sense.LAND_Y] = _gradient(land, positions)
     senses[:, Sense.IN_WATER] = 1.0 - land[rows, columns]
 
@@ -200,6 +230,52 @@ def appetite(cfg: FaunaConfig, energy: Values, body: Phenotype, hours: float) ->
     useful = room / np.maximum(cfg.plant_energy * body.plant_efficiency, 1e-6)
     bite = body.graze_rate * np.float32(hours)
     return np.where(body.plant_efficiency > 0.01, np.minimum(bite, useful), 0.0).astype(np.float32)
+
+
+def spread(field: NDArray[np.float32], radius: int) -> NDArray[np.float32]:
+    """Mean of ``field`` over the (2 radius + 1)² box around every cell, counting cells
+    beyond the edge as empty: a scent that reaches beyond the cell it comes from, so that
+    the sparse sampling of `smell_food` finds point sources such as carcasses."""
+    if radius <= 0 or not field.any():
+        return field
+    width = 2 * radius + 1
+    summed = np.pad(field.astype(np.float64), ((radius + 1, radius), (radius + 1, radius)))
+    summed = summed.cumsum(0).cumsum(1)
+    box = (
+        summed[width:, width:] - summed[:-width, width:]
+        - summed[width:, :-width] + summed[:-width, :-width]
+    )  # fmt: skip
+    return (box / float(width * width)).astype(np.float32)
+
+
+def stamp(
+    scent: NDArray[np.float32], rows: Index, columns: Index, amounts: Values, radius: int
+) -> None:
+    """Add each amount's scent to ``scent`` in place: amount / (2 radius + 1)² over the box
+    around its cell (cells beyond the edge dropped), as `spread` would give for it. Keeps a
+    scent up to date as carrion is left and eaten, without spreading the whole map."""
+    height, width = int(scent.shape[0]), int(scent.shape[1])
+    share = 1.0 / float((2 * radius + 1) ** 2)
+    for row, column, amount in zip(rows.tolist(), columns.tolist(), amounts.tolist(), strict=True):
+        top, left = max(0, row - radius), max(0, column - radius)
+        bottom, right = min(height, row + radius + 1), min(width, column + radius + 1)
+        scent[top:bottom, left:right] += np.float32(amount * share)
+
+
+def share_out(field: NDArray[np.float32], rows: Index, columns: Index, demand: Values) -> Values:
+    """Creatures at cells (rows, columns) ask for ``demand`` of what ``field`` holds there;
+    several on one cell share it in proportion to their demand. Takes what they get out of
+    ``field`` (in place) and returns it."""
+    width = field.shape[1]
+    cells, group = np.unique(rows * width + columns, return_inverse=True)
+    cell_rows, cell_columns = cells // width, cells % width
+    asked = np.bincount(group, weights=demand, minlength=cells.size)
+    there = field[cell_rows, cell_columns].astype(np.float64)
+    share = np.minimum(1.0, there / np.maximum(asked, 1e-12))
+    got = (demand * share[group]).astype(np.float32)
+    left = there - np.bincount(group, weights=got, minlength=cells.size)
+    field[cell_rows, cell_columns] = np.maximum(left, 0.0).astype(np.float32)
+    return got
 
 
 def kill_chance(cfg: FaunaConfig, body: Phenotype, hunter: Index, prey: Index) -> Values:

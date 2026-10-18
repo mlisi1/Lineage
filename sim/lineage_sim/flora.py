@@ -99,6 +99,9 @@ class Cover(IntEnum):
 
 
 PLANT_FORMS = (Cover.LICHEN, Cover.GRASS, Cover.SHRUB, Cover.BROADLEAF, Cover.CONIFER)
+# What grazers can tell apart by sight (M5): low growth and woody growth.
+LOW_FORMS = (Cover.LICHEN, Cover.GRASS)
+WOODY_FORMS = (Cover.SHRUB, Cover.BROADLEAF, Cover.CONIFER)
 TREE_FORMS = (Cover.BROADLEAF, Cover.CONIFER)
 
 
@@ -274,6 +277,9 @@ class Flora:
         shape = terrain.height.shape
         self._biomass: Grid = np.zeros(shape, dtype=_F)
         self._genome: Bytes = np.zeros((GENE_COUNT, *shape), dtype=np.uint8)
+        # Plant form of every cell, derived from the genome; None when the genome changed.
+        self._forms: Bytes | None = None
+        self._form_masks: tuple[Mask, Mask] | None = None
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1], set by the presence model (M8); scales growth.
@@ -374,6 +380,25 @@ class Flora:
         self._biomass[cell_y, cell_x] = np.maximum(left, 0.0).astype(_F)
         return eaten
 
+    def forms(self) -> Bytes:
+        """Plant form (a `Cover` value among `PLANT_FORMS`) of every cell's genome,
+        whether or not anything grows there. Cached until the genome changes."""
+        if self._forms is None:
+            self._forms = classify_form(self._cfg, self.genes())
+        return self._forms
+
+    def form_masks(self) -> tuple[Mask, Mask]:
+        """Cells whose genome is low growth (lichen, grass) and woody growth (shrub,
+        trees). Cached with `forms`."""
+        if self._form_masks is None:
+            forms = self.forms()
+            self._form_masks = (np.isin(forms, LOW_FORMS), np.isin(forms, WOODY_FORMS))
+        return self._form_masks
+
+    def defence_at(self, ys: Index, xs: Index) -> Grid:
+        """Defence gene, in [0, 1], of the plants at cells (ys, xs)."""
+        return self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
+
     def grazeable(self) -> Grid:
         """Biomass grazers can reach in each cell (what they see as food)."""
         return np.maximum(self._biomass - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
@@ -461,6 +486,8 @@ class Flora:
         if biomass.shape != shape or genome.shape != (GENE_COUNT, *shape):
             raise ValueError(f"saved flora is {biomass.shape}, terrain is {shape}")
         self._biomass, self._genome = biomass, genome
+        self._forms = None
+        self._form_masks = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
@@ -472,6 +499,8 @@ class Flora:
         dead = self._biomass < _F(_DEATH_SHARE * self._cfg.seedling_biomass)
         self._biomass[dead] = 0.0
         self._genome[:, dead] = 0
+        self._forms = None
+        self._form_masks = None
         self._rare[dead] = 0
 
     def _disperse(self, rng: Generator, temp: Grid, elevation: Grid, dt_years: float) -> None:
@@ -589,6 +618,8 @@ class Flora:
                 rare = np.where(flip, rare ^ np.uint8(gene), rare).astype(np.uint8)
         kept = self._biomass[ys, xs] * _F(cfg.takeover_keep)
         self._genome[:, ys, xs] = genome
+        self._forms = None
+        self._form_masks = None
         self._rare[ys, xs] = rare
         self._biomass[ys, xs] = np.maximum(kept, _F(cfg.seedling_biomass))
 

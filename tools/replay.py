@@ -70,9 +70,14 @@ SWEEP_BASE = {
     Gene.BROOD: 0.0,
     Gene.HUE: 0.92,
     Gene.PATTERN: 0.0,
+    # The lifetime-learning genes (M5) have no look.
+    Gene.LEARNING: 0.0,
+    Gene.EXPLORATION: 0.0,
+    Gene.SOCIAL: 0.0,
 }
 SWEEP_STEPS = (0.0, 0.25, 0.5, 0.75, 1.0)
-# Every gene with a look, in the order the sheet shows them. BROOD has none.
+# Every gene with a look, in the order the sheet shows them. BROOD and the learning
+# genes have none.
 SWEEP_GENES = (
     Gene.SIZE,
     Gene.LIMBS,

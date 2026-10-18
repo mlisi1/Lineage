@@ -102,6 +102,30 @@ def median_lines(
     return fig
 
 
+def compare_bands(
+    x: np.ndarray,
+    arms: dict[str, tuple[np.ndarray, str]],
+    *,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+) -> Figure:
+    """Median and 10–90 % band across seeds for several runs of the same quantity (an
+    ablation), on one axis. ``arms`` maps a label to a (seeds, x) array and its colour."""
+    fig, ax = plt.subplots()
+    for label, (values, colour) in arms.items():
+        median, low, high = band_over_seeds(values)
+        ax.fill_between(x, low, high, color=colour, alpha=0.15, linewidth=0)
+        ax.plot(x, median, color=colour, label=f"{label} (median, 10–90 % band)")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.margins(x=0)
+    ax.legend(loc="best")
+    fig.tight_layout()
+    return fig
+
+
 def stacked_area(
     times: np.ndarray,
     layers: dict[str, tuple[np.ndarray, str]],

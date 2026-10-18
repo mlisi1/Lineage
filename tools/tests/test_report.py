@@ -1,5 +1,6 @@
 """The report tool turns a (dummy) run into a valid, self-contained report."""
 
+import html
 import json
 import math
 import re
@@ -9,6 +10,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from lineage_sim.fauna.genome import Gene
 
 from tools import report
 from tools.fastforward import fastforward
@@ -288,7 +290,7 @@ def test_m4_report_has_acceptance_and_creature_maps(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "m4"
     run = fastforward(1.25, [0, 1], run_dir, save_days=1000, snapshot_days=60, jobs=2)
     assert max(float(s["population"].max()) for s in run.series.values()) > 0, "no founders"
-    assert run.series[0]["_final_genes"].shape[1] == 11
+    assert run.series[0]["_final_genes"].shape[1] == len(Gene)
     out = build_report("M4", run_dir, tmp_path / "reports")
     assert out.name == "M4-fauna-evolution"
 
@@ -613,3 +615,12 @@ def test_r0_needs_every_view_from_one_profile(tmp_path: Path) -> None:
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     assert doc["best_profile"] == "default"
     assert _r0_statuses(doc) == dict.fromkeys(R0_IDS, "PASS")
+
+
+def test_figure_alt_text_is_escaped_once() -> None:
+    from tools.milestones.base import figure_html
+
+    caption = html.escape("the founders' winter & <b>")  # captions arrive HTML-safe
+    page = figure_html(caption, "data:image/svg+xml;base64,AA==")
+    alt = page.split('alt="', 1)[1].split('"', 1)[0]
+    assert alt == "the founders&#x27; winter &amp; &lt;b&gt;"

@@ -26,23 +26,26 @@ PRESENT = 3  # creatures of a diet class for it to count as present
 MIN_SEEDS_DRIFTING = 0.8
 
 
-def _run(seed: int) -> tuple[list[bool], bool, list[float]]:
-    """Per seed: extinction in each year, both diets present at the end, distance from
-    ancestors at the end of each year."""
+def _run(seed: int) -> tuple[list[bool], float, list[float]]:
+    """Per seed: extinction in each year, the share of the final year's weeks with both
+    diets present, distance from ancestors at the end of each year."""
     config = parse_config(CONFIG.read_text(encoding="utf-8"))
     world, _ = World.create(config, seed, EPOCH_UNIX_MS)
     extinct: list[bool] = []
     distance: list[float] = []
-    for _year in range(YEARS):
+    weeks_with_both = 0
+    for year in range(YEARS):
         died_out = False
         for _week in range(WEEKS_PER_YEAR):
             outputs = world.step(WEEK_S)
             died_out |= any(isinstance(o, PopulationExtinct) for o in outputs)
+            if year == YEARS - 1:
+                herbivores, _, predators = world.fauna.diet_counts()
+                weeks_with_both += herbivores >= PRESENT and predators >= PRESENT
         extinct.append(died_out)
         fauna = world.fauna
         distance.append(float(fauna.distance_from_ancestors().mean()) if fauna.count else 0.0)
-    herbivores, _, predators = world.fauna.diet_counts()
-    return extinct, herbivores >= PRESENT and predators >= PRESENT, distance
+    return extinct, weeks_with_both / WEEKS_PER_YEAR, distance
 
 
 @pytest.mark.slow
@@ -54,7 +57,9 @@ def test_fauna_acceptance_over_three_years() -> None:
     distance = np.array([r[2] for r in results])
 
     assert extinct.mean() < MAX_EXTINCT_SEED_YEARS, f"extinctions by seed and year: {extinct}"
-    assert both.mean() >= MIN_SEEDS_WITH_BOTH, f"herbivores and predators at year 3: {both}"
+    # Mean over the final year, not one day: predator packs boom and bust within months.
+    spread = f"share of year 3 with both diets, per seed: {both.round(2).tolist()}"
+    assert both.mean() >= MIN_SEEDS_WITH_BOTH, spread
     # Drift from the ancestors: further away at year 3 than at year 2.
     rising = distance[:, 2] > distance[:, 1]
     spread = f"mean distance per seed, years 2 and 3: {distance[:, 1:].round(3).tolist()}"

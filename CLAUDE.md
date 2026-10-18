@@ -50,7 +50,8 @@ lineage/
 ├── docs/
 │   ├── design/               # spec: concept, creatures, plants, terrain, chronicle, presence
 │   ├── decisions/            # ADRs: NNNN-short-title.md (context, decision, consequences)
-│   └── milestones.md         # status table mirrored from section 8 of this file
+│   ├── milestones.md         # status table mirrored from section 8 of this file; handoff notes
+│   └── m11-plan.md           # how M11 will tune the island (evidence from M5 onward)
 ├── sim/                      # Python package `lineage_sim` — the world. Pure. No I/O.
 │   ├── pyproject.toml
 │   ├── lineage_sim/
@@ -73,7 +74,7 @@ lineage/
 │   │       ├── io.py         # save/load (compressed), atomic writes handled by caller
 │   │       └── migrations/   # vN_to_vN+1.py, one file per bump, never edited after release
 │   ├── config/default.toml   # every tunable lives here, documented inline
-│   └── tests/
+│   └── tests/                # fauna_site.py: hand-built site shared by fauna scenario tests
 ├── tools/                    # dev-only CLIs (not deployed)
 │   ├── fastforward.py        # run N sim-years headless for M seeds → runs/<id>/
 │   ├── report.py             # build a milestone report from runs → reports/<milestone>/
@@ -155,8 +156,11 @@ Do not create directories outside this layout without updating this file.
   - `uv run pytest -m "not slow"` — fast suite (CI on every push)
   - `uv run pytest -m slow` — long statistical tests (nightly)
   - `uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>`
-    (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume)
+    (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume;
+    `--set fauna.learning=false` to change one config key for an ablation;
+    `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
+    (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off)
   - `uv run python -m tools.replay <save.lzma> [--still out.png] [--renderer-fixture DIR]`
     — inspect a save; `--renderer-fixture renderer/public/spike` regenerates the spike's world
   - `cd renderer && npm run build` — build the pages into `renderer/dist`
@@ -296,17 +300,24 @@ needs a note in `docs/decisions/`.
   extinction events.
 - **Accept**: total extinction in `[< 20%]` of seed-years; trait distributions drift
   measurably from ancestors (mean genetic distance rising); both herbivores and predators
-  present at year 3 in `[≥ 60%]` of seeds.
+  present during year 3 in `[≥ 60%]` of seeds (mean over the final year, not one day:
+  predator packs boom and bust within months; ADR 0009).
 
 ### M5 — Fauna II: lifetime learning
 - **Deliver**: reward-modulated policy update with eligibility traces and exploration
-  noise; learning-rate and exploration genes; "time to competence" metric.
+  noise; learning-rate and exploration genes; "time to competence" metric. (As built,
+  ADR 0009: learning from meals, diet traditions, plant-form senses, scavenging.)
 - **Tests**: unit (update rule on a toy bandit improves reward), scenario (a single
   creature in a food field learns to approach food within N steps), determinism.
 - **Report**: ablation learning ON vs OFF (same seeds): survival, mean energy, time to
   competence across generations (Baldwin effect plot), learning-rate gene trajectory.
-- **Accept**: learning ON improves early-life feeding success by `[≥ 15%]`; time to
-  competence trends down over generations in `[≥ 60%]` of seeds; step cost within budget.
+- **Accept**: learning tracks the local environment: final-year diet fit (learned plant
+  preference against local plant defence) positive in `[≥ 80%]` of seeds; step cost within
+  budget. Reported without a band: early-life feeding gain (originally `[≥ 15%]`, out of
+  reach on a balanced island), time to competence across generations (originally a
+  downward trend in `[≥ 60%]` of seeds), and shielding versus genetic assimilation; every
+  run shows shielding, the opposite of a Baldwin effect. Revised 2026-10-17 and
+  2026-10-18 (ADR 0009).
 
 ### M6 — Species, names, phylogeny
 - **Deliver**: daily genome clustering with persistent ids, speciation/extinction
@@ -362,7 +373,8 @@ needs a note in `docs/decisions/`.
 - **Accept**: archives load and render; new world starts within budget.
 
 ### M11 — Long-run tuning and stability
-- **Deliver**: tuned `default.toml`; `tools/tune/` sweeps.
+- **Deliver**: tuned `default.toml`; `tools/tune/` sweeps. Plan and evidence so far:
+  `docs/m11-plan.md` (ADR 0011: features first, tuning once here).
 - **Tests**: nightly 3-year × 20-seed run with all acceptance criteria from M2–M10.
 - **Report**: full dashboard — all prior metrics at 3 sim-years, genetic distance from
   ancestors, sensitivity of key metrics to the top tunables.

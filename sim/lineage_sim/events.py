@@ -145,3 +145,21 @@ class CreaturesArrived(OutputEvent):
 @dataclass(frozen=True)
 class PopulationExtinct(OutputEvent):
     """The last creature died."""
+
+
+@dataclass(frozen=True)
+class JuvenileGrown(OutputEvent):
+    """A creature's youth ended: it reached breeding age, or died before it (``died``).
+
+    Records how it fed while young: energy eaten and burnt from birth (or arrival) to
+    now, and the age at which it became competent (its day-averaged energy balance
+    stopped being negative), -1 if it never did. Generation 0 arrived from elsewhere.
+    """
+
+    creature_id: int
+    generation: int
+    age_h: float
+    eaten: float
+    burnt: float
+    competent_h: float
+    died: bool

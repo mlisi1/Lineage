@@ -6,151 +6,40 @@ import datetime as dt
 import json
 from dataclasses import fields, replace
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
+from fauna_site import COLUMNS, GRAZER, HUNTER, ROWS, TICK_S, Array, Site
+from fauna_site import genes_of as _genes
+from fauna_site import with_gene as _with
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from lineage_sim import clock
-from lineage_sim.config import Config, FaunaConfig
-from lineage_sim.events import CreaturesArrived, OutputEvent, PopulationExtinct
+from lineage_sim.config import Config
+from lineage_sim.events import CreaturesArrived, JuvenileGrown, PopulationExtinct
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype, phenotype
-from lineage_sim.fauna.population import Fauna
-from lineage_sim.flora import Flora
+from lineage_sim.flora import Gene as FloraGene
 from lineage_sim.state import io
-from lineage_sim.subsystem import Context
-from lineage_sim.terrain import Terrain
 from lineage_sim.world import World
 from numpy.random import PCG64, Generator
-from numpy.typing import NDArray
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
-TICK_S = 600.0
-# Final state of the default world, seed 42, after 520 days (same as fixture v4).
-GOLDEN_FAUNA_SEED_42 = "5b9e0194728c622dbe30ccc8189f578332cc8439fe7e617cb37bbe8bddf5c051"
-# …and three days later.
-GOLDEN_AFTER_THREE_DAYS = "4daf4c736681bd38ed4b438ef0b04412914b375843283aa84c6ec274c1dd1484"
+# Fixture v6: the default world, seed 42, after 520 days, as saved by the code of its day.
+GOLDEN_FAUNA_SEED_42 = "58a70db57eea635532ad0a456a3b66ccc91e8545748494c50a336bac3bca108d"
+# The fixture stepped three more days by today's code.
+GOLDEN_AFTER_THREE_DAYS = "b75bacf04d78859771d55aee330f115f924a8a98d1ca688fe495075f99277f51"
+# The default world, seed 42, after 520 days from bare rock with today's code. It equals
+# the fixture only while fauna behaves as it did when the fixture was saved.
+GOLDEN_BARE_ROCK_520_DAYS = "58a70db57eea635532ad0a456a3b66ccc91e8545748494c50a336bac3bca108d"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
-
-ROWS, COLUMNS = 40, 60
-SEA = 0.42
-Array = NDArray[np.float32]
-
-# Hand-made genomes, by gene:
-# SIZE DIET LIMBS SPEED ARMOUR SENSE AQUATIC JAW BROOD HUE PATTERN
-GRAZER = (0.30, 0.05, 0.50, 0.50, 0.20, 0.50, 0.00, 0.50, 0.00, 0.30, 0.30)
-HUNTER = (0.60, 0.90, 0.50, 0.80, 0.10, 0.70, 0.00, 0.90, 0.00, 0.90, 0.90)
-
-
-def _genes(*rows: tuple[float, ...]) -> Array:
-    return np.array(rows, dtype=np.float32)
-
-
-def _with(genome: tuple[float, ...], gene: Gene, value: float) -> tuple[float, ...]:
-    changed = list(genome)
-    changed[gene] = value
-    return tuple(changed)
 
 
 def _body(config: Config, *rows: tuple[float, ...]) -> Phenotype:
     return phenotype(config.fauna, _genes(*rows))
-
-
-class Site:
-    """A frozen terrain with flora and fauna on it; fauna ticks are driven by hand."""
-
-    def __init__(
-        self,
-        config: Config,
-        *,
-        biomass: float = 0.8,
-        water_from: int | None = None,
-        fauna: FaunaConfig | None = None,
-        seed: int = 1,
-    ) -> None:
-        self.config = config
-        # No strangers unless a test asks for them.
-        self.cfg = fauna or replace(config.fauna, immigrant_groups_per_year=0.0)
-        height = np.full((ROWS, COLUMNS), SEA + 0.10, dtype=np.float32)
-        if water_from is not None:
-            height[:, water_from:] = SEA - 0.2
-        self.terrain = Terrain(replace(config.terrain, grid_height=ROWS, grid_width=COLUMNS))
-        self.terrain.set_state(
-            {
-                "height": height,
-                "fertility": np.full((ROWS, COLUMNS), 0.5, dtype=np.float32),
-                "hotspots": np.zeros((0, 7)),
-                "sea_phases": [0.0, 0.0],
-                "sea_level": SEA,
-                "continent_seeds": [1, 2, 3],
-                "roughness_seed": 4,
-            }
-        )
-        self.flora = Flora(config.flora, self.terrain)
-        state = self.flora.get_state()
-        state["biomass"][height > SEA] = biomass
-        state["genome"][:, height > SEA] = 60
-        self.flora.set_state(state)
-        self.fauna = Fauna(self.cfg, self.terrain, self.flora)
-        self.rng = Generator(PCG64(seed))
-        self.t_ms = 0
-
-    def add(
-        self,
-        genome: tuple[float, ...],
-        positions: list[tuple[float, float]],
-        *,
-        energy_share: float = 0.9,
-        age_days: float = 20.0,
-        idle_days: float = 0.0,
-    ) -> NDArray[np.int64]:
-        """Put creatures with ``genome`` at ``positions``; returns their ids."""
-        count = len(positions)
-        genes = np.repeat(_genes(genome), count, axis=0)
-        state = self.fauna.get_state()
-        body = phenotype(self.cfg, genes)
-        ids = np.arange(state["next_id"], state["next_id"] + count, dtype=np.int64)
-        weights = brain.founder_weights(Generator(PCG64(7)), self.cfg, genes)
-        extra: dict[str, Any] = {
-            "positions": np.array(positions, dtype=np.float32),
-            "energy": energy_share * body.capacity,
-            "age_h": np.full(count, age_days * 24.0, dtype=np.float32),
-            "idle_h": np.full(count, idle_days * 24.0, dtype=np.float32),
-            "heading": np.zeros(count, dtype=np.float32),
-            "genes": genes,
-            "weights": weights,
-            "slots": np.zeros(count, dtype=np.uint16),
-            "ids": ids,
-            "origin": np.full(count, len(state["ancestors"]), dtype=np.int32),
-        }
-        for key, value in extra.items():
-            state[key] = np.concatenate([state[key], value])
-        state["ancestors"] = np.concatenate([state["ancestors"], _genes(genome)])
-        state["next_id"] = int(ids[-1]) + 1
-        self.fauna.set_state(state)
-        return ids
-
-    def run(self, hours: float, when: dt.date = dt.date(2026, 6, 1)) -> list[OutputEvent]:
-        outputs: list[OutputEvent] = []
-        for _ in range(round(hours * 3600 / TICK_S)):
-            self.t_ms += int(TICK_S * 1000)
-            unix_ms = clock.date_to_unix_ms(when) + self.t_ms
-            instant = clock.instant(unix_ms, 0, self.config.calendar)
-            outputs += self.fauna.tick(Context(self.t_ms, TICK_S, instant, self.rng))
-        return outputs
-
-    def alive(self, ids: NDArray[np.int64]) -> int:
-        return int(np.isin(ids, self.fauna.ids).sum())
-
-    def energy_share(self, ids: NDArray[np.int64]) -> Array:
-        mask = np.isin(self.fauna.ids, ids)
-        return self.fauna.energy[mask] / self.fauna.body.capacity[mask]
 
 
 # --- Genome -----------------------------------------------------------------------------
@@ -209,7 +98,7 @@ def test_bigger_is_costlier(config: Config) -> None:
 
 
 @pytest.mark.parametrize("gene", [Gene.SPEED, Gene.ARMOUR, Gene.SENSE, Gene.JAW, Gene.AQUATIC,
-                                  Gene.LIMBS])  # fmt: skip
+                                  Gene.LIMBS, Gene.LEARNING])  # fmt: skip
 def test_every_ability_raises_the_resting_burn(config: Config, gene: Gene) -> None:
     body = _body(config, _with(GRAZER, gene, 0.1), _with(GRAZER, gene, 0.9))
     assert float(body.basal_burn[1]) > float(body.basal_burn[0])
@@ -232,6 +121,18 @@ def test_what_each_gene_buys(config: Config) -> None:
     assert float(swim.land_speed[1]) < float(swim.land_speed[0])
     brood = pair(Gene.BROOD)
     assert (float(brood.brood[0]), float(brood.brood[1])) == (1.0, float(config.fauna.brood_max))
+    learning = pair(Gene.LEARNING)
+    assert float(learning.learning_rate[1]) > float(learning.learning_rate[0])
+    exploring = pair(Gene.EXPLORATION)
+    assert float(exploring.exploration[1]) > float(exploring.exploration[0])
+
+
+def test_without_learning_the_learning_genes_do_nothing(config: Config) -> None:
+    off = replace(config.fauna, learning=False)
+    keen = _with(_with(GRAZER, Gene.LEARNING, 1.0), Gene.EXPLORATION, 1.0)
+    body, plain = phenotype(off, _genes(keen)), phenotype(off, _genes(GRAZER))
+    assert float(body.learning_rate[0]) == float(body.exploration[0]) == 0.0
+    assert float(body.basal_burn[0]) == float(plain.basal_burn[0])
 
 
 def test_limbs(config: Config) -> None:
@@ -422,9 +323,31 @@ def test_energy_balance_of_one_tick(config: Config) -> None:
     travelled = float(np.hypot(*(fauna.positions[0] - start[0])))
     eaten = biomass - float(site.flora.biomass.sum(dtype=np.float64))
     burnt = float(body.basal_burn[0]) * hours + float(body.move_cost[0]) * travelled
-    gained = eaten * cfg.plant_energy * float(body.plant_efficiency[0])
+    defence = float(site.flora.genes()[FloraGene.DEFENCE, 20, 20])
+    value = (
+        cfg.plant_energy * float(body.plant_efficiency[0]) * (1 - cfg.defence_toxicity * defence)
+    )
+    gained = eaten * value
     assert eaten > 0
     assert float(fauna.energy[0]) - energy == pytest.approx(gained - burnt, abs=0.02)
+
+
+def test_defended_plants_feed_less(config: Config) -> None:
+    """Defence refuses part of each bite and poisons what is eaten: a day on defended
+    pasture feeds a grazer far less than a day on undefended pasture."""
+
+    def day_on(defence: int) -> float:
+        site = Site(config)
+        plants = site.flora.get_state()
+        plants["genome"][FloraGene.DEFENCE] = defence
+        site.flora.set_state(plants)
+        site.add(GRAZER, [(20.0, 20.0)], energy_share=0.4)
+        site.run(24.0)
+        return float(site.energy_share(site.fauna.ids)[0])
+
+    undefended, defended = day_on(0), day_on(200)
+    assert undefended > 0.4  # it grew fat
+    assert defended < undefended - 0.1
 
 
 def test_starving_creature_dies(config: Config) -> None:
@@ -492,7 +415,7 @@ def test_compatible_pair_breeds(config: Config) -> None:
 
 def test_incompatible_pair_does_not_breed(config: Config) -> None:
     site = Site(config)
-    other = _with(_with(GRAZER, Gene.HUE, 0.95), Gene.PATTERN, 0.95)  # too different
+    other = _with(_with(_with(GRAZER, Gene.HUE, 1.0), Gene.PATTERN, 1.0), Gene.SOCIAL, 1.0)
     assert float(gn.distance(_genes(GRAZER), _genes(other))[0]) > config.fauna.compat_distance
     site.add(GRAZER, [(20.0, 20.0)], idle_days=3.0)
     site.add(other, [(20.4, 20.0)], idle_days=3.0)
@@ -545,7 +468,9 @@ def test_hungry_hunter_kills_and_feeds(config: Config) -> None:
     assert site.alive(hunter) == 1
     body = _body(config, GRAZER, HUNTER)
     meal = cfg.meat_energy * float(body.mass[0]) * float(body.meat_efficiency[1])
-    assert float(site.energy_share(hunter)[0]) > 0.3 + 0.5 * meal / float(body.capacity[1])
+    # Fed by at least half the meal, or full (a meal can be worth more than its room).
+    expected = min(0.3 + 0.5 * meal / float(body.capacity[1]), 0.9)
+    assert float(site.energy_share(hunter)[0]) > expected
 
 
 def test_fed_hunter_leaves_prey_alone(config: Config) -> None:
@@ -579,6 +504,8 @@ def test_founders_wait_for_plants_and_for_spring(config: Config) -> None:
 
     green = Site(config, fauna=quick)
     outputs = green.run(24.0 * 4)
+    # Founders arrive at random ages; the youngest grow up during these days.
+    outputs = [o for o in outputs if not isinstance(o, JuvenileGrown)]
     assert [type(o) for o in outputs] == [CreaturesArrived]
     arrival = outputs[0]
     assert isinstance(arrival, CreaturesArrived)
@@ -610,14 +537,14 @@ def test_strangers_join_an_inhabited_world(config: Config) -> None:
 
 @pytest.mark.slow
 def test_golden_hash_from_bare_rock(config: Config) -> None:
-    """The whole history, 520 days from creation, is reproducible (and is fixture v4)."""
+    """The whole history, 520 days from creation, is reproducible."""
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(520 * DAY_S)
-    assert world.state_hash() == GOLDEN_FAUNA_SEED_42
+    assert world.state_hash() == GOLDEN_BARE_ROCK_520_DAYS
 
 
 def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v4.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v6.lzma"
     hashes: list[str] = []
     for _ in range(2):
         world = World.restore(config, io.loads(fixture.read_bytes()))
@@ -629,7 +556,7 @@ def test_golden_hash_of_an_inhabited_world(config: Config) -> None:
 
 
 def test_save_load_continue_with_creatures(config: Config) -> None:
-    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v4.lzma"
+    fixture = Path(__file__).resolve().parent / "fixtures" / "saves" / "v6.lzma"
     straight = World.restore(config, io.loads(fixture.read_bytes()))
     straight.step(3 * DAY_S)
     assert straight.state_hash() == GOLDEN_AFTER_THREE_DAYS
@@ -675,3 +602,114 @@ def test_days_with_creatures_keep_every_invariant(config: Config, seed: int) -> 
         tally = fauna.tally
         assert n == 12 + tally.arrivals + tally.births - tally.deaths
         assert sum(fauna.diet_counts()) == n
+
+
+# --- Carrion -------------------------------------------------------------------------------
+
+SCAVENGER = _with(GRAZER, Gene.DIET, 0.5)  # digests meat about as well as plants
+
+
+def test_a_kill_leaves_what_the_hunter_could_not_eat(config: Config) -> None:
+    site = Site(config)
+    prey = site.add(GRAZER, [(20.5, 20.0)])
+    site.add(HUNTER, [(20.0, 20.0)], energy_share=0.6)  # hungry, but without room for all
+    body = site.fauna.body
+    prey_mass = float(body.mass[0])
+    site.run(6.0)
+    assert site.alive(prey) == 0
+    left = float(site.fauna.carrion.sum())
+    assert 0.0 < left < prey_mass  # part was eaten, the rest lies there (rotting a little)
+
+
+def test_the_starved_leave_a_carcass_and_the_drowned_do_not(config: Config) -> None:
+    starving = Site(config, biomass=0.0)
+    starving.add(GRAZER, [(20.0, 20.0)], energy_share=0.01)
+    mass = float(starving.fauna.body.mass[0])
+    starving.run(3.0)
+    assert starving.fauna.count == 0
+    share = config.fauna.carcass_share
+    # Rotting for at most a couple of hours since.
+    assert float(starving.fauna.carrion.sum()) == pytest.approx(share * mass, rel=0.05)
+    assert float(starving.fauna.carrion.max()) > 0.0
+
+    sea = Site(config, water_from=0)
+    sea.add(GRAZER, [(20.0, 20.0)], energy_share=0.01)
+    sea.run(3.0)
+    assert sea.fauna.tally.drowned == 1
+    assert float(sea.fauna.carrion.sum()) == 0.0
+
+
+def test_carrion_rots(config: Config) -> None:
+    site = Site(config, biomass=0.0)
+    site.add(GRAZER, [(10.0, 10.0)])  # someone alive, so the fauna ticks
+    state = site.fauna.get_state()
+    state["carrion"][30, 40] = 2.0
+    site.fauna.set_state(state)
+    site.run(config.fauna.carrion_decay_hours)
+    assert float(site.fauna.carrion[30, 40]) == pytest.approx(2.0 * np.exp(-1.0), rel=0.02)
+
+
+def test_meat_eaters_scavenge_and_plant_eaters_do_not(config: Config) -> None:
+    def fed_on_carrion(genome: tuple[float, ...]) -> tuple[float, float]:
+        site = Site(config, biomass=0.0)  # nothing else to eat
+        site.add(genome, [(20.0, 20.0)], energy_share=0.3)
+        state = site.fauna.get_state()
+        state["carrion"][20, 20] = 5.0
+        state["weights"][:] = 0.0  # stay put on the carcass
+        site.fauna.set_state(state)
+        before = float(site.energy_share(site.fauna.ids)[0])
+        site.run(2.0)
+        return float(site.energy_share(site.fauna.ids)[0]) - before, float(
+            site.fauna.carrion[20, 20]
+        )
+
+    gained, left = fed_on_carrion(SCAVENGER)
+    assert gained > 0.05
+    assert left < 5.0 * np.exp(-2.0 / config.fauna.carrion_decay_hours) - 0.1
+    gained_grazer, left_grazer = fed_on_carrion(GRAZER)
+    assert gained_grazer < 0.0  # it only burns
+    assert left_grazer == pytest.approx(5.0 * np.exp(-2.0 / config.fauna.carrion_decay_hours))
+
+
+def test_carrion_is_sensed_in_its_direction(config: Config) -> None:
+    site = Site(config, biomass=0.0)
+    site.add(SCAVENGER, [(20.0, 20.0)])
+    state = site.fauna.get_state()
+    state["carrion"][20, 24] = 3.0  # four cells east
+    site.fauna.set_state(state)
+    fauna = site.fauna
+    offsets, distance = creature.separations(fauna.positions)
+    land = site.terrain.land.astype(np.float32)
+    zero = np.zeros_like(site.flora.biomass)
+    senses = creature.sense(
+        fauna.config, fauna.positions, fauna.energy, fauna.body, fauna.adult, fauna.ready,
+        fauna.hungry, np.zeros((1, 1), bool), np.zeros((1, 1), bool), zero, zero, zero,
+        creature.spread(fauna.carrion, config.fauna.carrion_scent_cells), land, offsets,
+        distance,
+    )  # fmt: skip
+    assert float(senses[0, Sense.CARRION_X]) > 0.1
+    assert abs(float(senses[0, Sense.CARRION_Y])) < 0.05
+
+
+def test_spread_keeps_the_amount_away_from_edges() -> None:
+    field = np.zeros((20, 30), dtype=np.float32)
+    field[10, 15] = 9.0
+    scent = creature.spread(field, 1)
+    assert float(scent[10, 15]) == pytest.approx(1.0)
+    assert float(scent[9, 14]) == pytest.approx(1.0)
+    assert float(scent[10, 17]) == 0.0
+    assert float(scent.sum()) == pytest.approx(9.0)
+
+
+def test_the_scent_follows_the_carrion(config: Config) -> None:
+    """The scent kept up to date as carrion is left, eaten and rots equals the carrion
+    spread out afresh."""
+    site = Site(config, biomass=0.0)
+    site.add(SCAVENGER, [(20.0, 20.0)], energy_share=0.3)
+    site.add(GRAZER, [(30.0, 25.0), (2.0, 2.0)], energy_share=0.02)  # will starve
+    site.run(12.0)
+    fauna = site.fauna
+    assert float(fauna.carrion.sum()) > 0.0
+    fresh = creature.spread(fauna.carrion, config.fauna.carrion_scent_cells)
+    kept = fauna.get_state()["scent"]
+    np.testing.assert_allclose(kept, fresh, atol=1e-5)

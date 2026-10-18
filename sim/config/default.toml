@@ -412,9 +412,13 @@ graze_rate = 0.05
 graze_jaw_floor = 0.5
 # Energy in one full cell of plant biomass, and per unit of prey mass.
 plant_energy = 300.0
-meat_energy = 900.0
+meat_energy = 1600.0
 # Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
 diet_exponent = 1.0
+# Plant defence also poisons: energy from plants is multiplied by
+# 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
+# than it gives). Grazers cannot sense defence, only plant form (M5).
+defence_toxicity = 0.5
 # Creatures with at least this diet gene hunt. Reach of a bite (cells). Attacks per hour
 # on a prey in reach. Attack power = mass × (jaw_floor + jaw gene); defence = mass ×
 # (1 + armour_strength × armour gene). A hit kills with probability
@@ -430,6 +434,19 @@ armour_strength = 2.5
 attack_softness = 0.35
 # Energy an attempt costs the hunter, per unit mass.
 attack_cost = 1.5
+
+# --- Carrion (scavenging) ---
+# The dead leave carrion on land, in units of meat mass: what a hunter could not eat of
+# its kill, and carcass_share of the body of those that starved or died of age (the
+# drowned are lost). It rots with time constant carrion_decay_hours. Creatures that digest
+# meat (diet gene ≥ attack_min_diet) eat it where they stand, at scavenge_rate ×
+# mass^metabolic_exponent meat mass per hour, for meat_energy × their meat efficiency.
+carcass_share = 0.5
+carrion_decay_hours = 72.0
+scavenge_rate = 0.5
+# Carrion is smelled through a scent spread over the box of this half-width (cells)
+# around it: a carcass is a single cell, which the sparse sampling of smell would miss.
+carrion_scent_cells = 3
 
 # --- Reproduction ---
 # Two adults can breed when their body genomes differ by at most compat_distance (mean
@@ -468,8 +485,63 @@ instinct_flee = 2.0
 instinct_mate = 2.5
 instinct_land = 1.5
 instinct_space = 1.2
+# Founders head for carrion in proportion to their diet gene.
+instinct_scavenge = 1.6
 # Standard deviation of the other weights of a founder's brain.
 founder_brain_sigma = 0.1
+
+# --- Lifetime learning (M5) ---
+# Brains also learn during life. Noise is added to the steering drive; an eligibility
+# trace remembers which inputs and which noise went together; the creature's energy
+# balance this tick, above or below its running average, then strengthens or weakens
+# those weights. Only the direct and output weights learn, and what is learned is not
+# inherited: evolution sees only the innate weights. false turns it all off (no noise,
+# no learning, no cost): the M4 brain, and the OFF arm of the M5 ablation.
+learning = true
+# Learning rate per hour at learning gene 1: weight change per unit of trace per unit of
+# reward (reward: energy balance as a share of capacity per hour, minus its average).
+learning_rate_max = 3.0
+# Standard deviation of the noise added to each steering drive at exploration gene 1.
+exploration_max = 1.0
+# Time constant (hours) over which that noise changes: a creature tries a different way
+# for a while (white noise every tick would average out before it went anywhere).
+exploration_hours = 1.0
+# Exploration fades with age, like juvenile play: full at birth, then toward
+# exploration_floor of it with this time constant (hours). Youths learn while they play;
+# adults stop paying for noise they no longer learn much from.
+exploration_fade_hours = 48.0
+exploration_floor = 0.25
+# Time constant (hours) over which the eligibility trace fades: how long after an action
+# its consequences still count.
+trace_hours = 2.0
+# Time constant (hours) of the running average energy balance used as the reward baseline.
+baseline_hours = 6.0
+# Largest change learning can make to any one weight.
+learned_max = 3.0
+# Time constant (hours) with which learned changes fade when nothing reinforces them.
+# Without it, weights that no reward depends on random-walk to the limit.
+forget_hours = 72.0
+# Learning from meals (M5, like taste aversion): after each bite of plants the learned
+# gain on that plant form's sense (low or woody growth) moves by learning rate ×
+# meal_learning_gain × share of a full bite × (this bite's value − the creature's usual
+# meal value). Value is the share of the plant's energy really got, after toxins; the
+# usual value is a running average over meal_memory_hours.
+meal_learning_gain = 1.0
+# Weight of trial-and-error learning (node perturbation through steering noise) on all
+# learned gains, × learning rate. 0 leaves learning from meals alone.
+perturbation_gain = 0.25
+meal_memory_hours = 24.0
+# Diet traditions (social learning): at birth a newborn takes on social_copy_max × its
+# SOCIAL gene of its mother's learned plant-form gains (only those). Its own meals then
+# confirm or correct them, and forgetting fades what is never confirmed. Copying is free;
+# whether it pays is left to evolution.
+social_copy_max = 1.0
+# Basal-burn cost of the learning gene, like the body costs above (× gene): a brain
+# that learns is expensive tissue.
+cost_learning = 0.05
+# A creature is competent from the first time its energy balance, averaged with this
+# time constant (hours), stops being negative: it feeds itself.
+competence_hours = 24.0
 
 # --- Bookkeeping ---
 # Diet classes for statistics: herbivore up to the first, predator from the second.

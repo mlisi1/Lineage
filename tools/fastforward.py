@@ -5,6 +5,7 @@ Usage::
     uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>
         [--start 2026-01-01] [--config sim/config/default.toml] [--jobs N]
         [--save-days 1] [--sample-days 7] [--snapshot-days 30] [--power-cut-day N]
+        [--set fauna.learning=false] [--fork-days 60 --fork-length 28]
 
 Each seed's world is stepped one sim-day at a time, exactly as the device would advance
 it. Every ``--save-days`` it is saved to ``saves/<seed>.lzma`` (atomic replace); every
@@ -14,6 +15,14 @@ the height grid is stored (8-bit) in ``snapshots/<seed>.npz`` for maps and anima
 With ``--power-cut-day N`` the in-memory world is discarded half a day after day N and the
 run resumes from the last save on disk; the final state hash must match an uninterrupted
 run. Final state hashes are recorded in the manifest.
+
+``--set section.key=value`` changes one key of the config (a TOML value), for ablations
+such as ``--set fauna.learning=false``; the run's ``config.toml`` records the change.
+
+With ``--fork-days N`` the inhabited world is forked every N days: the same state is run
+on for ``--fork-length`` days twice, with lifetime learning on and off, and the youths of
+creatures born in the first half of that time are recorded per arm (``_fork``). Forks
+leave the main world untouched.
 """
 
 from __future__ import annotations
@@ -21,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
+import re
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -33,14 +43,18 @@ from lineage_sim.events import (
     CreaturesArrived,
     EarthquakeStruck,
     FireEnded,
+    JuvenileGrown,
     LandmassesRejoined,
     LandmassSplit,
     OutputEvent,
     PopulationExtinct,
     VolcanoErupted,
 )
+from lineage_sim.fauna import brain
+from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import Gene
-from lineage_sim.flora import Cover, Rare
+from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Cover, Rare
+from lineage_sim.flora import Gene as PlantGene
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -73,6 +87,110 @@ EVENT_SERIES: dict[str, type[OutputEvent]] = {
 # Arrays that are not sampled series (their length differs from the time axis) carry
 # this prefix; reports read them by name.
 EXTRA_PREFIX = "_"
+# Columns of the youth table (``_youth``): one row per creature born on the island whose
+# youth ended, from its JuvenileGrown event. ``competent_h`` is -1 if it never was.
+YOUTH_COLUMNS = ("day", "generation", "age_h", "eaten", "burnt", "competent_h", "died")
+# Columns of the fork table (``_fork``): one row per youth of a forked world; ``learning``
+# is 1 for the arm with lifetime learning on.
+FORK_COLUMNS = ("fork_day", "learning", *YOUTH_COLUMNS[1:])
+DAY_MS = DAY_S * 1000
+_LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
+_WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
+
+
+def override_config(text: str, assignment: str) -> str:
+    """Config text with one key replaced: ``assignment`` is ``section.key=value`` and the
+    value is TOML (``false``, ``0.5``). The key must already exist in its section."""
+    target, sep, value = assignment.partition("=")
+    section, dot, key = target.strip().partition(".")
+    if not (sep and dot and section and key and value.strip()):
+        raise ValueError(f"expected section.key=value, got {assignment!r}")
+    out: list[str] = []
+    current, replaced = "", False
+    for line in text.splitlines(keepends=True):
+        header = re.match(r"\s*\[([^\]]+)\]", line)
+        if header:
+            current = header.group(1).strip()
+        elif current == section and re.match(rf"\s*{re.escape(key)}\s*=", line):
+            line = f"{key} = {value.strip()}\n"
+            replaced = True
+        out.append(line)
+    if not replaced:
+        raise ValueError(f"no key {key!r} in section [{section}]")
+    changed = "".join(out)
+    parse_config(changed)  # fail early on a bad value
+    return changed
+
+
+# Diet fit (M5): half-width, in cells, of the neighbourhood whose plants a grazer is
+# compared with; and how many cells of each form it must hold to count.
+FIT_RADIUS = 8
+FIT_MIN_CELLS = 5
+
+
+def _box_sum(grid: np.ndarray, radius: int) -> np.ndarray:
+    """Sum of ``grid`` over the (2 radius + 1)² box around every cell (clipped at edges)."""
+    padded = np.pad(grid.astype(np.float64), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    h, w = grid.shape
+    y0 = np.clip(np.arange(h) - radius, 0, h)
+    y1 = np.clip(np.arange(h) + radius + 1, 0, h)
+    x0 = np.clip(np.arange(w) - radius, 0, w)
+    x1 = np.clip(np.arange(w) + radius + 1, 0, w)
+    return padded[y1][:, x1] - padded[y0][:, x1] - padded[y1][:, x0] + padded[y0][:, x0]
+
+
+def diet_fit(world: World) -> float:
+    """Correlation, over plant eaters living among both plant forms, between what each has
+    learned (gain on low growth minus gain on woody growth) and how much more defended the
+    woody plants are than the low ones around it. Positive: they learned their place."""
+    fauna, flora = world.fauna, world.flora
+    grazer = fauna.genes[:, Gene.DIET] <= fauna.config.herbivore_max_diet
+    if np.count_nonzero(grazer) < 10:
+        return np.nan
+    food = flora.grazeable() > 0.05
+    forms = flora.forms()
+    defence = flora.genes()[PlantGene.DEFENCE]
+    low = food & np.isin(forms, LOW_FORMS)
+    woody = food & np.isin(forms, WOODY_FORMS)
+    n_low, n_woody = _box_sum(low, FIT_RADIUS), _box_sum(woody, FIT_RADIUS)
+    d_low = _box_sum(defence * low, FIT_RADIUS) / np.maximum(n_low, 1)
+    d_woody = _box_sum(defence * woody, FIT_RADIUS) / np.maximum(n_woody, 1)
+    ys = np.clip(np.rint(fauna.positions[:, 1]), 0, defence.shape[0] - 1).astype(np.intp)
+    xs = np.clip(np.rint(fauna.positions[:, 0]), 0, defence.shape[1] - 1).astype(np.intp)
+    mixed = grazer & (n_low[ys, xs] >= FIT_MIN_CELLS) & (n_woody[ys, xs] >= FIT_MIN_CELLS)
+    if np.count_nonzero(mixed) < 10:
+        return np.nan
+    difference = (d_woody - d_low)[ys, xs][mixed]
+    learned = fauna.learned[mixed]
+    preference = learned[:, _LOW_GAIN] - learned[:, _WOODY_GAIN]
+    if difference.std() == 0 or preference.std() == 0:
+        return np.nan
+    return float(np.corrcoef(difference, preference)[0, 1])
+
+
+def form_bias(world: World) -> tuple[float, float]:
+    """Mean plant-form bias of the plant eaters, (inherited, learned): how much more they
+    follow low growth than woody growth, from the inherited direct weights and from what
+    they have learned. Shows whether what is learned becomes innate (genetic
+    assimilation) or makes the genes unnecessary (shielding)."""
+    fauna = world.fauna
+    grazer = fauna.genes[:, Gene.DIET] <= fauna.config.herbivore_max_diet
+    if not grazer.any():
+        return np.nan, np.nan
+    weights = fauna.weights[grazer]
+
+    def innate(sense_x: int) -> np.ndarray:
+        # Mean of the two direct weights a gain on this sense adds to (x from x, y from y).
+        return (weights[:, sense_x] + weights[:, brain.SENSE_COUNT + sense_x + 1]) / 2.0
+
+    inherited = innate(int(Sense.LOW_X)) - innate(int(Sense.WOODY_X))
+    learned = fauna.learned[grazer, _LOW_GAIN] - fauna.learned[grazer, _WOODY_GAIN]
+    return float(inherited.mean()), float(learned.mean())
+
+
+def youth_row(event: JuvenileGrown) -> list[float]:
+    return [event.t_ms / DAY_MS, event.generation, event.age_h, event.eaten, event.burnt,
+            event.competent_h, float(event.died)]  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -86,6 +204,8 @@ class SeedJob:
     sample_days: int
     snapshot_days: int
     power_cut_day: int | None
+    fork_days: int = 0
+    fork_length: int = 28
 
 
 def epoch_unix_ms(start: dt.date) -> int:
@@ -107,6 +227,7 @@ class Probes:
         self._steps = 0
         self.fire_sizes: list[int] = []
         self.burnt_cells = 0
+        self.youths: list[list[float]] = []
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
         for name, kind in EVENT_SERIES.items():
@@ -115,6 +236,8 @@ class Probes:
             if isinstance(output, FireEnded):
                 self.fire_sizes.append(output.cells)
                 self.burnt_cells += output.cells
+            elif isinstance(output, JuvenileGrown) and output.generation > 0:
+                self.youths.append(youth_row(output))
         self._step_s += step_s
         self._steps += 1
 
@@ -175,7 +298,15 @@ class Probes:
             "deaths_drowned": float(tally.drowned),
             "genetic_distance": float(fauna.distance_from_ancestors().mean()) if n else np.nan,
             "energy_share": float((fauna.energy / fauna.body.capacity).mean()) if n else np.nan,
+            "generation": float(fauna.generation.mean()) if n else np.nan,
+            "diet_fit": diet_fit(world) if n else np.nan,
         }
+        row["form_bias_inherited"], row["form_bias_learned"] = (
+            form_bias(world) if n else (np.nan, np.nan)
+        )
+        for k, sense in enumerate(brain.FOLLOWED):
+            name = (sense.name or "").removesuffix("_X").lower()
+            row[f"learned_{name}"] = float(fauna.learned[:, k].mean()) if n else np.nan
         for gene in Gene:
             mean = float(fauna.genes[:, gene].mean()) if n else np.nan
             row[f"gene_{gene.name.lower()}"] = mean
@@ -194,10 +325,33 @@ class Probes:
     def series(self) -> dict[str, np.ndarray]:
         series = {name: np.array(values) for name, values in self.rows.items()}
         series[EXTRA_PREFIX + "fire_sizes"] = np.array(self.fire_sizes, dtype=np.int64)
+        series[EXTRA_PREFIX + "youth"] = np.array(self.youths, dtype=np.float64).reshape(
+            -1, len(YOUTH_COLUMNS)
+        )
         return series
 
     def final_genes(self, world: World) -> np.ndarray:
         return world.fauna.genes.copy()
+
+
+def fork(config_text: str, world: World, days: int) -> list[list[float]]:
+    """Run copies of ``world`` on for ``days`` with lifetime learning on and off. Returns
+    a `FORK_COLUMNS` row for every youth of a creature born in the first half of that
+    time (so that each had time to grow up)."""
+    snapshot = world.snapshot()
+    start_day = world.t_ms / DAY_MS
+    rows: list[list[float]] = []
+    for learning in (True, False):
+        text = override_config(config_text, f"fauna.learning={'true' if learning else 'false'}")
+        arm = World.restore(parse_config(text), snapshot)
+        for _ in range(days):
+            for output in arm.step(DAY_S):
+                if not isinstance(output, JuvenileGrown) or output.generation == 0:
+                    continue
+                born = output.t_ms / DAY_MS - output.age_h / 24.0
+                if start_day <= born < start_day + days / 2:
+                    rows.append([round(start_day), float(learning), *youth_row(output)[1:]])
+    return rows
 
 
 def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
@@ -214,6 +368,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     cap = config.fauna.population_cap + config.fauna.predator_cap
     snapshot_sea: list[float] = []
     snapshot_days: list[int] = []
+    forks: list[list[float]] = []
+    can_fork = job.fork_days > 0 and config.fauna.learning
 
     def save() -> float:
         data = io.dumps(world.snapshot())
@@ -248,6 +404,13 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         if day % job.save_days == 0 or day == job.days:
             save_kib = save()
         record(day, save_kib)
+        if (
+            can_fork
+            and day % job.fork_days == 0
+            and day + job.fork_length <= job.days
+            and world.fauna.count > 0
+        ):
+            forks += fork(job.config_text, world, job.fork_length)
         if day == job.power_cut_day:
             world.step(DAY_S / 2)  # lost: the power fails before the next save
             world = World.restore(config, io.loads(save_path.read_bytes()))
@@ -269,6 +432,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         )
     series = probes.series()
     series[EXTRA_PREFIX + "final_genes"] = probes.final_genes(world)
+    series[EXTRA_PREFIX + "fork"] = np.array(forks, dtype=np.float64).reshape(-1, len(FORK_COLUMNS))
     return series, world.state_hash()
 
 
@@ -284,6 +448,9 @@ def fastforward(
     sample_days: int = 7,
     snapshot_days: int = 30,
     jobs: int = 1,
+    overrides: tuple[str, ...] = (),
+    fork_days: int = 0,
+    fork_length: int = 28,
 ) -> Run:
     if years <= 0:
         raise ValueError(f"years must be positive, got {years}")
@@ -294,13 +461,17 @@ def fastforward(
     days = max(1, round(years * DAYS_PER_YEAR))
     if power_cut_day is not None and not 0 < power_cut_day < days:
         raise ValueError(f"power cut day must be within 1..{days - 1}")
+    if fork_days < 0 or fork_length < 2:
+        raise ValueError("fork days must not be negative, and a fork must last two days")
     config_text = config_path.read_text(encoding="utf-8")
+    for assignment in overrides:
+        config_text = override_config(config_text, assignment)
     parse_config(config_text)  # fail early on a bad config
     started = time.perf_counter()
     todo = [
         SeedJob(
             seed, days, config_text, start, out_dir, save_days, sample_days, snapshot_days,
-            power_cut_day,
+            power_cut_day, fork_days, fork_length,
         )
         for seed in seeds
     ]  # fmt: skip
@@ -320,7 +491,9 @@ def fastforward(
         wall_time_s=round(time.perf_counter() - started, 3),
         created_utc=dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         notes=f"start {start.isoformat()}; {jobs} job(s)"
-        + (f"; power cut after day {power_cut_day}" if power_cut_day else ""),
+        + (f"; power cut after day {power_cut_day}" if power_cut_day else "")
+        + "".join(f"; {assignment}" for assignment in overrides)
+        + (f"; forks every {fork_days} days for {fork_length}" if fork_days else ""),
         final_state_hashes=hashes,
     )
     run = Run(manifest, config_text, series)
@@ -351,6 +524,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--power-cut-day", type=int, help="simulate a power cut half a day after this day"
     )
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="SECTION.KEY=VALUE",
+        help="change one config key (TOML value), e.g. fauna.learning=false; repeatable",
+    )
+    parser.add_argument(
+        "--fork-days", type=int, default=0, help="fork learning on/off every N days (0: never)"
+    )
+    parser.add_argument("--fork-length", type=int, default=28, help="days each fork runs")
     parser.add_argument("--out", type=Path, required=True, help="output dir, e.g. runs/<id>")
     args = parser.parse_args(argv)
     seeds = list(range(args.seed_base, args.seed_base + args.seeds))
@@ -358,6 +543,7 @@ def main(argv: list[str] | None = None) -> None:
         args.years, seeds, args.out, args.config, args.start, args.power_cut_day,
         save_days=args.save_days, sample_days=args.sample_days,
         snapshot_days=args.snapshot_days, jobs=min(args.jobs, len(seeds)),
+        overrides=tuple(args.overrides), fork_days=args.fork_days, fork_length=args.fork_length,
     )  # fmt: skip
     print(
         f"wrote {args.out} ({len(seeds)} seeds × {args.years} sim-years, "

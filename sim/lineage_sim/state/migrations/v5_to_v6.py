@@ -1,0 +1,77 @@
+"""v5 → v6. Creatures see plant form and carrion (M5, revised plan in ADR 0009).
+
+Brains gain six senses after the sixteen of v5: where low growth, woody growth and
+carrion increase (x, y each). Their weights are inserted as zeros, in the direct block
+(2 × 16 → 2 × 22) and in the hidden layer's input block (8 × 16 → 8 × 22), so a v5
+creature steers exactly as before until mutation brings the new senses in. Learned gains
+and their traces gain the three new followed senses, at zero; the world gains an empty
+carrion grid and its scent (the size of the terrain); and each creature gains a running
+average
+meal value, NaN until its next meal (it has tasted nothing yet). Genomes gain the SOCIAL
+gene (after the thirteen of v5), at 0: v5 creatures pass on no diet traditions until
+mutation brings them in.
+"""
+
+from __future__ import annotations
+
+from typing import cast
+
+import numpy as np
+
+from lineage_sim.state.schema import Tree
+
+# Values of this version, written out so the migration never depends on current code.
+_OLD_SENSES, _NEW_SENSES = 16, 22
+_OUTPUTS, _HIDDEN = 2, 8
+_OLD_WEIGHTS = 186
+_OLD_GAINS, _NEW_GAINS = 6, 9
+_OLD_GENES = 13
+
+
+def _widen_genes(genes: np.ndarray) -> np.ndarray:
+    genes = np.asarray(genes, dtype=np.float32).reshape(-1, _OLD_GENES)
+    return np.concatenate([genes, np.zeros((genes.shape[0], 1), dtype=np.float32)], axis=1)
+
+
+def _widen_senses(block: np.ndarray, rows: int) -> np.ndarray:
+    """(n, rows × 16) weights → (n, rows × 20), new sense columns zero."""
+    n = block.shape[0]
+    wide = np.zeros((n, rows, _NEW_SENSES), dtype=np.float32)
+    wide[:, :, :_OLD_SENSES] = block.reshape(n, rows, _OLD_SENSES)
+    return wide.reshape(n, rows * _NEW_SENSES)
+
+
+def _widen_gains(gains: np.ndarray) -> np.ndarray:
+    gains = np.asarray(gains, dtype=np.float32).reshape(-1, _OLD_GAINS)
+    extra = np.zeros((gains.shape[0], _NEW_GAINS - _OLD_GAINS), dtype=np.float32)
+    return np.concatenate([gains, extra], axis=1)
+
+
+def migrate(tree: Tree) -> Tree:
+    subsystems = cast(dict[str, Tree], tree["subsystems"])
+    fauna = subsystems.get("fauna")
+    if fauna is None:
+        return {**tree, "schema_version": 6}
+    weights = np.asarray(fauna["weights"], dtype=np.float32).reshape(-1, _OLD_WEIGHTS)
+    direct_end = _OUTPUTS * _OLD_SENSES
+    hidden_end = direct_end + _HIDDEN * _OLD_SENSES
+    widened = np.concatenate(
+        [
+            _widen_senses(weights[:, :direct_end], _OUTPUTS),
+            _widen_senses(weights[:, direct_end:hidden_end], _HIDDEN),
+            weights[:, hidden_end:],
+        ],
+        axis=1,
+    )
+    upgraded = {
+        **fauna,
+        "weights": widened,
+        "genes": _widen_genes(fauna["genes"]),
+        "ancestors": _widen_genes(fauna["ancestors"]),
+        "learned": _widen_gains(fauna["learned"]),
+        "trace": _widen_gains(fauna["trace"]),
+        "meal_value": np.full(weights.shape[0], np.nan, dtype=np.float32),
+        "carrion": np.zeros(np.asarray(subsystems["terrain"]["height"]).shape, np.float32),
+        "scent": np.zeros(np.asarray(subsystems["terrain"]["height"]).shape, np.float32),
+    }
+    return {**tree, "schema_version": 6, "subsystems": {**subsystems, "fauna": upgraded}}
