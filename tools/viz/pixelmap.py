@@ -45,6 +45,9 @@ HIGH_ROCK = ("#77716c", "#98928c", "#b5b0aa")
 SNOW = ("#c9d3dc", "#e6edf2", "#ffffff")
 HIGH_ROCK_FROM = 0.30  # height above the sea
 SNOW_FROM = 0.46
+# Height gained per cell toward the light from which a slope counts as lit (or, lost, as
+# in shade).
+RELIEF_SLOPE = 0.012
 
 # One flat colour per class for chart legends and stacked areas.
 COVER_COLOURS: dict[Cover, str] = {
@@ -74,8 +77,8 @@ def relief_step(height: np.ndarray) -> np.ndarray:
     # Height gained walking one cell toward the light: positive faces the light.
     slope[1:, 1:] = h[1:, 1:] - h[:-1, :-1]
     step = np.ones(h.shape, dtype=np.intp)
-    step[slope > 0.012] = 2
-    step[slope < -0.012] = 0
+    step[slope > RELIEF_SLOPE] = 2
+    step[slope < -RELIEF_SLOPE] = 0
     return step
 
 

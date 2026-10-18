@@ -22,7 +22,7 @@ count toward mate compatibility and genetic distance.
 | `AQUATIC` | swims fast and does not drown | slow on land, energy |
 | `JAW` | attack power and grazing rate | energy |
 | `BROOD` | many young per brood | each young starts with less |
-| `HUE`, `PATTERN` | looks; count toward mate compatibility | — |
+| `HUE`, `PATTERN` | looks (body colour; one of twelve markings); count toward mate compatibility | — |
 | `LEARNING` | learning rate during life | basal burn (`cost_learning`) |
 | `EXPLORATION` | steering noise to learn from, fading with age | noisier steering |
 | `SOCIAL` | share of its mother's plant preferences a newborn takes on | — (free) |
@@ -38,7 +38,9 @@ and their effects arrive in M7.
 land and swim speed, sense range, resting burn, cost per cell travelled, energy capacity,
 grazing rate, plant and meat efficiency, attack, defence, lifespan, maturity, brood size,
 learning rate, exploration, and social copying.
-Bigger and better-equipped always burns more. The renderer draws bodies from the same
+Bigger and better-equipped always burns more. How each gene shows on the body (a plan
+per kind of animal, picked by leg pairs, water, armour and speed) is in `renderer.md`.
+The renderer draws bodies from the same
 values; `sim/tests/fixtures/phenotypes.json` holds 15 specimen genomes with their
 expected values for the cross-language check in R2.
 

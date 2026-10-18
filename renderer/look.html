@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lineage look sheet</title>
+    <style>
+      :root {
+        --page: #10192e;
+        --panel: #14213d;
+        --text: #e6edf2;
+        --muted: #9fb3c8;
+        --rule: #2c3f66;
+        --accent: #8ecbe6;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font:
+          15px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        width: max-content;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 24px 16px 72px;
+        box-sizing: border-box;
+      }
+      main > * {
+        max-width: 1024px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 1.6rem;
+      }
+      h2 {
+        margin: 44px 0 8px;
+        font-size: 1.2rem;
+      }
+      h3 {
+        margin: 24px 0 6px;
+        font-size: 1rem;
+      }
+      p,
+      li {
+        max-width: 76ch;
+      }
+      .sub,
+      figcaption,
+      .note {
+        color: var(--muted);
+      }
+      .sub {
+        margin: 0 0 16px;
+      }
+      .note {
+        font-size: 0.9rem;
+      }
+      code {
+        color: var(--accent);
+      }
+      #failure {
+        color: #ff8f8f;
+        font-weight: 600;
+      }
+      canvas,
+      img {
+        display: block;
+        image-rendering: pixelated;
+      }
+      figure {
+        margin: 14px 0;
+      }
+      figure.screen {
+        overflow-x: auto;
+      }
+      figcaption {
+        max-width: 76ch;
+        padding-top: 6px;
+        font-size: 0.88rem;
+      }
+      .pick {
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--page);
+        font-size: 0.75rem;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+      .pick.new {
+        background: #f2d24b;
+      }
+      .strip {
+        margin: 10px 0;
+      }
+      .wrap {
+        overflow-x: auto;
+      }
+      table.cost {
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.92rem;
+      }
+      table.cost th,
+      table.cost td {
+        padding: 6px 12px 6px 0;
+        border-bottom: 1px solid var(--rule);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.cost th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      .lights {
+        display: grid;
+        grid-template-columns: repeat(2, max-content);
+        gap: 0 8px;
+      }
+      .tiles,
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      figure.tile {
+        margin: 0;
+      }
+      figure.tile figcaption {
+        max-width: 224px;
+        padding-top: 3px;
+        line-height: 1.3;
+      }
+      figure.tile b {
+        display: block;
+        color: var(--text);
+      }
+      .steps figure.tile figcaption,
+      #patterns-beast figcaption,
+      #patterns-beetle figcaption {
+        max-width: 168px;
+      }
+      .strip {
+        overflow-x: auto;
+      }
+      .strip canvas,
+      .strip img {
+        margin: 6px 0;
+      }
+      .sweep {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        padding: 10px 0;
+        border-top: 1px solid var(--rule);
+      }
+      .gene {
+        flex: 0 0 104px;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .gene b {
+        display: block;
+        color: var(--text);
+        font-size: 1rem;
+      }
+      table.sprites {
+        border-collapse: collapse;
+        background: var(--panel);
+      }
+      table.sprites th {
+        padding: 6px 10px;
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-align: left;
+      }
+      table.sprites td {
+        padding: 6px 8px;
+        vertical-align: bottom;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lineage look sheet</h1>
+      <p class="sub">
+        How the renderer draws the world, and what there is to choose. World:
+        <span id="world">…</span>. Renderer build <code id="build">…</code>.
+      </p>
+      <p id="failure" hidden></p>
+      <p>
+        The world is a continent, and the screen shows it from three distances. The
+        <b>map view</b> holds all of it. The <b>middle view</b> is four times closer: a region, its
+        woods and shores, animals as small bodies. The <b>local view</b> is four times closer again
+        and is about one animal: it and what it walks through fill the screen. All three are painted
+        from the same cells by the same rules, and the plants of the middle view stand in the same
+        places in the local one, drawn larger and in more detail.
+      </p>
+      <p>
+        Art pixels are 2 screen pixels: every picture marked <b>full size</b> is drawn at 512×300
+        and shown at 1024×600, pixel for pixel what the 7″ screen will show. Everything is drawn by
+        the renderer spike (R0); plants and animals are drawn by rule, which is what lets the same
+        plant be drawn at two distances, and can be redrawn by hand once the look is fixed.
+      </p>
+      <p class="note" data-live>
+        This page is live (drawn with <span id="drawn-with">…</span>): the creatures walk.
+        <code>npm run look</code> writes a copy to <code>reports/R0-look-sheet/</code>.
+      </p>
+      <p class="note" data-still hidden>
+        A copy to read anywhere, generated by <code>npm run look</code> in <code>renderer/</code>;
+        do not edit by hand. The pictures with animals in them are short loops, and the animals jump
+        back when a loop restarts. The live page (<code>npm run dev</code> there, then
+        <code>/look.html</code>) runs without end.
+      </p>
+
+      <h2>1. The map view <span class="pick">settled</span></h2>
+      <p>
+        The whole continent, 2 art pixels to the cell: heights and cover interpolated between cells,
+        each animal a dot in its own colour (your M3).
+      </p>
+      <figure class="screen">
+        <canvas data-picture="map" aria-label="The map view"></canvas>
+        <figcaption><b>Full size.</b></figcaption>
+      </figure>
+
+      <h2>2. The middle view <span class="pick new">trees redrawn</span></h2>
+      <p>
+        A sixteenth of the continent, 8 art pixels to the cell. As you decided: animals stay at 0.5
+        here, larger than life (at the local view's size they would be three pixels long), and
+        <b>the vegetation is redrawn as T1</b>: the same rule as the local view at a quarter of the
+        size, so a tree is the same tree from both distances. With it come the stages of growth (a
+        wood now has saplings at its edges where it used to have young trees everywhere) and shadows
+        painted on the ground instead of drawn with each plant.
+      </p>
+      <figure class="screen">
+        <canvas data-picture="mid-shore" aria-label="The middle view, a shore"></canvas>
+        <figcaption>
+          <b>Full size.</b> A shore, with the fifteen specimens and ten of the herd placed on it.
+        </figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="mid-wood" aria-label="The middle view, a wood"></canvas>
+        <figcaption>
+          <b>Full size.</b> The densest wood, with whoever of the herd is there.
+        </figcaption>
+      </figure>
+
+      <h2>3. The local view</h2>
+      <p>
+        One animal from close to the ground, 32 art pixels to the cell: 16 by 9 cells in sight.
+        Settled: the ground read over two cells around (K2), trees and bushes as bundles of leaves
+        (T1), animals at 0.35.
+      </p>
+
+      <h3>The ground <span class="pick">settled</span></h3>
+      <figure class="screen">
+        <canvas data-picture="ground" aria-label="The local view's ground on its own"></canvas>
+        <figcaption>
+          <b>Full size.</b> A meadow without its plants and animals: patches several cells wide, and
+          in them what the ground is made of.
+        </figcaption>
+      </figure>
+      <p>A piece of each kind of ground, enlarged twice:</p>
+      <div id="ground-samples" class="tiles"></div>
+
+      <h3>Trees and bushes <span class="pick new">mended</span></h3>
+      <ul>
+        <li>
+          <b>Trunks have bark.</b> A broadleaf's is furrowed: strokes of shade run down it, each
+          column on its own rhythm, with a knot on the stoutest, the lit edge on the left and the
+          crown's shade on the wood just under the leaves. A conifer's is redder and scaly: short
+          plates, staggered from one column to the next.
+        </li>
+        <li>
+          <b>Bushes are mounds.</b> They were bundles packed into an oval, which came out lopsided
+          and flat-sided. A bush is now rows of bundles from the ground up, each row narrower along
+          the line of a dome, in the same three builds (as the scale has it, tall, low).
+        </li>
+      </ul>
+      <div id="trees" class="strip"></div>
+      <p class="note">
+        Full grown: broadleaf ×3, conifer ×3; bushes ×3 (the second in berry) and, last, the three
+        kinds at the middle view's size.
+      </p>
+      <figure class="screen">
+        <canvas data-picture="local-wood" aria-label="The local view in a wood"></canvas>
+        <figcaption>
+          <b>Full size.</b> A hunter in the densest wood, with company. Trees in front of the animal
+          the picture is about go see-through while it is behind them.
+        </figcaption>
+      </figure>
+
+      <h3>What grows and lies among them</h3>
+      <p>
+        Small plants, placed by what covers each cell. In grass: tufts to walk through, herbs, and
+        four kinds of flower in five colours, which come in drifts. In scrub that has died back: the
+        first shoots of a bush. Under bushes and trees: ferns, mushrooms, fallen logs. On bare
+        ground: stones and boulders, some grown over with lichen or moss; reeds on the shore;
+        charred stumps and snags where it burnt.
+      </p>
+      <div id="plants-small" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-meadow" aria-label="The local view in a meadow"></canvas>
+        <figcaption><b>Full size.</b> A grazer in a meadow, among bushes.</figcaption>
+      </figure>
+      <figure class="screen">
+        <canvas data-picture="local-shore" aria-label="The local view on a shore"></canvas>
+        <figcaption>
+          <b>Full size.</b> A heavy beetle on the shore, with swimmers in the water beside it.
+        </figcaption>
+      </figure>
+      <h3>Light <span class="pick">settled</span></h3>
+      <div class="lights">
+        <figure>
+          <canvas data-picture="light-day" aria-label="The shore by day"></canvas>
+          <figcaption>Day</figcaption>
+        </figure>
+        <figure>
+          <canvas data-picture="light-dusk" aria-label="The shore at dusk"></canvas>
+          <figcaption>Dusk</figcaption>
+        </figure>
+        <figure>
+          <canvas data-picture="light-night" aria-label="The shore at night"></canvas>
+          <figcaption>Night</figcaption>
+        </figure>
+        <figure>
+          <canvas data-picture="light-dawn" aria-label="The shore at dawn"></canvas>
+          <figcaption>Dawn</figcaption>
+        </figure>
+      </div>
+      <p class="note">Half size: the 512×300 drawing shown without stretching.</p>
+
+      <h2>4. Vegetation: every variation <span class="pick new">new</span></h2>
+      <p>
+        What a plant looks like follows from three things the simulation knows: its form (grass,
+        bush, broadleaf, conifer), how much of it there is on its cell (biomass), and the date. This
+        section shows all of it: the stages of growth, then each season as a sheet of the plants,
+        the same shore from close, and the same wood from the middle view. Everything is drawn by
+        the one rule, so it is the same in both views.
+      </p>
+      <h3>Stages of growth</h3>
+      <p>
+        Four stages by biomass: a <b>sprout</b> (under 17 % of what a cell can hold),
+        <b>young</b> (to 50 %), <b>grown</b> (to 85 %) and <b>old</b>, which for a tree is no taller
+        than a grown one but broader and stouter. Until now there were two, young and grown, so a
+        tree that had only just taken root looked like one half its age. In this world's woods half
+        of the tree cells hold sprouts, a third young trees, and one in seven a grown or old one.
+      </p>
+      <div id="stages" class="strip"></div>
+      <p class="note">
+        Broadleaf and conifer: sprout, young, grown, old. Then a bush the same; grass short, young
+        and grown; dried grass; and what a fire leaves: a charred stump, two snags, a log.
+      </p>
+      <h3>Spring</h3>
+      <p>
+        Fresh, lighter greens. One broadleaf in three is a kind that flowers and two bushes in three
+        are in blossom; conifers put out light tips; the grass is short; daisies and bells are out.
+      </p>
+      <div id="plants-spring" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-spring" aria-label="The shore in spring"></canvas>
+        <figcaption><b>Full size.</b> The local view: the shore of section 3.</figcaption>
+      </figure>
+      <h3>Summer</h3>
+      <p>
+        The colours you have seen so far. One bush in three is in berry; all four flowers are out;
+        reeds are green.
+      </p>
+      <div id="plants-summer" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-summer" aria-label="The shore in summer"></canvas>
+        <figcaption><b>Full size.</b> The local view: the shore of section 3.</figcaption>
+      </figure>
+      <h3>Autumn</h3>
+      <p>
+        Broadleaves turn, each its own way: one in three gold, one flame, one still half green.
+        Bushes go rust and two in three carry berries; grass yellows and goes to seed; ferns brown;
+        mushrooms are at their most; few flowers are left.
+      </p>
+      <div id="plants-autumn" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-autumn" aria-label="The shore in autumn"></canvas>
+        <figcaption><b>Full size.</b> The local view: the shore of section 3.</figcaption>
+      </figure>
+      <h3>Winter</h3>
+      <p>
+        Broadleaves and bushes are bare (a few berries stay on); conifers darken; grass is dried and
+        pressed flat, as the simulation's own winter has low growth die back to its roots. No
+        flowers, herbs or mushrooms.
+      </p>
+      <div id="plants-winter" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-winter" aria-label="The shore in winter"></canvas>
+        <figcaption><b>Full size.</b> The local view: the shore of section 3.</figcaption>
+      </figure>
+      <h3>Winter, under snow</h3>
+      <p>
+        The same winter with snow lying on it: on the crowns, the boughs, the stones, and on the
+        ground in patches, thinner under trees. The simulation has no snow on low ground, so this
+        one is the renderer's own to add or leave out.
+      </p>
+      <div id="plants-snow" class="strip"></div>
+      <figure class="screen">
+        <canvas data-picture="local-snow" aria-label="The shore in winter, under snow"></canvas>
+        <figcaption><b>Full size.</b> The local view: the shore of section 3.</figcaption>
+      </figure>
+      <h3>The middle view through the year</h3>
+      <div class="lights">
+        <figure>
+          <canvas
+            data-picture="mid-spring"
+            aria-label="The wood from the middle view in spring"
+          ></canvas>
+          <figcaption>Spring</figcaption>
+        </figure>
+        <figure>
+          <canvas
+            data-picture="mid-summer"
+            aria-label="The wood from the middle view in summer"
+          ></canvas>
+          <figcaption>Summer</figcaption>
+        </figure>
+        <figure>
+          <canvas
+            data-picture="mid-autumn"
+            aria-label="The wood from the middle view in autumn"
+          ></canvas>
+          <figcaption>Autumn</figcaption>
+        </figure>
+        <figure>
+          <canvas
+            data-picture="mid-winter"
+            aria-label="The wood from the middle view in winter"
+          ></canvas>
+          <figcaption>Winter</figcaption>
+        </figure>
+        <figure>
+          <canvas
+            data-picture="mid-snow"
+            aria-label="The wood from the middle view in winter, under snow"
+          ></canvas>
+          <figcaption>Winter, under snow</figcaption>
+        </figure>
+      </div>
+      <p class="note">
+        Half size: the wood of section 2 without its animals, drawn at 512×300 and shown without
+        stretching.
+      </p>
+
+      <h2>5. Creatures up close <span class="pick">settled</span></h2>
+      <p>
+        Style C3, shaded, with legs that turn into fins, as you found them fine on the last sheet;
+        nothing changed here.
+      </p>
+      <p>
+        The fifteen reference genomes, each on its own patch of ground at the local view's own size
+        (0.35), enlarged twice:
+      </p>
+      <div id="specimens" class="tiles"></div>
+      <h3>Markings</h3>
+      <p>
+        The twelve markings, each in one of its four colours, on a beast's back and on a beetle's
+        shell. Drawn from nearly three times as close as the local view, as a bestiary would show an
+        animal: at the local view's size most animals are 10 to 16 pixels long and a marking is a
+        pixel or two, so markings and their shading show on the heavy ones and from this close.
+      </p>
+      <div id="patterns-beast" class="tiles"></div>
+      <div id="patterns-beetle" class="tiles"></div>
+      <h3>One gene at a time</h3>
+      <p>
+        The same plain animal with a single gene at 0, 0.25, 0.5, 0.75 and 1, on plain sand (or sea,
+        for those that live in it); under each, the kind its genes make it.
+      </p>
+      <div id="sweeps"></div>
+
+      <h2>6. What it costs</h2>
+      <p>
+        The board is not on the desk, so this is an estimate: the three views measured on the
+        development PC and scaled to the board's processor. An Allwinner H618 scores about 150 in
+        Geekbench 6 on one core and this PC about 3,150: the board is some 21 times slower per core.
+        It is another architecture and another graphics stack, so read the last column as an order
+        of magnitude.
+      </p>
+      <div class="wrap">
+        <table class="cost">
+          <tr>
+            <th></th>
+            <th>On the PC</th>
+            <th>At the board's speed</th>
+            <th>Against</th>
+          </tr>
+          <tr>
+            <td>Script per frame, map view (216 animals as dots)</td>
+            <td>0.2 ms</td>
+            <td>2 ms (up to 7)</td>
+            <td rowspan="4">33 ms a frame at 30 fps</td>
+          </tr>
+          <tr>
+            <td>Script per frame, middle view (50 animals)</td>
+            <td>0.2 ms</td>
+            <td>3 ms (up to 9)</td>
+          </tr>
+          <tr>
+            <td>Script per frame, middle view (all 216 animals alive)</td>
+            <td>0.6 ms</td>
+            <td>10 ms (up to 17)</td>
+          </tr>
+          <tr>
+            <td>Script per frame, local view (following one animal)</td>
+            <td>0.2 ms</td>
+            <td>1 ms (up to 9)</td>
+          </tr>
+          <tr>
+            <td>The page's process, any view</td>
+            <td>5 to 7 % of a core at 60 fps</td>
+            <td>about 0.6 of a core at 30 fps</td>
+            <td>4 cores, of which the simulation may use ¼</td>
+          </tr>
+          <tr>
+            <td>Painting the map's and the middle view's ground, with every plant's shadow</td>
+            <td>0.6 s</td>
+            <td>11 s</td>
+            <td>once a sim-day</td>
+          </tr>
+          <tr>
+            <td>Painting the local view's ground, per piece of 8 × 8 cells</td>
+            <td>40 ms</td>
+            <td>0.7 s</td>
+            <td>two or three new pieces whenever the animal has walked 8 cells</td>
+          </tr>
+          <tr>
+            <td>Drawing the plants' pictures (93 for the local view, 45 for the middle one)</td>
+            <td>15 ms and 2 ms</td>
+            <td>0.3 s and 35 ms</td>
+            <td>when the season turns</td>
+          </tr>
+          <tr>
+            <td>Pixels to fill per frame</td>
+            <td colspan="2">512×300, two to three layers deep: about 0.4 million</td>
+            <td>a Mali-G31 MP2, if Chromium is given it</td>
+          </tr>
+          <tr>
+            <td>WebGL drawn by the processor instead</td>
+            <td>2 to 3 cores</td>
+            <td>out of reach</td>
+            <td>4 cores, 21 times slower</td>
+          </tr>
+          <tr>
+            <td>Chromium's memory</td>
+            <td colspan="2">about 0.6 GB</td>
+            <td>1 to 4 GB by model; simulation and server get 0.3</td>
+          </tr>
+        </table>
+      </div>
+      <p>What follows from it:</p>
+      <ul>
+        <li>
+          <b>Drawing the frames fits in all three views</b>, with room. The local view is the
+          cheapest per frame: few animals are in sight.
+        </li>
+        <li>
+          <b>Painting ground is the one thing that does not fit in a frame.</b> On the board a piece
+          of the local view's ground would stop the picture for half a second, and the daily repaint
+          of the other two for eleven. Both have to be painted in the background (a worker), ahead
+          of the camera for the local view. Measured as it is, the local view drops to 2 frames a
+          second while a piece is painted.
+        </li>
+        <li>
+          <b>Everything still hangs on the graphics driver.</b> With the GPU the picture is small
+          work; without it nothing here is fast enough. Reports for this board show the driver
+          loading while Chromium still draws in software, so this is the first thing to try when the
+          board is on the desk.
+        </li>
+        <li>
+          <b>Memory fits.</b> The board on the desk is the 2 GB model: Chromium's 0.6 GB and the 0.3
+          GB for simulation and server leave room.
+        </li>
+      </ul>
+      <p class="note">
+        Measured again with this sheet: painting the ground costs up to a fifth more than before
+        (the middle view's now carries every plant's shadow), the frames the same. "At the board's
+        speed" is the same page with its processor throttled 21 times in Chromium; in brackets, the
+        slowest frame in a hundred. The page's process and the memory are Chromium's own figures on
+        the PC. Sources for the scores: Geekbench 6 uploads for the Orange Pi Zero 3 (same chip) and
+        for the Core Ultra 9 275HX.
+      </p>
+
+      <h2>To choose, and to say</h2>
+      <ul>
+        <li>
+          <b>Snow</b>: whether winter should have it (the last season shown) or stay bare. The
+          simulation has no snow on low ground, so it would be the renderer's own.
+        </li>
+        <li>
+          <b>The seasons' colours</b>: autumn and spring above all. Say what looks off or too much.
+        </li>
+        <li>
+          <b>The stages</b>: whether four is right, and whether an old tree should stand out more
+          from a grown one.
+        </li>
+        <li><b>Trunks and bushes</b>: whether the bark and the mounds are what you had in mind.</li>
+      </ul>
+    </main>
+    <script type="module" src="/src/spike/look.ts"></script>
+  </body>
+</html>

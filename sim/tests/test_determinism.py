@@ -1,5 +1,6 @@
 """Same seed + config + event sequence ⇒ bit-identical state (CLAUDE.md §4.2)."""
 
+import platform
 from collections.abc import Callable
 
 import pytest
@@ -7,6 +8,7 @@ from lineage_sim.config import Config
 from lineage_sim.events import InputEvent, PresenceChanged
 from lineage_sim.state import io
 from lineage_sim.world import Subsystem, World
+from numpy.lib.introspect import opt_func_info
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
@@ -120,3 +122,16 @@ def test_three_years_daily_saves_survive_a_power_cut(
         last_save = io.dumps(resumed.snapshot())
     assert resumed.state_hash() == straight.state_hash()
     assert io.loads(last_save).t_ms == days * DAY_S * 1000
+
+
+@pytest.mark.skipif(
+    platform.machine().lower() not in ("x86_64", "amd64"), reason="x86 kernels only"
+)
+def test_numpy_uses_the_kernels_the_golden_hashes_were_taken_with() -> None:
+    # The root conftest.py keeps NumPy off its AVX-512 kernels, which round differently.
+    info = opt_func_info(func_name="exp|log|sin|cos|tanh", signature="float32|float64")
+    current = {
+        f"{name}.{sig}": by_sig[sig]["current"] for name, by_sig in info.items() for sig in by_sig
+    }
+    assert current, "NumPy reported no kernels"
+    assert not [key for key, target in current.items() if "X86_V4" in target or "AVX512" in target]

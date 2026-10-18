@@ -16,7 +16,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started | — |
-| R0 | Renderer spike on the device | in progress on branch `r0-renderer-spike` (not merged here; that branch's row is the current one): spike, benchmark and look built; the measurement on the board is pending | on that branch |
+| R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | not started | — |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |

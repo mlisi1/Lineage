@@ -1,0 +1,465 @@
+/**
+ * Creatures: a head that wanders, a chain of joints that follows it, and on that chain
+ * whatever the body plan asks for: parts that ride the joints and legs that step.
+ * Everything is a sprite of the atlas (tinted discs, wedges and stretched squares), so a
+ * creature costs no geometry rebuild, only transforms.
+ */
+import { Container, Sprite, type Texture } from "pixi.js";
+import { DISC_SIZE, type Atlas } from "./atlas";
+import { FIRST_LOOK, bodyPlan, type BodyOptions, type BodyPlan, type LegPlan } from "./body";
+import type { CellRect } from "./camera";
+import { followChain, solveKnee, type Point } from "./chain";
+import type { CreatureSeed } from "./fixture";
+import type { Passable } from "./habitat";
+import type { Random } from "./rng";
+
+/** Wandering: how fast the turn rate drifts and settles (per second). */
+const TURN_JITTER = 6;
+const TURN_DAMPING = 1.5;
+const AVOID_TURN = 3.5;
+const LOOK_AHEAD_CELLS = 1.2;
+/** How briskly a foot swings to its target. */
+const STEP_RATE = 16;
+/** Texels across the white square of the atlas. */
+const WHITE_TEXELS = 2;
+/** How far (cells) a creature that starts where it cannot live is moved to where it can. */
+const SETTLE_REACH = 48;
+/** On the map a creature is a dot: this many cells across at mass 1, and its dark edge. */
+const MARKER_CELLS = 1;
+const MARKER_EDGE_CELLS = 0.5;
+const MARKER_EDGE = 0x1b1b1b;
+/** The dark edge of a leg: the colour of the outline round the body. */
+const EDGE = 0x1f1a17;
+/** Toward the light: up and to the left. */
+const LIGHT = Math.SQRT1_2;
+/**
+ * Flippers row: so many strokes to a body length travelled, swinging this far (radians)
+ * either side of where they rest, which is a little behind straight out to the side.
+ */
+const STROKES_PER_LENGTH = 1.1;
+const STROKE_SWING = 0.55;
+const FLIPPER_REST = 0.3;
+/** Where along its length a flipper is joined to the body. */
+const FLIPPER_ROOT = 0.12;
+/**
+ * A webbed foot: how far past the end of the leg its middle is, in foot radii, and how
+ * long (the way the shin points) and wide it is against a round foot.
+ */
+const WEB_AHEAD = 0.5;
+const WEB_LONG = 0.9;
+const WEB_WIDE = 1.2;
+
+/** How a layer's creatures are shown: as bodies, as dots on the map, or not at all. */
+export type Showing = "bodies" | "markers" | "hidden";
+
+interface Leg {
+  plan: LegPlan;
+  foot: Point;
+  target: Point;
+  /** The two bones of a leg; a flipper is one blade, in `upper`. */
+  upper: Sprite;
+  lower: Sprite | null;
+  /** The dark edge round the two bones and the foot, on legs thick enough for one. */
+  edges: Sprite[];
+  /** The foot at the end of the leg, on legs thick enough to show one. */
+  sole: Sprite | null;
+  /** The foot is webbed: a paddle set across the way the leg points. */
+  webbed: boolean;
+}
+
+interface Creature {
+  plan: BodyPlan;
+  container: Container;
+  marker: Container;
+  joints: Point[];
+  heading: number;
+  turn: number;
+  avoid: 1 | -1;
+  /** How far through a stroke its flippers are, in radians. */
+  stroke: number;
+  /** Where it may go, if it is kept somewhere. */
+  pen: CreatureSeed["pen"];
+  /** One sprite per part of the plan, in the same order. */
+  sprites: Sprite[];
+  legs: Leg[];
+  /** Within the view of the last update, so worth drawing. */
+  inView: boolean;
+}
+
+export class CreatureLayer {
+  /** Creatures not standing among plants, and every marker. Add this to the world. */
+  readonly container = new Container();
+  private readonly creatures: Creature[] = [];
+  private active = 0;
+  private only: number | null = null;
+  private showing: Showing = "bodies";
+  // Scratch, reused every frame so the animation allocates nothing.
+  private readonly hip: Point = { x: 0, y: 0 };
+  private readonly knee: Point = { x: 0, y: 0 };
+  private readonly dirX = new Float32Array(16);
+  private readonly dirY = new Float32Array(16);
+  private readonly angle = new Float32Array(16);
+
+  constructor(
+    private readonly atlas: Atlas,
+    private readonly seeds: readonly CreatureSeed[],
+    private readonly passable: Passable,
+    private readonly random: Random,
+    private readonly body: BodyOptions = FIRST_LOOK,
+  ) {}
+
+  /** Number of sprites the active creatures are made of. */
+  get spriteCount(): number {
+    let total = 0;
+    for (const creature of this.creatures.slice(0, this.active)) {
+      total += creature.container.children.length;
+    }
+    return total;
+  }
+
+  /** Animate exactly `count` creatures; more are created on demand, extras are hidden. */
+  setCount(count: number): void {
+    while (this.creatures.length < count) this.creatures.push(this.spawn(this.creatures.length));
+    this.active = count;
+    this.refresh();
+  }
+
+  /** Show the creatures as bodies, as dots, or not at all; `only` picks a single one. */
+  show(showing: Showing, only: number | null = null): void {
+    if (this.showing === showing && this.only === only) return;
+    this.showing = showing;
+    this.only = only;
+    this.refresh();
+  }
+
+  /** The middle of creature `index`'s body, in cells. */
+  centre(index: number): Point {
+    const joints = this.creatures[index]?.joints ?? [];
+    return joints[Math.floor(joints.length / 2)] ?? { x: 0, y: 0 };
+  }
+
+  /** The box creature `index`'s body fills, in cells: what must show through what covers it. */
+  box(index: number): CellRect {
+    const creature = this.creatures[index];
+    const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    creature?.joints.forEach((joint, i) => {
+      const radius = creature.plan.radii[i] ?? 0;
+      box.x0 = Math.min(box.x0, joint.x - radius);
+      box.x1 = Math.max(box.x1, joint.x + radius);
+      box.y0 = Math.min(box.y0, joint.y - radius);
+      box.y1 = Math.max(box.y1, joint.y + radius);
+    });
+    return box;
+  }
+
+  /**
+   * Stand every creature among the plants: `guests` holds one container per row,
+   * `rowsPerCell` of them to the cell, and a creature goes in the row of its lowest
+   * point, so that what grows in front of it covers it. With null they go back to the
+   * layer's own container.
+   */
+  hostIn(guests: readonly Container[] | null, rowsPerCell = 1): void {
+    for (let index = 0; index < this.active; index++) {
+      const creature = this.creatures[index];
+      if (creature === undefined) continue;
+      let host = this.container;
+      if (guests !== null) {
+        let lowest = -Infinity;
+        for (const joint of creature.joints) lowest = Math.max(lowest, joint.y);
+        const row = Math.min(Math.max(Math.floor(lowest * rowsPerCell), 0), guests.length - 1);
+        host = guests[row] ?? this.container;
+      }
+      if (creature.container.parent !== host) host.addChild(creature.container);
+    }
+  }
+
+  /**
+   * Move every creature on by `dtS` seconds. Bodies are worked out only for those in
+   * `view` (all of them when it is left out), and not at all with `posed` false, as when
+   * they are shown as dots: the others walk on as a head and a chain.
+   */
+  update(dtS: number, view?: CellRect, posed = true): void {
+    for (let index = 0; index < this.active; index++) {
+      const creature = this.creatures[index];
+      if (creature === undefined) continue;
+      const head = this.wander(creature, dtS);
+      // In sight, with room for the whole body to stick into the picture.
+      const reach = creature.plan.length + 1;
+      const inView =
+        view === undefined ||
+        (head.x >= view.x0 - reach &&
+          head.x <= view.x1 + reach &&
+          head.y >= view.y0 - reach &&
+          head.y <= view.y1 + reach);
+      if (inView && posed) this.pose(creature, dtS);
+      if (creature.inView !== inView) {
+        creature.inView = inView;
+        this.reveal(creature, index);
+      }
+    }
+  }
+
+  private refresh(): void {
+    this.creatures.forEach((creature, index) => this.reveal(creature, index));
+  }
+
+  /** Show a creature or not: by the count, the choice of one, the way of showing, the view. */
+  private reveal(creature: Creature, index: number): void {
+    const chosen = index < this.active && (this.only ?? index) === index;
+    creature.container.visible = chosen && this.showing === "bodies" && creature.inView;
+    creature.marker.visible = chosen && this.showing === "markers";
+  }
+
+  /** The nearest cell to (x, y) this body can live in, searching outward in rings. */
+  private settle(x: number, y: number, swims: boolean): Point {
+    for (let reach = 0; reach <= SETTLE_REACH; reach++) {
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          // Only the ring at this distance: the inside was searched already.
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== reach) continue;
+          if (this.passable(x + dx, y + dy, swims)) return { x: x + dx, y: y + dy };
+        }
+      }
+    }
+    return { x, y };
+  }
+
+  private spawn(index: number): Creature {
+    const seed = this.seeds[index % this.seeds.length];
+    if (seed === undefined) throw new Error("the fixture has no creatures");
+    const random = this.random;
+    const plan = bodyPlan(seed, this.body);
+    // Past the fixture's creatures, reuse them a few cells away.
+    const clone = index >= this.seeds.length;
+    const { x, y } = this.settle(
+      seed.x + (clone ? (random() - 0.5) * 8 : 0),
+      seed.y + (clone ? (random() - 0.5) * 8 : 0),
+      plan.swims,
+    );
+    const heading = random() * Math.PI * 2;
+    const joints = Array.from({ length: plan.joints }, (_, i) => ({
+      x: x - Math.cos(heading) * plan.spacing * i,
+      y: y - Math.sin(heading) * plan.spacing * i,
+    }));
+
+    const container = new Container();
+    this.container.addChild(container);
+    // Legs first: the body covers the hips. All their edges go under all of the legs.
+    const bar = (tint: number): Sprite => {
+      const sprite = new Sprite({ texture: this.atlas.white, anchor: { x: 0, y: 0.5 } });
+      sprite.tint = tint;
+      return container.addChild(sprite);
+    };
+    /** A foot: round, or with `webbed` a paddle, an oval wider than it is long. */
+    const round = (tint: number, radius: number, webbed = false): Sprite => {
+      const sprite = new Sprite({ texture: this.atlas.disc, anchor: 0.5 });
+      sprite.tint = tint;
+      const across = (2 * radius) / DISC_SIZE;
+      if (webbed) sprite.scale.set(across * WEB_LONG, across * WEB_WIDE);
+      else sprite.scale.set(across);
+      return container.addChild(sprite);
+    };
+    /** A flipper: an oval blade, held near one end; `margin` wider all round for its edge. */
+    const blade = (tint: number, length: number, width: number, margin = 0): Sprite => {
+      const long = length + 2 * margin;
+      const sprite = new Sprite({
+        texture: this.atlas.disc,
+        anchor: { x: (FLIPPER_ROOT * length + margin) / long, y: 0.5 },
+      });
+      sprite.tint = tint;
+      sprite.scale.set(long / DISC_SIZE, (width + 2 * margin) / DISC_SIZE);
+      return container.addChild(sprite);
+    };
+    const edges = plan.legs.map((leg): Sprite[] => {
+      if (leg.edge === 0) return [];
+      if (leg.fin === 1) return [blade(EDGE, leg.length, leg.thickness, leg.edge)];
+      const bones = [bar(EDGE), bar(EDGE)];
+      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge, leg.fin > 0)] : bones;
+    });
+    const legs = plan.legs.map((leg, index): Leg => {
+      const flipper = leg.fin === 1;
+      return {
+        plan: leg,
+        foot: { x, y },
+        target: { x, y },
+        upper: flipper ? blade(leg.sole, leg.length, leg.thickness) : bar(leg.colour),
+        lower: flipper ? null : bar(leg.colour),
+        edges: edges[index] ?? [],
+        sole: !flipper && leg.foot > 0 ? round(leg.sole, leg.foot, leg.fin > 0) : null,
+        webbed: leg.fin > 0,
+      };
+    });
+    const textures: Record<string, [Texture, number]> = {
+      disc: [this.atlas.disc, DISC_SIZE],
+      wedge: [this.atlas.wedge, DISC_SIZE],
+      bar: [this.atlas.white, WHITE_TEXELS],
+    };
+    const sprites = plan.parts.map((part) => {
+      const [texture, texels] = textures[part.shape] ?? [this.atlas.disc, DISC_SIZE];
+      const sprite = new Sprite({ texture, anchor: 0.5 });
+      sprite.tint = part.colour;
+      sprite.scale.set(part.along / texels, part.across / texels);
+      return container.addChild(sprite);
+    });
+
+    // The dot that stands for it on the map: its colour, with a dark edge.
+    const marker = new Container();
+    const size = MARKER_CELLS * Math.max(Math.cbrt(seed.mass), 1);
+    for (const [tint, across] of [
+      [MARKER_EDGE, size + 2 * MARKER_EDGE_CELLS],
+      [plan.colour, size],
+    ] as const) {
+      const square = new Sprite({ texture: this.atlas.white, anchor: 0.5 });
+      square.tint = tint;
+      square.scale.set(across / WHITE_TEXELS);
+      marker.addChild(square);
+    }
+    marker.visible = false;
+    this.container.addChild(marker);
+
+    return {
+      plan,
+      pen: seed.pen,
+      container,
+      marker,
+      joints,
+      heading,
+      turn: 0,
+      avoid: random() < 0.5 ? 1 : -1,
+      stroke: random() * Math.PI * 2,
+      sprites,
+      legs,
+      inView: true,
+    };
+  }
+
+  /** Walk the head on and pull the chain after it. Returns the head. */
+  private wander(creature: Creature, dtS: number): Point {
+    const { plan, joints } = creature;
+    const head = joints[0] ?? { x: 0, y: 0 };
+    const random = this.random;
+
+    // Wander, turning away from where this body cannot go.
+    creature.turn += ((random() * 2 - 1) * TURN_JITTER - creature.turn * TURN_DAMPING) * dtS;
+    let dirX = Math.cos(creature.heading);
+    let dirY = Math.sin(creature.heading);
+    const { pen } = creature;
+    const free = (x: number, y: number): boolean =>
+      this.passable(x, y, plan.swims) &&
+      (pen === undefined || (x >= pen.x0 && x <= pen.x1 && y >= pen.y0 && y <= pen.y1));
+    const blocked = !free(head.x + dirX * LOOK_AHEAD_CELLS, head.y + dirY * LOOK_AHEAD_CELLS);
+    creature.heading += (blocked ? creature.avoid * AVOID_TURN : creature.turn) * dtS;
+    dirX = Math.cos(creature.heading);
+    dirY = Math.sin(creature.heading);
+    const stride = plan.pace * dtS;
+    const stuck = !free(head.x, head.y);
+    if (!blocked || stuck) {
+      head.x += dirX * stride;
+      head.y += dirY * stride;
+      creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
+    }
+    followChain(joints, plan.spacing);
+    creature.marker.position.set(head.x, head.y);
+    return head;
+  }
+
+  /** Put every part and leg of the body where the chain now is. */
+  private pose(creature: Creature, dtS: number): void {
+    const { plan, joints } = creature;
+    // Which way the body points at each joint: the head where it is going, the others
+    // toward the joint in front.
+    this.dirX[0] = Math.cos(creature.heading);
+    this.dirY[0] = Math.sin(creature.heading);
+    this.angle[0] = creature.heading;
+    for (let i = 1; i < joints.length; i++) {
+      const joint = joints[i];
+      const lead = joints[i - 1];
+      if (joint === undefined || lead === undefined) continue;
+      const span = Math.hypot(lead.x - joint.x, lead.y - joint.y) || 1;
+      this.dirX[i] = (lead.x - joint.x) / span;
+      this.dirY[i] = (lead.y - joint.y) / span;
+      this.angle[i] = Math.atan2(lead.y - joint.y, lead.x - joint.x);
+    }
+
+    for (let i = 0; i < plan.parts.length; i++) {
+      const part = plan.parts[i];
+      const sprite = creature.sprites[i];
+      const joint = part === undefined ? undefined : joints[part.joint];
+      if (part === undefined || sprite === undefined || joint === undefined) continue;
+      const forwardX = this.dirX[part.joint] ?? 1;
+      const forwardY = this.dirY[part.joint] ?? 0;
+      // To the body's left is its direction turned a quarter.
+      sprite.position.set(
+        joint.x + forwardX * part.forward - forwardY * part.side - part.lift * LIGHT,
+        joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT,
+      );
+      sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
+    }
+    for (const leg of creature.legs) this.walk(creature, leg, dtS);
+  }
+
+  private walk(creature: Creature, leg: Leg, dtS: number): void {
+    const { joint: at, side, length, thickness, aim } = leg.plan;
+    const joint = creature.joints[at];
+    if (joint === undefined) return;
+    // The body's direction at this joint, and the side the leg is on.
+    const forwardX = this.dirX[at] ?? 1;
+    const forwardY = this.dirY[at] ?? 0;
+    const sideX = -forwardY * side;
+    const sideY = forwardX * side;
+    const radius = creature.plan.radii[at] ?? 0;
+    const hip = this.hip;
+    hip.x = joint.x + sideX * radius * 0.7;
+    hip.y = joint.y + sideY * radius * 0.7;
+    if (leg.lower === null) {
+      // A flipper: it swings about where it is joined, each pair a little after the one in front.
+      const swing = Math.sin(creature.stroke - at * 0.9) * STROKE_SWING;
+      const rotation =
+        (this.angle[at] ?? 0) + side * (Math.PI / 2 + FLIPPER_REST - 0.4 * aim + swing);
+      for (const sprite of [leg.upper, ...leg.edges]) {
+        sprite.position.set(hip.x, hip.y);
+        sprite.rotation = rotation;
+      }
+      return;
+    }
+    const out = Math.cos(aim) * length * 0.8;
+    const ahead = Math.sin(aim) * length * 0.8;
+    const restX = hip.x + sideX * out + forwardX * ahead;
+    const restY = hip.y + sideY * out + forwardY * ahead;
+    // A planted foot stays put until the body has left it behind, then swings ahead.
+    if (Math.hypot(leg.target.x - restX, leg.target.y - restY) > length * 0.8) {
+      leg.target.x = restX + forwardX * length * 0.5;
+      leg.target.y = restY + forwardY * length * 0.5;
+    }
+    const swing = Math.min(1, dtS * STEP_RATE);
+    leg.foot.x += (leg.target.x - leg.foot.x) * swing;
+    leg.foot.y += (leg.target.y - leg.foot.y) * swing;
+
+    const bone = length * 0.6;
+    solveKnee(hip, leg.foot, bone, bone, side, this.knee);
+    this.place(leg.upper, hip, this.knee, thickness);
+    this.place(leg.lower, this.knee, leg.foot, thickness * 0.8);
+    const [upperEdge, lowerEdge, soleEdge] = leg.edges;
+    const edge = 2 * leg.plan.edge;
+    if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
+    if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
+    // A webbed foot lies ahead of the leg's end, across the way the shin points.
+    const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
+    const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
+    for (const sprite of [soleEdge, leg.sole]) {
+      if (sprite === undefined || sprite === null) continue;
+      sprite.position.set(leg.foot.x + Math.cos(shin) * reach, leg.foot.y + Math.sin(shin) * reach);
+      if (leg.webbed) sprite.rotation = shin;
+    }
+  }
+
+  /** Stretch a white square from `from` to `to`. */
+  private place(sprite: Sprite, from: Point, to: Point, thickness: number): void {
+    sprite.position.set(from.x, from.y);
+    sprite.rotation = Math.atan2(to.y - from.y, to.x - from.x);
+    sprite.scale.set(
+      Math.hypot(to.x - from.x, to.y - from.y) / WHITE_TEXELS,
+      thickness / WHITE_TEXELS,
+    );
+  }
+}
