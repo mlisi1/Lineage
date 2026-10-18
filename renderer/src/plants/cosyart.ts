@@ -22,6 +22,7 @@ import type { Random } from "../rng";
 import {
   BARE_TAPER,
   INK,
+  inkAt,
   LIGHT_X,
   LIGHT_Y,
   RICH_FROM,
@@ -167,14 +168,17 @@ function crownPuffs(width: number, height: number, random: Random): Puff[] {
 /** How far past its radius a puff can reach: its size by chance and its scallops. */
 const REACH = 1.14 * (1 + SCALLOP);
 
-/** A bare tree forks this far down its height. */
-const BARE_FORK = 0.56;
+/** A bare tree forks this far down its height: where its crown began. */
+const BARE_FORK = 0.6;
 
 /**
- * A bare crown as Stardew draws one: a few strong limbs with sky between them rather
- * than a tangle of twigs. The leader goes on up; a bough leans out to each side and
- * curves up toward its end; each limb parts once more (twice on a large tree), and only
- * the last ends carry a twig. On a large tree two lesser boughs leave the trunk lower.
+ * A bare crown as Stardew draws one: as large as the leafy crown it was, so that a wood
+ * keeps its shape in winter. The trunk goes on up as a leader, thinning; limbs leave it
+ * one above another, left and right in turn, the lowest reaching out nearly level and
+ * the higher ones more upright, each thinner than the one below and each sending a
+ * branch up from its middle. These are outlined, as the trunk is. Fine twigs then fill
+ * toward the rim (`twigsFrom`), a pixel across and not outlined, so that the crown stays
+ * open and does not clot.
  */
 function bareCrown(
   art: PlantArt,
@@ -183,69 +187,77 @@ function bareCrown(
   forkY: number,
   thick: number,
   random: Random,
-): void {
+): Array<[number, number, number]> {
   const large = width >= RICH_FROM;
-  const inside = (x: number): number => Math.min(Math.max(x, 1), width - 2);
-  /** A limb from (x, y) at `angle` from upright, curving up toward its end; then its parts. */
-  const limbFrom = (
-    x: number,
-    y: number,
-    angle: number,
-    length: number,
-    size: number,
-    parts: number,
-  ): void => {
-    const midX = inside(x + Math.sin(angle) * length * 0.55);
-    const midY = Math.max(y - Math.cos(angle) * length * 0.55, 1);
-    const bent = angle * 0.7;
-    const endX = inside(midX + Math.sin(bent) * length * 0.45);
-    const endY = Math.max(midY - Math.cos(bent) * length * 0.45, 1);
-    const drawn = Math.max(1, Math.round(size));
-    limb(art, x, y, midX, midY, drawn);
-    limb(art, midX, midY, endX, endY, Math.max(1, Math.round(size * 0.85)));
-    if (parts === 0) {
-      // A twig at the very end, leaning out.
-      if (large || random() < 0.5) {
-        const side = random() < 0.5 ? -1 : 1;
-        limb(
-          art,
-          endX,
-          endY,
-          inside(endX + side * length * 0.3),
-          Math.max(endY - length * 0.3, 1),
-          1,
-        );
-      }
-      return;
-    }
-    for (const side of [-1, 1]) {
-      limbFrom(
-        endX,
-        endY,
-        bent + side * (0.42 + 0.2 * random()),
-        length * 0.55,
-        size * 0.7,
-        parts - 1,
-      );
-    }
-  };
-  const reach = height * 0.27;
-  const parts = large ? 2 : 1;
-  limbFrom(width / 2, forkY, (random() - 0.5) * 0.15, reach * 1.1, thick * 0.8, parts);
-  for (const side of [-1, 1]) {
-    limbFrom(
-      width / 2,
-      forkY + thick * 0.3,
-      side * (0.78 + 0.18 * random()),
-      reach,
-      thick * 0.7,
-      parts,
-    );
+  const crown = height * CROWN_SHARE;
+  const cx = width / 2;
+  const cy = crown * 0.5;
+  const rx = width * 0.47;
+  const ry = crown * 0.48;
+  const fit = (x: number, y: number): [number, number] => [
+    Math.min(Math.max(x, 1), width - 2),
+    Math.min(Math.max(y, 1), forkY),
+  ];
+  /** A point on the rim of the old crown, `angle` from upright, `share` of the way out. */
+  const rim = (angle: number, share: number): [number, number] =>
+    fit(cx + Math.sin(angle) * rx * share, cy - Math.cos(angle) * ry * share);
+  const px = (share: number, least: number): number => Math.max(least, Math.round(thick * share));
+  const ends: Array<[number, number, number]> = [];
+  // The leader: up the middle to near the top of the old crown, in two lengths, thinning.
+  const lean = (random() - 0.5) * width * 0.06;
+  const [topX, topY] = fit(cx + lean, cy - ry * 0.72);
+  const [midX, midY] = fit(cx + lean * 0.4, (forkY + topY) / 2);
+  limb(art, cx, forkY, midX, midY, px(0.8, large ? 3 : 1));
+  limb(art, midX, midY, topX, topY, px(0.4, large ? 2 : 1));
+  ends.push([topX, topY, 0]);
+  // Limbs off the leader, one above another.
+  const pairs = large ? 3 : 2;
+  for (let k = 0; k < 2 * pairs; k++) {
+    const up = (k + 0.5) / (2 * pairs);
+    const side = k % 2 === 0 ? -1 : 1;
+    const fromX = cx + lean * up;
+    const fromY = forkY + (topY - forkY) * up * 0.75;
+    // The lowest nearly level, the highest nearly upright.
+    const angle = side * (1.35 - 0.8 * up + (random() - 0.5) * 0.15);
+    const [ex, ey] = rim(angle, 0.85 + 0.12 * random());
+    const [bx, by] = fit(fromX + (ex - fromX) * 0.5, fromY + (ey - fromY) * 0.5 - height * 0.02);
+    const size = px(0.34 - 0.14 * up, 1);
+    limb(art, fromX, fromY, bx, by, size);
+    limb(art, bx, by, ex, ey, Math.max(1, Math.round(size * 0.6)));
+    ends.push([ex, ey, angle]);
+    // A branch from its middle, leaning out less than the limb.
+    const branch = angle * 0.7;
+    const [tx, ty] = rim(branch + side * 0.1, 0.75 + 0.15 * random());
+    limb(art, bx, by, tx, ty, 1);
+    ends.push([tx, ty, branch]);
   }
-  if (!large) return;
-  for (const side of [-1, 1]) {
-    const y = forkY + height * (0.08 + 0.05 * random());
-    limbFrom(width / 2, y, side * (1.15 + 0.15 * random()), reach * 0.75, thick * 0.5, 1);
+  return ends;
+}
+
+/** Fine twigs from `ends`, a pixel across, in the bark's dark, kept inside the drawing. */
+function twigsFrom(
+  art: PlantArt,
+  ends: ReadonlyArray<readonly [number, number, number]>,
+  width: number,
+  height: number,
+  random: Random,
+): void {
+  const reach = Math.max(2, width * 0.12);
+  for (const [x, y, angle] of ends) {
+    for (const turn of [-0.6, 0, 0.6]) {
+      if (random() < 0.25) continue;
+      const a = angle + turn + (random() - 0.5) * 0.3;
+      const length = reach * (0.6 + 0.5 * random());
+      const tx = Math.min(Math.max(x + Math.sin(a) * length, 0), width - 1);
+      const ty = Math.min(Math.max(y - Math.cos(a) * length, 0), height - 1);
+      const steps = Math.ceil(Math.max(Math.abs(tx - x), Math.abs(ty - y)));
+      for (let step = 1; step <= steps; step++) {
+        const px = x + ((tx - x) * step) / steps;
+        const py = y + ((ty - y) * step) / steps;
+        if (inkAt(art, Math.round(px), Math.round(py)) === INK.none)
+          put(art, px, py, INK.trunkDark);
+      }
+    }
   }
 }
 
@@ -285,7 +297,13 @@ export function cosyBroadleaf(size: Size, random: Random, salt: number, look: St
       const forkY = height * BARE_FORK;
       const thick = girth(width * STOUT, old);
       trunk(art, width * STOUT, Math.round(forkY), height, width / 2, "furrowed", old, BARE_TAPER);
-      bareCrown(art, width, height, forkY, thick * BARE_TAPER, random);
+      const ends = bareCrown(art, width, height, forkY, thick * BARE_TAPER, random);
+      trim(art, height);
+      rimAll(art);
+      twigsFrom(art, ends, width, height, random);
+      if (look.snow) snowCap(art, width >= RICH_FROM ? 2 : 1);
+      art.shadow = shadowOf(width, 0.22);
+      return art;
     } else {
       trunk(art, width * STOUT, Math.round(crown * 0.62), height, width / 2, "furrowed", old);
       pile(art, crownPuffs(width, crown, random), width / 2, crown / 2, salt);
@@ -317,36 +335,36 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   const [width, height] = size;
   const art = blank(width, height);
   const sprout = look.growth === "sprout";
-  if (look.season === "winter") {
-    // Bare, as Stardew's winter bushes: still a dome, of dry twiggy puffs (the winter
-    // ramp is the dried one), with a few twigs poking out of its top.
-    const r = Math.max(1.6, Math.min(height * 0.36, width * 0.22));
-    const low = height - r;
-    pile(
-      art,
-      [
-        { x: r * REACH, y: low, r: r * 0.9 },
-        { x: width / 2, y: low, r },
-        { x: width - r * REACH, y: low, r: r * 0.9 },
-        ...(sprout
-          ? []
-          : [{ x: width * 0.5, y: Math.max(r * REACH, height - r * 1.8), r: r * 0.85 }]),
-      ],
-      width / 2,
-      height / 2,
-      salt,
-    );
-    settle(art, height);
-    const twigs = sprout ? 2 : Math.max(3, Math.round(width / 8));
-    for (let k = 0; k < twigs; k++) {
-      const x = width * (0.2 + (0.6 * (k + 0.5)) / twigs);
-      const top = height * (0.35 + 0.15 * random());
-      limb(art, x, top + r * 0.6, x + (random() - 0.5) * r, Math.max(top - r * 0.5, 1), 1);
+  if (look.season === "winter" && look.bare === true) {
+    // A bush that does not keep its leaves (little EVERGREEN): fine twigs fanning out
+    // from the foot, in the bark's colour and not outlined, so that they stay twigs and
+    // do not close into a lump.
+    const stems = sprout ? 3 : Math.max(5, Math.round(width / 5));
+    for (let k = 0; k < stems; k++) {
+      const angle = ((k + 0.5) / stems - 0.5) * 2.2 + (random() - 0.5) * 0.25;
+      const length = height * (0.6 + 0.35 * random());
+      const x = Math.min(Math.max(width / 2 + Math.sin(angle) * length * 1.1, 1), width - 2);
+      const y = Math.max(height - 1 - Math.cos(angle) * length, 1);
+      limb(art, width / 2 + Math.sin(angle) * 1.5, height - 1, x, y, 1);
+      if (sprout) continue;
+      const twig = angle + (random() < 0.5 ? -1 : 1) * (0.5 + 0.3 * random());
+      limb(
+        art,
+        (x + width / 2) / 2,
+        (y + height) / 2,
+        Math.min(Math.max(x + Math.sin(twig) * length * 0.35, 0), width - 1),
+        Math.max(y - Math.cos(twig) * length * 0.2, 0),
+        1,
+      );
     }
-    // A berry or two the birds have left.
-    if (!sprout && look.variant % 3 === 1) berries(art, width, height, random);
+    trim(art, height);
+    if (look.snow) snowCap(art, 1);
+    if (!sprout) art.shadow = shadowOf(width, 0.28);
+    return art;
   } else {
-    // A dome: three puffs low down, one or two above.
+    // A dome: three puffs low down, one or two above. In winter it is a bush that keeps
+    // its leaves (the simulation's bushes that do not die back to the ground), in the
+    // season's darker, colder green.
     const r = Math.max(1.8, Math.min(height * 0.42, width * 0.26));
     const low = height - r;
     const puffs: Puff[] = [
@@ -373,7 +391,7 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   trim(art, height);
   rimAll(art);
   if (look.snow) snowCap(art, width >= RICH_FROM ? 2 : 1);
-  if (!sprout) art.shadow = shadowOf(width, look.season === "winter" ? 0.3 : 0.46);
+  if (!sprout) art.shadow = shadowOf(width, 0.46);
   return art;
 }
 
@@ -407,12 +425,16 @@ export function cosyTuft(size: Size, random: Random, seeding = false, flat = fal
     }
     return art;
   }
-  const blades = Math.max(4, Math.round(width / (flat ? 5 : 3.5)));
+  const blades = Math.max(4, Math.round(width / (flat ? 4 : 3.5)));
   for (let k = 0; k < blades; k++) {
     const spread = (k + 0.5) / blades - 0.5;
-    const lean = spread * width * (flat ? 1.5 : 0.9) + (random() - 0.5) * 2;
+    // Pressed by winter, a tuft is short stubble, a little bent, not a fan laid flat.
+    const lean = spread * width * (flat ? 0.35 : 0.9) + (random() - 0.5) * 2;
     const tall =
-      height * (flat ? 0.45 : 0.6 + 0.4 * (1 - 2 * Math.abs(spread)) * (0.75 + 0.25 * random()));
+      height *
+      (flat
+        ? 0.38 + 0.18 * random()
+        : 0.6 + 0.4 * (1 - 2 * Math.abs(spread)) * (0.75 + 0.25 * random()));
     const root = width / 2 + spread * width * 0.3;
     for (let t = 0; t < tall; t++) {
       const along = t / tall;

@@ -551,19 +551,24 @@ scalloped puffs lit as balls on stout trunks with roots; conifers a few bold tie
 large teeth; bushes domes of puffs; grass tufts of broad blades. The R0 look (bundles,
 the earlier palette) is kept as `R0` for the record.
 
-In winter a cosy broadleaf is a stout trunk and a few strong limbs that curve up, with
-sky between them, parting once more (twice on a large tree) and only the last ends
-carrying a twig: the first cosy winter, every twig outlined, closed into a tangle and
-the middle view's woods into brown lumps. A bare bush stays a dome, of dry russet puffs
-with a few twigs out of its top, as Stardew's winter bushes do.
+In winter a cosy broadleaf keeps the size of its crown, as Stardew's bare trees do: the
+trunk goes on up as a leader, limbs leave it one above another, the lowest nearly level
+and the higher more upright, each thinner and each with a branch from its middle, all
+outlined; fine twigs fill toward the rim a pixel across and not outlined, so the crown
+stays open (the first cosy winters, every twig outlined or every limb from one fork,
+closed into a tangle or a hand). A bush still standing in winter is one the simulation
+did not let die back, so it keeps its leaves, darker and colder; one with little
+`EVERGREEN` (under 100 of 255) is a fan of fine twigs instead. Winter grass is short
+stubble, not a tuft laid flat.
 
-**The sea moves** (`terrain/sea.ts`), at almost no cost per frame. The painter leaves
-the surf on two layers of its own: a band of foam along the shore and a dashed line of
-lighter water beyond it, which come and go in turn over 3.6 s, so that the surf seems
-to come in and go back (two opacities a frame). Glints, short white strokes, grow on
-the open water, drift a little and go, forty slots to a view, each on its own clock and
-somewhere new each time (a hash of the slot and the showing). Nothing is painted again
-for it; `?still` keeps it at its first moment, which the snapshots use.
+**The sea moves** (`terrain/sea.ts`), at almost no cost per frame. Where the surf moves
+the painter leaves it on three layers of its own instead of on the ground: a dashed line
+of lighter water far out, one nearer, and the foam at the shore. A crest comes in every
+3.6 s: the far line shows, then the nearer, then the foam flares and slowly fades
+(three opacities a frame). Glints, short white strokes, grow on the open water, drift a
+little and go, forty slots to a view, each on its own clock and somewhere new each time
+(a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
+it at its first moment, which the snapshots use. The land sheet films it.
 
 **The turn of the year** (`plants/turning.ts`): around each change of season places turn
 one after another over about four weeks, in fronts across the land; the hills first into

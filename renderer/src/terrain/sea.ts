@@ -1,9 +1,9 @@
 /**
  * The sea moves (cosy look, after Stardew Valley's water), at almost no cost per frame:
  *
- *   surf    the two bands the painter leaves on layers of their own (`GroundOptions.surf`):
- *           foam close in and a line of lighter water further out, each coming and going
- *           in turn, so that the surf seems to come in and go back; two opacities a frame
+ *   surf    the three bands the painter leaves on layers of their own (`GroundOptions.surf`):
+ *           a line of lighter water far out, one nearer, and the foam at the shore, shown
+ *           one after another as a crest comes in; three opacities a frame
  *   glints  short light strokes on the open water that grow, drift a little with the
  *           waves and go, each on its own clock, in new places every time; a few dozen
  *           sprites of one white texture, moved a frame
@@ -17,8 +17,6 @@ import { cellHash } from "./pixels";
 
 /** Seconds for the surf to come in and go back. */
 export const BREATH_S = 3.6;
-/** Opacity of a band of surf at its faintest. */
-const SURF_LOW = 0.25;
 /** Seconds between two showings of a glint (from, to), and the share of that it shows. */
 const GLINT_EVERY_S: readonly [number, number] = [2.4, 5.2];
 const GLINT_SHOWS = 0.42;
@@ -49,13 +47,25 @@ function heightAt(land: Land, x: number, y: number): number {
   );
 }
 
-/** The opacity of the two bands of surf at `timeS`: when the foam is full the outer line is faint. */
-export function surfAlphas(timeS: number): { near: number; far: number } {
-  const swing = (Math.sin((2 * Math.PI * timeS) / BREATH_S) + 1) / 2;
-  return {
-    near: SURF_LOW + (1 - SURF_LOW) * swing,
-    far: SURF_LOW + (1 - SURF_LOW) * (1 - swing),
-  };
+/** Where in the swell each band's crest is (share of `BREATH_S`), from the shore out, and how long it lasts. */
+const CRESTS: readonly number[] = [0.62, 0.38, 0.14];
+const CREST_WIDTH = 0.26;
+/** The foam never quite goes: this much of it stays between crests. */
+const FOAM_REST = 0.3;
+
+/**
+ * The opacity of the surf's bands at `timeS`, from the shore out: a crest comes in, the
+ * outer line first, then the nearer, then the foam flares at the shore and slowly fades.
+ */
+export function surfAlphas(timeS: number): number[] {
+  const phase = (((timeS / BREATH_S) % 1) + 1) % 1;
+  return CRESTS.map((crest, band) => {
+    const apart = Math.min(Math.abs(phase - crest), 1 - Math.abs(phase - crest));
+    // The foam lingers after its crest: twice as long to go as to come.
+    const width = band === 0 && phase > crest ? 2 * CREST_WIDTH : CREST_WIDTH;
+    const pulse = Math.max(0, 1 - apart / width);
+    return band === 0 ? FOAM_REST + (1 - FOAM_REST) * pulse : pulse;
+  });
 }
 
 /** Where glint `slot` is at `timeS` in `view`, and how long its stroke is (art pixels), if it shows. */
@@ -107,16 +117,12 @@ export class Sea {
   }
 
   /** Move the sea on to `timeS` (wall seconds) over `view`; `surf` is the ground's two bands. */
-  tick(
-    timeS: number,
-    land: Land,
-    view: CellRect,
-    surf: { near: Container; far: Container } | null,
-  ): void {
+  tick(timeS: number, land: Land, view: CellRect, surf: readonly Container[] | null): void {
     if (surf !== null) {
-      const { near, far } = surfAlphas(timeS);
-      surf.near.alpha = near;
-      surf.far.alpha = far;
+      const alphas = surfAlphas(timeS);
+      surf.forEach((band, index) => {
+        band.alpha = alphas[index] ?? 0;
+      });
     }
     const { tile } = this;
     // Texture.WHITE is 16 texels: sized in cells, a stroke `length` art pixels long and one tall.

@@ -90,8 +90,9 @@ export interface GroundOptions {
    */
   seasonAt?: (u: number, v: number, dither: number) => Season;
   /**
-   * Also paint the surf that moves (`Pixels.surf`): a band of foam along the shore and a
-   * dashed line of lighter water beyond it, each on its own, to be shown in turn.
+   * Also paint the surf that moves (`Pixels.surf`): a band of foam along the shore and two
+   * dashed lines of lighter water beyond it, each on its own, to be shown one after
+   * another. The foam is then not painted on the ground itself.
    */
   surf?: boolean;
   /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
@@ -171,9 +172,9 @@ const GRIT = 0.012;
 const WAVES = 0.006;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
-/** The moving surf: share of the foam band's pixels that are foam, and of the outer line's dashes. */
-const SURF_NEAR = 0.7;
-const SURF_FAR = 0.55;
+/** The moving surf: share of the foam band's pixels that are foam, and of a line's dashes. */
+const SURF_FOAM = 0.8;
+const SURF_LINE = 0.62;
 /** Ordered dither: thresholds of a 4×4 Bayer matrix. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((n) => (n + 0.5) / 16);
 
@@ -936,8 +937,13 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const far = 2 * surf + 1;
   // The surf that moves (`surf` option) reaches further out than the foam painted here.
   const surfing = options.surf === true && grain;
-  const nearTo = surf + 1;
-  const farTo = 2 * surf + 3;
+  // Its bands, as distances from the shore: foam up to `foamTo`, then two lines of
+  // lighter water, each `line` pixels wide, further out.
+  const foamTo = surf + 1;
+  const line = Math.max(1, Math.round(surf / 2));
+  const midFrom = foamTo + 1 + Math.floor(line / 2);
+  const farFrom = midFrom + line + surf + 1;
+  const farTo = farFrom + line - 1;
   const away = new Uint8Array(wide * tall).fill(surfing ? farTo + 1 : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
@@ -983,7 +989,8 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         }
         continue;
       }
-      if (!grain || distance >= far) continue;
+      // Where the surf moves the foam is its, not painted on the ground.
+      if (!grain || surfing || distance >= far) continue;
       const chance = distance <= surf ? FOAM_NEAR : FOAM_FAR;
       if (cellHash(originX + px, originY + py, 9) < chance) colours[at] = foam;
     }
@@ -999,12 +1006,14 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   }
   if (!surfing) return { width: wide, height: tall, rgba };
 
-  // The surf, in two bands to be shown in turn (`terrain/sea.ts`): foam close in, and a
-  // dashed line of lighter water further out. Clear everywhere else.
-  const near = new Uint8ClampedArray(wide * tall * 4);
-  const out = new Uint8ClampedArray(wide * tall * 4);
+  // The surf, in three bands to be shown one after another (`terrain/sea.ts`), a crest
+  // coming in: a line of lighter water far out, one nearer, then the foam at the shore.
+  // Clear everywhere else.
+  const surfBands = [0, 1, 2].map(() => new Uint8ClampedArray(wide * tall * 4));
   const swell = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, tones.surfMix);
-  const put = (into: Uint8ClampedArray, at: number, colour: Rgb): void => {
+  const put = (band: number, at: number, colour: Rgb): void => {
+    const into = surfBands[band];
+    if (into === undefined) return;
     into[at * 4] = colour >> 16;
     into[at * 4 + 1] = (colour >> 8) & 255;
     into[at * 4 + 2] = colour & 255;
@@ -1017,17 +1026,15 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const distance = away[at] ?? farTo + 1;
       const worldX = originX + px;
       const worldY = originY + py;
-      if (distance <= nearTo) {
-        if (cellHash(worldX, worldY, 19) < SURF_NEAR) put(near, at, foam);
-      } else if (distance <= farTo && cellHash(Math.floor(worldX / dash), worldY, 21) < SURF_FAR) {
-        put(out, at, swell);
+      const dashed = cellHash(Math.floor(worldX / dash), Math.floor(worldY / line), 21) < SURF_LINE;
+      if (distance <= foamTo) {
+        if (cellHash(worldX, worldY, 19) < SURF_FOAM) put(0, at, foam);
+      } else if (distance >= midFrom && distance < midFrom + line) {
+        if (dashed) put(1, at, swell);
+      } else if (distance >= farFrom && distance <= farTo) {
+        if (dashed) put(2, at, swell);
       }
     }
   }
-  return {
-    width: wide,
-    height: tall,
-    rgba,
-    surf: { near, far: out },
-  };
+  return { width: wide, height: tall, rgba, surf: surfBands };
 }

@@ -11,14 +11,29 @@ const land = {
 const view = { x0: 0, y0: 0, x1: 14, y1: 4 };
 
 describe("the moving sea", () => {
-  it("brings the foam in as the outer line goes, and back", () => {
-    const quarter = surfAlphas(BREATH_S / 4);
-    const threeQuarters = surfAlphas((3 * BREATH_S) / 4);
-    expect(quarter.near).toBeCloseTo(1);
-    expect(quarter.far).toBeLessThan(0.3);
-    expect(threeQuarters.near).toBeLessThan(0.3);
-    expect(threeQuarters.far).toBeCloseTo(1);
-    expect(surfAlphas(BREATH_S + 0.7).near).toBeCloseTo(surfAlphas(0.7).near);
+  it("brings a crest in: the far line, then the nearer, then the foam flares and fades", () => {
+    const peak = (band: number): number => {
+      let best = 0;
+      let at = 0;
+      for (let step = 0; step < 360; step++) {
+        const alpha = surfAlphas((step / 360) * BREATH_S)[band] ?? 0;
+        if (alpha > best) {
+          best = alpha;
+          at = step;
+        }
+      }
+      return at;
+    };
+    expect(peak(2)).toBeLessThan(peak(1));
+    expect(peak(1)).toBeLessThan(peak(0));
+    for (let step = 0; step < 36; step++) {
+      const [foam = 0, near = 0, far = 0] = surfAlphas((step / 36) * BREATH_S);
+      // The foam never quite goes; the lines come from nothing.
+      expect(foam).toBeGreaterThanOrEqual(0.3 - 1e-9);
+      expect(Math.min(near, far)).toBeGreaterThanOrEqual(0);
+      expect(Math.max(foam, near, far)).toBeLessThanOrEqual(1);
+    }
+    expect(surfAlphas(BREATH_S + 0.7)[1]).toBeCloseTo(surfAlphas(0.7)[1] ?? 0);
   });
 
   it("puts glints on open water only, the same at the same moment", () => {
@@ -47,28 +62,46 @@ describe("the moving sea", () => {
 });
 
 describe("the surf the painter leaves for the sea", () => {
-  it("is two bands on the water by the shore, clear on land and far out", () => {
+  it("is three bands on the water by the shore, the foam nearest, and none on the ground", () => {
     const pixels = paintGround(land, { tile: 32, style: "blended", grain: true, surf: true });
-    const { surf } = pixels;
-    if (surf === undefined) throw new Error("no surf");
-    const alpha = (band: Uint8ClampedArray, x: number, y: number): number =>
-      band[(y * pixels.width + x) * 4 + 3] ?? 0;
+    const bands = pixels.surf;
+    if (bands === undefined) throw new Error("no surf");
+    expect(bands).toHaveLength(3);
     const row = 64;
-    // Where the height crosses the sea level, between the middles of cells 9 and 10; the
-    // coast wanders a few pixels either side of it.
     const shore = 10 * 32;
-    const opaque = (band: Uint8ClampedArray, from: number, to: number): number => {
-      let n = 0;
-      for (let x = Math.round(from); x < Math.round(to); x++) if (alpha(band, x, row) > 0) n += 1;
-      return n;
+    // The lines are dashed: look along a few rows.
+    const xs = (band: Uint8ClampedArray): number[] => {
+      const found: number[] = [];
+      for (let y = row - 24; y < row + 24; y++) {
+        for (let x = 0; x < pixels.width; x++) {
+          if ((band[(y * pixels.width + x) * 4 + 3] ?? 0) > 0) found.push(x);
+        }
+      }
+      return found;
     };
-    expect(opaque(surf.near, shore - 16, shore + 8)).toBeGreaterThan(0);
-    expect(opaque(surf.near, 0, shore - 40)).toBe(0);
-    expect(opaque(surf.far, 0, shore - 40)).toBe(0);
-    expect(opaque(surf.near, shore + 16, pixels.width)).toBe(0);
-    expect(opaque(surf.far, shore + 16, pixels.width)).toBe(0);
-    expect(opaque(surf.far, shore - 24, shore + 4)).toBeGreaterThan(0);
-    // Without asking, none.
-    expect(paintGround(land, { tile: 32, style: "blended", grain: true }).surf).toBeUndefined();
+    const [foam = [], near = [], far = []] = bands.map(xs);
+    const middle = (values: number[]): number => values.reduce((a, b) => a + b, 0) / values.length;
+    for (const band of [foam, near, far]) {
+      expect(band.length).toBeGreaterThan(0);
+      // On the water, within a cell of the shore, never far out or on land.
+      expect(Math.max(...band)).toBeLessThan(shore + 12);
+      expect(Math.min(...band)).toBeGreaterThan(shore - 40);
+    }
+    expect(middle(far)).toBeLessThan(middle(near));
+    expect(middle(near)).toBeLessThan(middle(foam));
+    // The ground itself has no foam where the surf moves; it has it without the surf.
+    const foamColour = (rgba: Uint8ClampedArray): number => {
+      let white = 0;
+      for (let x = shore - 40; x < shore; x++) {
+        const at = (row * pixels.width + x) * 4;
+        if ((rgba[at] ?? 0) > 200 && (rgba[at + 1] ?? 0) > 220 && (rgba[at + 2] ?? 0) > 220)
+          white += 1;
+      }
+      return white;
+    };
+    const still = paintGround(land, { tile: 32, style: "blended", grain: true });
+    expect(still.surf).toBeUndefined();
+    expect(foamColour(still.rgba)).toBeGreaterThan(0);
+    expect(foamColour(pixels.rgba)).toBe(0);
   });
 });

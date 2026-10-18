@@ -5,8 +5,11 @@ export interface Pixels {
   height: number;
   /** RGBA bytes, row by row. */
   rgba: Uint8ClampedArray<ArrayBuffer>;
-  /** A ground's surf, when asked for (`GroundOptions.surf`): RGBA of the same size, clear but for it. */
-  surf?: { near: Uint8ClampedArray<ArrayBuffer>; far: Uint8ClampedArray<ArrayBuffer> };
+  /**
+   * A ground's surf, when asked for (`GroundOptions.surf`): its bands from the shore out
+   * (foam, a line, a line further out), each RGBA of the same size, clear but for it.
+   */
+  surf?: readonly Uint8ClampedArray<ArrayBuffer>[];
 }
 
 /** "#rrggbb" → [r, g, b]. */

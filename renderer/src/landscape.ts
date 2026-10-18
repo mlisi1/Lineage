@@ -180,7 +180,7 @@ export class Landscape {
         this.seaTime,
         this.land,
         cells,
-        ground === undefined ? null : { near: ground.surfNear, far: ground.surfFar },
+        ground === undefined ? null : ground.surf,
       );
     }
     if (built.middle !== null) {
@@ -259,8 +259,7 @@ export class Landscape {
         const { ground, plants: standing } = this.built.middle;
         this.layers.middle.addChild(
           ground.container,
-          ground.surfFar,
-          ground.surfNear,
+          ...[...ground.surf].reverse(),
           this.seas.middle.glints,
           standing.container,
         );
@@ -278,8 +277,7 @@ export class Landscape {
       const { ground, plants: standing } = this.built.local;
       this.layers.local.addChild(
         ground.container,
-        ground.surfFar,
-        ground.surfNear,
+        ...[...ground.surf].reverse(),
         this.seas.local.glints,
         standing.container,
       );

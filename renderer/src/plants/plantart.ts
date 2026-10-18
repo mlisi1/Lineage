@@ -676,6 +676,8 @@ export interface Standing {
   season: Season;
   /** Winter with snow lying on it. */
   snow: boolean;
+  /** A bush that does not keep its leaves: bare in winter (the cosy look; R0's always are). */
+  bare?: boolean;
 }
 
 function broadleaf(size: Size, random: Random, salt: number, look: Standing): PlantArt {
@@ -1390,8 +1392,9 @@ export function drawStanding(
   season: Season = "summer",
   snow = false,
   shapes: Shapes = "bundles",
+  bare = false,
 ): PlantArt {
-  const look: Standing = { form, growth, variant, season, snow };
+  const look: Standing = { form, growth, variant, season, snow, bare };
   const cosy = shapes === "cosy";
   const tree = form === "BROADLEAF" || form === "CONIFER";
   const [wider, taller] = BUILDS[variant % BUILDS.length] ?? [1, 1];

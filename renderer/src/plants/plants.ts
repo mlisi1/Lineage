@@ -366,6 +366,8 @@ const DRIFT_CELLS = 4;
 /** `HEIGHT` gene (0–255) below which a tree or bush is drawn broad and low, and from which slender and tall. */
 const BROAD_BELOW = 85;
 const TALL_FROM = 170;
+/** `EVERGREEN` gene (0–255) below which a bush standing in winter is bare twigs, not leaves. */
+const BARE_BELOW = 100;
 /** Snow (0–255) on a cell from which the plants on it carry some. */
 const PLANT_SNOW_FROM = 96;
 
@@ -457,6 +459,19 @@ export function standingArts(
           key: standingKey(form, growth, variant),
           art: drawStanding(form, growth, variant, detail, season, snow, look.shapes),
           ...standingColours(land.palette, form, variant, season, look),
+        });
+      }
+    }
+  }
+  // In winter a bush with little EVERGREEN is bare twigs (`BARE_BELOW`), in the wood's russet.
+  if (season === "winter") {
+    for (const growth of GROWTHS) {
+      for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+        arts.push({
+          key: `${standingKey("SHRUB", growth, variant)}/bare`,
+          art: drawStanding("SHRUB", growth, variant, detail, season, snow, look.shapes, true),
+          ...standingColours(land.palette, "SHRUB", variant, season, look),
+          ramp: look.seasons.russet,
         });
       }
     }
@@ -812,11 +827,18 @@ export function standingPlants(
       const density = look.form === "SHRUB" ? PLANT_SCALE.bushDensity : PLANT_SCALE.treeDensity;
       if (cellHash(x, y, 16) >= density) return out;
       const [dx, dy] = plantOffset(x, y);
+      const shown = plantSeason(x, y);
+      const evergreen = land.plantEvergreen?.[y * land.width + x];
+      const bare =
+        look.form === "SHRUB" &&
+        shown === "winter" &&
+        evergreen !== undefined &&
+        evergreen < BARE_BELOW;
       const key = named(
-        plantSeason(x, y),
+        shown,
         x,
         y,
-        standingKey(look.form, growthOf(biomass), buildOf(x, y)),
+        `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${bare ? "/bare" : ""}`,
       );
       return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
     },

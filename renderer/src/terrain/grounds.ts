@@ -11,8 +11,8 @@
  * it, so that the day's growth, a fire's scar or the turn of the season comes over the
  * land gently, and the old one goes when the new one is fully there.
  *
- * Asked for the surf (`PaintRequest.surf`), a painting comes with its two bands, which
- * go in layers of their own (`surfNear`, `surfFar`) for the sea to show in turn.
+ * Asked for the surf (`PaintRequest.surf`), a painting comes with its three bands, which
+ * go in layers of their own (`surf`, from the shore out) for the sea to show in turn.
  */
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
@@ -81,19 +81,17 @@ interface Painting {
 function show(
   pixels: Pixels,
   tile: number,
-  layers: { ground: Container; near: Container; far: Container },
+  layers: { ground: Container; surf: readonly Container[] },
   at: Placing,
 ): Painting {
   const ground = rgbaSprite(pixels.rgba, pixels, tile, at);
   layers.ground.addChild(ground);
   const sprites = [ground];
-  if (pixels.surf !== undefined) {
-    const near = rgbaSprite(pixels.surf.near, pixels, tile, at);
-    const far = rgbaSprite(pixels.surf.far, pixels, tile, at);
-    layers.near.addChild(near);
-    layers.far.addChild(far);
-    sprites.push(near, far);
-  }
+  (pixels.surf ?? []).forEach((band, index) => {
+    const sprite = rgbaSprite(band, pixels, tile, at);
+    layers.surf[index]?.addChild(sprite);
+    sprites.push(sprite);
+  });
   return { sprites };
 }
 
@@ -138,13 +136,12 @@ class Fade {
   }
 }
 
-/** Where a ground's sprites go: the ground itself, and the two bands of its surf. */
+/** Where a ground's sprites go: the ground itself, and the three bands of its surf. */
 class Layers {
-  /** Add these to the world: the ground, then the surf's outer band, then its foam. */
+  /** Add these to the world: the ground, then the surf's bands (the foam first, then the lines). */
   readonly container = new Container();
-  readonly surfFar = new Container();
-  readonly surfNear = new Container();
-  protected readonly layers = { ground: this.container, near: this.surfNear, far: this.surfFar };
+  readonly surf: readonly Container[] = [new Container(), new Container(), new Container()];
+  protected readonly layers = { ground: this.container, surf: this.surf };
 }
 
 /** One picture of the whole world, repainted when asked and faded in. */

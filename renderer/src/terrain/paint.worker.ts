@@ -31,12 +31,7 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
   }
   const moved =
     reply.kind === "painted"
-      ? [
-          reply.pixels.rgba.buffer,
-          ...(reply.pixels.surf === undefined
-            ? []
-            : [reply.pixels.surf.near.buffer, reply.pixels.surf.far.buffer]),
-        ]
+      ? [reply.pixels.rgba.buffer, ...(reply.pixels.surf ?? []).map((band) => band.buffer)]
       : [];
   self.postMessage(reply, moved);
 });
