@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * The scene from the committed recording (`public/stream/recording.json`, its last day:
- * 28 September, the autumn turn half done), in each view at fixed places: snapshots of
- * fixed states. Regenerate with `npx playwright test --update-snapshots` after a change
+ * The scene from the committed recordings (`public/stream/recording.json`, its last day:
+ * 28 September, the autumn turn half done; `winter.json`, its last day 5 February), in
+ * each view at fixed places: snapshots of fixed states. Regenerate with `npx playwright test --update-snapshots` after a change
  * to the look, and look at them first.
  */
 const SHOTS = {
@@ -12,6 +12,10 @@ const SHOTS = {
   "middle-shore": "view=middle&x=40&y=40",
   "local-meadow": "view=local&x=60&y=60",
   "local-shore": "view=local&x=26&y=47",
+  // The winter recording (15 January to 5 February): the snow line, where the
+  // simulation's snow on the hills meets the plants below it.
+  "winter-middle": "recording=winter&view=middle&x=40&y=36",
+  "winter-local": "recording=winter&view=local&x=40&y=36",
 } as const;
 
 for (const [name, query] of Object.entries(SHOTS)) {

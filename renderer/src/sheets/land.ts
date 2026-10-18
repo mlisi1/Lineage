@@ -21,7 +21,7 @@ import { GROUND, LOCAL_PIXELS, MAP_GROUND } from "../spike/proposal";
 import { findSite, forest, meadow, shore } from "../spike/sites";
 import { Stage, type Picture } from "../spike/stage";
 import type { ClockMessage, LandMessage, Message } from "../protocol";
-import { Camera, clockAfter, type Cue } from "./films";
+import { Camera, type Cue } from "./films";
 
 /** Replaced by Vite with the commit the page was built from. */
 declare const __BUILD_COMMIT__: string;
@@ -339,25 +339,36 @@ async function filmSection(host: HTMLElement): Promise<void> {
     );
   }
 
-  // Autumn into winter: the recording ends in September, so the clock is run on over its last land.
-  const winterFrom = 68;
-  const every = 2;
-  const winterCues: Cue[] = Array.from({ length: 16 }, (_, index) => ({
-    at: (index + 1) * 0.6,
-    message: clockAfter(lastClock, winterFrom + (index + 1) * every),
-  }));
-  const first = clockAfter(lastClock, winterFrom);
-  const final = clockAfter(lastClock, winterFrom + 16 * every);
-  filmFigure(
-    host,
-    await camera.film({ view: "middle", x: 60, y: 60 }, [first, lastLand], winterCues, {
-      seconds: 16 * 0.6 + 1.5,
-      fps: 10,
-      fadeS: 0.4,
-    }),
-    `Autumn into winter, ${first.date} to ${final.date}.`,
-    "Two days every 0.6 s. The clock is run on over the recording's last land (28 September), so the plants are September's and no snow has come: the leaves go, the bushes brown.",
+  // Deep winter: the winter recording's own days, snow on the hills as the simulation has it.
+  const winterResponse = await fetch("stream/winter.json");
+  if (!winterResponse.ok) throw new Error(`stream/winter.json: HTTP ${winterResponse.status}`);
+  const winter = ((await winterResponse.json()) as { messages: Message[] }).messages;
+  const winterClocks = winter.filter(
+    (message): message is ClockMessage => message.type === "clock",
   );
+  const winterLands = winter.filter((message): message is LandMessage => message.type === "land");
+  const [firstClock] = winterClocks;
+  const [firstLand] = winterLands;
+  const finalClock = winterClocks.at(-1);
+  if (firstClock !== undefined && firstLand !== undefined && finalClock !== undefined) {
+    // Each clock a day on; each land when it came (every ten days).
+    let at = 0;
+    const cues: Cue[] = [];
+    for (const message of winter.slice(winter.indexOf(firstLand) + 1)) {
+      if (message.type === "clock") at += 0.5;
+      if (message.type === "clock" || message.type === "land") cues.push({ at, message });
+    }
+    filmFigure(
+      host,
+      await camera.film({ view: "middle", x: 40, y: 36 }, [firstClock, firstLand], cues, {
+        seconds: at + 1.5,
+        fps: 10,
+        fadeS: 0.4,
+      }),
+      `Deep winter, ${firstClock.date} to ${finalClock.date}.`,
+      "From the winter recording (186 sim-days on from the fixture): snow lies on the hills where the simulation's temperature puts it; the bushes still standing are those that kept their leaves, the others bare twigs; broadleaves bare but for the evergreen ones.",
+    );
+  }
 }
 
 async function main(): Promise<void> {

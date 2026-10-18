@@ -55,7 +55,7 @@ describe("cosy plants", () => {
 
   it("keep a winter bush's leaves, unless it is one that goes bare", () => {
     const leafy = drawStanding("SHRUB", "grown", 0, 4, "winter", false, "cosy");
-    const bare = drawStanding("SHRUB", "grown", 0, 4, "winter", false, "cosy", true);
+    const bare = drawStanding("SHRUB", "grown", 0, 4, "winter", false, "cosy", "bare");
     const leaves = (art: PlantArt): number =>
       [INK.deep, INK.dark, INK.mid, INK.light, INK.bright].reduce(
         (n, ink) => n + count(art, ink),
@@ -64,6 +64,21 @@ describe("cosy plants", () => {
     expect(leaves(leafy)).toBeGreaterThan(200);
     expect(leaves(bare)).toBe(0);
     expect(count(bare, INK.trunk) + count(bare, INK.trunkDark)).toBeGreaterThan(20);
+  });
+
+  it("keep an evergreen broadleaf in leaf through winter, the rest bare", () => {
+    const leaves = (art: PlantArt): number =>
+      [INK.deep, INK.dark, INK.mid, INK.light, INK.bright].reduce(
+        (n, ink) => n + count(art, ink),
+        0,
+      );
+    for (const shapes of ["cosy", "bundles"] as const) {
+      const bare = drawStanding("BROADLEAF", "grown", 0, 4, "winter", false, shapes);
+      const leafy = drawStanding("BROADLEAF", "grown", 0, 4, "winter", false, shapes, "leafy");
+      const summer = drawStanding("BROADLEAF", "grown", 0, 4, "summer", false, shapes);
+      expect(leaves(bare), shapes).toBe(0);
+      expect(leaves(leafy), shapes).toBe(leaves(summer));
+    }
   });
 
   it("draw a crown of a few large puffs in the same box as the bundles", () => {

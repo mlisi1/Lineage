@@ -3,9 +3,10 @@
 Usage::
 
     uv run python -m tools.stream <save.lzma> --out renderer/public/stream/recording.json
-        [--days 28] [--land-every 7] [--creatures]
+        [--skip-days 0] [--days 28] [--land-every 7] [--creatures]
 
-Runs the world on from the save one sim-day at a time and writes the messages a server
+Runs the world on from the save (first ``--skip-days`` unrecorded, to reach another time
+of year) one sim-day at a time and writes the messages a server
 would have sent (``server/lineage_server/protocol``): everything on connect, then each
 day a ``clock`` and, every ``--land-every`` days, a ``land``. With ``--creatures`` the
 ``creatures`` message of each day too (for R2). The renderer's ``Recording`` plays it.
@@ -52,12 +53,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("save", type=Path, help="a save file written by the sim (.lzma)")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--out", type=Path, required=True, help="the recording (.json)")
-    parser.add_argument("--days", type=int, default=28, help="sim-days to run on")
+    parser.add_argument("--skip-days", type=int, default=0, help="sim-days to run unrecorded")
+    parser.add_argument("--days", type=int, default=28, help="sim-days to record")
     parser.add_argument("--land-every", type=int, default=7, help="days between lands")
     parser.add_argument("--creatures", action="store_true", help="also every creature")
     args = parser.parse_args(argv)
     config = parse_config(args.config.read_text(encoding="utf-8"))
     world = World.restore(config, io.loads(args.save.read_bytes()))
+    if args.skip_days > 0:
+        world.advance_to(world.t_ms + args.skip_days * MS_PER_DAY)
     messages = record(world, args.days, args.land_every, args.creatures)
     document = {"format": FORMAT, "source": args.save.as_posix(), "messages": messages}
     args.out.parent.mkdir(parents=True, exist_ok=True)

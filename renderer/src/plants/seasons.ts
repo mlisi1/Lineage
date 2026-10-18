@@ -99,6 +99,9 @@ export const R0_SEASONS: SeasonTones = {
 };
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
 
+/** What keeps its leaves through winter takes them darker and colder. */
+export const coldRamp = (ramp: Ramp, cold: string): Ramp => toward(ramp, cold, 0.28);
+
 /**
  * The three tones of `form` in `season`. `variant` tells apart the plants of one form
  * where they do not all turn alike: in autumn one broadleaf in three goes gold, one
@@ -135,7 +138,7 @@ export function seasonRamp(
   // Bare wood: a broadleaf's branches. A bush still standing in winter keeps its leaves
   // (the rest die back to the ground), darker and colder, as an evergreen's.
   if (form === "BROADLEAF") return tones.russet;
-  if (form === "SHRUB") return toward(ramp, tones.cold, 0.28);
+  if (form === "SHRUB") return coldRamp(ramp, tones.cold);
   if (form === "LICHEN") return ramp;
   return toward(dry, tones.pale, 0.25);
 }

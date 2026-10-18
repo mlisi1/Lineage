@@ -33,8 +33,17 @@ import {
   drawStanding,
   type PlantArt,
   type Small,
+  type WinterHabit,
 } from "./plantart";
-import { GROWTHS, growthOf, seasonRamp, woodOf, type Growth, type Season } from "./seasons";
+import {
+  GROWTHS,
+  coldRamp,
+  growthOf,
+  seasonRamp,
+  woodOf,
+  type Growth,
+  type Season,
+} from "./seasons";
 import {
   groundEarliness,
   plantEarliness,
@@ -366,8 +375,21 @@ const DRIFT_CELLS = 4;
 /** `HEIGHT` gene (0–255) below which a tree or bush is drawn broad and low, and from which slender and tall. */
 const BROAD_BELOW = 85;
 const TALL_FROM = 170;
-/** `EVERGREEN` gene (0–255) below which a bush standing in winter is bare twigs, not leaves. */
+/**
+ * `EVERGREEN` gene (0–255) below which a bush standing in winter is bare twigs, not leaves,
+ * and from which a broadleaf keeps its leaves (the simulation makes conifers of trees
+ * from 128 on: these are the broadleaves just under it).
+ */
 const BARE_BELOW = 100;
+const LEAFY_FROM = 77;
+
+/** How a plant of `form` with `evergreen` (0–255; unknown where the land does not carry it) spends the winter, if not as its kind mostly does. */
+function habitOf(form: string, evergreen: number | undefined): WinterHabit | null {
+  if (evergreen === undefined) return null;
+  if (form === "SHRUB" && evergreen < BARE_BELOW) return "bare";
+  if (form === "BROADLEAF" && evergreen >= LEAFY_FROM) return "leafy";
+  return null;
+}
 /** Snow (0–255) on a cell from which the plants on it carry some. */
 const PLANT_SNOW_FROM = 96;
 
@@ -463,16 +485,27 @@ export function standingArts(
       }
     }
   }
-  // In winter a bush with little EVERGREEN is bare twigs (`BARE_BELOW`), in the wood's russet.
+  // In winter the habits their kind mostly does without (`habitOf`): a bush with little
+  // EVERGREEN bare twigs, in the wood's russet; a broadleaf with much of it still in leaf,
+  // in a colder green.
   if (season === "winter") {
-    for (const growth of GROWTHS) {
-      for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
-        arts.push({
-          key: `${standingKey("SHRUB", growth, variant)}/bare`,
-          art: drawStanding("SHRUB", growth, variant, detail, season, snow, look.shapes, true),
-          ...standingColours(land.palette, "SHRUB", variant, season, look),
-          ramp: look.seasons.russet,
-        });
+    for (const [form, habit] of [
+      ["SHRUB", "bare"],
+      ["BROADLEAF", "leafy"],
+    ] as const) {
+      for (const growth of GROWTHS) {
+        for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+          const colours = standingColours(land.palette, form, variant, season, look);
+          arts.push({
+            key: `${standingKey(form, growth, variant)}/${habit}`,
+            art: drawStanding(form, growth, variant, detail, season, snow, look.shapes, habit),
+            ...colours,
+            ramp:
+              habit === "bare"
+                ? look.seasons.russet
+                : coldRamp(land.palette[form] ?? colours.ramp, look.seasons.cold),
+          });
+        }
       }
     }
   }
@@ -828,17 +861,13 @@ export function standingPlants(
       if (cellHash(x, y, 16) >= density) return out;
       const [dx, dy] = plantOffset(x, y);
       const shown = plantSeason(x, y);
-      const evergreen = land.plantEvergreen?.[y * land.width + x];
-      const bare =
-        look.form === "SHRUB" &&
-        shown === "winter" &&
-        evergreen !== undefined &&
-        evergreen < BARE_BELOW;
+      const habit =
+        shown === "winter" ? habitOf(look.form, land.plantEvergreen?.[y * land.width + x]) : null;
       const key = named(
         shown,
         x,
         y,
-        `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${bare ? "/bare" : ""}`,
+        `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${habit === null ? "" : `/${habit}`}`,
       );
       return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
     },

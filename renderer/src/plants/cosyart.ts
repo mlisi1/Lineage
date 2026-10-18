@@ -269,7 +269,7 @@ const STOUT = 1.45;
 export function cosyBroadleaf(size: Size, random: Random, salt: number, look: Standing): PlantArt {
   const [width, height] = size;
   const art = blank(width, height);
-  const bare = look.season === "winter";
+  const bare = look.season === "winter" && look.habit !== "leafy";
   const old = look.growth === "old";
   if (look.growth === "sprout") {
     // A sapling: a stem, and a small puff or two at its top; two twigs when it is bare.
@@ -335,7 +335,7 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   const [width, height] = size;
   const art = blank(width, height);
   const sprout = look.growth === "sprout";
-  if (look.season === "winter" && look.bare === true) {
+  if (look.season === "winter" && look.habit === "bare") {
     // A bush that does not keep its leaves (little EVERGREEN): fine twigs fanning out
     // from the foot, in the bark's colour and not outlined, so that they stay twigs and
     // do not close into a lump.

@@ -6,7 +6,7 @@ How R1 draws the ground and the plants in the cosy look, after Stardew Valley
 `?look=all` adds the R0 look beside it).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `c645bcd99a32-dirty`
+- Renderer build: `1de4020b19dd-dirty`
 - 50 pictures
 
 Regenerate with `cd renderer && npm run land`; do not edit by hand. It is a view of

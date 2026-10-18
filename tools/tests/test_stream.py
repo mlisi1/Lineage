@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
+import pytest
 from lineage_sim.config import parse_config
 from lineage_sim.state import io
 from lineage_sim.world import World
@@ -51,3 +53,35 @@ def test_the_committed_recording_is_what_the_tool_writes(tmp_path: Path) -> None
         "run `uv run python -m tools.stream sim/tests/fixtures/saves/v4.lzma "
         "--out renderer/public/stream/recording.json --days 56 --land-every 28`"
     )
+
+
+WINTER = REPO_ROOT / "renderer" / "public" / "stream" / "winter.json"
+
+
+@pytest.mark.slow
+def test_the_committed_winter_recording_is_what_the_tool_writes(tmp_path: Path) -> None:
+    """renderer/public/stream/winter.json: 186 sim-days to run, so nightly only."""
+    out = tmp_path / "winter.json"
+    stream.main(
+        [
+            SAVE.as_posix(),
+            "--out",
+            out.as_posix(),
+            "--skip-days",
+            "165",
+            "--days",
+            "21",
+            "--land-every",
+            "10",
+        ]
+    )
+    written = json.loads(out.read_text("utf-8"))
+    committed = json.loads(WINTER.read_text("utf-8"))
+    assert committed["messages"] == written["messages"], (
+        "run `uv run python -m tools.stream sim/tests/fixtures/saves/v4.lzma --out "
+        "renderer/public/stream/winter.json --skip-days 165 --days 21 --land-every 10`"
+    )
+    # Snow lies on the hills in the simulation's own winter.
+    lands = [message for message in committed["messages"] if message["type"] == "land"]
+    snowy = sum(1 for byte in base64.b64decode(lands[-1]["snow"]["data"]) if byte > 0)
+    assert snowy > len(base64.b64decode(lands[-1]["snow"]["data"])) / 10

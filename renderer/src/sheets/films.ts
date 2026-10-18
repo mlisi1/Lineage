@@ -9,7 +9,7 @@
  */
 import { Application, Container } from "pixi.js";
 import { Landscape, TILES, type ViewName } from "../landscape";
-import type { ClockMessage, Message } from "../protocol";
+import type { Message } from "../protocol";
 import { ApngWriter, dataUri } from "../spike/apng";
 import { InlinePainter } from "../terrain/painter";
 
@@ -122,22 +122,4 @@ export class Camera {
     painter.dispose();
     return dataUri(writer.finish(), "image/png");
   }
-}
-
-/** The clock `days` after `clock`, with its date, season and day of the year moved on. */
-export function clockAfter(clock: ClockMessage, days: number, seasonDays = 91.3): ClockMessage {
-  const date = new Date(`${clock.date}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  const seasons = ["spring", "summer", "autumn", "winter"] as const;
-  const phase = seasons.indexOf(clock.season) + clock.season_progress + days / seasonDays;
-  const wrapped = ((phase % 4) + 4) % 4;
-  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
-  return {
-    ...clock,
-    t_ms: clock.t_ms + days * 86_400_000,
-    date: date.toISOString().slice(0, 10),
-    season: seasons[Math.floor(wrapped)] ?? "summer",
-    season_progress: Math.round((wrapped % 1) * 1e6) / 1e6,
-    day_of_year: Math.floor((date.getTime() - start) / 86_400_000) + 1,
-  };
 }

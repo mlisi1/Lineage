@@ -668,6 +668,9 @@ export function snowCap(art: PlantArt, deep: number): void {
  */
 export type Shapes = "bundles" | "cosy";
 
+/** How a plant spends the winter, where its kind does not all do the same. */
+export type WinterHabit = "bare" | "leafy";
+
 /** A plant as drawn: what of it, how grown, which of its drawings, when. */
 export interface Standing {
   form: Form;
@@ -676,14 +679,17 @@ export interface Standing {
   season: Season;
   /** Winter with snow lying on it. */
   snow: boolean;
-  /** A bush that does not keep its leaves: bare in winter (the cosy look; R0's always are). */
-  bare?: boolean;
+  /**
+   * What it does in winter when its kind mostly does otherwise: a bush that goes `bare`
+   * (the cosy look; R0's always are), a broadleaf that stays `leafy` (an evergreen one).
+   */
+  habit?: WinterHabit;
 }
 
 function broadleaf(size: Size, random: Random, salt: number, look: Standing): PlantArt {
   const [width, height] = size;
   const art = blank(width, height);
-  const bare = look.season === "winter";
+  const bare = look.season === "winter" && look.habit !== "leafy";
   const old = look.growth === "old";
   if (look.growth === "sprout") {
     // A sapling: a stem, and a few leaves at its top, or two twigs when it is bare.
@@ -1392,9 +1398,16 @@ export function drawStanding(
   season: Season = "summer",
   snow = false,
   shapes: Shapes = "bundles",
-  bare = false,
+  habit?: WinterHabit,
 ): PlantArt {
-  const look: Standing = { form, growth, variant, season, snow, bare };
+  const look: Standing = {
+    form,
+    growth,
+    variant,
+    season,
+    snow,
+    ...(habit === undefined ? {} : { habit }),
+  };
   const cosy = shapes === "cosy";
   const tree = form === "BROADLEAF" || form === "CONIFER";
   const [wider, taller] = BUILDS[variant % BUILDS.length] ?? [1, 1];

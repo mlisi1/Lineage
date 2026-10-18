@@ -6,6 +6,8 @@
  *                              day every second, the middle view on the island's middle
  *   ?view=map|middle|local     the view
  *   ?x=120&y=60                where it looks, in cells
+ *   ?recording=winter          the winter recording (15 January to 5 February, snow on
+ *                              the hills) instead of the summer-into-autumn one
  *   ?source=ws://host/stream   the server's stream instead of the recording (S1)
  *   ?every=1000                wall milliseconds between the recording's messages (0: all
  *                              at once, the last day; the default is 1000)
@@ -15,7 +17,7 @@
  *
  * The camera's moves between views and who it follows are R3; creatures are R2.
  */
-import { Application, Container } from "pixi.js";
+import { Application, Container, WebGLRenderer } from "pixi.js";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import type { Message } from "./protocol";
@@ -28,12 +30,18 @@ const WIDTH = DESIGN_WIDTH / ART;
 const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
-const RECORDING = "stream/recording.json";
+/** The committed recordings (`tools/stream.py`): 3 August to 28 September, and deep winter. */
+const RECORDINGS: Readonly<Record<string, string>> = {
+  autumn: "stream/recording.json",
+  winter: "stream/winter.json",
+};
 
 declare global {
   interface Window {
     /** True once the view shows the latest day, fully painted (the visual tests wait for it). */
     __sceneSettled?: () => boolean;
+    /** Textures alive on the GPU: what a leak would make grow (tests). */
+    __textures?: () => number;
     /** Hand the scene a message as if the stream had sent it (tests and measurements). */
     __receive?: (message: Message) => void;
   }
@@ -85,11 +93,21 @@ async function start(): Promise<void> {
   const socket = params.get("source");
   const every = Number(params.get("every") ?? 1000);
   const source: Source =
-    socket !== null ? new SocketSource(socket) : await Recording.load(RECORDING, every);
+    socket !== null
+      ? new SocketSource(socket)
+      : await Recording.load(
+          RECORDINGS[params.get("recording") ?? "autumn"] ?? RECORDINGS["autumn"] ?? "",
+          every,
+        );
   source.listen((message) => landscape.receive(message));
 
   window.__sceneSettled = () => landscape.settled;
   window.__receive = (message) => landscape.receive(message);
+  // PixiJS leaves a freed texture's place empty (null) rather than taking it out: count the rest.
+  window.__textures = () =>
+    app.renderer instanceof WebGLRenderer
+      ? app.renderer.texture.managedTextures.filter((source) => source !== null).length
+      : -1;
   // The view first, so that the first land is laid out for it alone.
   landscape.show(view, { x0: 0, y0: 0, x1: 0, y1: 0 });
   app.ticker.add((ticker) => {
