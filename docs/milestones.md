@@ -21,6 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |
 | R4 | Atmosphere | not started | — |
+| R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |

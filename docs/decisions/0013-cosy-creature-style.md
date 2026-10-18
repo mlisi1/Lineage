@@ -51,7 +51,8 @@ animals share one light. `lit` stays in the code as the comparison in the creatu
   eyes were too small for one: 2.5 % more sprites for the fixture's 197 animals in the
   middle view, 6 % in the local view (where few are in sight). mid-crowd held 30 fps on
   the board with about 9 ms a frame to spare (ADR 0010); the benchmark's views now draw
-  `cosy`, and R2's performance check re-measures them.
+  `cosy`. On the PC, slowed 21 times, the difference is lost in noise; the board measures
+  it in R5, the final rendering pass, with the rest of the look.
 - The R0 look sheet (`reports/R0-look-sheet/`) is R0's record and keeps `lit`; the next
   regeneration of it will show `cosy`.
 - The ground shadow is the only see-through part of a body. If R4's night tint or glow

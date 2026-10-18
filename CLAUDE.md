@@ -415,7 +415,18 @@ needs a note in `docs/decisions/`.
 ### R4 — Atmosphere
 - **Deliver**: day/night tint from presence, glow pass, seasons, weather of events,
   apocalypse sequence.
-- **Tests**: snapshots per lighting state; fps benchmark on device unchanged within 10%.
+- **Tests**: snapshots per lighting state. (Its device benchmark moved to R5.)
+
+### R5 — Final rendering pass and device benchmark
+- **Deliver**: the look of terrain, plants, creatures and atmosphere tuned together, as one
+  pass over R1–R4 (the cosy palette, ADR 0013, is the starting point); the R0 benchmark's
+  views rebuilt on the real renderer and the state stream; on-device numbers in a report.
+  R1–R4 do not measure on the device; they keep within the PC-side checks and leave the
+  board to R5.
+- **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
+  (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
+- **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
+  (ADR 0010), with the final look; Chromium's memory within the board's budget (§4.8).
 
 ### S1 — Server: real-time loop and persistence
 - **Deliver**: run the sim in real time, daily atomic saves (write temp → fsync → rename),
@@ -452,7 +463,8 @@ needs a note in `docs/decisions/`.
 - **Accept**: no leak trend, no crashes, all budgets in §4.8 met.
 
 **Suggested order**: M0 → M1 → R0 (as soon as hardware is on the desk) → M2 → M3 → M4 →
-M5 → M6 → M7 → M8 → M9 → M10 → M11, with R1–R4 following M3/M4 and S1–S7 after M8.
+M5 → M6 → M7 → M8 → M9 → M10 → M11, with R1–R4 following M3/M4, R5 once R1–R4 are in,
+and S1–S7 after M8.
 
 ## 9. How to work on a milestone (for Claude)
 
