@@ -22,6 +22,7 @@
  * rock. It can also be given the shadows of what stands on it.
  */
 import { VISIBLE_FROM } from "../plants/look";
+import { MAPS, type Look } from "../looks";
 import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
@@ -78,6 +79,14 @@ export interface GroundOptions {
   season?: Season;
   /** Winter with snow lying on the land: in patches, thinner under trees. */
   snow?: boolean;
+  /**
+   * The season at each place, in cells, where the year is turning from one season to the
+   * next (`turning.ts`); `dither` (−1 to 1) is there to dither the line between them.
+   * Every place is in `season` when left out.
+   */
+  seasonAt?: (u: number, v: number, dither: number) => Season;
+  /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
+  look?: Look;
 }
 
 /** The forms that grow, in the order of their class numbers here (1 to 5); 0 is bare. */
@@ -125,7 +134,6 @@ const CALM_MIX = 0.4;
 /** How far, in biomass, the line between dried and green growth wanders in a calm view. */
 const DRY_DRIFT = 0.12;
 /** Under trees and bushes a close view shows a floor of litter: mixed this far into their dark. */
-const LITTER = 0x6a5637;
 const FLOOR_LITTER: readonly number[] = [0, 0, 0, 0.18, 0.4, 0.46, 0];
 /** Snow lies where this noise is under so much: in the open, and under trees. */
 const SNOW_OPEN = 0.64;
@@ -145,12 +153,7 @@ const BLADE_GROWTH: Readonly<Record<Season, number>> = {
   autumn: 0.8,
   winter: 0.4,
 };
-/** Fallen leaves in autumn. */
-const LEAF_GOLD = 0xd29a2a;
-const LEAF_FLAME = 0xc25a26;
-/** What a shadow is mixed with, how far, and how wide (as a share of it) its dithered rim is. */
-const SHADOW = 0x16203a;
-const SHADOW_MIX = 0.32;
+/** How wide (as a share of it) a shadow's dithered rim is. */
 const SHADOW_RIM = 0.18;
 /** Share of the pixels of bare ground that are a grain darker or lighter. */
 const GRIT = 0.012;
@@ -322,17 +325,6 @@ const DETAIL: Readonly<Record<Matter, readonly (readonly [readonly Motif[], numb
     [TWIGS, 0.05],
   ],
 };
-/** Lichen comes grey-green as the palette has it, mustard, or as a chalky crust. */
-const LICHENS: readonly (readonly [Rgb, Rgb, Rgb])[] = [
-  [0xe3cd72, 0xc9a94a, 0x9b7d33],
-  [0xe8e6d4, 0xcfccb6, 0xa8a58f],
-];
-const LEAF_OCHRE = 0xb08a4a;
-const LEAF_BROWN = 0x7a5a34;
-const MOSS = 0x7fa24a;
-const TWIG = 0x5a4632;
-const ASH_PALE = 0xb9b2a8;
-const PETALS: readonly Rgb[] = [0xf4f1e4, 0xf2d24b];
 
 /** Weights of a binomial kernel reaching `reach` cells either side. */
 function kernel(reach: number): number[] {
@@ -386,29 +378,50 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const bare = packRamp(world.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
   const rock = packRamp(relief.highRock);
   const snow = packRamp(relief.snow);
-  const season = options.season ?? "summer";
-  const snowing = options.snow === true && season === "winter";
-  // Dried growth: the maps' own dry colours, paler in winter.
-  const dry = packRamp(
-    season === "winter"
-      ? seasonRamp(world.palette, "GRASS", "winter")
-      : (world.palette["DORMANT"] ?? ["#8f8448", "#b3a65c", "#cdc177"]),
-  );
+  const look = options.look ?? MAPS;
+  const tones = look.ground;
   const burnt = packRamp(world.palette["BURNT"] ?? ["#3a302b", "#4f423a", "#66564b"]);
-  // Grass and lichen are the ground's own colour; under bushes and trees it is their floor.
-  const ramps = FORMS.map((form, index) =>
-    packRamp(
-      index + 1 > LOW && grain
-        ? floorRamp(world.palette, form, season)
-        : seasonRamp(world.palette, form, season),
-    ),
-  );
+  /** What the time of year paints with: one season everywhere, or each place its own. */
+  interface Seasonal {
+    season: Season;
+    snowing: boolean;
+    /** Dried growth: the maps' own dry colours, paler in winter. */
+    dry: readonly [Rgb, Rgb, Rgb];
+    /** Grass and lichen are the ground's own colour; under bushes and trees it is their floor. */
+    ramps: readonly (readonly [Rgb, Rgb, Rgb])[];
+  }
+  const seasonals = new Map<Season, Seasonal>();
+  const seasonalOf = (season: Season): Seasonal => {
+    const known = seasonals.get(season);
+    if (known !== undefined) return known;
+    const made: Seasonal = {
+      season,
+      snowing: options.snow === true && season === "winter",
+      dry: packRamp(
+        season === "winter"
+          ? seasonRamp(world.palette, "GRASS", "winter", 0, look.seasons)
+          : (world.palette["DORMANT"] ?? ["#8f8448", "#b3a65c", "#cdc177"]),
+      ),
+      ramps: FORMS.map((form, index) =>
+        packRamp(
+          index + 1 > LOW && grain
+            ? floorRamp(world.palette, form, season, look.seasons)
+            : seasonRamp(world.palette, form, season, 0, look.seasons),
+        ),
+      ),
+    };
+    seasonals.set(season, made);
+    return made;
+  };
+  const { seasonAt } = options;
+  // The season of the pixel being painted.
+  let now = seasonalOf(options.season ?? "summer");
   const dries = FORMS.map((form) => world.dormantClasses.includes(form));
   const dryBelow = world.dormantBelow / 255;
   const bands = relief.seaBands.map((band) => ({ limit: band.limit, colour: pack(band.colour) }));
   const outline = pack(relief.shoreOutline);
-  const sand = bare[2];
-  const foam = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, 0.6);
+  const sand = tones.sand ?? bare[2];
+  const foam = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, tones.foamMix);
 
   const clampX = (x: number): number => Math.min(Math.max(x, 0), width - 1);
   const clampY = (y: number): number => Math.min(Math.max(y, 0), height - 1);
@@ -606,13 +619,13 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     withered =
       grows !== BURNT &&
       (dries[grows - 1] ?? false) &&
-      (season === "winter" || grown + drift < dryBelow);
-    const ramp = grows === BURNT ? burnt : withered ? dry : (ramps[grows - 1] ?? bare);
+      (now.season === "winter" || grown + drift < dryBelow);
+    const ramp = grows === BURNT ? burnt : withered ? now.dry : (now.ramps[grows - 1] ?? bare);
     // A plant standing on a floor: the floor is a tone darker, for it to stand out on.
     const floor = grows > LOW && grows !== BURNT;
     let tone = ramp[floor && grain ? Math.max(step - 1, 0) : step] ?? 0;
     if (!grain) return tone;
-    if (floor && detailed && !withered) tone = mix(tone, LITTER, FLOOR_LITTER[grows] ?? 0);
+    if (floor && detailed && !withered) tone = mix(tone, tones.litter, FLOOR_LITTER[grows] ?? 0);
     const [thin, full] = COVERAGE[grows] ?? [0, 0];
     if (calm > 0) {
       // Growth thins in patches cells across, and the soil shows in the gaps. A gap's
@@ -698,6 +711,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
 
       // Where two sides of a threshold meet, `dither` decides pixel by pixel.
       const dither = dithered ? (BAYER[(worldY & 3) * 4 + (worldX & 3)] ?? 0.5) * 2 - 1 : 0;
+      if (seasonAt !== undefined) now = seasonalOf(seasonAt(u, v, dither));
       if (!land) {
         const depth = -above * (1 + MIX_DEPTH * dither);
         const band = bands.find((candidate) => depth <= candidate.limit) ?? bands[bands.length - 1];
@@ -717,7 +731,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         toned[at] = step;
         thick[at] = Math.round(grown * 255);
       }
-      if (snowing) {
+      if (now.snowing) {
         // Snow in patches cells across, with a dithered edge; less of it under trees.
         const lying =
           0.82 * valueNoise(u / SNOW_PATCH, v / SNOW_PATCH, 40) +
@@ -763,7 +777,6 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   // to its own kind of ground, so borders stay where they were painted.
   if (detailed) {
     const grid = Math.max(4, Math.round(tile / 5));
-    const lichenRamp = ramps[0] ?? bare;
     for (let gy = Math.floor(originY / grid) - 1; gy <= Math.floor((originY + tall) / grid); gy++) {
       for (
         let gx = Math.floor(originX / grid) - 1;
@@ -774,6 +787,14 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         const sy = gy * grid + Math.floor(cellHash(gx, gy, 32) * grid) - originY;
         if (sx < 0 || sy < 0 || sx >= wide || sy >= tall) continue;
         const site = sy * wide + sx;
+        if (seasonAt !== undefined) {
+          const wx = sx + originX;
+          const wy = sy + originY;
+          const dither = (BAYER[(wy & 3) * 4 + (wx & 3)] ?? 0.5) * 2 - 1;
+          now = seasonalOf(seasonAt((wx + 0.5) / tile - 0.5, (wy + 0.5) / tile - 0.5, dither));
+        }
+        const { season } = now;
+        const lichenRamp = now.ramps[0] ?? bare;
         const made = (matter[site] ?? 0) as Matter;
         if (made === MATTER.sea) continue;
         const amount = (thick[site] ?? 0) / 255;
@@ -804,9 +825,9 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         const step = toned[site] ?? 1;
         const ramp =
           made === MATTER.grass
-            ? (ramps[1] ?? bare)
+            ? (now.ramps[1] ?? bare)
             : made === MATTER.dry
-              ? dry
+              ? now.dry
               : made === MATTER.rock
                 ? rock
                 : made === MATTER.snow
@@ -816,7 +837,8 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         const darker = ramp !== null && step > 0 ? (ramp[step - 1] ?? base) : shade(base, 0.84);
         const lighter = ramp !== null && step < 2 ? (ramp[step + 1] ?? base) : shade(base, 1.12);
         const variety = cellHash(gx, gy, 35);
-        const lichen = variety < 0.66 ? lichenRamp : (LICHENS[variety < 0.8 ? 0 : 1] ?? lichenRamp);
+        const lichen =
+          variety < 0.66 ? lichenRamp : (tones.lichens[variety < 0.8 ? 0 : 1] ?? lichenRamp);
         const inks: Readonly<Record<string, Rgb>> = {
           d: darker,
           l: lighter,
@@ -824,13 +846,13 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
           a: lichen[2],
           c: lichen[1],
           e: lichen[0],
-          o: season === "autumn" ? LEAF_GOLD : LEAF_OCHRE,
-          n: season === "autumn" ? LEAF_FLAME : LEAF_BROWN,
-          m: MOSS,
-          t: made === MATTER.burnt ? shade(TWIG, 0.5) : TWIG,
-          w: ASH_PALE,
-          p: PETALS[0] ?? 0xffffff,
-          q: PETALS[1] ?? 0xffffff,
+          o: season === "autumn" ? tones.leafGold : tones.leafOchre,
+          n: season === "autumn" ? tones.leafFlame : tones.leafBrown,
+          m: tones.moss,
+          t: made === MATTER.burnt ? shade(tones.twig, 0.5) : tones.twig,
+          w: tones.ash,
+          p: tones.petals[0],
+          q: tones.petals[1],
         };
         const flipped = cellHash(gx, gy, 36) < 0.5;
         motif.forEach((row, index) => {
@@ -868,7 +890,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
           const bayer = BAYER[((originY + py) & 3) * 4 + ((originX + px) & 3)] ?? 0.5;
           if (reach > 1 + SHADOW_RIM * (2 * bayer - 1)) continue;
           shaded[at] = 1;
-          colours[at] = mix(colours[at] ?? 0, SHADOW, SHADOW_MIX);
+          colours[at] = mix(colours[at] ?? 0, tones.shadow, tones.shadowMix);
         }
       }
     }

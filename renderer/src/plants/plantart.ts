@@ -22,6 +22,7 @@
  * see ADR 0007. No plant carries a shadow: the ground paints it, so that shadows do not
  * darken each other.
  */
+import { MAPS, type PlantInks } from "../looks";
 import { mulberry32, type Random } from "../rng";
 import type { Ramp } from "../terrain/land";
 import { cellHash, hexToRgb, type Pixels } from "../terrain/pixels";
@@ -109,13 +110,7 @@ const OLD: Readonly<Record<"tree" | "bush", Size>> = { tree: [1.12, 1], bush: [1
 export const STANDING_VARIANTS = 3;
 const TRUNK = "#5a4632";
 /** What the darkest and the lightest tone of foliage are mixed with. */
-const DEEP: readonly [number, number, number] = [18, 30, 56];
-const BRIGHT: readonly [number, number, number] = [246, 240, 150];
 /** The middle of a flower, and pale wood or a mushroom's stem. */
-const CORE = "#e0b83a";
-const PALE = "#e9dfc6";
-const SNOW: readonly [number, number, number] = [244, 248, 252];
-const SNOW_SHADE: readonly [number, number, number] = [196, 212, 232];
 /** Clear pixels kept around a plant for its outline. */
 const MARGIN = 2;
 /** Where the light comes from: up and to the left. */
@@ -1403,7 +1398,13 @@ const YOUNG_SHARE = PLANT_SCALE.broadleaf[1][1] / PLANT_SCALE.broadleaf[0][1];
  * Colour a drawing with a ramp, `accent` for berries, petals, caps and moss, and `wood`
  * for trunks.
  */
-export function colourArt(art: PlantArt, ramp: Ramp, accent = "#b8443a", wood = TRUNK): Pixels {
+export function colourArt(
+  art: PlantArt,
+  ramp: Ramp,
+  accent = "#b8443a",
+  wood = TRUNK,
+  inks: PlantInks = MAPS.plants,
+): Pixels {
   type Rgb = [number, number, number];
   const shadeOf = (colour: string, factor: number): Rgb => {
     const [r, g, b] = hexToRgb(colour);
@@ -1419,8 +1420,8 @@ export function colourArt(art: PlantArt, ramp: Ramp, accent = "#b8443a", wood = 
       Math.round((from[i] ?? 0) * (1 - share) + (other[i] ?? 0) * share),
     ) as Rgb;
   };
-  const inks: Record<number, readonly [number, number, number, number]> = {
-    [INK.outline]: [...shadeOf(ramp[0], 0.62), 255],
+  const colours: Record<number, readonly [number, number, number, number]> = {
+    [INK.outline]: [...inks.outline(ramp[0]), 255],
     [INK.dark]: [...hexToRgb(ramp[0]), 255],
     [INK.mid]: [...hexToRgb(ramp[1]), 255],
     [INK.light]: [...hexToRgb(ramp[2]), 255],
@@ -1430,17 +1431,17 @@ export function colourArt(art: PlantArt, ramp: Ramp, accent = "#b8443a", wood = 
     [INK.trunkDeep]: [...shadeOf(wood, 0.52), 255],
     [INK.accent]: [...hexToRgb(accent), 255],
     // In shade a colour is cooler as well as darker; in the light, warmer.
-    [INK.deep]: [...toward(ramp[0], DEEP, 0.34), 255],
-    [INK.bright]: [...toward(ramp[2], BRIGHT, 0.34), 255],
-    [INK.accentDark]: [...toward(accent, DEEP, 0.3), 255],
-    [INK.core]: [...hexToRgb(CORE), 255],
-    [INK.pale]: [...hexToRgb(PALE), 255],
-    [INK.snow]: [...SNOW, 255],
-    [INK.snowShade]: [...SNOW_SHADE, 255],
+    [INK.deep]: [...toward(ramp[0], inks.deep, inks.deepMix), 255],
+    [INK.bright]: [...toward(ramp[2], inks.bright, inks.brightMix), 255],
+    [INK.accentDark]: [...toward(accent, inks.deep, 0.3), 255],
+    [INK.core]: [...hexToRgb(inks.core), 255],
+    [INK.pale]: [...hexToRgb(inks.pale), 255],
+    [INK.snow]: [...inks.snow, 255],
+    [INK.snowShade]: [...inks.snowShade, 255],
   };
   const rgba = new Uint8ClampedArray(art.width * art.height * 4);
   art.ink.forEach((ink, at) => {
-    const colour = inks[ink];
+    const colour = colours[ink];
     if (colour !== undefined) rgba.set(colour, at * 4);
   });
   return { width: art.width, height: art.height, rgba };

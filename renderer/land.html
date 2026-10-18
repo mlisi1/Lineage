@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lineage land sheet</title>
+    <style>
+      :root {
+        --page: #10192e;
+        --text: #e6edf2;
+        --muted: #9fb3c8;
+        --rule: #2c3f66;
+        --accent: #8ecbe6;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font:
+          15px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 2200px;
+        margin: 0 auto;
+        padding: 24px 16px 72px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 1.6rem;
+      }
+      h2 {
+        margin: 44px 0 8px;
+        font-size: 1.2rem;
+        border-top: 1px solid var(--rule);
+        padding-top: 16px;
+      }
+      h3 {
+        margin: 20px 0 6px;
+        font-size: 1rem;
+        color: var(--accent);
+      }
+      h4 {
+        margin: 0 0 4px;
+        font-size: 0.95rem;
+      }
+      p {
+        max-width: 80ch;
+      }
+      .sub,
+      figcaption {
+        color: var(--muted);
+      }
+      .row,
+      .pair {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .column {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      figure {
+        margin: 0;
+      }
+      canvas,
+      img {
+        image-rendering: pixelated;
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      figcaption {
+        font-size: 0.9rem;
+        margin-top: 2px;
+      }
+      #failure {
+        color: #ff8a80;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lineage land sheet (R1)</h1>
+      <p class="sub">
+        World: <span id="world"></span> · build <code id="build"></code>
+        <span id="failure"></span>
+      </p>
+      <p>
+        The ground and the plants in each look, side by side. <b>maps</b> is the R0 look, the report
+        maps' palette. <b>cosy</b> is the proposal after Stardew Valley: warmer, more saturated
+        colours, earth that is orange-brown, a bright teal sea, shade toward violet and light toward
+        gold, outlines in each thing's own darkest tone taken toward plum. The camera stays
+        top-down; only colours and edges change. No creatures here: they are R2's (whose own
+        <i>cosy</i> palette shares the plum and the violet).
+      </p>
+
+      <h2>The map</h2>
+      <div class="pair" id="map"></div>
+
+      <h2>The middle view</h2>
+      <h3>A wood</h3>
+      <div class="pair" id="mid-wood"></div>
+      <h3>A shore</h3>
+      <div class="pair" id="mid-shore"></div>
+
+      <h2>The local view</h2>
+      <h3>A meadow</h3>
+      <div class="pair" id="local-meadow"></div>
+      <h3>A wood</h3>
+      <div class="pair" id="local-wood"></div>
+      <h3>A shore</h3>
+      <div class="pair" id="local-shore"></div>
+
+      <h2>Every kind of ground, from close</h2>
+      <div id="ground-samples"></div>
+
+      <h2>The plants, from close</h2>
+      <div id="plants"></div>
+
+      <h2>The turn of the year</h2>
+      <p>
+        The same wood from the middle view, on five days around three changes of season. Places turn
+        one after another over about four weeks: in fronts across the land, the hills first into
+        autumn and winter and last into spring, and each tree on its own day near its place's. Where
+        the stream carries the plants' <code>EVERGREEN</code> gene, the more of it, the later a tree
+        turns (the R0 fixture has no genes, so here every tree turns by place and chance).
+      </p>
+      <div id="turning"></div>
+
+      <h2>Through the year</h2>
+      <p>The same wood from the middle view and the same shore from close, in each season.</p>
+      <div id="seasons"></div>
+    </main>
+    <script type="module" src="/src/sheets/land.ts"></script>
+  </body>
+</html>

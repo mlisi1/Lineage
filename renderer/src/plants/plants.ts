@@ -15,6 +15,7 @@
  * them, for the ground to paint.
  */
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import { MAPS, type Look, type PlantInks } from "../looks";
 import { mulberry32 } from "../rng";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
@@ -34,6 +35,13 @@ import {
   type Small,
 } from "./plantart";
 import { GROWTHS, growthOf, seasonRamp, woodOf, type Growth, type Season } from "./seasons";
+import {
+  groundEarliness,
+  plantEarliness,
+  seasonShown,
+  seasonsInPlay,
+  type YearTime,
+} from "./turning";
 
 /** Cells per chunk of a row; whole chunks are built, and skipped, together. */
 const CHUNK_CELLS = 16;
@@ -261,7 +269,7 @@ interface Drawing {
 const SHEET_WIDTH = 1024;
 
 /** Draw `arts` into one texture, in rows, a clear pixel between them. */
-function strip(arts: readonly StandingArt[]): Map<string, Drawing> {
+function strip(arts: readonly StandingArt[], inks: PlantInks): Map<string, Drawing> {
   // Where each goes: along a row until it is full, then on the next.
   const places: { left: number; top: number }[] = [];
   let left = 1;
@@ -288,7 +296,7 @@ function strip(arts: readonly StandingArt[]): Map<string, Drawing> {
   const drawings = new Map<string, Drawing>();
   arts.forEach(({ key, art, ramp, accent, wood }, index) => {
     const at = places[index] ?? { left: 1, top: 1 };
-    const pixels = colourArt(art, ramp, accent, wood);
+    const pixels = colourArt(art, ramp, accent, wood, inks);
     context.putImageData(new ImageData(pixels.rgba, pixels.width, pixels.height), at.left, at.top);
     const frame = new Rectangle(at.left, at.top, art.width, art.height);
     drawings.set(key, { texture: new Texture({ source, frame }), art });
@@ -338,6 +346,9 @@ const IN_SEASON: Readonly<Record<Season, Readonly<Record<string, number>>>> = {
 /** Flowers come in drifts: where this noise is high a cell of grown grass carries several. */
 const DRIFT_FROM = 0.58;
 const DRIFT_CELLS = 4;
+/** `HEIGHT` gene (0–255) below which a tree or bush is drawn broad and low, and from which slender and tall. */
+const BROAD_BELOW = 85;
+const TALL_FROM = 170;
 
 /**
  * What a standing plant of `form` is coloured with in `season`: the tones of its
@@ -348,16 +359,17 @@ export function standingColours(
   form: string,
   variant: number,
   season: Season,
+  look: Look = MAPS,
 ): { ramp: Ramp; accent: string; wood: string } {
   const flowers =
     form === "BROADLEAF"
       ? BLOSSOM.BROADLEAF
       : (BLOSSOM.SHRUB[variant % BLOSSOM.SHRUB.length] ?? BERRY);
   return {
-    ramp: seasonRamp(palette, form, season, form === "GRASS" ? 0 : variant),
+    ramp: seasonRamp(palette, form, season, form === "GRASS" ? 0 : variant, look.seasons),
     accent:
       form === "GRASS" ? SEED_HEAD : season === "spring" && form !== "CONIFER" ? flowers : BERRY,
-    wood: woodOf(form),
+    wood: look.plants.wood[form] ?? woodOf(form),
   };
 }
 
@@ -373,6 +385,13 @@ export interface StandingOptions {
   snow?: boolean;
   /** Build a middle view's plants as the view reaches them instead of all at once. */
   lazy?: boolean;
+  /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
+  look?: Look;
+  /**
+   * Where the world is in its year: around a change of season each plant shows the
+   * season of its own turn (`turning.ts`), instead of every plant showing `season`.
+   */
+  time?: YearTime;
 }
 
 /** A drawing the layer uses, by the name it is placed under, with what it is coloured in. */
@@ -406,16 +425,18 @@ export function standingArts(
   const close = options.close === true;
   const season = options.season ?? land.season;
   const snow = options.snow === true && season === "winter";
+  const look = options.look ?? MAPS;
   const detail = tile / SPRITE_WIDTH;
   const arts: StandingArt[] = [];
-  const ramp = (form: string, variant = 0): Ramp => seasonRamp(land.palette, form, season, variant);
+  const ramp = (form: string, variant = 0): Ramp =>
+    seasonRamp(land.palette, form, season, variant, look.seasons);
   for (const form of ["SHRUB", "BROADLEAF", "CONIFER"] as const) {
     for (const growth of GROWTHS) {
       for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
         arts.push({
           key: standingKey(form, growth, variant),
           art: drawStanding(form, growth, variant, detail, season, snow),
-          ...standingColours(land.palette, form, variant, season),
+          ...standingColours(land.palette, form, variant, season, look),
         });
       }
     }
@@ -425,7 +446,7 @@ export function standingArts(
       arts.push({
         key: standingKey("GRASS", growth, variant),
         art: drawStanding("GRASS", growth, variant, detail, season, snow),
-        ...standingColours(land.palette, "GRASS", variant, season),
+        ...standingColours(land.palette, "GRASS", variant, season, look),
       });
     }
   }
@@ -503,8 +524,40 @@ export function standingPlants(
 ): PlantLayer {
   const close = options.close === true;
   const season = options.season ?? land.season;
-  const arts = standingArts(land, tile, options);
-  const drawings = strip(arts);
+  const { time } = options;
+  // Every drawing in each season some of the plants are in, named "season:key".
+  const arts = (time === undefined ? [season] : seasonsInPlay(time)).flatMap((shown) =>
+    standingArts(land, tile, { ...options, season: shown }).map((art) => ({
+      ...art,
+      key: `${shown}:${art.key}`,
+    })),
+  );
+  const drawings = strip(arts, (options.look ?? MAPS).plants);
+  const aboveSea = (x: number, y: number): number =>
+    (land.heights[y * land.width + x] ?? 0) - land.seaLevel;
+  /** The season the ground of cell (x, y) is in, and the season of the plant standing on it. */
+  const groundSeason = (x: number, y: number): Season =>
+    time === undefined ? season : seasonShown(time, groundEarliness(time, x, y, aboveSea(x, y)));
+  const plantSeason = (x: number, y: number): Season => {
+    if (time === undefined) return season;
+    const evergreen = land.plantEvergreen?.[y * land.width + x];
+    return seasonShown(
+      time,
+      plantEarliness(
+        time,
+        x,
+        y,
+        aboveSea(x, y),
+        evergreen === undefined ? undefined : evergreen / 255,
+      ),
+    );
+  };
+  /** A tree's or a bush's build from its `HEIGHT` gene where it is known: broad and low, as the scale has it, or slender and tall. */
+  const buildOf = (x: number, y: number): number => {
+    const gene = land.plantHeight?.[y * land.width + x];
+    if (gene === undefined) return variantOf(x, y, 17);
+    return gene < BROAD_BELOW ? 2 : gene >= TALL_FROM ? 1 : 0;
+  };
   const placed = (key: string, dx: number, dy: number): Placed[] => {
     const drawing = drawings.get(key);
     if (drawing === undefined) return [];
@@ -531,20 +584,21 @@ export function standingPlants(
     -cellHash(x, y, salt + 1),
   ];
   const burntClass = land.coverClasses.indexOf("BURNT");
-  const inSeason = IN_SEASON[season];
-  const flowersNow = FLOWERS[season];
 
   /** The small things of the local view on cell (x, y), whose plant is `look`. */
   const among = (look: PlantLook | null, x: number, y: number): Placed[] => {
     const out: Placed[] = [];
+    // What is out on the cell is what is out in the season its ground is in.
+    const here = groundSeason(x, y);
+    const inSeason = IN_SEASON[here];
+    const flowersNow = FLOWERS[here];
+    const put = (key: string, dx: number, dy: number): Placed[] => placed(`${here}:${key}`, dx, dy);
     let salt = 100;
     /** One of `kind` somewhere on the cell, with `chance`; `variants` drawings to pick from. */
     const maybe = (kind: string, chance: number, variants: number): void => {
       salt += 4;
       if (cellHash(x, y, salt) >= chance * (inSeason[kind] ?? 1)) return;
-      out.push(
-        ...placed(`${kind}/${variantOf(x, y, salt + 1, variants)}`, ...within(x, y, salt + 2)),
-      );
+      out.push(...put(`${kind}/${variantOf(x, y, salt + 1, variants)}`, ...within(x, y, salt + 2)));
     };
     const cell = y * land.width + x;
     const above = (land.heights[cell] ?? 0) - land.seaLevel;
@@ -586,7 +640,7 @@ export function standingPlants(
           growth === "old" ? "grown" : growth,
           variantOf(x, y, 50 + 3 * k),
         );
-        out.push(...placed(key, ...within(x, y, 51 + 3 * k)));
+        out.push(...put(key, ...within(x, y, 51 + 3 * k)));
       }
       maybe("herb", CHANCE.grass.herb, 2);
       if (biomass < 128 || flowersNow.length === 0) return out;
@@ -598,24 +652,22 @@ export function standingPlants(
       const many = (inSeason["flower"] ?? 1) >= 1;
       const flowers = drift >= DRIFT_FROM && many ? 2 + variantOf(x, y, 74, 3) : 0;
       for (let k = 0; k < flowers; k++) {
-        out.push(...placed(`${kind}/${colour}`, ...within(x, y, 75 + 2 * k)));
+        out.push(...put(`${kind}/${colour}`, ...within(x, y, 75 + 2 * k)));
       }
       if (flowers === 0 && cellHash(x, y, 81) < CHANCE.grass.flower * (inSeason["flower"] ?? 1)) {
-        out.push(...placed(`${kind}/${colour}`, ...within(x, y, 82)));
+        out.push(...put(`${kind}/${colour}`, ...within(x, y, 82)));
       }
     } else if (look.form === "SHRUB") {
       // A bush that has died back to its roots, or only just come up: its first shoots.
       if (look.dormant && cellHash(x, y, 86) < CHANCE.scrub.sprout) {
-        out.push(
-          ...placed(standingKey("SHRUB", "sprout", variantOf(x, y, 87)), ...within(x, y, 88)),
-        );
+        out.push(...put(standingKey("SHRUB", "sprout", variantOf(x, y, 87)), ...within(x, y, 88)));
       }
       maybe("fern", CHANCE.scrub.fern, 2);
       maybe("herb", CHANCE.scrub.herb, 2);
       const kind = flowersNow[0];
       if (kind !== undefined && cellHash(x, y, 83) < CHANCE.scrub.flower) {
         out.push(
-          ...placed(`${kind}/${variantOf(x, y, 84, FLOWER_COLOURS.length)}`, ...within(x, y, 85)),
+          ...put(`${kind}/${variantOf(x, y, 84, FLOWER_COLOURS.length)}`, ...within(x, y, 85)),
         );
       }
     } else if (look.form === "BROADLEAF") {
@@ -643,13 +695,13 @@ export function standingPlants(
         // Close up the grass is the tufts above, not one in three cells.
         if (close) return out;
         const [dx, dy] = plantOffset(x, y);
-        const key = standingKey("GRASS", "grown", variantOf(x, y, 17));
+        const key = `${groundSeason(x, y)}:${standingKey("GRASS", "grown", variantOf(x, y, 17))}`;
         return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
       }
       const density = look.form === "SHRUB" ? PLANT_SCALE.bushDensity : PLANT_SCALE.treeDensity;
       if (cellHash(x, y, 16) >= density) return out;
       const [dx, dy] = plantOffset(x, y);
-      const key = standingKey(look.form, growthOf(biomass), variantOf(x, y, 17));
+      const key = `${plantSeason(x, y)}:${standingKey(look.form, growthOf(biomass), buildOf(x, y))}`;
       return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
     },
     // Close up, plants and animals are large enough to be sorted four rows to the cell.
