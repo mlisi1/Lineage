@@ -1399,6 +1399,7 @@ export function drawStanding(
   snow = false,
   shapes: Shapes = "bundles",
   habit?: WinterHabit,
+  tallerBy = 1,
 ): PlantArt {
   const look: Standing = {
     form,
@@ -1411,12 +1412,17 @@ export function drawStanding(
   const cosy = shapes === "cosy";
   const tree = form === "BROADLEAF" || form === "CONIFER";
   const [wider, taller] = BUILDS[variant % BUILDS.length] ?? [1, 1];
+  // An emergent tree (a rare gene, M7) is drawn taller than its build has it.
+  const emergent = tree ? tallerBy : 1;
   const [alsoWider, alsoTaller] = growth === "old" ? OLD[tree ? "tree" : "bush"] : [1, 1];
   const young = growth === "young" || growth === "sprout" ? 1 : 0;
   const sprout = growth === "sprout" ? (tree ? SPROUT.tree : SPROUT.bush) / YOUNG_SHARE : 1;
   const sized = (sizes: readonly [Size, Size]): Size => [
     Math.max(2, Math.round((sizes[young] ?? sizes[0])[0] * detail * wider * alsoWider * sprout)),
-    Math.max(2, Math.round((sizes[young] ?? sizes[0])[1] * detail * taller * alsoTaller * sprout)),
+    Math.max(
+      2,
+      Math.round((sizes[young] ?? sizes[0])[1] * detail * taller * alsoTaller * sprout * emergent),
+    ),
   ];
   const seed = FORM_SEEDS[form] * 97 + young * 13 + (growth === "sprout" ? 31 : 0) + variant;
   const random = mulberry32(seed);

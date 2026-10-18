@@ -612,9 +612,28 @@ enough of it.
 
 **The plant genes** where the stream carries them: `HEIGHT` picks a tree's or bush's
 build (broad and low, as the scale has it, or slender and tall); `EVERGREEN` how late it
-turns and what it does in winter (above). The other six genes and the rare genes show
-nothing yet (the stream carries the rare ones: M7). The R0 fixture has no genes, so the
+turns and what it does in winter (above); the rare genes as below. The other six genes
+show nothing yet. The R0 fixture has no genes, so the
 spike and the land sheet's stills choose builds by chance.
+
+**Rare plants** (M7's signatures, `plants/rareart.ts`), from the stream's `plant_rare`
+mask and the gene names in `rare_genes`, as accents on a plant's usual drawing; each
+carrier always stands (whatever the wood's or the scrub's share of standing plants), and
+a plant with several rare genes carries each look:
+
+| Gene | Look |
+|---|---|
+| FIRE_PINE | the wood a warm red-brown (the same drawing, coloured otherwise) |
+| NITROGEN_FIXER | small three-lobed leaves round the foot, pale flowers on some |
+| MANGROVE | arched stilt roots; the only plants standing in shallow water (as a broadleaf, in leaf all year) |
+| POISONOUS | clusters of three violet berries on the leaves (not on grass) |
+| FRUITING | three or four bright orange fruits on a woody plant; a seed head on grass |
+| EMERGENT | a tree drawn half as tall again (1.45) |
+
+Berries, fruit, clover and stilts are overlays the size of the drawing they lie on, with
+its foot, scaled to its size (a pixel in the middle view). The drawings are made only for
+the looks some plant of the land has. Not drawn: a fire pine's blackened trunk after a
+fire, which M7 asked for: the stream carries no scorch yet.
 
 **The land sheet** (`renderer/land.html`, `npm run land` →
 [`reports/R1-land-sheet/`](../../reports/R1-land-sheet/README.md)) opens with films of the
@@ -648,10 +667,12 @@ autumn recording and two on the winter recording's snow line, taken with `still`
 
 - **Snow**: settled in R1 (ADR 0014): it lies where the simulation's temperature says.
 - **Turning from one season to the next**: done in R1, over about four weeks.
-- **Plant genes in the drawing**: `HEIGHT` picks the build and `EVERGREEN` how late a
-  tree turns (R1). Which broadleaf flowers or turns gold, and the kinds of flower, are
-  still the renderer's own variety; rare genes (`plant_rare` in the stream) show
-  nothing yet (M7's visual signatures).
+- **Plant genes in the drawing**: `HEIGHT` picks the build, `EVERGREEN` how late a
+  tree turns and how it spends the winter, and the rare genes have their looks (R1, from
+  M7's signatures). Which broadleaf flowers or turns gold, and the kinds of flower, are
+  still the renderer's own variety.
+- **A fire pine after a fire** keeps a blackened trunk in M7's description; it needs the
+  scorch grid in the stream (`Flora.scorch`), which is not sent yet.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local

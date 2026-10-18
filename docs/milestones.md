@@ -54,9 +54,13 @@ beside it and exchange notes in `/home/elechim/Lineage-coord/` (not in git).
   and `default.toml` (R1's two `[flora]` snow keys and `snow_cover` beside M7's rare ones). After R2 is in,
   remove the re-export shims in `renderer/src/spike/{ground,seasons,plantart,plants,rng}.ts`
   and put R2's creatures among the plant rows of the real scene (`Landscape.plants`).
-- **Left for others**: the server's stream (S1: `SocketSource` is untried); rare-gene
-  looks (M7 is coordinating: `plant_rare`, `born[].slots`, `torpid` and the `rare`
-  signature table are in the stream, read from M7's code once it is merged); the
+- **Rare plants** (M7's signatures) are drawn from the stream's `plant_rare`; the stream
+  also carries M7's `born[].slots`, `torpid` and the `rare` table, read from M7's code
+  once it is merged. A fire pine's blackened trunk after a fire needs `Flora.scorch` in
+  the stream (not sent yet).
+- **A flake to watch**: twice the first Playwright run after a code change failed in
+  `scene.spec.ts` and every rerun passed; not reproduced. Watch it in CI.
+- **Left for others**: the server's stream (S1: `SocketSource` is untried); the
   creatures, species and rare messages are encoded but only R2 will read them.
 
 

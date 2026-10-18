@@ -59,6 +59,12 @@ export interface Land extends LandPalette {
    */
   plantHeight?: Uint8Array;
   plantEvergreen?: Uint8Array;
+  /**
+   * The rare genes of the plant on each cell, as a bit mask, and the genes' names by bit
+   * (bit 0 first): from the stream (absent in the R0 fixture).
+   */
+  plantRare?: Uint8Array;
+  rareGenes?: readonly string[];
   /** Depth of lying snow per cell, 0–255, as the simulation has it (absent in the R0 fixture). */
   snow?: Uint8Array;
 }

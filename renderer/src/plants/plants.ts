@@ -20,7 +20,14 @@ import { mulberry32 } from "../rng";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
 import { cellHash } from "../terrain/pixels";
-import { SPRITE_WIDTH, plantLook, plantOffset, standsAlone, type PlantLook } from "./look";
+import {
+  SPRITE_WIDTH,
+  VISIBLE_FROM,
+  plantLook,
+  plantOffset,
+  standsAlone,
+  type PlantLook,
+} from "./look";
 import {
   CAP_COLOURS,
   FLOWER_COLOURS,
@@ -44,6 +51,14 @@ import {
   type Growth,
   type Season,
 } from "./seasons";
+import {
+  EMERGENT_TALLER,
+  OVERLAYS,
+  RARE_COLOURS,
+  looksOf,
+  overlayArt,
+  type RareLook,
+} from "./rareart";
 import {
   groundEarliness,
   plantEarliness,
@@ -375,6 +390,13 @@ const DRIFT_CELLS = 4;
 /** `HEIGHT` gene (0–255) below which a tree or bush is drawn broad and low, and from which slender and tall. */
 const BROAD_BELOW = 85;
 const TALL_FROM = 170;
+/** A number for a drawing's name, to place what lies on it the same way every time. */
+function keySalt(key: string): number {
+  let hash = 7;
+  for (let i = 0; i < key.length; i++) hash = (Math.imul(hash, 31) + key.charCodeAt(i)) | 0;
+  return hash & 0xffff;
+}
+
 /**
  * `EVERGREEN` gene (0–255) below which a bush standing in winter is bare twigs, not leaves,
  * and from which a broadleaf keeps its leaves (the simulation makes conifers of trees
@@ -430,6 +452,8 @@ export interface StandingOptions {
   lazy?: boolean;
   /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
   look?: Look;
+  /** The rare genes' looks to draw besides the usual drawings (`rareart.ts`). */
+  rare?: readonly RareLook[];
   /**
    * Where the world is in its year: around a change of season each plant shows the
    * season of its own turn (`turning.ts`), instead of every plant showing `season`.
@@ -516,6 +540,52 @@ export function standingArts(
         art: drawStanding("GRASS", growth, variant, detail, season, snow, look.shapes),
         ...standingColours(land.palette, "GRASS", variant, season, look),
       });
+    }
+  }
+  // Rare genes (M7) the land has carriers of: their drawings, beside the usual ones.
+  const rare = options.rare ?? [];
+  if (rare.length > 0) {
+    const bases = [...arts];
+    // An emergent tree: its drawing again, taller.
+    if (rare.includes("crown")) {
+      for (const base of bases) {
+        const [form, growth, variant, habit] = base.key.split("/");
+        if (form !== "BROADLEAF" && form !== "CONIFER") continue;
+        arts.push({
+          ...base,
+          key: `${base.key}+crown`,
+          art: drawStanding(
+            form,
+            (growth ?? "grown") as Growth,
+            Number(variant ?? 0),
+            detail,
+            season,
+            snow,
+            look.shapes,
+            habit === "bare" || habit === "leafy" ? habit : undefined,
+            EMERGENT_TALLER,
+          ),
+        });
+      }
+    }
+    for (const base of [...arts]) {
+      const grass = base.key.startsWith("GRASS/");
+      // A fire pine's wood: the same drawing, coloured otherwise.
+      if (rare.includes("bark") && !grass) {
+        arts.push({ ...base, key: `${base.key}+bark`, wood: RARE_COLOURS.bark });
+      }
+      for (const overlay of OVERLAYS) {
+        if (!rare.includes(overlay) || (grass && (overlay === "stilts" || overlay === "berries"))) {
+          continue;
+        }
+        arts.push({
+          key: `${base.key}#${overlay}`,
+          art: overlayArt(base.art, overlay, keySalt(base.key), grass),
+          ramp: overlay === "clover" ? ramp("GRASS") : base.ramp,
+          accent: overlay === "berries" ? RARE_COLOURS.berries : RARE_COLOURS.fruit,
+          ...(base.wood === undefined ? {} : { wood: base.wood }),
+        });
+      }
     }
   }
   if (close) {
@@ -611,6 +681,7 @@ function sheetOf(
   close: boolean,
   shown: readonly Season[],
   snows: readonly boolean[],
+  rare: readonly RareLook[],
   arts: () => StandingArt[],
 ): Sheet {
   let byKey = SHEETS.get(land.palette);
@@ -618,7 +689,7 @@ function sheetOf(
     byKey = new Map();
     SHEETS.set(land.palette, byKey);
   }
-  const key = [tile, look.name, close, shown.join("+"), snows.join("+")].join("|");
+  const key = [tile, look.name, close, shown.join("+"), snows.join("+"), rare.join("+")].join("|");
   let shared = byKey.get(key);
   if (shared === undefined) {
     const drawn = arts();
@@ -670,15 +741,24 @@ export function standingPlants(
   const snows =
     snowCells === undefined ? [options.snow === true] : anySnow ? [false, true] : [false];
   const look = options.look ?? DEFAULT_LOOK;
-  const sheet = sheetOf(land, tile, look, close, shown, snows, () =>
+  // The rare genes' looks some plant of this land has (M7).
+  const rareGenes = land.rareGenes ?? [];
+  let carried = 0;
+  for (const mask of land.plantRare ?? []) carried |= mask;
+  const present = looksOf(carried, rareGenes);
+  const looksAt = (x: number, y: number): RareLook[] =>
+    land.plantRare === undefined ? [] : looksOf(land.plantRare[y * land.width + x] ?? 0, rareGenes);
+  const sheet = sheetOf(land, tile, look, close, shown, snows, present, () =>
     // Every drawing in each season some of the plants are in, with snow and without where
     // some lies: named "season:key" and "season+snow:key".
     shown.flatMap((when) =>
       snows.flatMap((snowy) =>
-        standingArts(land, tile, { ...options, season: when, snow: snowy }).map((art) => ({
-          ...art,
-          key: `${when}${snowy && snowCells !== undefined ? "+snow" : ""}:${art.key}`,
-        })),
+        standingArts(land, tile, { ...options, season: when, snow: snowy, rare: present }).map(
+          (art) => ({
+            ...art,
+            key: `${when}${snowy && snowCells !== undefined ? "+snow" : ""}:${art.key}`,
+          }),
+        ),
       ),
     ),
   );
@@ -795,6 +875,14 @@ export function standingPlants(
           variantOf(x, y, 50 + 3 * k),
         );
         out.push(...put(key, ...within(x, y, 51 + 3 * k)));
+        // A rare gene's look on the first tuft: a seed head, clover at its foot.
+        if (k === 0) {
+          for (const overlay of looksAt(x, y)) {
+            if (overlay === "fruit" || overlay === "clover") {
+              out.push(...put(`${key}#${overlay}`, ...within(x, y, 51)));
+            }
+          }
+        }
       }
       maybe("herb", CHANCE.grass.herb, 2);
       if (biomass < 128 || flowersNow.length === 0) return out;
@@ -839,37 +927,91 @@ export function standingPlants(
   };
 
   const { tall } = sheet;
+  /**
+   * A plant drawn as `base` (a drawing's name) with the looks of its rare genes: its own
+   * drawing (taller if emergent, red-barked if a fire pine), then each overlay over it.
+   */
+  const withLooks = (
+    shown: Season,
+    x: number,
+    y: number,
+    base: string,
+    looks: readonly RareLook[],
+    tree: boolean,
+    dx: number,
+    dy: number,
+  ): Placed[] => {
+    const drawn = looks.includes("crown") && tree ? `${base}+crown` : base;
+    const own = placed(
+      named(shown, x, y, `${drawn}${looks.includes("bark") ? "+bark" : ""}`),
+      dx,
+      dy,
+    );
+    const overlays = OVERLAYS.filter((overlay) => looks.includes(overlay)).flatMap((overlay) =>
+      placed(named(shown, x, y, `${drawn}#${overlay}`), dx, dy),
+    );
+    return [...own, ...overlays];
+  };
+  const waterClass = land.coverClasses.indexOf("WATER");
+
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
       const out = close ? among(look, x, y) : [];
-      if (look === null || !standsAlone(look, x, y)) return out;
-      const biomass = land.biomass[y * land.width + x] ?? 0;
+      const cell = y * land.width + x;
+      const biomass = land.biomass[cell] ?? 0;
+      const looks = looksAt(x, y);
+      if (look === null) {
+        // A mangrove (rare, M7) stands in the shallow water where nothing else grows: a
+        // broadleaf on stilt roots, in leaf all year.
+        if (
+          land.cover[cell] !== waterClass ||
+          !looks.includes("stilts") ||
+          biomass < VISIBLE_FROM
+        ) {
+          return out;
+        }
+        const shown = plantSeason(x, y);
+        const base = `${standingKey("BROADLEAF", growthOf(biomass), buildOf(x, y))}${shown === "winter" ? "/leafy" : ""}`;
+        const [dx, dy] = plantOffset(x, y);
+        return [
+          ...out,
+          ...withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+        ];
+      }
+      if (!standsAlone(look, x, y)) return out;
       if (look.form === "GRASS") {
         // Close up the grass is the tufts above, not one in three cells.
         if (close) return out;
         const [dx, dy] = plantOffset(x, y);
-        const key = named(
-          groundSeason(x, y),
-          x,
-          y,
-          standingKey("GRASS", "grown", variantOf(x, y, 17)),
-        );
-        return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
+        const base = standingKey("GRASS", "grown", variantOf(x, y, 17));
+        return [
+          ...out,
+          ...withLooks(
+            groundSeason(x, y),
+            x,
+            y,
+            base,
+            looks,
+            false,
+            dx / SPRITE_WIDTH,
+            dy / SPRITE_WIDTH,
+          ),
+        ];
       }
+      // Of a wood or of scrub only some cells carry a plant of their own; a carrier of a
+      // rare gene always does, so that its look is seen.
       const density = look.form === "SHRUB" ? PLANT_SCALE.bushDensity : PLANT_SCALE.treeDensity;
-      if (cellHash(x, y, 16) >= density) return out;
+      if (cellHash(x, y, 16) >= density && looks.length === 0) return out;
       const [dx, dy] = plantOffset(x, y);
       const shown = plantSeason(x, y);
-      const habit =
-        shown === "winter" ? habitOf(look.form, land.plantEvergreen?.[y * land.width + x]) : null;
-      const key = named(
-        shown,
-        x,
-        y,
-        `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${habit === null ? "" : `/${habit}`}`,
-      );
-      return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
+      const habit = shown === "winter" ? habitOf(look.form, land.plantEvergreen?.[cell]) : null;
+      const base = `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${habit === null ? "" : `/${habit}`}`;
+      const tree = look.form === "BROADLEAF" || look.form === "CONIFER";
+      return [
+        ...out,
+        ...withLooks(shown, x, y, base, looks, tree, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+      ];
     },
     // Close up, plants and animals are large enough to be sorted four rows to the cell.
     close ? { tall, rowsPerCell: 4 } : { tall, eager: options.lazy !== true },

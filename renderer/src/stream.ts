@@ -71,6 +71,8 @@ export function landOf(message: LandMessage, clock: ClockMessage | null): Land {
     plantHeight: asBytes(message.plant_height, cells),
     plantEvergreen: asBytes(message.plant_evergreen, cells),
     snow: asBytes(message.snow, cells),
+    plantRare: Uint8Array.from(gridNumbers(message.plant_rare, cells)),
+    rareGenes: message.rare_genes,
   };
 }
 

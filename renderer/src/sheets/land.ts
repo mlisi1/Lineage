@@ -11,6 +11,7 @@
 import { DEFAULT_LOOK, LOOKS, dressed, type Look } from "../looks";
 import { colourArt, type PlantArt } from "../plants/plantart";
 import { standingArts, standingPlants } from "../plants/plants";
+import { RARE_LOOKS } from "../plants/rareart";
 import { seasonRamp, type Season } from "../plants/seasons";
 import { groundSeasons, later, type YearTime } from "../plants/turning";
 import { MAP_TILE, MID_TILE, paintGround, type GroundOptions } from "../terrain/ground";
@@ -291,6 +292,89 @@ function filmFigure(host: HTMLElement, uri: string, title: string, note: string)
 }
 
 /** The films: the sea moving, and the year turning day by day. */
+/** Each rare gene's look (M7) on the plants it shows on, at the local view's size. */
+function rareSheets(host: HTMLElement, land: WorldFixture, look: Look): void {
+  const worn = dressed(land, look);
+  const arts = new Map(
+    standingArts(worn, LOCAL_PIXELS, { close: true, season: "summer", look, rare: RARE_LOOKS }).map(
+      (art) => [art.key, art],
+    ),
+  );
+  type Drawn = { art: PlantArt; pixels: ReturnType<typeof colourArt> };
+  const coloured = (key: string): Drawn | null => {
+    const found = arts.get(key);
+    if (found === undefined) return null;
+    return {
+      art: found.art,
+      pixels: colourArt(found.art, found.ramp, found.accent, found.wood, look.plants),
+    };
+  };
+  /** A plant with overlays laid over it: the pixels of each where it has any. */
+  const plant = (key: string, overlays: readonly string[] = []): Drawn[] => {
+    const base = coloured(key);
+    if (base === null) return [];
+    const rgba = new Uint8ClampedArray(base.pixels.rgba);
+    for (const overlay of overlays) {
+      const over = coloured(`${key.replace(/\+bark$/, "")}#${overlay}`);
+      if (over === null) continue;
+      for (let at = 0; at < rgba.length; at += 4) {
+        if ((over.pixels.rgba[at + 3] ?? 0) === 0) continue;
+        rgba.set(over.pixels.rgba.subarray(at, at + 4), at);
+      }
+    }
+    return [{ art: base.art, pixels: { ...base.pixels, rgba } }];
+  };
+  const ground = seasonRamp(worn.palette, "GRASS", "summer", 0, look.seasons)[1];
+  const rows: readonly [string, Drawn[]][] = [
+    [
+      "Fire pine: red-brown bark",
+      [
+        ...plant("BROADLEAF/grown/0+bark"),
+        ...plant("CONIFER/grown/1+bark"),
+        ...plant("SHRUB/grown/0+bark"),
+      ],
+    ],
+    [
+      "Nitrogen fixer: clover at the foot",
+      [
+        ...plant("BROADLEAF/grown/0", ["clover"]),
+        ...plant("SHRUB/grown/1", ["clover"]),
+        ...plant("GRASS/grown/0", ["clover"]),
+      ],
+    ],
+    [
+      "Mangrove: stilt roots (it stands in shallow water)",
+      [...plant("BROADLEAF/grown/1", ["stilts"]), ...plant("BROADLEAF/young/0", ["stilts"])],
+    ],
+    [
+      "Poisonous: violet berries",
+      [...plant("SHRUB/grown/0", ["berries"]), ...plant("BROADLEAF/grown/2", ["berries"])],
+    ],
+    [
+      "Fruiting: fruit, a seed head on grass",
+      [
+        ...plant("BROADLEAF/grown/0", ["fruit"]),
+        ...plant("SHRUB/grown/2", ["fruit"]),
+        ...plant("GRASS/grown/1", ["fruit"]),
+      ],
+    ],
+    [
+      "Emergent: a crown half as tall again (beside one without)",
+      [
+        ...plant("BROADLEAF/grown/0"),
+        ...plant("BROADLEAF/grown/0+crown"),
+        ...plant("CONIFER/grown/0"),
+        ...plant("CONIFER/grown/0+crown"),
+      ],
+    ],
+    [
+      "Several at once: a fire pine with berries and clover",
+      [...plant("BROADLEAF/grown/1+bark", ["berries", "clover"])],
+    ],
+  ];
+  for (const [label, drawings] of rows) sheet(host, label, drawings, ground, shadowCss(look));
+}
+
 async function filmSection(host: HTMLElement): Promise<void> {
   const response = await fetch("stream/recording.json");
   if (!response.ok) throw new Error(`stream/recording.json: HTTP ${response.status}`);
@@ -524,6 +608,9 @@ async function main(): Promise<void> {
     const plants = create("div", "row");
     element("plants").append(create("h3", "", name), plants);
     plantSheets(plants, fixture, look, "summer", false);
+    const rare = create("div", "row");
+    element("rare").append(create("h3", "", name), rare);
+    rareSheets(rare, fixture, look);
 
     // Every season: the wood from the middle view, the shore from close, the plants.
     const year = create("div", "row");

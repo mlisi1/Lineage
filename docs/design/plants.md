@@ -98,7 +98,9 @@ The state stream (R1) carries two genes of each cell's plant and its rare genes:
   a broadleaf from 77/255 (below the conifers' 128) keeps its leaves, in a colder green;
   a bush still standing in winter (one not died back) keeps its leaves unless it has
   under 100/255, when it is bare twigs.
-- The other six genes and the rare genes do not show yet (rare genes: M7).
+- The rare genes show as accents (M7's signatures: red bark, clover at the foot, stilt
+  roots in shallow water, violet berries, fruit, a taller crown).
+- The other six genes do not show.
 
 See `renderer.md`, "The land from the state stream".
 
