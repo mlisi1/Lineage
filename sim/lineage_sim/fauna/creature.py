@@ -144,12 +144,15 @@ def sense(
     land: NDArray[np.float32],
     offsets: NDArray[np.float32],
     distance: NDArray[np.float32],
+    sight: NDArray[np.float32] | None = None,
 ) -> Senses:
     """Everything the brains perceive this tick. ``offsets`` and ``distance`` come from
     `separations` of the same positions; ``ready`` marks creatures able to breed now
     (only they look for a mate) and ``hungry`` those with room for a meal (only they
     look for prey). ``low`` and ``woody`` are ``biomass`` split by plant form: a
-    creature sees which plants grow where, not how well they feed it."""
+    creature sees which plants grow where, not how well they feed it. ``sight`` [i, j]
+    is how far i sees j in the dark (`rare.sight`); None in daylight, when each sees out
+    to its sense range. Smell is not affected by the dark."""
     n = positions.shape[0]
     senses = np.zeros((n, SENSE_COUNT), dtype=np.float32)
     rows, columns = cells_of(positions, (biomass.shape[0], biomass.shape[1]))
@@ -168,7 +171,7 @@ def sense(
     senses[:, Sense.LAND_X], senses[:, Sense.LAND_Y] = _gradient(land, positions)
     senses[:, Sense.IN_WATER] = 1.0 - land[rows, columns]
 
-    in_range = distance <= body.sense_range[:, None]
+    in_range = distance <= (body.sense_range[:, None] if sight is None else sight)
     np.fill_diagonal(in_range, False)
     reach = body.sense_range
     senses[:, Sense.PREY_X], senses[:, Sense.PREY_Y] = _toward(
@@ -215,9 +218,12 @@ def upkeep(
     travelled: Values,
     in_water: Flags,
     hours: float,
+    waterproof: Flags | None = None,
 ) -> Values:
-    """Energy burnt this tick: resting metabolism, movement, and struggling in water."""
-    drowning = cfg.water_stress * body.mass * (1.0 - genes[:, Gene.AQUATIC]) * in_water
+    """Energy burnt this tick: resting metabolism, movement, and struggling in water
+    (except for the ``waterproof``)."""
+    struggling = in_water if waterproof is None else in_water & ~waterproof
+    drowning = cfg.water_stress * body.mass * (1.0 - genes[:, Gene.AQUATIC]) * struggling
     return ((body.basal_burn + drowning) * np.float32(hours) + body.move_cost * travelled).astype(
         np.float32
     )
@@ -278,9 +284,14 @@ def share_out(field: NDArray[np.float32], rows: Index, columns: Index, demand: V
     return got
 
 
-def kill_chance(cfg: FaunaConfig, body: Phenotype, hunter: Index, prey: Index) -> Values:
-    """Probability that an attack by ``hunter`` kills ``prey`` (matching index arrays)."""
+def kill_chance(
+    cfg: FaunaConfig, body: Phenotype, hunter: Index, prey: Index, still: Flags | None = None
+) -> Values:
+    """Probability that an attack by ``hunter`` kills ``prey`` (matching index arrays).
+    Prey marked ``still`` (per creature) do not flee: speed does not save them."""
     edge = np.log(body.attack[hunter] / body.defence[prey]) / cfg.attack_softness
     power = 1.0 / (1.0 + np.exp(-np.clip(edge, -30.0, 30.0)))
     catch = np.minimum(1.0, body.land_speed[hunter] / np.maximum(body.land_speed[prey], 1e-6))
+    if still is not None:
+        catch = np.where(still[prey], 1.0, catch)
     return (power * catch).astype(np.float32)

@@ -31,10 +31,10 @@ DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "141a619fed99190cad661506db6352b31eb30b5e36061a401b0853a142720e54"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "6e3ecda6c6d03e5fb11eb61fd1e2ab1a4fc5c321681b2c21d0c3a9cc8a643e25"
+GOLDEN_AFTER_THREE_DAYS = "f84e8f5178821441662eb088df05888f57a2e84b2eb8e36f65744ccd8a3c90ca"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "141a619fed99190cad661506db6352b31eb30b5e36061a401b0853a142720e54"
+GOLDEN_BARE_ROCK_520_DAYS = "73fa2df52e10cfd84a8f03be1ded9e3626fc111831f7bb1727cea77ec05f3454"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -453,7 +453,7 @@ def test_pair_must_be_adult_fed_and_close(config: Config) -> None:
         ({}, [(10.0, 20.0), (50.0, 20.0)]),  # far apart
     ):
         site = Site(config, biomass=0.0)
-        site.add(GRAZER, positions, idle_days=3.0, **kwargs)
+        site.add(GRAZER, positions, idle_days=3.0, **kwargs)  # pyright: ignore[reportArgumentType]
         site.run(TICK_S / 3600)
         assert site.fauna.tally.births == 0, kwargs
 
