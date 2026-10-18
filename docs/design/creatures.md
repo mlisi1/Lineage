@@ -29,8 +29,8 @@ count toward mate compatibility and genetic distance.
 
 With `learning = false` the three learning genes do nothing and cost nothing.
 
-Sixteen-bit **rare-gene slots** are inherited and occasionally gained or lost; the genes
-and their effects arrive in M7.
+Sixteen-bit **rare-gene slots** are inherited bit by bit (each from one parent) and
+occasionally gained or lost at birth; eight of them carry the rare genes below (M7).
 
 ## Phenotype
 
@@ -180,8 +180,39 @@ omnivores are rare strangers (ADR 0012, "By diet class").
 
 ## Rare genes (M7)
 
-Rare genes carry an extreme bonus and a real cost (e.g. venom, glow, hibernation,
-photosynthesis) and a visual signature for the renderer.
+Each rare gene is one bit of the creature's slots (`lineage_sim/rare.py`,
+`CreatureRare`): an extreme bonus at a real cost, and a visual signature for the
+renderer. A newborn gains each with probability `rare_gain_probability` (0.0005) and
+loses one it inherited with `rare_loss_probability` (0.02); arrivals carry none. Every
+rare gene also costs resting burn, like a body gene (`*_burn_cost` × basal_rate ×
+mass^0.75). Numbers are `[fauna]` keys.
+
+| Gene | Bonus | Cost | Signature |
+|---|---|---|---|
+| `VENOM` | attack × 3: a hunter kills prey far larger than itself | burn | `venom`: bright fangs |
+| `TOXIC` | warning colours: a hunter's kill chance × 0.2 | burn | `warning`: bold bands |
+| `GIANT` | mass × 2, with everything that scales with mass (reserve, attack, defence, speed, lifespan) | burn (mass and extra), matures 1.5× later | `giant`: drawn larger |
+| `LONGEVITY` | lifespan × 2, maturity unchanged | broods halved (at least one young), burn | `elder`: grizzled |
+| `AMPHIBIOUS` | walks as a land animal and swims as a swimmer; no struggle in water | burn | `gills` |
+| `HIBERNATION` | torpid in winter (and in darkness, M8) while its reserve is above 30 %: burns 20 %, ages at 25 % | torpid: does not move, eat or breed, cannot flee; burn | `coat`; curled while torpid |
+| `PHOTOSYNTHESIS` | energy from sunlight on land (less under a canopy) | land speed × 0.7; burn, so it starves faster in the dark | `leaves`: green tint |
+| `GLOW` | in darkness sees others at full range | in darkness everyone sees it at full range (hunters too); burn | `glow` |
+
+The rare genes act **beside the phenotype**: `phenotype()` is a function of the genes
+only (the renderer ports it), and `rare.adjust` changes the carriers' body values
+afterwards (`rare.body_of`); `Fauna.body` holds the result. What is not a body value is
+read by the fauna tick: torpor (`Fauna.torpid`), sunlight, sight in the dark, the kill
+odds of toxic prey, and amphibians' ease in water.
+
+**Darkness** comes with M8. Until then daylight is 1 (`Fauna.set_daylight`, like
+`Flora.set_daylight`): sight is never dimmed, so glow pays only its cost, photosynthesis
+never lacks light, and hibernators sleep through winter only. In the dark every creature
+sees others out to `night_sight` (0.3) of its sense range, scaling up to the full range
+in daylight; smell is unaffected.
+
+The renderer draws each gene by its signature key (`rare.CREATURE_SIGNATURES`,
+`rare.signature_table()` for the wire protocol); only `GIANT` changes the body's size.
+Decisions: ADR 0015.
 
 ## Measured behaviour (M4 report, 20 seeds × 3 sim-years)
 
