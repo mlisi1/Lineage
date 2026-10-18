@@ -145,8 +145,30 @@ the measure of evolutionary drift.
 
 ## Species (M6)
 
-Daily genome clustering with persistent ids, speciation and extinction detection,
-syllable names derived from the genome with lineage-aware daughter names, a phylogeny.
+A species is the creatures that can interbreed, directly or through others: genomes
+within the mating distance (`compat_distance`, all 14 genes, learning genes included).
+Decisions and alternatives: ADR 0012.
+
+- **Daily census** (`species.py`, after fauna at midnight; no randomness). Every living
+  creature keeps the species it was given. A newcomer joins the species of its nearest
+  relative: the genetically closest labelled creature of its lineage (the arrival it
+  descends from through its mother). A lineage the island has not seen (the founders,
+  each group of strangers) founds a new **root** species.
+- **Splits.** When a species' members fall into separate interbreeding groups of at least
+  `min_members` (5) and stay apart for `split_days` (7 days), the largest group keeps the
+  species and every other one becomes a **daughter** species. Smaller strays stay; a
+  separation that heals within the week does not count.
+- **Extinction**: the last member died.
+- **Names** are read off the genome: a syllable is an onset chosen by one gene and a vowel
+  by another. A root species has three syllables, from (size, diet), (limbs, speed) and
+  (hue, pattern). A daughter keeps its parent's first two syllables and adds one for the
+  gene it diverged on most (the gene picks the onset, its value the vowel), so a lineage
+  shares a stem: a daughter of *Malesha* that diverged most on its senses, to keen ones,
+  is *Maleku*. Names are unique within a world.
+- **Phylogeny**: one record per species that ever lived (parent, lineage, born,
+  extinct, members, peak, founding and current mean genome, name); ids are never reused
+  and parents are always older, so it is a forest with one root per arrival.
+- **Outputs**: `SpeciesBorn` and `SpeciesExtinct`, for the chronicle (M9).
 
 ## Rare genes (M7)
 
