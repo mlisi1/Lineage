@@ -340,7 +340,9 @@ needs a note in `docs/decisions/`.
 - **Report**: appearance frequency, carrier lifespan and lineage persistence per gene,
   frequency trajectories, which genes dominate under which conditions.
 - **Accept**: every rare gene appears in `[≥ 30%]` of 3-year seeds; none reaches fixation
-  (> 90% of population) for more than `[3 sim-months]` in `[≥ 90%]` of seeds.
+  (> 90% of population) for more than `[3 sim-months]` in `[≥ 90%]` of seeds. (As built,
+  ADR 0015: M7.1 95 % PASS; M7.2 85 % FAIL because photosynthesis sweeps herds while
+  there is no night, 95 % without it; deferred to M8 by the owner, 2026-10-18.)
 
 ### M8 — Presence, calendar, god powers
 - **Deliver**: daylight from presence events with hold logic handled upstream, dusk/dawn,

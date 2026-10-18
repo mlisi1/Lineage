@@ -11,7 +11,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
 | M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | **done** 2026-10-18, merged into `main` (`1dd1720`): M6.2 1.08 splits / month PASS; M6.1 79 % of inhabited time with 3–12 species FAIL, deferred to M11 by the owner (ADR 0012). Species are genome clusters (`link_distance` 0.035); predator species split from groups of 5 | [reports/M6-species](../reports/M6-species/README.md) |
-| M7 | Rare genes (creatures and plants) | next: start on a branch from `main` (handoff below) | — |
+| M7 | Rare genes (creatures and plants) | **done** 2026-10-18 on `m7-rare-genes` (awaiting merge): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
 | M8 | Presence, calendar, god powers | not started | — |
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
@@ -31,84 +31,45 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-State at 2026-10-18, end of M6, for the next session (M7).
+State at 2026-10-18, end of M7, for the next session (M8).
 
-### M6 closed
+### M7 closed (on `m7-rare-genes`, not merged yet)
 
-M6 was merged into `main` on 2026-10-18 (`1dd1720`); lint, types and the fast suite (476)
-passed after the merge (the renderer was not touched).
+- What M7 left: `sim/lineage_sim/rare.py` (creature table `CreatureRare` in the bits of
+  `Fauna.slots`; `rare.adjust` / `rare.body_of` change carriers' body values after
+  `phenotype()`, which is untouched; torpor, sunlight, sight in the dark, toxic kill
+  odds, waterproofing; signature tables for the renderer). Plants: `flora.Rare` gained
+  POISONOUS, FRUITING, EMERGENT (`Flora.meal_factor`, `Flora.shade`, `flora.stature`).
+  Decisions and results: ADR 0015; report `reports/M7-rare-genes/` (run `runs/m7-rare2`).
+- **No schema bump** (v7 stays current). Golden hashes changed (one more flora draw per
+  plant rare gene at establishment).
+- M7.2 (85 %) is deferred to M8: photosynthesis sweeps herds in constant daylight; read
+  without it, 95 % PASS. Longevity was given slower breeding after it swept a herd.
+- Rare genes stay rare (≈ 0.1 % of creatures; most die out with their first carriers).
 
-- **Schema v7 and `sim/tests/fixtures/saves/v7.lzma` are frozen**: any change to saved
-  fields needs v8 and a migration.
-- What M6 left in place: `species.py` (daily census after fauna; lineage labels; splits of
-  genome clusters, `link_distance` 0.035, groups of 8, 5 for predator species; genome
-  names; phylogeny), `SpeciesBorn` / `SpeciesExtinct` events, `world.species.records()`
-  and `labels_now()` (species per creature at any tick). Decisions, sweeps and findings:
-  ADR 0012; report `reports/M6-species/`.
-- M6.1 (79 % of inhabited time with 3–12 species, target 90 %) is deferred to M11 by the
-  owner; M6.2 passes (1.08 splits / month). Predators still starve and depend partly on
-  arrivals; omnivores are rare strangers (`docs/m11-plan.md` §6).
-- Earlier parked work: branch `m8-daylight` (`67dfeb6`) holds the started day/night
-  work; cherry-pick it when M8 starts (it does not type-check until M8 wires it in).
+### Starting M8 (presence, calendar, god powers)
+
+- **Branch**: `git switch main && git switch -c m8-presence` after `m7-rare-genes` is
+  merged; cherry-pick the parked day/night work from `m8-daylight` (`67dfeb6`).
+- **Wire daylight**: the presence model must call `Flora.set_daylight` and
+  `Fauna.set_daylight` (hooks, not saved). With nights: sight dims to `night_sight`
+  (glow pays), photosynthesis loses light (its cost), hibernators go torpid in darkness
+  below `hibernation_daylight`. Re-run M7's report on M8's schedules and judge M7.2 in
+  full there (photosynthesis included).
+- M8's report compares schedules on "rare-gene frequencies (glow, hibernation,
+  photosynthesis)": `_rare_daily` already records carriers per day by diet class, and
+  torpid counts.
 
 ### Parallel work (other agents)
 
-R1 (`r1-terrain`, worktree `/home/elechim/Lineage-r1`) and R2 (`r2-creatures`, worktree
-`/home/elechim/Lineage-r2`) are in progress and not merged. They coordinate with the sim
-work through plain files in **`/home/elechim/Lineage-coord`** (not in git; rules in its
-README): read your inbox (`m7-inbox.md`) and the others' status files before
-touching shared files, and keep a status file of your own (`m7.md`).
-
-- R1 owns the wire schema (`server/lineage_server/protocol/`) and is adding
-  `species` per creature (from `labels_now()`) and a species table.
-- R2 owns the renderer's creatures and a TypeScript port of `fauna/phenotype.py`
-  (with `CONFIG_KEYS` / `phenotype_config` on its branch, and a test that
-  `sim/tests/fixtures/phenotypes.json` matches the default `[fauna]` config). **Any
-  change to the phenotype or to `[fauna]` keys it reads must be announced to R2.**
-- Pending on those branches: R1 adds two `[flora]` keys (snow); R2 adds milestone R5 to
-  CLAUDE.md §8 and `docs/milestones.md`; R1 and R2 both claimed ADR 0013 (to be settled
-  between them). M7 should take ADR **0014** or later, after checking the board.
-
-### Starting M7 (rare genes, creatures and plants)
-
-- **Branch**: `git switch main && git switch -c m7-rare-genes` (no remote push has been
-  done for M6; `origin/main` is behind `main`).
-- **Read first**: CLAUDE.md §8 M7 and §9; `docs/design/creatures.md` (genome, rare-gene
-  slots) and `docs/design/plants.md` (rare genes); ADR 0004 (flora) and 0005 (fauna);
-  ADR 0011 (features first: keep the island viable, do not tune); `docs/m11-plan.md` §3
-  and §6 (add M7's findings there).
-- **What exists**:
-  - `sim/lineage_sim/rare.py` is a skeleton.
-  - Creatures: `Fauna.slots` (uint16 per creature, saved), inherited bit by bit with
-    gains and losses (`genome.inherit_slots`; `[fauna] rare_slots` 8,
-    `rare_gain_probability` 0.0005, `rare_loss_probability` 0.02). **Nothing reads the
-    slots yet**: no creature rare gene has an effect. Arrivals start with none.
-  - Plants: `flora.Rare` (IntFlag, a bit mask per cell, `Flora.rare`): `FIRE_PINE`,
-    `NITROGEN_FIXER`, `MANGROVE`, with effects and growth costs; `[flora]
-    rare_gain_probability` 0.0002, `rare_loss_probability` 0.01. fastforward already
-    records `rare_<name>` cell counts per sample.
-  - Species and lineages (M6) are there to measure "lineage persistence per gene".
-- **Questions to settle at the start** (CLAUDE.md §9: propose, then ask):
-  - The full tables: which creature genes (the docs name venom, glow, hibernation,
-    photosynthesis) and which further plant genes (ADR 0009 / 0011 slot **poisonous
-    plants** here, to make diet learning and traditions matter).
-  - Darkness-dependent genes (glow, hibernation, photosynthesis) before M8 brings night:
-    `Flora.set_daylight` is a hook, but nothing sets daylight yet. Test them with an
-    injected daylight in scenarios only, or pull a minimal daylight input forward?
-  - Do creature rare genes act through the phenotype (shared with R2's renderer port) or
-    beside it? Visual-signature flags for the renderer are a deliverable.
-  - Gain rates: at 0.0005 per bit per newborn, does each gene appear in ≥ 30 % of 3-year
-    seeds (M7's band)? Measure before choosing.
-- **Schema**: any new saved state (per-creature state such as hibernating, new plant
-  bits beyond the mask's width) means schema v8, a v7→v8 migration and a `v8.lzma`
-  fixture.
-- **Report**: `tools/milestones/m7.py` registered in `tools/report.py`, 20 seeds × 3
-  years: appearance frequency, carrier lifespan, lineage persistence per gene, frequency
-  trajectories; criteria: every gene appears in ≥ 30 % of seeds; none above 90 % of the
-  population for more than 3 sim-months in ≥ 90 % of seeds. M5's and M6's modules
-  generate a "What the plots show" section; reuse it.
-- **A cheap pattern from M6**: when a mechanism is bookkeeping (it does not change what
-  happens), many variants can run beside one world per seed (see ADR 0012, the sweeps).
+R1 (`r1-terrain`, `/home/elechim/Lineage-r1`) is in review; R2 (`r2-creatures`,
+`/home/elechim/Lineage-r2`) is in progress. They coordinate through
+`/home/elechim/Lineage-coord` (status files and inboxes). R1's protocol already carries
+the rare-gene table, `born[].slots`, `torpid` and the plant rare mask; R1 has M7's
+descriptions of the plant looks. R2 has M7's notes on the creature overlays (only GIANT
+changes body size). On merge: M7 changed one line of `tools/replay.py`
+(`write_renderer_fixture` draws genes-only bodies); R2's replay supersedes it.
+ADR numbers: 0013 R2, 0014 R1, 0015 M7; the next free is 0016 (check the board).
 
 ### Working notes
 
@@ -125,6 +86,8 @@ touching shared files, and keep a status file of your own (`m7.md`).
   machines agree. Hashes computed by scripts outside pytest match on this machine (no
   AVX-512), but check with pytest.
 - **Local runs** (gitignored; deletable):
+  - `runs/m7-rare2` is the M7 report's run (`runs/m7-rare` before the longevity fix,
+    `runs/m7-preview` and `runs/m7-loss005` are previews);
   - `runs/m6-species-pred` is the M6 report's run (`runs/m6-preview`, `m6-species`,
     `m6-species-final` are earlier M6 runs);
   - `runs/m5-on` and `runs/m5-off` are the M5 report's runs;
