@@ -43,7 +43,8 @@ Questions settled with the owner at the start of M6 (all as proposed):
   group of strangers is another.
 - **Splits are clusters that last.** Each day, within each species, members are linked
   when their genomes differ by at most `link_distance` (0.035), and the connected groups
-  are found. When at least two groups hold `min_members` (8) creatures each, and that
+  are found. When at least two groups hold `min_members` (8; `predator_min_members`, 5,
+  for a predator species, below) creatures each, and that
   lasts `split_days` (3) days in a row, the largest group keeps the species and each
   other large group becomes a daughter. Smaller strays stay in the
   species, so a few odd mutants never make one; a separation that heals or dwindles
@@ -113,6 +114,10 @@ M11 may revisit it with the rest.
 
 From `reports/M6-species/metrics.json` (run `m6-species-final`, code `35fd586`):
 
+After the predator rule (run `m6-species-pred`, code `11a4640`): M6.1 79 % FAIL, M6.2
+1.08 PASS; splits by founding diet: herbivores 498, omnivores 4, predators 51 (17 of 20
+seeds). The numbers below are from the run before it (`m6-species-final`):
+
 - **M6.1 FAIL**: the median seed has 3–12 species alive on 81 % of its inhabited days
   (10th percentile 59 %, worst 38 %); 16 % below the band, almost never above. Median
   alive 7 (10–90 %: 1–12). The shortfall is the months after landing (one or two species
@@ -137,15 +142,32 @@ From the same run, by each species' founding diet:
 | omnivores | 33 | 29 | 4 | 3 | 1 |
 | predators | 132 | 128 | 4 | 8 | 1 |
 
-Only herbivores speciate on the island. Predators, capped at 16 and arriving eight at a
+At first only herbivores speciated on the island. Predators, capped at 16 and arriving eight at a
 time, can split only if the whole capped population divides into two groups of
 `min_members` (8), and their few founders are genetically narrow; their persistence on
 the island is repeated arrival, not descent. Omnivores only come from random-genome
 strangers, share the herbivores' cap (so a group landing beside a full herd lands with
 almost nobody, most likely why their median peak is 3) and last a median of 16 days.
-No herbivore daughter ever became an omnivore or a predator. Options, for M11: a
-`min_members` that scales with a species' population (a census-only change), room for
-newcomers under the cap, a mixed diet that pays.
+No herbivore daughter ever became an omnivore or a predator.
+
+**Predator lines (owner: "try solving this carnivore situation as you prefer").** A
+diagnosis over 8 seeds × 3 years showed that predator lineages do continue: 86 % of
+predator deaths were born on the island, usually one predator lineage at a time breeds
+for months. 87 % of predator deaths are starvation (42 % before maturity); predators are
+present on 23–57 % of days. Their lines were invisible only because the census could not
+split them. Two census rules were swept (census only, 20 seeds × 3 years):
+
+- `min_members` scaled with a species' own size: rejected. Herds that have already split
+  are small, so they shatter too (1 300–4 000 herbivore splits, 14–28 species at once).
+- A smaller group for **predator species** (mean diet ≥ `predator_min_diet`), since
+  their numbers have their own cap: herbivore splits unchanged (498); predator splits
+  3 → 141, 4 → 87, **5 → 51 (17 of 20 seeds)**, 6 → 28; M6.1 76–80 %.
+
+`predator_min_members` = 5 is adopted: two groups of five in a pack of at least ten.
+Making predators themselves last longer (they starve) is balance, left to M11
+(ADR 0011); omnivores remain rare strangers (no source, no room under a full herd's
+cap). Options for those, in M11: room for newcomers under the cap, a mixed diet that
+pays.
 
 ## References
 

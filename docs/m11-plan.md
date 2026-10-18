@@ -142,11 +142,12 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 - **Splits come in bursts** when a widely spread herd shatters at the threshold; the
   species count follows the herd's genetic spread, so anything that changes mutation
   (`mutation_sigma_body`) or selection will move both M6 numbers.
-- **Only herbivores speciate** (ADR 0012, "By diet class"): predators (cap 16, groups of
-  8) cannot form two groups of `min_members` 8 and persist only by new arrivals;
-  omnivores have no source but random strangers and no room under a full herd's cap.
-  Levers: `min_members` scaled to a species' size, room for newcomers, a mixed diet
-  that pays.
-- **M6.1 is deferred here** by the owner (81 % vs 90 %, 2026-10-18).
+- **Diet classes** (ADR 0012, "By diet class"): predator species now split from groups of
+  5 (`predator_min_members`; 51 splits in 20 seeds × 3 years), but predators still
+  starve (87 % of their deaths, 42 % before maturity) and are present on only a quarter
+  to a half of days; omnivores have no source but random strangers and no room under a
+  full herd's cap. Levers: hunter survival (the M5 levers above), room for newcomers, a
+  mixed diet that pays.
+- **M6.1 is deferred here** by the owner (79 % vs 90 % with the predator rule, 2026-10-18).
 - `[species]` settings come from a 20-seed sweep (ADR 0012 table); recheck them after
   any fauna tuning — they are cheap to sweep (many censuses per run).

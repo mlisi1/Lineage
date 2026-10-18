@@ -559,6 +559,9 @@ predator_min_diet = 0.65
 # they are, so a few odd mutants never make a species.
 link_distance = 0.035
 min_members = 8
+# The same for predator species (mean diet gene at or above [fauna] predator_min_diet):
+# capped at [fauna] predator_cap, their packs could never form two groups of min_members.
+predator_min_members = 5
 split_days = 3.0
 
 [schedule]

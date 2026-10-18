@@ -36,6 +36,7 @@ SPLITS_PER_MONTH_TARGET = 1.0
 DAYS_PER_MONTH = DAYS_PER_YEAR / 12.0
 TREE_SEEDS = 3  # representative seeds drawn as trees, plus the worst one
 LABELLED_PEAK = 10  # species with at least this many members at their peak are named
+PREDATOR_LABELLED_PEAK = 5  # the same for predators, whose numbers have their own cap
 NAME_SAMPLES = 12  # names listed per tree seed
 BURST_DAYS = 30.0  # window in which the daughters of one species count as one burst
 # Founding diet classes (herbivore up to, predator from), when the config cannot be read.
@@ -400,7 +401,8 @@ def tree_figure(
         parent = int(table[row, _P["parent"]])
         if parent:
             ax.plot([born, born], [y_of[parent], y], color=style.NEUTRAL, linewidth=0.8)
-        if peak >= LABELLED_PEAK:
+        hunter = _diet_class(float(table[row, _P["diet"]]), limits) == "predators"
+        if peak >= (PREDATOR_LABELLED_PEAK if hunter else LABELLED_PEAK):
             ax.annotate(labels[row], (born, y), xytext=(2, 3), textcoords="offset points",
                         fontsize=7, color=style.TEXT_SECONDARY)  # fmt: skip
     for name, colour in m4.DIET_COLOURS.items():
@@ -436,7 +438,7 @@ def _tree_section(run: Run) -> Section:
         "thicker for species that grew larger; the colour is its founding diet class. "
         "A grey connector joins a daughter to its parent at the split. Roots are arrivals "
         f"(founders or strangers). Species that reached {LABELLED_PEAK} members are "
-        "named.</p>"
+        f"named ({PREDATOR_LABELLED_PEAK} for predators).</p>"
     )
     shares = dict(zip(run.manifest.seeds, per_seed(run)["in_band"], strict=True))
     rows: list[str] = []

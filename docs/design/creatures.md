@@ -157,7 +157,7 @@ Decisions, alternatives and the sweep behind the numbers: ADR 0012.
   descends from through its mother). A lineage the island has not seen (the founders,
   each group of strangers) founds a new **root** species.
 - **Splits.** When a species' members fall into separate clusters of at least
-  `min_members` (8) and stay apart for `split_days` (3 days), the largest group keeps the
+  `min_members` (8; 5 for predator species, whose numbers have their own cap) and stay apart for `split_days` (3 days), the largest group keeps the
   species and every other one becomes a **daughter** species. Smaller strays stay; a
   separation that heals within the week does not count.
 - **Extinction**: the last member died.
@@ -174,8 +174,9 @@ Decisions, alternatives and the sweep behind the numbers: ADR 0012.
   `Species.labels_now()` gives every creature's species at any tick (for the renderer).
 
 Measured (M6 report): about 7 species alive once the herd has spread, a split a month;
-only herbivores speciate: predator lines are too small to split and persist by new
-arrivals, omnivores are rare strangers (ADR 0012, "By diet class").
+herbivores split most; predator lines branch too (51 splits in 20 seeds × 3 years, from
+groups of 5), though predators still starve often and depend partly on new arrivals;
+omnivores are rare strangers (ADR 0012, "By diet class").
 
 ## Rare genes (M7)
 

@@ -330,7 +330,7 @@ needs a note in `docs/decisions/`.
 - **Accept**: species alive in `[3–12]` for ≥ 90% of sim-time; speciation `[≥ 1 / month]`
   median. (As built, ADR 0012: species are genome clusters, finer than who can mate;
   sim-time is inhabited time, median seed; speciation counts splits only. M6.1 measured
-  81 % and was deferred to M11 by the owner, 2026-10-18.)
+  79 % and was deferred to M11 by the owner, 2026-10-18.)
 
 ### M7 — Rare genes (creatures and plants)
 - **Deliver**: full rare tables for both kingdoms, appearance and loss rates, effects and
