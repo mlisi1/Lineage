@@ -36,6 +36,21 @@ describe("scenarios", () => {
     expect(TARGET_FPS).toBe(30);
   });
 
+  it("tell what the R0 scene costs with nothing moving, and with the plants apart", () => {
+    const acceptance = SCENARIOS.find((scenario) => scenario.name === ACCEPTANCE_SCENARIO);
+    const still = SCENARIOS.find((scenario) => scenario.name === "spec-still");
+    const apart = SCENARIOS.find((scenario) => scenario.name === "spec-apart");
+    expect(acceptance?.plantsApart).toBeUndefined();
+    // Each differs from the acceptance scenario in one thing only.
+    expect(still).toEqual({ ...acceptance, name: "spec-still", creatures: 0, about: still?.about });
+    expect(apart).toEqual({
+      ...acceptance,
+      name: "spec-apart",
+      plantsApart: true,
+      about: apart?.about,
+    });
+  });
+
   it("cover every art scale, both shots and a full population", () => {
     expect(new Set(SCENARIOS.map((scenario) => scenario.artScale))).toEqual(new Set([1, 2, 4]));
     expect(new Set(SCENARIOS.map((scenario) => scenario.shot))).toEqual(

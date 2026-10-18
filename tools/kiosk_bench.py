@@ -56,7 +56,8 @@ PSS_EVERY = 5
 # Seconds allowed for the browser to start and the page to load, on top of the benchmark.
 STARTUP_ALLOWANCE_S = 90.0
 PER_SCENARIO_ALLOWANCE_S = 5.0
-SCENARIO_COUNT_ESTIMATE = 8
+# Scenarios the page runs when not told which (renderer/src/spike/scenarios.ts).
+SCENARIO_COUNT_ESTIMATE = 14
 
 # Flags every profile gets: a quiet, full-screen window that is never throttled.
 BASE_FLAGS = (

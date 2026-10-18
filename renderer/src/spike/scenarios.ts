@@ -27,6 +27,12 @@ export interface Scenario {
   plants: PlantMode;
   creatures: number;
   tint: boolean;
+  /**
+   * The plants as a render group of their own, the creatures over them rather than among
+   * their rows, so that nothing a creature does makes PixiJS rebuild the plants. Left
+   * out: among them, as the look asks.
+   */
+  plantsApart?: boolean;
   about: string;
 }
 
@@ -52,6 +58,25 @@ export const SCENARIOS: readonly Scenario[] = [
     creatures: SPEC_CREATURES,
     tint: true,
     about: "The R0 scene by the letter at the display's resolution: every plant a sprite.",
+  },
+  {
+    name: "spec-still",
+    artScale: 1,
+    shot: "wide",
+    plants: "sprites",
+    creatures: 0,
+    tint: true,
+    about: "The R0 scene with no creatures: nothing moves, so nothing is rebuilt.",
+  },
+  {
+    name: "spec-apart",
+    artScale: 1,
+    shot: "wide",
+    plants: "sprites",
+    creatures: SPEC_CREATURES,
+    tint: true,
+    plantsApart: true,
+    about: "The R0 scene with the plants drawn apart: creatures walk over them, not among.",
   },
   {
     name: "spec-2x",

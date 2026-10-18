@@ -68,6 +68,8 @@ export class SpikeScene {
   /** The plants and creatures of the scenario in force. */
   private activePlants: PlantLayer | null = null;
   private activeCreatures: CreatureLayer;
+  /** Creatures stand in the rows of the plants, behind what grows in front of them. */
+  private amongPlants = true;
 
   private constructor(
     private readonly app: Application,
@@ -138,6 +140,12 @@ export class SpikeScene {
     ground.visible = !map.visible && !painted;
     plants.container.visible = scenario.plants === "sprites";
     this.activePlants = plants.container.visible ? plants : null;
+    const apart = scenario.plantsApart === true;
+    if (apart !== plants.container.isRenderGroup) {
+      if (apart) plants.container.enableRenderGroup();
+      else plants.container.disableRenderGroup();
+    }
+    this.amongPlants = !apart;
     this.activeCreatures = this.creatures;
     this.pieces = null;
     if (proposed !== null) {
@@ -206,7 +214,10 @@ export class SpikeScene {
     this.drawnPlants = this.activePlants?.cull(view.cells) ?? 0;
     this.activeCreatures.update(dtS, view.cells, !this.dots);
     // Among plants a creature stands in its row, behind what grows in front of it.
-    this.activeCreatures.hostIn(this.activePlants?.guests ?? null, this.activePlants?.rowsPerCell);
+    this.activeCreatures.hostIn(
+      this.amongPlants ? (this.activePlants?.guests ?? null) : null,
+      this.activePlants?.rowsPerCell,
+    );
     // What stands in front of the one the camera is on shows it through.
     this.activePlants?.fade(this.shot === "follow" ? this.activeCreatures.box(0) : null);
     if (this.tint.visible) this.tint.tint = cycleTint(this.timeS);

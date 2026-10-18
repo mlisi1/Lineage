@@ -379,6 +379,8 @@ the 1 % low, the script time per frame and the graphics driver the browser gave 
 |---|---|---|---|---|
 | `floor` | 1024×600 | none | 0 | what the browser costs before any scene |
 | `spec-1x` | 1024×600 | 16 504 sprites | 50 | **the R0 scene by the letter: the acceptance** |
+| `spec-still` | 1024×600 | 16 504 sprites | 0 | the same with nothing moving: what the plants cost alone |
+| `spec-apart` | 1024×600 | 16 504 sprites, a render group of their own | 50 | the same with the creatures over the plants, not among their rows |
 | `spec-2x` | 512×300 | sprites | 50 | the same with art pixels of 2 screen pixels |
 | `spec-4x` | 256×150 | sprites | 50 | the same with art pixels of 4 screen pixels |
 | `map-1x` | 1024×600 | flat map | 50 | a wide shot as it would ship |
@@ -390,10 +392,16 @@ the 1 % low, the script time per frame and the graphics driver the browser gave 
 | `mid-crowd` | 512×300 | painted ground, standing plants | 216 | the middle view with every creature alive |
 | `local-view` | 512×300 | ground in pieces, the local view's plants | 50 | the local view, the camera on one creature |
 
-The first eight draw the spike's first look (a flat square of ground per cell and a
+The first ten draw the spike's first look (a flat square of ground per cell and a
 drawing in every vegetated cell), which is what R0 was written against. `spec-1x` is
-deliberately its worst case: a sprite for every cell of the island at once. The last
-four draw the three views as chosen. The acceptance scenario should move to them once
+deliberately its worst case: a sprite for every cell of the island at once.
+`spec-still` and `spec-apart` each change one thing in it, to tell where its time goes.
+On the board (a first run on a virtual display) `spec-1x` spends 88 ms of script a frame
+whatever the art scale, and waits several times longer on the GPU at 1024×600. The
+creatures stand in the plants' rows, so one stepping into the next row changes the
+scene's structure and PixiJS rebuilds the batches of all 16 504 plants; `spec-apart`
+takes that away, `spec-still` takes away all change. The last four draw the three views
+as chosen. The acceptance scenario should move to them once
 the local view is settled, with a note in `docs/decisions/`.
 
 Page parameters: `?demo=<scenario>` shows one scenario indefinitely with the frame rate
