@@ -368,6 +368,10 @@ function rareSheets(host: HTMLElement, land: WorldFixture, look: Look): void {
       ],
     ],
     [
+      "Fire pine after a fire: its trunk charred, its crown kept",
+      [...plant("CONIFER/grown/0+charred"), ...plant("BROADLEAF/grown/0+charred")],
+    ],
+    [
       "Several at once: a fire pine with berries and clover",
       [...plant("BROADLEAF/grown/1+bark", ["berries", "clover"])],
     ],

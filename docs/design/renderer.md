@@ -623,7 +623,7 @@ a plant with several rare genes carries each look:
 
 | Gene | Look |
 |---|---|
-| FIRE_PINE | the wood a warm red-brown (the same drawing, coloured otherwise) |
+| FIRE_PINE | the wood a warm red-brown (the same drawing, coloured otherwise); after a fire it stands on the burnt ground, trunk charred, crown kept |
 | NITROGEN_FIXER | small three-lobed leaves round the foot, pale flowers on some |
 | MANGROVE | arched stilt roots; the only plants standing in shallow water (as a broadleaf, in leaf all year) |
 | POISONOUS | clusters of three violet berries on the leaves (not on grass) |
@@ -632,8 +632,10 @@ a plant with several rare genes carries each look:
 
 Berries, fruit, clover and stilts are overlays the size of the drawing they lie on, with
 its foot, scaled to its size (a pixel in the middle view). The drawings are made only for
-the looks some plant of the land has. Not drawn: a fire pine's blackened trunk after a
-fire, which M7 asked for: the stream carries no scorch yet.
+the looks some plant of the land has. A fire pine after a fire needs no scorch in the
+stream: the simulation marks a scorched cell burnt, and a fire leaves biomass only on a
+fire pine, so a burnt cell with biomass and the gene is one (drawn as a conifer if its
+`EVERGREEN` makes it one, from 128, else a broadleaf).
 
 **The land sheet** (`renderer/land.html`, `npm run land` →
 [`reports/R1-land-sheet/`](../../reports/R1-land-sheet/README.md)) opens with films of the
@@ -671,8 +673,6 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   tree turns and how it spends the winter, and the rare genes have their looks (R1, from
   M7's signatures). Which broadleaf flowers or turns gold, and the kinds of flower, are
   still the renderer's own variety.
-- **A fire pine after a fire** keeps a blackened trunk in M7's description; it needs the
-  scorch grid in the stream (`Flora.scorch`), which is not sent yet.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local

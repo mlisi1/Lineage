@@ -86,6 +86,8 @@ describe("rare plant looks", () => {
     expect(plain.some((key) => key.includes("#") || key.includes("+"))).toBe(false);
     const some = keys(["bark", "berries"]);
     expect(some).toContain("BROADLEAF/grown/0+bark");
+    // A fire pine after a fire: the same drawing, its wood charred.
+    expect(some).toContain("CONIFER/grown/0+charred");
     expect(some).toContain("SHRUB/grown/1#berries");
     expect(some.some((key) => key.includes("#fruit") || key.includes("+crown"))).toBe(false);
     // No berries on grass, no bark on it either.

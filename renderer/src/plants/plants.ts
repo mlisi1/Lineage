@@ -404,6 +404,8 @@ function keySalt(key: string): number {
  */
 const BARE_BELOW = 100;
 const LEAFY_FROM = 77;
+/** `EVERGREEN` from which the simulation makes a tree a conifer (`form_conifer_min_evergreen`, 0.5). */
+const CONIFER_FROM = 128;
 
 /** How a plant of `form` with `evergreen` (0–255; unknown where the land does not carry it) spends the winter, if not as its kind mostly does. */
 function habitOf(form: string, evergreen: number | undefined): WinterHabit | null {
@@ -573,6 +575,8 @@ export function standingArts(
       // A fire pine's wood: the same drawing, coloured otherwise.
       if (rare.includes("bark") && !grass) {
         arts.push({ ...base, key: `${base.key}+bark`, wood: RARE_COLOURS.bark });
+        // And after a fire, which it lives through: its trunk charred, its crown kept.
+        arts.push({ ...base, key: `${base.key}+charred`, wood: CHARRED });
       }
       for (const overlay of OVERLAYS) {
         if (!rare.includes(overlay) || (grass && (overlay === "stilts" || overlay === "berries"))) {
@@ -940,13 +944,11 @@ export function standingPlants(
     tree: boolean,
     dx: number,
     dy: number,
+    charred = false,
   ): Placed[] => {
     const drawn = looks.includes("crown") && tree ? `${base}+crown` : base;
-    const own = placed(
-      named(shown, x, y, `${drawn}${looks.includes("bark") ? "+bark" : ""}`),
-      dx,
-      dy,
-    );
+    const wood = charred ? "+charred" : looks.includes("bark") ? "+bark" : "";
+    const own = placed(named(shown, x, y, `${drawn}${wood}`), dx, dy);
     const overlays = OVERLAYS.filter((overlay) => looks.includes(overlay)).flatMap((overlay) =>
       placed(named(shown, x, y, `${drawn}#${overlay}`), dx, dy),
     );
@@ -961,6 +963,20 @@ export function standingPlants(
       const cell = y * land.width + x;
       const biomass = land.biomass[cell] ?? 0;
       const looks = looksAt(x, y);
+      if (look === null && land.cover[cell] === burntClass && looks.includes("bark")) {
+        // A fire pine (rare, M7) lives through a fire, which leaves nothing else: a tree on
+        // the burnt ground, its trunk charred and its crown kept; a conifer if it is
+        // evergreen enough to be one.
+        if (biomass < VISIBLE_FROM) return out;
+        const form = (land.plantEvergreen?.[cell] ?? 255) >= CONIFER_FROM ? "CONIFER" : "BROADLEAF";
+        const shown = plantSeason(x, y);
+        const base = standingKey(form, growthOf(biomass), buildOf(x, y));
+        const [dx, dy] = plantOffset(x, y);
+        return [
+          ...out,
+          ...withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH, true),
+        ];
+      }
       if (look === null) {
         // A mangrove (rare, M7) stands in the shallow water where nothing else grows: a
         // broadleaf on stilt roots, in leaf all year.
