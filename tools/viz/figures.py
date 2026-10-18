@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import matplotlib
 
@@ -283,6 +283,58 @@ def bars_with_spread(
     ax.set_ylabel(ylabel)
     ax.grid(axis="x", visible=False)
     ax.legend(loc="best")
+    fig.tight_layout()
+    return fig
+
+
+def grouped_bars(
+    groups: Sequence[str],
+    series: Mapping[str, Sequence[float | None]],
+    colours: Mapping[str, str],
+    *,
+    title: str,
+    ylabel: str,
+    reference: tuple[float, str] | None = None,
+) -> Figure:
+    """Bars side by side: one cluster per group, one coloured bar per series.
+
+    A value of None (not measured) leaves a gap. ``reference`` draws a labelled
+    horizontal line, such as a target.
+    """
+    fig, ax = plt.subplots(figsize=(7.0, 3.4 if len(groups) <= 8 else 4.0))
+    names = list(series)
+    width = 0.8 / max(len(names), 1)
+    positions = np.arange(len(groups), dtype=float)
+    for index, name in enumerate(names):
+        values = series[name]
+        measured = [i for i, value in enumerate(values) if value is not None]
+        ax.bar(
+            positions[measured] + (index - (len(names) - 1) / 2.0) * width,
+            [float(values[i] or 0.0) for i in measured],
+            width=width * 0.9,
+            color=colours[name],
+            label=name,
+        )
+    if reference is not None:
+        ax.axhline(
+            reference[0],
+            color=style.TEXT_PRIMARY,
+            linewidth=1.0,
+            linestyle="--",
+            label=reference[1],
+        )
+    # Past a handful of groups their names no longer fit side by side: slant them.
+    slanted = len(groups) > 8
+    if slanted:
+        ax.set_xticks(positions, groups, rotation=35, ha="right", rotation_mode="anchor")
+    else:
+        ax.set_xticks(positions, groups)
+    ax.set_ylim(bottom=0.0)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.grid(axis="x", visible=False)
+    anchor = (0.5, -0.32) if slanted else (0.5, -0.12)
+    ax.legend(loc="upper center", bbox_to_anchor=anchor, ncols=6, fontsize=8)
     fig.tight_layout()
     return fig
 

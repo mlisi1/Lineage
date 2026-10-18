@@ -64,7 +64,9 @@ generated with a new seed. Worlds are numbered.
 
 ## Outputs
 
-- One continuous scene on the 7" desk screen: documentary camera and captions.
+- One continuous scene on the 7" desk screen: documentary camera and captions. The
+  camera shows the world from three distances: the whole continent as a map, a region,
+  and one animal from close to the ground (`renderer.md`).
 - Phone web app with the same renderer, plus chronicle, bestiary and stats.
 - Push notifications for major events.
 - A daily public journal (static site) that also backs up the save off-device.
@@ -72,10 +74,11 @@ generated with a new seed. Worlds are numbered.
 ## Visual style
 
 Everything drawn is pixel art: flat limited palettes, stepped shading instead of
-gradients, hard pixel edges, whole-number scaling. One terrain cell is 4×4 screen pixels
-on the desk display. The reference palette and rules live in `tools/viz/pixelmap.py`
-(used by the reports) and the renderer follows them. Charts in reports are ordinary
-plots.
+gradients, hard pixel edges, whole-number scaling. On the desk display an art pixel is
+2×2 screen pixels, and a terrain cell is 2, 8 or 32 art pixels across depending on how
+close the camera is. The reference palette and rules live in `tools/viz/pixelmap.py`
+(used by the reports) and the renderer paints the ground by them. Charts in reports are
+ordinary plots.
 
 ## Open
 

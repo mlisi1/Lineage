@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lineage renderer spike</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        color: #e6edf2;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+      #hud {
+        position: absolute;
+        left: 8px;
+        top: 6px;
+        padding: 1px 6px;
+        background: rgba(20, 33, 61, 0.85);
+        font:
+          12px/1.5 ui-monospace,
+          monospace;
+      }
+      #results {
+        display: none;
+        position: absolute;
+        inset: 0;
+        overflow: auto;
+        padding: 16px 20px;
+        background: rgba(20, 33, 61, 0.96);
+      }
+      #results h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      #results p {
+        margin: 2px 0;
+      }
+      #results table {
+        margin: 12px 0;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      #results th,
+      #results td {
+        padding: 3px 12px 3px 0;
+        text-align: left;
+        border-bottom: 1px solid #2c3f66;
+      }
+      #results th {
+        color: #9fb3c8;
+        font-weight: 600;
+      }
+      #results a {
+        color: #8ecbe6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="hud"></div>
+    <div id="results"></div>
+    <script type="module" src="/src/spike/main.ts"></script>
+  </body>
+</html>

@@ -20,7 +20,7 @@ Eleven genes in `[0, 1]`:
 | `AQUATIC` | swims fast and does not drown | slow on land, energy |
 | `JAW` | attack power and grazing rate | energy |
 | `BROOD` | many young per brood | each young starts with less |
-| `HUE`, `PATTERN` | looks; count toward mate compatibility | — |
+| `HUE`, `PATTERN` | looks (body colour; one of twelve markings); count toward mate compatibility | — |
 
 Sixteen-bit **rare-gene slots** are inherited and occasionally gained or lost; the genes
 and their effects arrive in M7.
@@ -30,7 +30,9 @@ and their effects arrive in M7.
 `fauna/phenotype.py` is the single definition of what the genes mean: mass, leg pairs,
 land and swim speed, sense range, resting burn, cost per cell travelled, energy capacity,
 grazing rate, plant and meat efficiency, attack, defence, lifespan, maturity, brood size.
-Bigger and better-equipped always burns more. The renderer draws bodies from the same
+Bigger and better-equipped always burns more. How each gene shows on the body (a plan
+per kind of animal, picked by leg pairs, water, armour and speed) is in `renderer.md`.
+The renderer draws bodies from the same
 values; `sim/tests/fixtures/phenotypes.json` holds 15 specimen genomes with their
 expected values for the cross-language check in R2.
 
