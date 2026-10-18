@@ -1,9 +1,10 @@
 """M5 — Fauna II: lifetime learning. Metrics, acceptance criteria, report sections.
 
-Acceptance (CLAUDE.md §8, revised 2026-10-17, ADR 0009): learning tracks the local
-environment (final-year diet fit positive in ≥ 80 % of seeds); time to competence trends
-down over generations in ≥ 60 % of seeds; step cost within budget. Early-life feeding
-success (the original M5.1, ≥ 15 %) is still measured and reported.
+Acceptance (CLAUDE.md §8, revised 2026-10-17 and 2026-10-18, ADR 0009): learning tracks
+the local environment (final-year diet fit positive in ≥ 80 % of seeds, M5.1); step cost
+within budget (M5.3). M5.2, time to competence trending down over generations, is
+reported without a band, with shielding versus genetic assimilation, as is early-life
+feeding success (the original M5.1, ≥ 15 %).
 
 Two runs make this report: the main run has learning on and was forked
 (``fastforward --fork-days``); the baseline is the same seeds with
@@ -72,12 +73,6 @@ CRITERIA: list[Criterion] = [
         "(learned plant preference against the local plant defence) is positive",
         "diet_fit.last_year.share_of_seeds_positive",
         low=0.8,
-    ),
-    Criterion(
-        "M5.2",
-        "Share of seeds whose median time to competence falls over generations (learning on)",
-        "competence.share_of_seeds_falling",
-        low=0.6,
     ),
     Criterion(
         "M5.3",

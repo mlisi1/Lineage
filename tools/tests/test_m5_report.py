@@ -132,7 +132,8 @@ def test_m5_report_passes_and_names_the_baseline(tmp_path: Path) -> None:
     out = build_report("M5", on, tmp_path / "reports", off)
     assert out.name == "M5-fauna-learning"
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-    assert [a["status"] for a in doc["acceptance"]] == ["PASS", "PASS", "PASS"]
+    assert [a["id"] for a in doc["acceptance"]] == ["M5.1", "M5.3"]
+    assert [a["status"] for a in doc["acceptance"]] == ["PASS", "PASS"]
     page = (out / "report.html").read_text(encoding="utf-8")
     assert "Baseline run" in page
     assert "off, config" in page

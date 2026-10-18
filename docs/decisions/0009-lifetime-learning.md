@@ -464,7 +464,9 @@ uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 1000 --snaps
 - **Shielding again**: the inherited diet bias ends at +0.069 with learning on and
   +0.183 off, with a learned bias of +0.096. Learning takes over the diet rule, so the
   genes do not carry it.
-- **Open for the owner: M5.2.** A Baldwin trend (time to competence falling over
+- **Decided (owner, 2026-10-18): M5.2 becomes an observation.** Time to competence across
+  generations and shielding versus assimilation are measured and reported without a band;
+  CLAUDE.md §8 and the report follow. The question as it was put: A Baldwin trend (time to competence falling over
   generations) is what CLAUDE.md asks, but every run shows shielding, its opposite, and
   the share hovers around a coin toss (40–60 %) with learning on and off alike.
   Options:

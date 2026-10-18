@@ -37,14 +37,6 @@
       "status": "PASS"
     },
     {
-      "id": "M5.2",
-      "description": "Share of seeds whose median time to competence falls over generations (learning on)",
-      "metric": "competence.share_of_seeds_falling",
-      "value": 0.5,
-      "target": "\u2265 0.6",
-      "status": "FAIL"
-    },
-    {
       "id": "M5.3",
       "description": "Step of the whole world with learning on, median ms per sim-day",
       "metric": "step_ms.median",

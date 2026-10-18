@@ -311,10 +311,12 @@ needs a note in `docs/decisions/`.
 - **Report**: ablation learning ON vs OFF (same seeds): survival, mean energy, time to
   competence across generations (Baldwin effect plot), learning-rate gene trajectory.
 - **Accept**: learning tracks the local environment: final-year diet fit (learned plant
-  preference against local plant defence) positive in `[≥ 80%]` of seeds; time to
-  competence trends down over generations in `[≥ 60%]` of seeds; step cost within budget.
-  Early-life feeding gain (originally `[≥ 15%]`, out of reach on a balanced island) and
-  shielding versus genetic assimilation are reported. Revised 2026-10-17 (ADR 0009).
+  preference against local plant defence) positive in `[≥ 80%]` of seeds; step cost within
+  budget. Reported without a band: early-life feeding gain (originally `[≥ 15%]`, out of
+  reach on a balanced island), time to competence across generations (originally a
+  downward trend in `[≥ 60%]` of seeds), and shielding versus genetic assimilation; every
+  run shows shielding, the opposite of a Baldwin effect. Revised 2026-10-17 and
+  2026-10-18 (ADR 0009).
 
 ### M6 — Species, names, phylogeny
 - **Deliver**: daily genome clustering with persistent ids, speciation/extinction
