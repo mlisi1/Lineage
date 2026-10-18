@@ -50,7 +50,8 @@ lineage/
 ├── docs/
 │   ├── design/               # spec: concept, creatures, plants, terrain, chronicle, presence
 │   ├── decisions/            # ADRs: NNNN-short-title.md (context, decision, consequences)
-│   └── milestones.md         # status table mirrored from section 8 of this file
+│   ├── milestones.md         # status table mirrored from section 8 of this file; handoff notes
+│   └── m11-plan.md           # how M11 will tune the island (evidence from M5 onward)
 ├── sim/                      # Python package `lineage_sim` — the world. Pure. No I/O.
 │   ├── pyproject.toml
 │   ├── lineage_sim/
@@ -372,7 +373,8 @@ needs a note in `docs/decisions/`.
 - **Accept**: archives load and render; new world starts within budget.
 
 ### M11 — Long-run tuning and stability
-- **Deliver**: tuned `default.toml`; `tools/tune/` sweeps.
+- **Deliver**: tuned `default.toml`; `tools/tune/` sweeps. Plan and evidence so far:
+  `docs/m11-plan.md` (ADR 0011: features first, tuning once here).
 - **Tests**: nightly 3-year × 20-seed run with all acceptance criteria from M2–M10.
 - **Report**: full dashboard — all prior metrics at 3 sim-years, genetic distance from
   ancestors, sensitivity of key metrics to the top tunables.
