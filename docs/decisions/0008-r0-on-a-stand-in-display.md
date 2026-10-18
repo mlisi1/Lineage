@@ -1,6 +1,6 @@
 # 0008 — R0 may be measured on a larger display standing in for the 7" screen
 
-- **Status**: accepted
+- **Status**: accepted; R0 was measured this way on 2026-10-18 (a 2560×1440 monitor)
 - **Date**: 2026-10-11
 
 ## Context

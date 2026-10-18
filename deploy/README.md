@@ -9,7 +9,8 @@ backups, Tailscale, log rotation and SD-wear settings. Built in S6.
 flashing the card to the result on the PC, without a keyboard on the board. What follows
 is the procedure itself, for a board that already has a session on its screen.
 
-What the board needs: a graphical session on the 7" screen at 1024×600, Chromium
+What the board needs: a graphical session on the 7" screen at 1024×600 (or a larger
+monitor standing in for it, ADR 0008), Chromium
 (`chromium` or `chromium-browser`), and Python 3.9 or newer. Nothing is installed by the
 benchmark and nothing of the project needs to be on the board.
 
@@ -36,8 +37,8 @@ benchmark and nothing of the project needs to be on the board.
    …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
    the report marks as not the R0 measurement.
 
-   The screen belongs to the benchmark for about a quarter of an hour: five browser
-   profiles, twelve scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
+   The screen belongs to the benchmark for about twenty minutes: five browser
+   profiles, fourteen scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
    per profile and writes `kiosk-bench.json` (rewritten after every profile, so an
    interrupted run keeps what it had) and one `chromium-<profile>.log` per profile.
 
@@ -48,7 +49,9 @@ benchmark and nothing of the project needs to be on the board.
    uv run python -m tools.report R0 --runs runs/r0-device
    ```
 
-   This writes `reports/R0-renderer-spike/`, evidence file included.
+   This writes `reports/R0-renderer-spike/`, evidence file included. It passes when the
+   best profile holds 30 fps median in each of the three views and the crowded middle
+   one (ADR 0010); the result of 2026-10-18 is there.
 
 Reading the table on the board:
 
@@ -63,7 +66,28 @@ Reading the table on the board:
 - **Trying other flags** needs no edit: `--flags='--use-gl=egl'` adds them as one more
   profile named `custom`. `--profiles gpu --only spec-1x,map-1x --seconds 5` narrows a
   run down while experimenting.
+- **The GPU hanging** does not show in the table, only as a low frame rate: the kernel
+  kills a GPU job after half a second. `sudo dmesg | grep -c "gpu sched timeout"` before
+  and after a run counts them. On this board the spec scenes (a sprite in every cell)
+  hang on every frame; the three views do not (ADR 0010).
 
 To look at the scene instead of measuring it, serve `dist` (`python3 -m http.server
 --directory dist 8137`) and open `http://127.0.0.1:8137/spike.html?demo=close-2x` in the
-board's browser; any scenario name works.
+board's browser; any scenario name works. Where there is no desktop, the same under
+`cage`, as a one-off unit with the benchmark unit's settings, from SSH:
+
+```sh
+sudo systemctl stop getty@tty1
+sudo systemd-run --unit lineage-demo --uid=lineage \
+  -p PAMName=login -p TTYPath=/dev/tty1 -p TTYReset=yes -p TTYVHangup=yes \
+  -p StandardInput=tty-fail -p StandardOutput=journal -p StandardError=journal \
+  -p WorkingDirectory=/home/lineage/lineage-r0 -E XDG_SESSION_TYPE=wayland \
+  /usr/bin/cage -s -- /bin/sh -c "python3 -m http.server -d dist 8137 >/dev/null 2>&1 & \
+    sleep 2; exec chromium --kiosk --no-first-run 'http://127.0.0.1:8137/spike.html?demo=mid-view'"
+# and to end it:
+sudo systemctl stop lineage-demo; sudo systemctl start getty@tty1
+```
+
+Left running, the board out of any enclosure creeps towards 80 °C, where it slows itself down
+(`/sys/class/thermal/thermal_zone*/temp`, in thousandths of a degree): the enclosure
+needs a heatsink at least.

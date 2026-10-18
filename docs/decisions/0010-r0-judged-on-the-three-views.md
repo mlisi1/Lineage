@@ -1,6 +1,7 @@
 # 0010 — R0 is judged on the three views, not on a sprite in every cell
 
-- **Status**: accepted
+- **Status**: accepted; R0 passed on these criteria on 2026-10-18
+  ([report](../../reports/R0-renderer-spike/README.md))
 - **Date**: 2026-10-18
 
 ## Context

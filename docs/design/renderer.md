@@ -315,8 +315,9 @@ seasons and the stages asks to change.
 
 ## What it costs: an estimate for the board
 
-The board is not on the desk, so R0's measurement is still to come. Until then, the
-three views were measured on the development PC and scaled to the board's processor. An
+Written before the board was on the desk; what it measured since is under "What the
+board says" below. Until then, the three views were measured on the development PC and
+scaled to the board's processor. An
 Allwinner H618 scores about 150 in Geekbench 6 on one core and the PC (Core Ultra 9
 275HX) about 3 150: some 21 times slower per core. It is another architecture and
 another graphics stack, so the last column is an order of magnitude.
