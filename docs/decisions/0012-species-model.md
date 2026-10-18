@@ -1,6 +1,6 @@
 # 0012 — Species model: lineage labels, genome clusters, genome names
 
-- **Status**: proposed
+- **Status**: accepted
 - **Date**: 2026-10-18
 
 ## Context
@@ -123,6 +123,29 @@ From `reports/M6-species/metrics.json` (run `m6-species-final`, code `35fd586`):
 - Splits come in bursts: the most daughters one species had within 30 days has a
   median of 6 per seed, up to 13.
 - Census cost: well under a millisecond a day (benchmark budget 50 ms).
+
+**Owner's decision (2026-10-18):** M6 is done; M6.1 is deferred to M11 ("fairly close
+to the hoped result").
+
+### By diet class
+
+From the same run, by each species' founding diet:
+
+| Founding diet | Species | Arrived | Born by a split | Median peak | Deepest descent |
+|---|---|---|---|---|---|
+| herbivores | 544 | 46 | 498 | 18 | 4 |
+| omnivores | 33 | 29 | 4 | 3 | 1 |
+| predators | 132 | 128 | 4 | 8 | 1 |
+
+Only herbivores speciate on the island. Predators, capped at 16 and arriving eight at a
+time, can split only if the whole capped population divides into two groups of
+`min_members` (8), and their few founders are genetically narrow; their persistence on
+the island is repeated arrival, not descent. Omnivores only come from random-genome
+strangers, share the herbivores' cap (so a group landing beside a full herd lands with
+almost nobody, most likely why their median peak is 3) and last a median of 16 days.
+No herbivore daughter ever became an omnivore or a predator. Options, for M11: a
+`min_members` that scales with a species' population (a census-only change), room for
+newcomers under the cap, a mixed diet that pays.
 
 ## References
 

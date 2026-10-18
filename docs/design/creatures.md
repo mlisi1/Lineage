@@ -173,6 +173,10 @@ Decisions, alternatives and the sweep behind the numbers: ADR 0012.
 - **Outputs**: `SpeciesBorn` and `SpeciesExtinct`, for the chronicle (M9);
   `Species.labels_now()` gives every creature's species at any tick (for the renderer).
 
+Measured (M6 report): about 7 species alive once the herd has spread, a split a month;
+only herbivores speciate: predator lines are too small to split and persist by new
+arrivals, omnivores are rare strangers (ADR 0012, "By diet class").
+
 ## Rare genes (M7)
 
 Rare genes carry an extreme bonus and a real cost (e.g. venom, glow, hibernation,
