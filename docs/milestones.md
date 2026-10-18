@@ -31,14 +31,11 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-State at 2026-10-18, for the next session:
+State at 2026-10-18 (after merging R0), for the next session:
 
-- **Branches**:
-  - `r0-renderer-spike` holds R0 and waits for the board measurement
-    (`deploy/board-setup.md`).
-  - `m5-lifetime-learning`, branched from `main`, holds M5. It does not contain the R0
-    commits; expect conflicts only in shared files (this file, `CLAUDE.md`).
-  - Neither branch had been pushed when this was written; the owner was deciding.
+- **Branches**: R0 is done and merged into `main` (`de7c8da`). `m5-lifetime-learning`
+  holds M5 and has `main` merged in (`b6a0468`), so it merges back cleanly. Both are on
+  the remote.
 - **Read first**: ADR 0009, "Current design (summary)" at the top, then "Criteria
   adopted" and "Where M5 stands after balancing". The M5 report opens with a generated
   "What the plots show".
