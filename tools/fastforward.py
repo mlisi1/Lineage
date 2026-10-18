@@ -48,6 +48,8 @@ from lineage_sim.events import (
     LandmassSplit,
     OutputEvent,
     PopulationExtinct,
+    SpeciesBorn,
+    SpeciesExtinct,
     VolcanoErupted,
 )
 from lineage_sim.fauna import brain
@@ -93,6 +95,14 @@ YOUTH_COLUMNS = ("day", "generation", "age_h", "eaten", "burnt", "competent_h", 
 # Columns of the fork table (``_fork``): one row per youth of a forked world; ``learning``
 # is 1 for the arm with lifetime learning on.
 FORK_COLUMNS = ("fork_day", "learning", *YOUTH_COLUMNS[1:])
+# Columns of the phylogeny table (``_phylogeny``): one row per species that ever lived,
+# at the end of the run, in id order (M6). ``parent`` is 0 for an arrival;
+# ``extinct_day`` is -1 if it is still alive; the genes are its founding mean genome.
+# Names are in ``_species_names``, row for row; ``_species_daily`` is the number of
+# species alive after each day's census.
+PHYLOGENY_COLUMNS = (
+    "id", "parent", "lineage", "born_day", "extinct_day", "peak", "diet", "size", "hue",
+)  # fmt: skip
 DAY_MS = DAY_S * 1000
 _LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
@@ -228,12 +238,18 @@ class Probes:
         self.fire_sizes: list[int] = []
         self.burnt_cells = 0
         self.youths: list[list[float]] = []
+        self.species_daily: list[int] = []
+        self.counts |= {"species_splits": 0, "species_arrivals": 0, "species_extinctions": 0}
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
         for name, kind in EVENT_SERIES.items():
             self.counts[name] += sum(isinstance(o, kind) for o in outputs)
         for output in outputs:
-            if isinstance(output, FireEnded):
+            if isinstance(output, SpeciesBorn):
+                self.counts["species_splits" if output.parent else "species_arrivals"] += 1
+            elif isinstance(output, SpeciesExtinct):
+                self.counts["species_extinctions"] += 1
+            elif isinstance(output, FireEnded):
                 self.fire_sizes.append(output.cells)
                 self.burnt_cells += output.cells
             elif isinstance(output, JuvenileGrown) and output.generation > 0:
@@ -273,6 +289,8 @@ class Probes:
             name = (gene.name or "").lower()
             row[f"rare_{name}"] = float(np.count_nonzero(alive & ((flora.rare & gene) != 0)))
         row |= self._fauna_row(world)
+        row["species_alive"] = float(world.species.alive_count)
+        row["species_ever"] = float(world.species.count)
         row |= {name: float(count) for name, count in self.counts.items()}
         for name, value in row.items():
             self.rows.setdefault(name, []).append(value)
@@ -332,6 +350,26 @@ class Probes:
 
     def final_genes(self, world: World) -> np.ndarray:
         return world.fauna.genes.copy()
+
+    def phylogeny(self, world: World) -> dict[str, np.ndarray]:
+        """The species tables at the end of the run (`PHYLOGENY_COLUMNS`)."""
+        records = world.species.records()
+        table = np.array(
+            [
+                [
+                    r.id, r.parent, r.lineage, r.born_t_ms / DAY_MS,
+                    r.extinct_t_ms / DAY_MS if r.extinct_t_ms >= 0 else -1.0, r.peak,
+                    r.founding[Gene.DIET], r.founding[Gene.SIZE], r.founding[Gene.HUE],
+                ]
+                for r in records
+            ],
+            dtype=np.float64,
+        ).reshape(-1, len(PHYLOGENY_COLUMNS))  # fmt: skip
+        return {
+            EXTRA_PREFIX + "phylogeny": table,
+            EXTRA_PREFIX + "species_names": np.array([r.name for r in records], dtype=np.str_),
+            EXTRA_PREFIX + "species_daily": np.array(self.species_daily, dtype=np.int16),
+        }
 
 
 def fork(config_text: str, world: World, days: int) -> list[list[float]]:
@@ -400,6 +438,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         started = time.perf_counter()
         outputs = world.step(DAY_S)
         probes.observe(outputs, time.perf_counter() - started)
+        probes.species_daily.append(world.species.alive_count)
         day += 1
         if day % job.save_days == 0 or day == job.days:
             save_kib = save()
@@ -432,6 +471,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         )
     series = probes.series()
     series[EXTRA_PREFIX + "final_genes"] = probes.final_genes(world)
+    series |= probes.phylogeny(world)
     series[EXTRA_PREFIX + "fork"] = np.array(forks, dtype=np.float64).reshape(-1, len(FORK_COLUMNS))
     return series, world.state_hash()
 

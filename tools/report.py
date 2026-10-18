@@ -31,7 +31,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4, m5, r0
+from tools.milestones import m2, m3, m4, m5, m6, r0
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -68,7 +68,7 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4, "M5": m5}
+MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4, "M5": m5, "M6": m6}
 
 # Milestones measured on the device rather than by fast-forward: the module reads its
 # own evidence file and provides the header, metrics and sections from it.
@@ -80,6 +80,7 @@ CRITERIA: dict[str, list[Criterion]] = {
     "M3": m3.CRITERIA,
     "M4": m4.CRITERIA,
     "M5": m5.CRITERIA,
+    "M6": m6.CRITERIA,
     "R0": r0.CRITERIA,
 }
 
@@ -91,6 +92,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     **m3.SERIES_LABELS,
     **m4.SERIES_LABELS,
     **m5.SERIES_LABELS,
+    **m6.SERIES_LABELS,
 }
 
 

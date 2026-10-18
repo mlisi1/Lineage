@@ -505,12 +505,31 @@ class FaunaConfig:
 
 
 @dataclass(frozen=True)
+class SpeciesConfig:
+    """``[species]``; units and intent of every key are documented in default.toml."""
+
+    link_distance: float
+    min_members: int
+    predator_min_members: int
+    split_days: float
+
+    def __post_init__(self) -> None:
+        if not 0 < self.link_distance <= 1:
+            raise ConfigError("[species] link_distance must be within (0, 1]")
+        if self.min_members < 1 or self.predator_min_members < 1:
+            raise ConfigError("[species] min_members must be at least 1")
+        if self.split_days < 0:
+            raise ConfigError("[species] split_days must not be negative")
+
+
+@dataclass(frozen=True)
 class Config:
     config_version: int
     calendar: CalendarConfig
     terrain: TerrainConfig
     flora: FloraConfig
     fauna: FaunaConfig
+    species: SpeciesConfig
     # Subsystem name -> tick period in sim seconds.
     schedule: Mapping[str, float]
 
@@ -595,7 +614,7 @@ def parse_config(text: str) -> Config:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"invalid TOML: {exc}") from None
-    unknown = set(raw) - {"meta", "calendar", "schedule", "terrain", "flora", "fauna"}
+    unknown = set(raw) - {"meta", "calendar", "schedule", "terrain", "flora", "fauna", "species"}
     if unknown:
         raise ConfigError(f"unknown sections: {sorted(unknown)}")
     meta = _section(raw, "meta", frozenset({"config_version"}))
@@ -607,5 +626,6 @@ def parse_config(text: str) -> Config:
         _numeric_section(raw, "terrain", TerrainConfig),
         _numeric_section(raw, "flora", FloraConfig),
         _numeric_section(raw, "fauna", FaunaConfig),
+        _numeric_section(raw, "species", SpeciesConfig),
         _schedule(raw),
     )

@@ -163,3 +163,23 @@ class JuvenileGrown(OutputEvent):
     burnt: float
     competent_h: float
     died: bool
+
+
+@dataclass(frozen=True)
+class SpeciesBorn(OutputEvent):
+    """A species appeared with ``members`` creatures: a group that arrived from elsewhere
+    (``parent`` 0), or one that split off species ``parent`` on the island."""
+
+    species_id: int
+    name: str
+    parent: int
+    members: int
+
+
+@dataclass(frozen=True)
+class SpeciesExtinct(OutputEvent):
+    """The last creature of a species died; it had lived since ``born_t_ms``."""
+
+    species_id: int
+    name: str
+    born_t_ms: int
