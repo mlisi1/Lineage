@@ -551,6 +551,20 @@ scalloped puffs lit as balls on stout trunks with roots; conifers a few bold tie
 large teeth; bushes domes of puffs; grass tufts of broad blades. The R0 look (bundles,
 the earlier palette) is kept as `R0` for the record.
 
+In winter a cosy broadleaf is a stout trunk and a few strong limbs that curve up, with
+sky between them, parting once more (twice on a large tree) and only the last ends
+carrying a twig: the first cosy winter, every twig outlined, closed into a tangle and
+the middle view's woods into brown lumps. A bare bush stays a dome, of dry russet puffs
+with a few twigs out of its top, as Stardew's winter bushes do.
+
+**The sea moves** (`terrain/sea.ts`), at almost no cost per frame. The painter leaves
+the surf on two layers of its own: a band of foam along the shore and a dashed line of
+lighter water beyond it, which come and go in turn over 3.6 s, so that the surf seems
+to come in and go back (two opacities a frame). Glints, short white strokes, grow on
+the open water, drift a little and go, forty slots to a view, each on its own clock and
+somewhere new each time (a hash of the slot and the showing). Nothing is painted again
+for it; `?still` keeps it at its first moment, which the snapshots use.
+
 **The turn of the year** (`plants/turning.ts`): around each change of season places turn
 one after another over about four weeks, in fronts across the land; the hills first into
 autumn and winter and last into spring; each plant on its own day near its place's, and
@@ -599,7 +613,6 @@ by day around three changes of season, and the four seasons.
   nothing yet (M7's visual signatures).
 - **An evergreen broadleaf** (much `EVERGREEN`, below the conifer threshold) still goes
   bare in winter; the simulation has it keep its biomass.
-- **The sea is still**: glints and breathing foam proposed to the owner, not built.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local

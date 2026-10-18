@@ -29,5 +29,14 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
       landVersion,
     };
   }
-  self.postMessage(reply, reply.kind === "painted" ? [reply.pixels.rgba.buffer] : []);
+  const moved =
+    reply.kind === "painted"
+      ? [
+          reply.pixels.rgba.buffer,
+          ...(reply.pixels.surf === undefined
+            ? []
+            : [reply.pixels.surf.near.buffer, reply.pixels.surf.far.buffer]),
+        ]
+      : [];
+  self.postMessage(reply, moved);
 });

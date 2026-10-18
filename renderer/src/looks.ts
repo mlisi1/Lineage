@@ -36,8 +36,9 @@ export interface GroundTones {
   /** What a shadow on the ground is mixed with, and how far. */
   shadow: number;
   shadowMix: number;
-  /** Foam: the shallowest sea mixed this far toward white. */
+  /** Foam: the shallowest sea mixed this far toward white; and the outer line of the surf. */
   foamMix: number;
+  surfMix: number;
   /** Sand on the beach; the palette's lightest bare tone if left out. */
   sand?: number;
 }
@@ -138,6 +139,7 @@ export const R0: Look = {
     shadow: 0x16203a,
     shadowMix: 0.32,
     foamMix: 0.6,
+    surfMix: 0.35,
   },
   plants: {
     outline: (dark) => shaded(dark, 0.62),
@@ -182,6 +184,7 @@ export const COSY: Look = {
     shadow: TONES.GROUND_SHADOW,
     shadowMix: 0.3,
     foamMix: 0.75,
+    surfMix: 0.4,
     sand: 0xe8cc94,
   },
   plants: {

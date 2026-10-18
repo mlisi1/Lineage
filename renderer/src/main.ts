@@ -9,6 +9,7 @@
  *   ?source=ws://host/stream   the server's stream instead of the recording (S1)
  *   ?every=1000                wall milliseconds between the recording's messages (0: all
  *                              at once, the last day; the default is 1000)
+ *   ?still                     the sea does not move (pictures that must not change)
  *   ?painter=inline            paint the ground on the page's thread, not in a worker (to
  *                              compare: the frames stop while it paints)
  *
@@ -75,6 +76,9 @@ async function start(): Promise<void> {
   app.stage.addChild(world);
   const landscape = new Landscape(
     params.get("painter") === "inline" ? new InlinePainter() : makePainter(),
+    undefined,
+    undefined,
+    params.get("still") !== null,
   );
   world.addChild(landscape.container);
 

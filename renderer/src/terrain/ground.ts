@@ -89,6 +89,11 @@ export interface GroundOptions {
    * Every place is in `season` when left out.
    */
   seasonAt?: (u: number, v: number, dither: number) => Season;
+  /**
+   * Also paint the surf that moves (`Pixels.surf`): a band of foam along the shore and a
+   * dashed line of lighter water beyond it, each on its own, to be shown in turn.
+   */
+  surf?: boolean;
   /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
   look?: Look;
 }
@@ -166,6 +171,9 @@ const GRIT = 0.012;
 const WAVES = 0.006;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
+/** The moving surf: share of the foam band's pixels that are foam, and of the outer line's dashes. */
+const SURF_NEAR = 0.7;
+const SURF_FAR = 0.55;
 /** Ordered dither: thresholds of a 4×4 Bayer matrix. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((n) => (n + 0.5) / 16);
 
@@ -926,7 +934,11 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   // wet sand on the land, as far out as the view is close. `away` is how many pixels a
   // pixel is from the other side of the shore, counted up to twice that reach.
   const far = 2 * surf + 1;
-  const away = new Uint8Array(wide * tall).fill(far);
+  // The surf that moves (`surf` option) reaches further out than the foam painted here.
+  const surfing = options.surf === true && grain;
+  const nearTo = surf + 1;
+  const farTo = 2 * surf + 3;
+  const away = new Uint8Array(wide * tall).fill(surfing ? farTo + 1 : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
@@ -985,5 +997,37 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     rgba[at * 4 + 2] = colour & 255;
     rgba[at * 4 + 3] = 255;
   }
-  return { width: wide, height: tall, rgba };
+  if (!surfing) return { width: wide, height: tall, rgba };
+
+  // The surf, in two bands to be shown in turn (`terrain/sea.ts`): foam close in, and a
+  // dashed line of lighter water further out. Clear everywhere else.
+  const near = new Uint8ClampedArray(wide * tall * 4);
+  const out = new Uint8ClampedArray(wide * tall * 4);
+  const swell = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, tones.surfMix);
+  const put = (into: Uint8ClampedArray, at: number, colour: Rgb): void => {
+    into[at * 4] = colour >> 16;
+    into[at * 4 + 1] = (colour >> 8) & 255;
+    into[at * 4 + 2] = colour & 255;
+    into[at * 4 + 3] = 255;
+  };
+  for (let py = 0; py < tall; py++) {
+    for (let px = 0; px < wide; px++) {
+      const at = py * wide + px;
+      if (isLand[at] === 1) continue;
+      const distance = away[at] ?? farTo + 1;
+      const worldX = originX + px;
+      const worldY = originY + py;
+      if (distance <= nearTo) {
+        if (cellHash(worldX, worldY, 19) < SURF_NEAR) put(near, at, foam);
+      } else if (distance <= farTo && cellHash(Math.floor(worldX / dash), worldY, 21) < SURF_FAR) {
+        put(out, at, swell);
+      }
+    }
+  }
+  return {
+    width: wide,
+    height: tall,
+    rgba,
+    surf: { near, far: out },
+  };
 }

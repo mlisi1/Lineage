@@ -28,7 +28,6 @@ import {
   berries,
   blank,
   blossom,
-  branches,
   cast,
   drawSmall,
   girth,
@@ -168,6 +167,88 @@ function crownPuffs(width: number, height: number, random: Random): Puff[] {
 /** How far past its radius a puff can reach: its size by chance and its scallops. */
 const REACH = 1.14 * (1 + SCALLOP);
 
+/** A bare tree forks this far down its height. */
+const BARE_FORK = 0.56;
+
+/**
+ * A bare crown as Stardew draws one: a few strong limbs with sky between them rather
+ * than a tangle of twigs. The leader goes on up; a bough leans out to each side and
+ * curves up toward its end; each limb parts once more (twice on a large tree), and only
+ * the last ends carry a twig. On a large tree two lesser boughs leave the trunk lower.
+ */
+function bareCrown(
+  art: PlantArt,
+  width: number,
+  height: number,
+  forkY: number,
+  thick: number,
+  random: Random,
+): void {
+  const large = width >= RICH_FROM;
+  const inside = (x: number): number => Math.min(Math.max(x, 1), width - 2);
+  /** A limb from (x, y) at `angle` from upright, curving up toward its end; then its parts. */
+  const limbFrom = (
+    x: number,
+    y: number,
+    angle: number,
+    length: number,
+    size: number,
+    parts: number,
+  ): void => {
+    const midX = inside(x + Math.sin(angle) * length * 0.55);
+    const midY = Math.max(y - Math.cos(angle) * length * 0.55, 1);
+    const bent = angle * 0.7;
+    const endX = inside(midX + Math.sin(bent) * length * 0.45);
+    const endY = Math.max(midY - Math.cos(bent) * length * 0.45, 1);
+    const drawn = Math.max(1, Math.round(size));
+    limb(art, x, y, midX, midY, drawn);
+    limb(art, midX, midY, endX, endY, Math.max(1, Math.round(size * 0.85)));
+    if (parts === 0) {
+      // A twig at the very end, leaning out.
+      if (large || random() < 0.5) {
+        const side = random() < 0.5 ? -1 : 1;
+        limb(
+          art,
+          endX,
+          endY,
+          inside(endX + side * length * 0.3),
+          Math.max(endY - length * 0.3, 1),
+          1,
+        );
+      }
+      return;
+    }
+    for (const side of [-1, 1]) {
+      limbFrom(
+        endX,
+        endY,
+        bent + side * (0.42 + 0.2 * random()),
+        length * 0.55,
+        size * 0.7,
+        parts - 1,
+      );
+    }
+  };
+  const reach = height * 0.27;
+  const parts = large ? 2 : 1;
+  limbFrom(width / 2, forkY, (random() - 0.5) * 0.15, reach * 1.1, thick * 0.8, parts);
+  for (const side of [-1, 1]) {
+    limbFrom(
+      width / 2,
+      forkY + thick * 0.3,
+      side * (0.78 + 0.18 * random()),
+      reach,
+      thick * 0.7,
+      parts,
+    );
+  }
+  if (!large) return;
+  for (const side of [-1, 1]) {
+    const y = forkY + height * (0.08 + 0.05 * random());
+    limbFrom(width / 2, y, side * (1.15 + 0.15 * random()), reach * 0.75, thick * 0.5, 1);
+  }
+}
+
 /** From this share of a broadleaf's height down its trunk shows under the crown. */
 const CROWN_SHARE = 0.72;
 /** A cosy trunk is this much stouter than a bundled tree's. */
@@ -201,20 +282,10 @@ export function cosyBroadleaf(size: Size, random: Random, salt: number, look: St
   } else {
     const crown = height * CROWN_SHARE;
     if (bare) {
-      const forkY = height * 0.5;
+      const forkY = height * BARE_FORK;
       const thick = girth(width * STOUT, old);
       trunk(art, width * STOUT, Math.round(forkY), height, width / 2, "furrowed", old, BARE_TAPER);
-      branches(
-        art,
-        width,
-        width / 2,
-        forkY,
-        crown,
-        height * 0.175,
-        thick * BARE_TAPER,
-        width >= RICH_FROM ? 4 : 3,
-        random,
-      );
+      bareCrown(art, width, height, forkY, thick * BARE_TAPER, random);
     } else {
       trunk(art, width * STOUT, Math.round(crown * 0.62), height, width / 2, "furrowed", old);
       pile(art, crownPuffs(width, crown, random), width / 2, crown / 2, salt);
@@ -247,28 +318,33 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   const art = blank(width, height);
   const sprout = look.growth === "sprout";
   if (look.season === "winter") {
-    // Bare: a few stems that fan out from the foot and fork into twigs.
-    const stems = sprout ? 3 : Math.max(4, Math.round(width / 7));
-    for (let k = 0; k < stems; k++) {
-      const angle = ((k + 0.5) / stems - 0.5) * 2 + (random() - 0.5) * 0.2;
-      const length = height * (0.55 + 0.3 * random());
-      const x = Math.min(Math.max(width / 2 + Math.sin(angle) * length * 1.2, 1), width - 2);
-      const y = Math.max(height - 1 - Math.cos(angle) * length, 1);
-      const thick = width >= RICH_FROM ? 2 : 1;
-      limb(art, width / 2 + Math.sin(angle) * 1.5, height - 1, x, y, thick);
-      if (sprout) continue;
-      for (const side of [-1, 1]) {
-        const twig = angle + side * (0.5 + 0.3 * random());
-        limb(
-          art,
-          x,
-          y,
-          Math.min(Math.max(x + Math.sin(twig) * length * 0.4, 0), width - 1),
-          Math.max(y - Math.cos(twig) * length * 0.4, 0),
-          1,
-        );
-      }
+    // Bare, as Stardew's winter bushes: still a dome, of dry twiggy puffs (the winter
+    // ramp is the dried one), with a few twigs poking out of its top.
+    const r = Math.max(1.6, Math.min(height * 0.36, width * 0.22));
+    const low = height - r;
+    pile(
+      art,
+      [
+        { x: r * REACH, y: low, r: r * 0.9 },
+        { x: width / 2, y: low, r },
+        { x: width - r * REACH, y: low, r: r * 0.9 },
+        ...(sprout
+          ? []
+          : [{ x: width * 0.5, y: Math.max(r * REACH, height - r * 1.8), r: r * 0.85 }]),
+      ],
+      width / 2,
+      height / 2,
+      salt,
+    );
+    settle(art, height);
+    const twigs = sprout ? 2 : Math.max(3, Math.round(width / 8));
+    for (let k = 0; k < twigs; k++) {
+      const x = width * (0.2 + (0.6 * (k + 0.5)) / twigs);
+      const top = height * (0.35 + 0.15 * random());
+      limb(art, x, top + r * 0.6, x + (random() - 0.5) * r, Math.max(top - r * 0.5, 1), 1);
     }
+    // A berry or two the birds have left.
+    if (!sprout && look.variant % 3 === 1) berries(art, width, height, random);
   } else {
     // A dome: three puffs low down, one or two above.
     const r = Math.max(1.8, Math.min(height * 0.42, width * 0.26));

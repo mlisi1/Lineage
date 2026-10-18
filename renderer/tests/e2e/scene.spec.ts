@@ -18,7 +18,7 @@ for (const [name, query] of Object.entries(SHOTS)) {
   test(`the scene: ${name}`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`/?every=0&${query}`);
+    await page.goto(`/?every=0&still&${query}`);
     await page.waitForFunction(() => window.__sceneSettled?.() === true, null, {
       timeout: 60_000,
     });

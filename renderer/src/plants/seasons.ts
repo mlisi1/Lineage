@@ -132,7 +132,8 @@ export function seasonRamp(
   }
   // Winter: evergreens darker and bluer; what is left of the rest dried and pale.
   if (form === "CONIFER") return toward(ramp, tones.cold, 0.2);
-  if (form === "BROADLEAF") return tones.russet;
+  // Bare wood: a broadleaf's branches, and a bush's twigs (a cosy bush stays a dome of them).
+  if (form === "BROADLEAF" || form === "SHRUB") return tones.russet;
   if (form === "LICHEN") return ramp;
   return toward(dry, tones.pale, 0.25);
 }

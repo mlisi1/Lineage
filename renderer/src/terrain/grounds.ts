@@ -10,6 +10,9 @@
  * A new painting does not replace the old at once: it fades in over `FADE_S` on top of
  * it, so that the day's growth, a fire's scar or the turn of the season comes over the
  * land gently, and the old one goes when the new one is fully there.
+ *
+ * Asked for the surf (`PaintRequest.surf`), a painting comes with its two bands, which
+ * go in layers of their own (`surfNear`, `surfFar`) for the sea to show in turn.
  */
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
@@ -25,74 +28,145 @@ const PIECE_MARGIN = 1;
 /** Pieces this many cells beyond the view are painted too, so that the camera finds them ready. */
 const AHEAD_CELLS = 4;
 
-/** Pixels as a sprite of `tile` texels to the cell, its corner on cell (x, y). */
-export function pixelSprite(pixels: Pixels, tile: number, x = 0, y = 0): Sprite {
+/** Where a painting goes: its corner in cells, and the part of it kept (texels; all if left out). */
+interface Placing {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  offsetX?: number;
+  offsetY?: number;
+}
+
+/**
+ * RGBA as a sprite of `tile` texels to the cell, its corner on cell (x, y); `offsetX` and
+ * `offsetY` shift the image within a canvas of `width` × `height`, which cuts off what
+ * falls outside it.
+ */
+function rgbaSprite(
+  rgba: Uint8ClampedArray<ArrayBuffer>,
+  size: { width: number; height: number },
+  tile: number,
+  at: Placing,
+): Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width = pixels.width;
-  canvas.height = pixels.height;
+  canvas.width = at.width ?? size.width;
+  canvas.height = at.height ?? size.height;
   const context = canvas.getContext("2d");
   if (context === null) throw new Error("no 2D canvas");
-  context.putImageData(new ImageData(pixels.rgba, pixels.width, pixels.height), 0, 0);
+  context.putImageData(
+    new ImageData(rgba, size.width, size.height),
+    at.offsetX ?? 0,
+    at.offsetY ?? 0,
+  );
   const sprite = new Sprite(
     new Texture({ source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) }),
   );
   sprite.scale.set(1 / tile);
-  sprite.position.set(x, y);
+  sprite.position.set(at.x, at.y);
   return sprite;
 }
 
-/** A sprite fading in over another, which goes once the new one is all there. */
+/** Pixels as a sprite of `tile` texels to the cell, its corner on cell (x, y). */
+export function pixelSprite(pixels: Pixels, tile: number, x = 0, y = 0): Sprite {
+  return rgbaSprite(pixels.rgba, pixels, tile, { x, y });
+}
+
+/** A painting on the screen: the ground, and its surf if it was asked for. */
+interface Painting {
+  sprites: Sprite[];
+}
+
+/** The sprites of `pixels`: the ground into `layers.ground`, each band of surf into its own layer. */
+function show(
+  pixels: Pixels,
+  tile: number,
+  layers: { ground: Container; near: Container; far: Container },
+  at: Placing,
+): Painting {
+  const ground = rgbaSprite(pixels.rgba, pixels, tile, at);
+  layers.ground.addChild(ground);
+  const sprites = [ground];
+  if (pixels.surf !== undefined) {
+    const near = rgbaSprite(pixels.surf.near, pixels, tile, at);
+    const far = rgbaSprite(pixels.surf.far, pixels, tile, at);
+    layers.near.addChild(near);
+    layers.far.addChild(far);
+    sprites.push(near, far);
+  }
+  return { sprites };
+}
+
+const destroy = (painting: Painting | null): void => {
+  for (const sprite of painting?.sprites ?? []) {
+    sprite.destroy({ texture: true, textureSource: true });
+  }
+};
+
+/** A painting fading in over another, which goes once the new one is all there. */
 class Fade {
   private age = 0;
 
   constructor(
-    readonly incoming: Sprite,
-    private readonly outgoing: Sprite | null,
+    readonly incoming: Painting,
+    private readonly outgoing: Painting | null,
     private readonly seconds: number,
   ) {
-    incoming.alpha = seconds > 0 && outgoing !== null ? 0 : 1;
-    if (incoming.alpha === 1) this.finish();
+    const start = seconds > 0 && outgoing !== null ? 0 : 1;
+    for (const sprite of incoming.sprites) sprite.alpha = start;
+    if (start === 1) this.finish();
   }
 
   get done(): boolean {
-    return this.incoming.alpha >= 1;
+    return (this.incoming.sprites[0]?.alpha ?? 1) >= 1;
   }
 
   /** Move on by `dtS`; true once finished. */
   step(dtS: number): boolean {
     if (this.done) return true;
     this.age += dtS;
-    this.incoming.alpha = Math.min(this.age / this.seconds, 1);
+    const alpha = Math.min(this.age / this.seconds, 1);
+    for (const sprite of this.incoming.sprites) sprite.alpha = alpha;
     if (this.done) this.finish();
     return this.done;
   }
 
   /** Done at once. */
   finish(): void {
-    this.incoming.alpha = 1;
-    this.outgoing?.destroy({ texture: true, textureSource: true });
+    for (const sprite of this.incoming.sprites) sprite.alpha = 1;
+    destroy(this.outgoing);
   }
 }
 
-/** One picture of the whole world, repainted when asked and faded in. */
-export class WholeGround {
+/** Where a ground's sprites go: the ground itself, and the two bands of its surf. */
+class Layers {
+  /** Add these to the world: the ground, then the surf's outer band, then its foam. */
   readonly container = new Container();
-  private current: Sprite | null = null;
+  readonly surfFar = new Container();
+  readonly surfNear = new Container();
+  protected readonly layers = { ground: this.container, near: this.surfNear, far: this.surfFar };
+}
+
+/** One picture of the whole world, repainted when asked and faded in. */
+export class WholeGround extends Layers {
+  private current: Painting | null = null;
   private fade: Fade | null = null;
   /** Bumped by every request, so that only the latest is shown. */
   private asked = 0;
+  private waiting = 0;
 
   constructor(
     private readonly painter: Painter,
     readonly tile: number,
     private readonly fadeS = FADE_S,
-  ) {}
+  ) {
+    super();
+  }
 
   /** Whether a painting is on the screen, and none is coming. */
   get settled(): boolean {
     return this.current !== null && this.fade === null && this.waiting === 0;
   }
-  private waiting = 0;
 
   /** Paint `request` (at this ground's tile, the whole world) and fade it in when it comes. */
   async repaint(request: Omit<PaintRequest, "tile" | "cells">, priority = 10): Promise<void> {
@@ -103,11 +177,10 @@ export class WholeGround {
     try {
       const { pixels } = await this.painter.paint({ ...request, tile: this.tile }, priority);
       if (mine !== this.asked) return;
-      const sprite = pixelSprite(pixels, this.tile);
-      this.container.addChild(sprite);
+      const painting = show(pixels, this.tile, this.layers, { x: 0, y: 0 });
       this.fade?.finish();
-      this.fade = new Fade(sprite, this.current, this.current === null ? 0 : this.fadeS);
-      this.current = sprite;
+      this.fade = new Fade(painting, this.current, this.current === null ? 0 : this.fadeS);
+      this.current = painting;
       if (this.fade.done) this.fade = null;
     } catch (error) {
       if (!(error instanceof Dropped)) throw error;
@@ -122,7 +195,7 @@ export class WholeGround {
 }
 
 interface Piece {
-  sprite: Sprite | null;
+  painting: Painting | null;
   /** The land version it was painted from, and the one being painted for it, if any. */
   painted: number;
   asked: number;
@@ -130,8 +203,7 @@ interface Piece {
 }
 
 /** The ground of the local view, a piece at a time. */
-export class PieceGround {
-  readonly container = new Container();
+export class PieceGround extends Layers {
   private readonly pieces = new Map<number, Piece>();
   private landVersion = 0;
   private request: Omit<PaintRequest, "tile" | "cells"> | null = null;
@@ -143,7 +215,9 @@ export class PieceGround {
     readonly tile: number,
     private readonly world: { width: number; height: number },
     private readonly fadeS = FADE_S,
-  ) {}
+  ) {
+    super();
+  }
 
   /**
    * The land has changed (or the season, or what stands on it): paint every piece kept
@@ -180,7 +254,7 @@ export class PieceGround {
     for (const key of this.keys(view, AHEAD_CELLS)) {
       let piece = this.pieces.get(key);
       if (piece === undefined) {
-        piece = { sprite: null, painted: -1, asked: 0, fade: null };
+        piece = { painting: null, painted: -1, asked: 0, fade: null };
         this.pieces.set(key, piece);
       }
       if (piece.asked !== this.landVersion && piece.painted !== this.landVersion)
@@ -189,7 +263,9 @@ export class PieceGround {
     if (this.pieces.size <= PIECES_KEPT) return;
     const byDistance = [...this.pieces.keys()].sort((a, b) => this.distance(b) - this.distance(a));
     for (const key of byDistance.slice(0, this.pieces.size - PIECES_KEPT)) {
-      this.pieces.get(key)?.sprite?.destroy({ texture: true, textureSource: true });
+      const piece = this.pieces.get(key);
+      piece?.fade?.finish();
+      destroy(piece?.painting ?? null);
       this.pieces.delete(key);
     }
   }
@@ -260,26 +336,18 @@ export class PieceGround {
       .then(({ pixels }) => {
         if (this.pieces.get(key) !== piece || piece.asked !== version) return;
         // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
-        const canvas = document.createElement("canvas");
-        canvas.width = (cells.x1 - cells.x0) * this.tile;
-        canvas.height = (cells.y1 - cells.y0) * this.tile;
-        canvas
-          .getContext("2d")
-          ?.putImageData(
-            new ImageData(pixels.rgba, pixels.width, pixels.height),
-            (padded.x0 - cells.x0) * this.tile,
-            (padded.y0 - cells.y0) * this.tile,
-          );
-        const sprite = new Sprite(
-          new Texture({ source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) }),
-        );
-        sprite.scale.set(1 / this.tile);
-        sprite.position.set(cells.x0, cells.y0);
-        this.container.addChild(sprite);
+        const painting = show(pixels, this.tile, this.layers, {
+          x: cells.x0,
+          y: cells.y0,
+          width: (cells.x1 - cells.x0) * this.tile,
+          height: (cells.y1 - cells.y0) * this.tile,
+          offsetX: (padded.x0 - cells.x0) * this.tile,
+          offsetY: (padded.y0 - cells.y0) * this.tile,
+        });
         piece.fade?.finish();
-        piece.fade = new Fade(sprite, piece.sprite, piece.sprite === null ? 0 : this.fadeS);
+        piece.fade = new Fade(painting, piece.painting, piece.painting === null ? 0 : this.fadeS);
         if (piece.fade.done) piece.fade = null;
-        piece.sprite = sprite;
+        piece.painting = painting;
         piece.painted = version;
       })
       .catch((error: unknown) => {

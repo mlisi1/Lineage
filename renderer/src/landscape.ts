@@ -10,7 +10,7 @@
  * Once a sim-day, or when the land changes, the plants are laid out again for the day
  * (each in the season of its own turn, with snow where the simulation has it) and the
  * grounds repainted off the frame; the new day fades in over the old. Only the views
- * that have been shown are kept up to date. Creatures (R2) and the camera's moves (R3)
+ * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`). Creatures (R2) and the camera's moves (R3)
  * come on top of this.
  */
 import { Container } from "pixi.js";
@@ -23,6 +23,7 @@ import { MAP_TILE, MID_TILE, type GroundStyle } from "./terrain/ground";
 import { FADE_S, PieceGround, WholeGround } from "./terrain/grounds";
 import type { CellRect, Land } from "./terrain/land";
 import type { Painter } from "./terrain/painter";
+import { Sea } from "./terrain/sea";
 
 export const VIEWS = ["map", "middle", "local"] as const;
 export type ViewName = (typeof VIEWS)[number];
@@ -103,10 +104,20 @@ export class Landscape {
     local: new Container(),
   };
 
+  /** The moving sea of each view, and the wall time it has moved for. */
+  private readonly seas: Record<ViewName, Sea> = {
+    map: new Sea(TILES.map),
+    middle: new Sea(TILES.middle),
+    local: new Sea(TILES.local),
+  };
+  private seaTime = 0;
+
+  /** `still` keeps the sea as it is at its first moment: for pictures that must not change. */
   constructor(
     private readonly painter: Painter,
     private readonly look: Look = DEFAULT_LOOK,
     private readonly fadeS = FADE_S,
+    private readonly still = false,
   ) {
     for (const name of VIEWS) {
       this.layers[name].visible = false;
@@ -157,6 +168,21 @@ export class Landscape {
     if (this.stale && this.landMessage !== null) this.layOut();
     const { built, cells } = this;
     built.map?.tick(dtS);
+    if (!this.still) this.seaTime += dtS;
+    if (this.land !== null) {
+      const ground =
+        this.view === "middle"
+          ? built.middle?.ground
+          : this.view === "local"
+            ? built.local?.ground
+            : undefined;
+      this.seas[this.view].tick(
+        this.seaTime,
+        this.land,
+        cells,
+        ground === undefined ? null : { near: ground.surfNear, far: ground.surfFar },
+      );
+    }
     if (built.middle !== null) {
       built.middle.ground.tick(dtS);
       built.middle.plants.tick(dtS, cells);
@@ -206,11 +232,12 @@ export class Landscape {
     const { land, look } = this;
     if (land === null) return;
     const time = this.time();
-    const request = { style: STYLES[name], grain: name !== "map", look: look.name, time };
+    const close = name !== "map";
+    const request = { style: STYLES[name], grain: close, surf: close, look: look.name, time };
     if (name === "map") {
       if (this.built.map === null) {
         this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
-        this.layers.map.addChild(this.built.map.container);
+        this.layers.map.addChild(this.built.map.container, this.seas.map.glints);
       }
       void this.built.map.repaint(request, 5);
       return;
@@ -229,9 +256,13 @@ export class Landscape {
           ground: new WholeGround(this.painter, TILES.middle, this.fadeS),
           plants: new PlantFade(this.fadeS),
         };
+        const { ground, plants: standing } = this.built.middle;
         this.layers.middle.addChild(
-          this.built.middle.ground.container,
-          this.built.middle.plants.container,
+          ground.container,
+          ground.surfFar,
+          ground.surfNear,
+          this.seas.middle.glints,
+          standing.container,
         );
       }
       const island = { x0: 0, y0: 0, x1: land.width, y1: land.height };
@@ -244,9 +275,13 @@ export class Landscape {
         ground: new PieceGround(this.painter, TILES.local, land, this.fadeS),
         plants: new PlantFade(this.fadeS),
       };
+      const { ground, plants: standing } = this.built.local;
       this.layers.local.addChild(
-        this.built.local.ground.container,
-        this.built.local.plants.container,
+        ground.container,
+        ground.surfFar,
+        ground.surfNear,
+        this.seas.local.glints,
+        standing.container,
       );
     }
     this.built.local.ground.update(this.landVersion, request, (cells) => plants.shadows(cells));
