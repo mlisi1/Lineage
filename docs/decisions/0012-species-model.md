@@ -111,7 +111,18 @@ M11 may revisit it with the rest.
 
 ## Measured (M6 report, 20 seeds × 3 sim-years)
 
-To be filled from `reports/M6-species/metrics.json`.
+From `reports/M6-species/metrics.json` (run `m6-species-final`, code `35fd586`):
+
+- **M6.1 FAIL**: the median seed has 3–12 species alive on 81 % of its inhabited days
+  (10th percentile 59 %, worst 38 %); 16 % below the band, almost never above. Median
+  alive 7 (10–90 %: 1–12). The shortfall is the months after landing (one or two species
+  until the herd spreads) and seeds whose founders die out (the island is empty).
+- **M6.2 PASS**: 1.00 splits per inhabited sim-month, median seed (10–90 %: 0.53–1.31);
+  every seed has splits. Arrivals add 0.36 species a month; 1.12 die out a month.
+- Arrived species live a median of 29 days, species born by a split 110 days.
+- Splits come in bursts: the most daughters one species had within 30 days has a
+  median of 6 per seed, up to 13.
+- Census cost: well under a millisecond a day (benchmark budget 50 ms).
 
 ## References
 

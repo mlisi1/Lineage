@@ -126,3 +126,21 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 ## 6. Findings from later milestones
 
 (M6–M10: add what each milestone learned about the balance here.)
+
+### M6 — species (ADR 0012, reports/M6-species)
+
+- **One island, one gene pool.** With species defined by the mating distance (0.10), the
+  founders' herd never splits: after 50–70 generations it is broad (mean pairwise distance
+  0.09) but continuous. Nothing isolates groups. Species are therefore defined as genome
+  clusters (`species.link_distance` 0.035), which split about once a month.
+- **M6.1 fails as a structural matter (81 % of inhabited days in 3–12, target 90 %).**
+  The first 4–5 months after the founders land hold one or two species, and seeds whose
+  founders die out spend months empty. Levers for M11: an earlier and safer landing (the
+  M5 bottleneck, §4), more or longer-lived stranger groups (they live a median of about a
+  month), or a real isolating mechanism (assortative mating on HUE/PATTERN, which the
+  genome already describes as mate recognition; landmass splits).
+- **Splits come in bursts** when a widely spread herd shatters at the threshold; the
+  species count follows the herd's genetic spread, so anything that changes mutation
+  (`mutation_sigma_body`) or selection will move both M6 numbers.
+- `[species]` settings come from a 20-seed sweep (ADR 0012 table); recheck them after
+  any fauna tuning — they are cheap to sweep (many censuses per run).

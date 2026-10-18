@@ -37,6 +37,7 @@ DAYS_PER_MONTH = DAYS_PER_YEAR / 12.0
 TREE_SEEDS = 3  # representative seeds drawn as trees, plus the worst one
 LABELLED_PEAK = 10  # species with at least this many members at their peak are named
 NAME_SAMPLES = 12  # names listed per tree seed
+BURST_DAYS = 30.0  # window in which the daughters of one species count as one burst
 # Founding diet classes (herbivore up to, predator from), when the config cannot be read.
 DIET_LIMITS = (0.35, 0.65)
 
@@ -161,13 +162,15 @@ def lifespans(run: Run) -> dict[str, np.ndarray]:
     return {"split": np.array(split), "arrived": np.array(arrived)}
 
 
-def largest_burst(table: np.ndarray) -> int:
-    """Most daughters one species gave rise to in a single census (0 without splits)."""
+def largest_burst(table: np.ndarray, days: float = BURST_DAYS) -> int:
+    """Most daughters one species gave rise to within ``days`` (0 without splits)."""
+    best = 0
     split = table[table[:, _P["parent"]] > 0]
-    if split.shape[0] == 0:
-        return 0
-    _, counts = np.unique(split[:, [_P["parent"], _P["born_day"]]], axis=0, return_counts=True)
-    return int(counts.max())
+    for parent in np.unique(split[:, _P["parent"]]).tolist():
+        born = np.sort(split[split[:, _P["parent"]] == parent, _P["born_day"]])
+        within = np.searchsorted(born, born + days, side="left") - np.arange(born.size)
+        best = max(best, int(within.max()))
+    return best
 
 
 def metrics(run: Run) -> dict[str, float]:
@@ -450,10 +453,11 @@ def _interpretation_section(run: Run) -> Section:
         ),
         (
             "Splits come in bursts.",
-            f"The largest burst of a seed (daughters of one species born at one census) has "
-            f"a median of {m['speciation.largest_burst.median']:.0f} and reaches "
+            f"The largest burst of a seed (daughters of one species born within "
+            f"{BURST_DAYS:.0f} days) has a median of "
+            f"{m['speciation.largest_burst.median']:.0f} and reaches "
             f"{m['speciation.largest_burst.max']:.0f}: when a herd has spread wide enough, "
-            "it breaks into several clusters at once rather than one at a time. Species are "
+            "it breaks into several clusters within weeks rather than one at a time. Species are "
             "clusters a little coarser than parent and young differ (ADR 0012), so their "
             "number follows how widely the herd has spread genetically.",
         ),

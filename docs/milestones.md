@@ -10,7 +10,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
 | M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
-| M6 | Species, names, phylogeny | next: start on a branch from `main` once M5 is merged (handoff below) | — |
+| M6 | Species, names, phylogeny | report in, on branch `m6-species`: M6.2 1.00 splits / month PASS, M6.1 81 % of inhabited time with 3–12 species FAIL (target 90 %; structural, ADR 0012); awaiting the owner's decision | [reports/M6-species](../reports/M6-species/README.md) |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |
 | M9 | Chronicle and bestiary | not started | — |
@@ -52,7 +52,24 @@ and the renderer tests (130) passed after the merge.
   uv run python -m tools.report M5 --runs runs/m5-on-fresh --baseline runs/m5-off-fresh --out /tmp/m5-fresh
   ```
 
-### Starting M6 (species, names, phylogeny)
+### M6 (species) — state on `m6-species`, 2026-10-18
+
+- Built: `species.py` (daily census, lineage labels, splits, genome names, phylogeny,
+  `labels_now()` for the renderer), `SpeciesBorn` / `SpeciesExtinct`, schema **v7**
+  (`v6_to_v7.py`, fixture `v7.lzma`, unreleased until merge), `[species]` config, the M6
+  report (`tools/milestones/m6.py`). Decisions and sweep: ADR 0012 (status: proposed).
+- Owner's decisions: all genes count; lineage labels + splits; M6.2 counts splits only;
+  M6.1 on inhabited time, median seed; then (after the first runs) species are genome
+  clusters (`link_distance` 0.035), finer than who can mate.
+- Open for the owner: accept M6 with M6.1 failing (structural, recorded for M11 in
+  `docs/m11-plan.md` §6), or ask for a mechanism now (e.g. assortative mating).
+- Parallel work: R1 and R2 run in other worktrees; the coordination board is
+  `/home/elechim/Lineage-coord` (not in git). R1 will carry `species` in the protocol.
+- To rebuild the report: `uv run python -m tools.fastforward --years 3 --seeds 20
+  --save-days 30 --snapshot-days 0 --jobs 16 --out runs/m6-species-final`, then
+  `uv run python -m tools.report M6 --runs runs/m6-species-final`.
+
+### Starting M6 (species, names, phylogeny) — the brief, kept for reference
 
 - **Branch**: `git switch main && git pull && git switch -c m6-species`.
 - **Read first**: CLAUDE.md §8 M6 and §9; `docs/design/creatures.md` (genome, species

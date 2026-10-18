@@ -96,8 +96,9 @@ def test_m6_report(tmp_path: Path) -> None:
     assert "Maleku" in page
 
 
-def test_largest_burst_counts_daughters_of_one_census() -> None:
+def test_largest_burst_counts_daughters_close_in_time() -> None:
     table = _table([(1, 0, 0, -1, 9, 0), (2, 1, 5, -1, 9, 0), (3, 1, 5, -1, 9, 0),
                     (4, 1, 9, -1, 9, 0), (5, 2, 9, -1, 9, 0)])  # fmt: skip
-    assert m6.largest_burst(table) == 2
+    assert m6.largest_burst(table, days=1.0) == 2  # ids 2 and 3, on day 5
+    assert m6.largest_burst(table, days=30.0) == 3  # and id 4, four days later
     assert m6.largest_burst(table[:1]) == 0
