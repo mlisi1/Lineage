@@ -548,6 +548,16 @@ competence_hours = 24.0
 herbivore_max_diet = 0.35
 predator_min_diet = 0.65
 
+[species]
+# Species (M6): creatures that can interbreed, directly or through others (genomes within
+# [fauna] compat_distance, all genes), belong together. Once a day each species is checked:
+# when its members fall into separate groups of at least min_members creatures
+# (creatures) that stay apart for split_days (sim-days), the largest group keeps the
+# species and every other one becomes a daughter species. Smaller strays stay where they
+# are, so a few odd mutants never make a species.
+min_members = 5
+split_days = 7.0
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
@@ -561,3 +571,5 @@ flora = 86400
 fire = 3600
 # Fauna: sensing, steering, eating, breeding, every 10 sim-minutes.
 fauna = 600
+# Species: clustering, splits and extinctions, once per sim-day (after fauna at midnight).
+species = 86400

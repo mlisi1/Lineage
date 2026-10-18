@@ -192,6 +192,11 @@ class Fauna:
         return self._ids
 
     @property
+    def origin(self) -> NDArray[np.int32]:
+        """Which arrival each creature descends from (through its mother): its lineage."""
+        return self._origin
+
+    @property
     def generation(self) -> NDArray[np.int32]:
         """Generations since its lineage arrived (0: arrived from elsewhere)."""
         return self._generation
