@@ -17,7 +17,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
-| R1 | Terrain and plants from the state stream | not started | — |
+| R1 | Terrain and plants from the state stream | **in review** on `r1-terrain` (2026-10-18): wire schema and generated types, the scene from a recording in the three views, grounds painted in a worker and faded in daily, the cosy look after Stardew (ADR 0014, chosen by the owner), seasons turning over weeks, snow from the simulation, `HEIGHT`/`EVERGREEN` in the drawing. Not yet measured on the board | look: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |
 | R4 | Atmosphere | not started | — |
