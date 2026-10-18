@@ -1,8 +1,7 @@
 # 0009 — Lifetime learning
 
-- **Status**: proposed. M5 is built and balanced; it awaits the owner's decision on the
-  proposed criteria ("Where M5 stands after balancing"). Accept once they are agreed and
-  the report passes.
+- **Status**: accepted (2026-10-18). M5's criteria as revised with the owner pass (M5.1
+  diet fit, M5.3 step cost; M5.2 reported without a band), with the slow tests green.
 - **Date**: 2026-10-16 (last updated 2026-10-17)
 
 ## Current design (summary)

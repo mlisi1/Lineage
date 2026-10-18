@@ -165,14 +165,14 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 ## Open
 
-- M5 (in progress, ADR 0009): learning tracks the local plants (diet fit +0.32 in 20 of
-  20 seeds), but the feeding gain it buys is small (+5 %, against an original target of
-  15 %), evolution keeps the learning rate low, and there is no clear Baldwin trend in
-  three years. Proposed criteria await the owner.
+- M5 (done, ADR 0009): learning tracks the local plants (diet fit +0.29, positive in 20
+  of 20 seeds), but the feeding gain it buys is small (about +5 %); evolution keeps the
+  learning rate low; learning shields the genes (the inherited diet bias stays lower
+  than without learning), so there is no Baldwin trend.
 - Predator lineages are cyclic: they persist on the island for up to about 16
   generations, and are fewer late in learning worlds than in non-learning ones. Hunters
-  die mostly of starvation (half before maturity); scavenging (carrion) was added for
-  them and has not yet been measured in full worlds.
+  died mostly of starvation (half before maturity); with scavenging they are present
+  about as often as in M4 (≥ 3 predators in 60 % of years 1–3).
 
 - The mean diet gene of the founders' descendants stays near 0.1 or below: herbivores
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.
