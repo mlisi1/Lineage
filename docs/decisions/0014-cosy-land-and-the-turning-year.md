@@ -1,7 +1,6 @@
 # 0014 — The land and its plants in the cosy look; seasons that turn over weeks
 
-- **Status**: accepted for the look (the owner, 2026-10-18); open: whether the report
-  maps take the cosy palette, and whether winter has snow
+- **Status**: accepted (the owner, 2026-10-18), amended the same day (see the end)
 - **Date**: 2026-10-18
 
 ## Context
@@ -55,6 +54,30 @@ snowy tree is barely told from snowy ground.
   day changes (with the ground, once a sim-day), which carries the turn forward.
 - Drawings around a change of season are made for two seasons, about twice as many
   for a few weeks (93 local, 45 middle: cheap, see the cost estimate in renderer.md).
+
+## Amendment: the default, snow, the sea and winter (2026-10-18)
+
+The owner's verdicts on the land sheet, one after another:
+
+- **Cosy is the default, the report maps' palette too.** `tools/viz/pixelmap.py` holds
+  the cosy palette and writes the renderer's copy (`renderer/src/terrain/palette.json`,
+  a test keeps them equal), so "one palette" holds again. The R0 colours stay in
+  `looks.ts` as the `R0` look, for the record.
+- **Snow comes from the simulation**, not from the renderer: `flora.snow_cover` (two
+  `[flora]` keys) gives a depth per cell from the season and the height, the stream
+  carries it, and the renderer lays it on the ground and on the plants of snowy cells in
+  any season. The renderer's own snow option remains only for the R0 look sheet.
+- **The sea moves**: glints on open water and a crest of surf that comes in every 3.6 s
+  (a far line, a nearer one, the foam), on layers of their own so that nothing is
+  repainted; the static foam is not painted where the surf moves (painted as well, it
+  hid the movement).
+- **Winter, redrawn twice.** Outlining every twig closed bare crowns into a tangle and
+  bare bushes into lumps; thick limbs from one fork made a hand. Now a bare broadleaf
+  keeps its crown's size with a leader and limbs one above another, fine twigs left
+  unoutlined. A bush standing in winter keeps its leaves in a colder green (the
+  simulation's deciduous ones die back to the ground), unless it has little `EVERGREEN`
+  (bare twigs); a broadleaf with much `EVERGREEN` keeps its leaves too. Winter grass is
+  stubble.
 
 ## References
 

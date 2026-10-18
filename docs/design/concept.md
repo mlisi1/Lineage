@@ -76,9 +76,11 @@ generated with a new seed. Worlds are numbered.
 Everything drawn is pixel art: flat limited palettes, stepped shading instead of
 gradients, hard pixel edges, whole-number scaling. On the desk display an art pixel is
 2×2 screen pixels, and a terrain cell is 2, 8 or 32 art pixels across depending on how
-close the camera is. The reference palette and rules live in `tools/viz/pixelmap.py`
-(used by the reports) and the renderer paints the ground by them. Charts in reports are
-ordinary plots.
+close the camera is. The look is "cosy", after Stardew Valley's (ADR 0013 for the
+creatures, ADR 0014 for the land): warm saturated colours, shade toward violet and light
+toward gold, outlines in each thing's own darkest tone, seen from above. The reference
+palette and rules live in `tools/viz/pixelmap.py` (used by the reports) and the renderer
+paints the ground by them. Charts in reports are ordinary plots.
 
 ## Open
 
