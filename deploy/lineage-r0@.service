@@ -2,7 +2,7 @@
 #
 #   sudo cp lineage-r0@.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #   sudo systemctl start lineage-r0@<user>      # takes the screen for about 15 minutes
-#   journalctl -fu lineage-r0@<user>            # the tables, as they are printed
+#   sudo journalctl -fu lineage-r0@<user>       # the tables, as they are printed
 #
 # It expects ~<user>/lineage-r0/ to hold kiosk_bench.py and dist/ (see board-setup.md),
 # and leaves kiosk-bench.json there. cage is a Wayland compositor that shows one

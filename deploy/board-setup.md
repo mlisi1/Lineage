@@ -252,7 +252,7 @@ On the board:
 sudo cp ~/lineage-r0/lineage-r0@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl start lineage-r0@lineage
-journalctl -fu lineage-r0@lineage
+sudo journalctl -fu lineage-r0@lineage
 ```
 
 The unit gives `cage` a session on the board's console and runs the benchmark in it, so
@@ -271,7 +271,7 @@ console back.
 While it runs, the first thing to read is the line **"drawn by"** under each profile, as
 in step 7.
 
-If the unit stops at once: `journalctl -u lineage-r0@lineage -n 40` says why. The likely
+If the unit stops at once: `sudo journalctl -u lineage-r0@lineage -n 40` says why. The likely
 ones are no screen connected (`cage` has no output to show on), and `No usable sandbox`
 in `chromium-<profile>.log` (add `--no-sandbox` to the unit's `ExecStart` line).
 
