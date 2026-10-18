@@ -112,7 +112,8 @@ def test_v4_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(4))
     assert state.seed == 42
     assert state.t_ms == 520 * 86_400_000
-    assert sorted(state.subsystems) == ["fauna", "fire", "flora", "terrain"]
+    # Loading migrates to the current version, which adds the species.
+    assert sorted(state.subsystems) == ["fauna", "fire", "flora", "species", "terrain"]
     world = World.restore(config, state)
     fauna = world.fauna
     assert fauna.count > 50
@@ -176,3 +177,27 @@ def test_v6_fixture_values(config: Config) -> None:
     fauna = World.restore(config, state).fauna
     assert fauna.count > 50
     assert fauna.weights.shape == (fauna.count, brain.WEIGHT_COUNT)
+
+
+def test_v6_world_wakes_up_with_one_species_per_lineage(config: Config) -> None:
+    state = io.loads(_fixture(6))
+    assert state.subsystems["species"]["names"] == []  # v6 → v7 adds no species
+    world = World.restore(config, state)
+    lineages = sorted(set(world.fauna.origin.tolist()))
+    world.step(86_400)  # the first census
+    records = world.species.records()
+    assert sorted(r.lineage for r in records) == lineages
+    assert all(r.parent == 0 for r in records)
+    assert sum(r.members for r in records) > 50
+
+
+def test_v7_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(7))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    world = World.restore(config, state)
+    species = world.species
+    assert species.alive_count >= 1
+    labels = species.species_of(world.fauna.ids)
+    assert (labels > 0).all()  # saved at midnight, right after the census
+    assert species.record(1).parent == 0

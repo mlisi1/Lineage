@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "6de5a06be88da723c0757a86b1691ae5441a9223949be99f42440effca7d5e6d"
+GOLDEN_FLORA_SEED_42 = "c6d946ce6fbf161984f72b26b94f8f27cb080e735c6e327ca1bad425afdb15b9"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -623,7 +623,7 @@ def test_golden_hash_and_two_runs(config: Config) -> None:
 def test_streams_are_per_subsystem(config: Config) -> None:
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(3 * DAY_S)
-    assert sorted(world.snapshot().rng) == ["fauna", "fire", "flora", "terrain"]
+    assert sorted(world.snapshot().rng) == ["fauna", "fire", "flora", "species", "terrain"]
 
 
 def test_save_load_continue_and_chunking(config: Config) -> None:

@@ -12,6 +12,7 @@ One save per released schema version (`vN.lzma`). **Never edit or delete these**
 | `v4.lzma` | 4 | Default M4 world (terrain, flora, fire, fauna): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 | `v5.lzma` | 5 | Default M5 world (creatures learn during life): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 | `v6.lzma` | 6 | Default M5 world, revised (plant-form and carrion senses, meal value, `SOCIAL` gene, 246 weights, carrion and scent): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days. Amended while v6 was unreleased (branch `m5-lifetime-learning`); frozen from its merge |
+| `v7.lzma` | 7 | Default M6 world (species: labels, phylogeny, names): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 
 When bumping the schema to vN+1, add `vN+1.lzma` saved by the new code, alongside the
 `vN_to_vN+1.py` migration and its test.

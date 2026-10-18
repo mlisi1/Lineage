@@ -126,3 +126,28 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 ## 6. Findings from later milestones
 
 (M6–M10: add what each milestone learned about the balance here.)
+
+### M6 — species (ADR 0012, reports/M6-species)
+
+- **One island, one gene pool.** With species defined by the mating distance (0.10), the
+  founders' herd never splits: after 50–70 generations it is broad (mean pairwise distance
+  0.09) but continuous. Nothing isolates groups. Species are therefore defined as genome
+  clusters (`species.link_distance` 0.035), which split about once a month.
+- **M6.1 fails as a structural matter (81 % of inhabited days in 3–12, target 90 %).**
+  The first 4–5 months after the founders land hold one or two species, and seeds whose
+  founders die out spend months empty. Levers for M11: an earlier and safer landing (the
+  M5 bottleneck, §4), more or longer-lived stranger groups (they live a median of about a
+  month), or a real isolating mechanism (assortative mating on HUE/PATTERN, which the
+  genome already describes as mate recognition; landmass splits).
+- **Splits come in bursts** when a widely spread herd shatters at the threshold; the
+  species count follows the herd's genetic spread, so anything that changes mutation
+  (`mutation_sigma_body`) or selection will move both M6 numbers.
+- **Diet classes** (ADR 0012, "By diet class"): predator species now split from groups of
+  5 (`predator_min_members`; 51 splits in 20 seeds × 3 years), but predators still
+  starve (87 % of their deaths, 42 % before maturity) and are present on only a quarter
+  to a half of days; omnivores have no source but random strangers and no room under a
+  full herd's cap. Levers: hunter survival (the M5 levers above), room for newcomers, a
+  mixed diet that pays.
+- **M6.1 is deferred here** by the owner (79 % vs 90 % with the predator rule, 2026-10-18).
+- `[species]` settings come from a 20-seed sweep (ADR 0012 table); recheck them after
+  any fauna tuning — they are cheap to sweep (many censuses per run).

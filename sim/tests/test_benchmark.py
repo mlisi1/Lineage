@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from lineage_sim.config import Config
+from lineage_sim.species import Species
 from lineage_sim.state import io
 from lineage_sim.terrain import Terrain
 from lineage_sim.world import World
@@ -28,6 +29,9 @@ WORLD_DAY_BUDGET_S = 800e-3
 FAUNA_TICK_BUDGET_S = 10e-3
 # Daily save of a full world: device budget is 2 s; allow a tenth of it here.
 WORLD_SAVE_BUDGET_S = 0.3
+# The daily species census of a full population, labelling every creature from scratch
+# (its worst case, as after a v6 save is loaded). Once a day, it is free on any device.
+SPECIES_CENSUS_BUDGET_S = 50e-3
 
 
 def test_bench_empty_step_one_second(benchmark: Any, config: Config) -> None:
@@ -91,3 +95,15 @@ def test_bench_world_save(benchmark: Any, config: Config) -> None:
     world = _inhabited_world(config)
     benchmark(lambda: io.dumps(world.snapshot()))
     assert benchmark.stats.stats.median < WORLD_SAVE_BUDGET_S
+
+
+def test_bench_species_census(benchmark: Any, config: Config) -> None:
+    world = _inhabited_world(config)
+    assert world.fauna.count > 100
+    context = world._context(world.species, 86_400.0)  # pyright: ignore[reportPrivateUsage]
+
+    def census() -> None:
+        Species(config.species, world.fauna, config.fauna.predator_min_diet).tick(context)
+
+    benchmark.pedantic(census, rounds=20, iterations=1)
+    assert benchmark.stats.stats.median < SPECIES_CENSUS_BUDGET_S

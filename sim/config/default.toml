@@ -555,6 +555,22 @@ competence_hours = 24.0
 herbivore_max_diet = 0.35
 predator_min_diet = 0.65
 
+[species]
+# Species (M6): creatures whose genomes are linked, directly or through others, by steps
+# of at most link_distance (mean absolute gene difference, all genes) belong together.
+# It is finer than [fauna] compat_distance (who can mate): one island's herd stays one
+# interbreeding cloud, but a species is a distinct cluster within it (ADR 0012). Once a
+# day each species is checked: when its members fall into separate groups of at least
+# min_members creatures that stay apart for split_days (sim-days), the largest group keeps
+# the species and every other one becomes a daughter species. Smaller strays stay where
+# they are, so a few odd mutants never make a species.
+link_distance = 0.035
+min_members = 8
+# The same for predator species (mean diet gene at or above [fauna] predator_min_diet):
+# capped at [fauna] predator_cap, their packs could never form two groups of min_members.
+predator_min_members = 5
+split_days = 3.0
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
@@ -568,3 +584,5 @@ flora = 86400
 fire = 3600
 # Fauna: sensing, steering, eating, breeding, every 10 sim-minutes.
 fauna = 600
+# Species: clustering, splits and extinctions, once per sim-day (after fauna at midnight).
+species = 86400
