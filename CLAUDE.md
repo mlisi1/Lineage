@@ -166,6 +166,9 @@ Do not create directories outside this layout without updating this file.
   - `cd renderer && npm run build` — build the pages into `renderer/dist`
   - `cd renderer && npm run look` — write the look sheet (how terrain, plants and creatures
     are drawn) to `reports/R0-look-sheet/`; live at `/look.html` under `npm run dev`
+  - `cd renderer && npm run creatures` — write the creature sheet (phenotype port against
+    the sim, creature styles side by side) to `reports/R2-creature-sheet/`; live at
+    `/creatures.html`
   - on the board: `python3 kiosk_bench.py --dist dist` (procedure in `deploy/README.md`;
     from a board in its box, `deploy/board-setup.md`),
     then `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`

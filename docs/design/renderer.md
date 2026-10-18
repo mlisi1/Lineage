@@ -287,6 +287,15 @@ will want them: the look sheet draws the markings that way. Kinds change at thre
 so two animals of one species either side of one will look like different kinds; whether
 that needs softening is for R2.
 
+**A second style is proposed (R2): `cosy`**, after Stardew Valley's animals, with the
+camera kept straight above: the same plans, more saturated; the outline in each animal's
+own colour taken nearly to black and toward plum; shade toward violet and wider, light
+toward gold; eyes a size larger with a glint from 2 pixels; and one soft see-through
+oval on the ground under the animal, down and right of it. The creature sheet
+(`creatures.html`, `npm run creatures` → `reports/R2-creature-sheet/`) draws the same
+animals walking the same paths in `lit` and `cosy`, side by side, and checks the
+phenotype port against the sim. Which one stays is the owner's choice, then an ADR.
+
 ## The look sheet
 
 `renderer/look.html` shows the three views as they stand, drawn by the same code as the
