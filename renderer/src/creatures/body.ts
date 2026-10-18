@@ -19,6 +19,7 @@
  * A body is drawn from its `Look`: the values the phenotype derives from the genome
  * (`phenotype.ts`, the port of `fauna/phenotype.py`) and the genes that show.
  */
+import * as cosy from "../palette";
 import { geneOf, type Genome } from "./genome";
 import type { Phenotype } from "./phenotype";
 
@@ -299,7 +300,6 @@ interface Palette {
   /** A shadow on the ground under the animal, this opaque; 0 for none. */
   groundShadow: number;
 }
-const PLUM = 0x2b1630;
 const PALETTES: Readonly<Record<"lit" | "cosy", Palette>> = {
   lit: {
     saturation: SATURATION,
@@ -318,22 +318,21 @@ const PALETTES: Readonly<Record<"lit" | "cosy", Palette>> = {
   },
   cosy: {
     saturation: 0.82,
-    outline: (hue) => blend(colour(hue, 0.2, 0.85), PLUM, 0.35),
-    shadow: 0x4a2a7a,
+    outline: (hue) => blend(colour(hue, 0.2, 0.85), cosy.PLUM, 0.35),
+    shadow: cosy.SHADE,
     shadeMix: 0.5,
     shadeShare: 0.16,
     shadeMaxPx: 2.5,
-    sunlit: 0xfff1b8,
+    sunlit: cosy.SUNLIT,
     lightMix: 0.65,
-    warm: 0xffe08a,
+    warm: cosy.GOLD,
     warmMix: 0.4,
     eyes: 1.45,
     glintFromPx: 2,
     groundShadow: 0.38,
   },
 };
-/** The shadow on the ground: its colour, and its size against the body it lies under. */
-const GROUND_SHADOW = 0x10081c;
+/** The shadow on the ground: its size against the body it lies under. */
 const GROUND_SHADOW_LONG = 1.0;
 const GROUND_SHADOW_WIDE = 2.0;
 
@@ -1455,7 +1454,7 @@ function groundShadow(plan: BodyPlan, alpha: number): Part {
     forward: (middle - (plan.joints - 1) / 2) * plan.spacing,
     side: 0,
     turn: 0,
-    colour: GROUND_SHADOW,
+    colour: cosy.GROUND_SHADOW,
     layer: LAYER.ground,
     // Away from the light: a negative lift moves it down and to the right.
     lift: -widest * 0.9,
