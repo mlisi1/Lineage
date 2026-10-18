@@ -435,7 +435,7 @@ export function standingArts(
       for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
         arts.push({
           key: standingKey(form, growth, variant),
-          art: drawStanding(form, growth, variant, detail, season, snow),
+          art: drawStanding(form, growth, variant, detail, season, snow, look.shapes),
           ...standingColours(land.palette, form, variant, season, look),
         });
       }
@@ -445,7 +445,7 @@ export function standingArts(
     for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
       arts.push({
         key: standingKey("GRASS", growth, variant),
-        art: drawStanding("GRASS", growth, variant, detail, season, snow),
+        art: drawStanding("GRASS", growth, variant, detail, season, snow, look.shapes),
         ...standingColours(land.palette, "GRASS", variant, season, look),
       });
     }
@@ -466,6 +466,7 @@ export function standingArts(
         mulberry32(31 + variant),
         variant,
         snow,
+        look.shapes,
       );
       arts.push({
         key,
@@ -482,7 +483,7 @@ export function standingArts(
       // Grass that has dried: the same tufts in the dry colours.
       arts.push({
         key: `dry/${variant}`,
-        art: drawStanding("GRASS", "grown", variant, detail, season, snow),
+        art: drawStanding("GRASS", "grown", variant, detail, season, snow, look.shapes),
         ramp: dried,
         accent: SEED_HEAD,
       });

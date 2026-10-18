@@ -12,6 +12,7 @@
  * Seen from above as before: the look changes colours and edges, not the camera.
  */
 import * as TONES from "./palette";
+import type { Shapes } from "./plants/plantart";
 import { MAP_SEASONS, type SeasonTones } from "./plants/seasons";
 import type { LandPalette, Ramp } from "./terrain/land";
 
@@ -66,6 +67,8 @@ export interface Look {
   seasons: SeasonTones;
   ground: GroundTones;
   plants: PlantInks;
+  /** The rules the plants are drawn by. */
+  shapes: Shapes;
 }
 
 const shaded = (colour: string, factor: number): Rgb => {
@@ -84,6 +87,7 @@ const toward = (from: Rgb, to: Rgb, share: number): Rgb => [
 
 export const MAPS: Look = {
   name: "maps",
+  shapes: "bundles",
   seasons: MAP_SEASONS,
   ground: {
     litter: 0x6a5637,
@@ -126,6 +130,7 @@ const ramp = (dark: string, mid: string, light: string): Ramp => [dark, mid, lig
 
 export const COSY: Look = {
   name: "cosy",
+  shapes: "cosy",
   land: {
     palette: {
       BARE: ramp("#8a6a4c", "#a8865e", "#c2a274"),
@@ -184,7 +189,7 @@ export const COSY: Look = {
   plants: {
     outline: (dark) => toward(shaded(dark, 0.5), PLUM, 0.4),
     deep: VIOLET,
-    deepMix: 0.3,
+    deepMix: 0.18,
     bright: rgbOf(TONES.GOLD),
     brightMix: 0.38,
     wood: { BROADLEAF: "#8a5a34", CONIFER: "#94583a", SHRUB: "#80563a" },

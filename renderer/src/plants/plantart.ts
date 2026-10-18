@@ -26,6 +26,7 @@ import { MAPS, type PlantInks } from "../looks";
 import { mulberry32, type Random } from "../rng";
 import type { Ramp } from "../terrain/land";
 import { cellHash, hexToRgb, type Pixels } from "../terrain/pixels";
+import { cosyBroadleaf, cosyBush, cosyConifer, cosySmall, cosyTuft } from "./cosyart";
 import type { Form } from "./look";
 import type { Growth, Season } from "./seasons";
 
@@ -52,8 +53,10 @@ export const INK = {
   snowShade: 16,
   /** The deepest furrow of bark. */
   trunkDeep: 17,
+  /** The outline round wood (the cosy look's bare branches, trunks, logs). */
+  woodOutline: 18,
 } as const;
-type Ink = (typeof INK)[keyof typeof INK];
+export type Ink = (typeof INK)[keyof typeof INK];
 
 export interface PlantArt {
   width: number;
@@ -114,10 +117,10 @@ const TRUNK = "#5a4632";
 /** Clear pixels kept around a plant for its outline. */
 const MARGIN = 2;
 /** Where the light comes from: up and to the left. */
-const LIGHT_X = -0.6;
-const LIGHT_Y = -0.8;
+export const LIGHT_X = -0.6;
+export const LIGHT_Y = -0.8;
 /** From this many pixels wide a plant is drawn rich: bark, a thicker trunk. */
-const RICH_FROM = 24;
+export const RICH_FROM = 24;
 
 interface Lobe {
   x: number;
@@ -128,7 +131,7 @@ interface Lobe {
 }
 
 /** A blank drawing with room for a plant `width` × `height` and its outline. */
-function blank(width: number, height: number): PlantArt {
+export function blank(width: number, height: number): PlantArt {
   const wide = width + 2 * MARGIN;
   const tall = height + 2 * MARGIN;
   return {
@@ -140,13 +143,13 @@ function blank(width: number, height: number): PlantArt {
   };
 }
 
-function put(art: PlantArt, x: number, y: number, ink: Ink): void {
+export function put(art: PlantArt, x: number, y: number, ink: Ink): void {
   const px = Math.round(x) + MARGIN;
   const py = Math.round(y) + MARGIN;
   if (px >= 0 && py >= 0 && px < art.width && py < art.height) art.ink[py * art.width + px] = ink;
 }
 
-const inkAt = (art: PlantArt, x: number, y: number): number => {
+export const inkAt = (art: PlantArt, x: number, y: number): number => {
   const px = x + MARGIN;
   const py = y + MARGIN;
   return px >= 0 && py >= 0 && px < art.width && py < art.height
@@ -218,7 +221,7 @@ function outline(art: PlantArt): void {
 }
 
 /** How thick the trunk of a plant `width` wide is, in pixels. */
-function girth(width: number, stout: boolean): number {
+export function girth(width: number, stout: boolean): number {
   const thick =
     width >= RICH_FROM
       ? Math.max(3, Math.round(width * 0.13))
@@ -239,7 +242,7 @@ function girth(width: number, stout: boolean): number {
  * With `taper` under 1 it narrows upward to that share of its thickness, which it
  * reaches two thirds of the way up: a trunk that carries branches, not a crown.
  */
-function trunk(
+export function trunk(
   art: PlantArt,
   width: number,
   from: number,
@@ -300,7 +303,7 @@ function trunk(
 }
 
 /** Shade a crown throws on its own trunk: wood just under leaves is a tone darker. */
-function underCrown(art: PlantArt): void {
+export function underCrown(art: PlantArt): void {
   const darker = new Map<number, Ink>([
     [INK.trunkLight, INK.trunk],
     [INK.trunk, INK.trunkDark],
@@ -322,7 +325,7 @@ function underCrown(art: PlantArt): void {
 
 /** The tones of foliage, darkest first. */
 const TONES: readonly Ink[] = [INK.deep, INK.dark, INK.mid, INK.light, INK.bright];
-const toneOf = (level: number): Ink =>
+export const toneOf = (level: number): Ink =>
   TONES[Math.min(Math.max(Math.round(level), 0), 4)] ?? INK.mid;
 const GOLDEN_ANGLE = 2.39996;
 /** A clump shows its leaves from this radius; they move the line between tones this far. */
@@ -330,7 +333,7 @@ const LEAVES_FROM = 3.5;
 /** A clump throws a line of shade on those behind it from this radius. */
 const SHADE_LINE_FROM = 3;
 const LEAF_RUFFLE = 0.34;
-const isLeaf = (art: PlantArt, x: number, y: number): boolean =>
+export const isLeaf = (art: PlantArt, x: number, y: number): boolean =>
   LEAF.includes(inkAt(art, Math.round(x), Math.round(y)));
 
 /**
@@ -359,7 +362,7 @@ function clump(art: PlantArt, x: number, y: number, r: number, lift: number, sal
 }
 
 /** The shade a clump about to be drawn at (x, y) throws on the leaves already behind it. */
-function cast(art: PlantArt, x: number, y: number, r: number): void {
+export function cast(art: PlantArt, x: number, y: number, r: number): void {
   for (let py = Math.floor(y - r); py <= Math.ceil(y + r); py++) {
     for (let px = Math.floor(x - r); px <= Math.ceil(x + r); px++) {
       if ((px + 0.5 - x) ** 2 + (py + 0.5 - y) ** 2 > r * r) continue;
@@ -426,7 +429,14 @@ function bundles(
  * that rises and up and down on one that reaches out, so that it is as thick whichever
  * way it runs. Lit on its left or its top, in shade on the other side.
  */
-function limb(art: PlantArt, x0: number, y0: number, x1: number, y1: number, thick: number): void {
+export function limb(
+  art: PlantArt,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  thick: number,
+): void {
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
   const rising = Math.abs(x1 - x0) <= Math.abs(y1 - y0);
   for (let step = 0; step <= steps; step++) {
@@ -447,7 +457,7 @@ function limb(art: PlantArt, x0: number, y0: number, x1: number, y1: number, thi
 }
 
 /** Berries: pairs of pixels of the accent among the leaves. */
-function berries(art: PlantArt, width: number, height: number, random: Random): void {
+export function berries(art: PlantArt, width: number, height: number, random: Random): void {
   const big = width >= RICH_FROM;
   for (let k = 0; k < Math.max(3, Math.round(width / 4)); k++) {
     const x = Math.round(width * (0.12 + 0.76 * random()));
@@ -462,13 +472,13 @@ function berries(art: PlantArt, width: number, height: number, random: Random): 
 }
 
 /** Clear what was drawn below the line the plant stands on. */
-function trim(art: PlantArt, height: number): void {
+export function trim(art: PlantArt, height: number): void {
   for (let y = height + MARGIN; y < art.height; y++)
     art.ink.fill(INK.none, y * art.width, (y + 1) * art.width);
 }
 
 /** Move a drawing down until its lowest pixel is on the line it stands on. */
-function settle(art: PlantArt, height: number): void {
+export function settle(art: PlantArt, height: number): void {
   const foot = height + MARGIN - 1;
   let lowest = -1;
   for (let at = art.ink.length - 1; at >= 0 && lowest < 0; at--) {
@@ -481,7 +491,7 @@ function settle(art: PlantArt, height: number): void {
 }
 
 /** Where the plant's shadow falls: an ellipse under its foot. */
-const shadowOf = (width: number, reach: number): PlantArt["shadow"] => ({
+export const shadowOf = (width: number, reach: number): PlantArt["shadow"] => ({
   rx: Math.max(width * reach, 2),
   ry: Math.max(width * reach * 0.34, 1.5),
 });
@@ -527,7 +537,7 @@ function mound(
 }
 
 /** Blossom: small flowers of the accent over the lit side of the leaves, a few in shade. */
-function blossom(art: PlantArt, width: number, height: number, random: Random): void {
+export function blossom(art: PlantArt, width: number, height: number, random: Random): void {
   const big = width >= RICH_FROM;
   for (let k = 0; k < Math.max(4, Math.round((width * height) / (big ? 55 : 16))); k++) {
     const x = Math.round(width * (0.06 + 0.88 * random()));
@@ -542,7 +552,7 @@ function blossom(art: PlantArt, width: number, height: number, random: Random): 
 }
 
 /** A bare trunk narrows to this share of its thickness where it forks. */
-const BARE_TAPER = 0.72;
+export const BARE_TAPER = 0.72;
 /**
  * What carries on from a fork against what came to it: the leader, which is the trunk
  * going on up; a bough leaving it; and each of two or of three branches a limb parts into.
@@ -558,7 +568,7 @@ const OF_THREE = 0.62;
  * to each side; every limb then parts in two or three, each thinner than what it grew
  * from, down to twigs a pixel across. Kept inside the drawing above row `floor`.
  */
-function branches(
+export function branches(
   art: PlantArt,
   width: number,
   forkX: number,
@@ -634,20 +644,29 @@ function branches(
 }
 
 /** Snow lying on a drawing: the pixels under its upper outline, `deep` of them. */
-function snowCap(art: PlantArt, deep: number): void {
+export function snowCap(art: PlantArt, deep: number): void {
   for (let x = 0; x < art.width; x++) {
     let y = 0;
     while (y < art.height && art.ink[y * art.width + x] === INK.none) y++;
     // Under the outline where there is one, so that the plant keeps its edge.
-    if (y < art.height && art.ink[y * art.width + x] === INK.outline) y++;
+    const edge = (ink: number | undefined): boolean =>
+      ink === INK.outline || ink === INK.woodOutline;
+    if (y < art.height && edge(art.ink[y * art.width + x])) y++;
     for (let k = 0; k < deep && y + k < art.height; k++) {
       const at = (y + k) * art.width + x;
       const ink = art.ink[at] ?? INK.none;
-      if (ink === INK.none || ink === INK.outline) break;
+      if (ink === INK.none || edge(ink)) break;
       art.ink[at] = k === deep - 1 && deep > 1 ? INK.snowShade : INK.snow;
     }
   }
 }
+
+/**
+ * The rules plants are drawn by: `bundles` (T1, the R0 look: crowns of many small
+ * bundles of leaves) or `cosy` (after Stardew Valley: a few large puffs, every drawing
+ * outlined; `cosyart.ts`).
+ */
+export type Shapes = "bundles" | "cosy";
 
 /** A plant as drawn: what of it, how grown, which of its drawings, when. */
 export interface Standing {
@@ -723,12 +742,15 @@ function broadleaf(size: Size, random: Random, salt: number, look: Standing): Pl
   return art;
 }
 
+/** A conifer's tiers: one to so many pixels of height, a tooth of its hem to so many of width, the share of it that is bare stem. */
+const TIERS = { tierPixels: 11, teeth: 9, stem: 0.1 };
+
 /**
  * A conifer in tiers of drooping boughs, the lowest drawn first so that each hangs over
  * the one below and shades it. With `tips` the ends of the boughs are the light green
  * of new growth; with `snow` it lies on the shoulders of every tier.
  */
-function tiers(
+export function tiers(
   art: PlantArt,
   width: number,
   height: number,
@@ -736,13 +758,14 @@ function tiers(
   salt: number,
   tips: boolean,
   snow: boolean,
+  shape: { tierPixels: number; teeth: number; stem: number } = TIERS,
 ): void {
-  const stem = Math.max(2, Math.round(height * 0.1));
+  const stem = Math.max(2, Math.round(height * shape.stem));
   const crown = height - stem;
-  const count = Math.min(Math.max(Math.round(height / 11), 2), 9);
+  const count = Math.min(Math.max(Math.round(height / shape.tierPixels), 2), 9);
   const tall = crown / count;
   const lean = (random() - 0.5) * 0.08 * width;
-  const tooth = Math.max(3, Math.round(width / 9));
+  const tooth = Math.max(3, Math.round(width / shape.teeth));
   // Thinner than a broadleaf's, under the middle of the crown.
   trunk(
     art,
@@ -1252,7 +1275,9 @@ export function drawSmall(
   random: Random,
   variant = 0,
   snow = false,
+  shapes: Shapes = "bundles",
 ): PlantArt {
+  if (shapes === "cosy") return cosySmall(kind, size, random, variant, snow);
   const width = Math.max(2, Math.round(size[0]));
   const height = Math.max(2, Math.round(size[1]));
   const art = blank(width, height);
@@ -1364,8 +1389,10 @@ export function drawStanding(
   detail = 1,
   season: Season = "summer",
   snow = false,
+  shapes: Shapes = "bundles",
 ): PlantArt {
   const look: Standing = { form, growth, variant, season, snow: snow && season === "winter" };
+  const cosy = shapes === "cosy";
   const tree = form === "BROADLEAF" || form === "CONIFER";
   const [wider, taller] = BUILDS[variant % BUILDS.length] ?? [1, 1];
   const [alsoWider, alsoTaller] = growth === "old" ? OLD[tree ? "tree" : "bush"] : [1, 1];
@@ -1378,13 +1405,18 @@ export function drawStanding(
   const seed = FORM_SEEDS[form] * 97 + young * 13 + (growth === "sprout" ? 31 : 0) + variant;
   const random = mulberry32(seed);
   const salt = 60 + seed;
-  if (form === "BROADLEAF") return broadleaf(sized(PLANT_SCALE.broadleaf), random, salt, look);
-  if (form === "CONIFER") return conifer(sized(PLANT_SCALE.conifer), random, salt, look);
-  if (form === "SHRUB") return bush(sized(PLANT_SCALE.bush), random, salt, look);
+  if (form === "BROADLEAF") {
+    return (cosy ? cosyBroadleaf : broadleaf)(sized(PLANT_SCALE.broadleaf), random, salt, look);
+  }
+  if (form === "CONIFER") {
+    return (cosy ? cosyConifer : conifer)(sized(PLANT_SCALE.conifer), random, salt, look);
+  }
+  if (form === "SHRUB")
+    return (cosy ? cosyBush : bush)(sized(PLANT_SCALE.bush), random, salt, look);
   // Grass: short while young and in spring, in seed in autumn, pressed flat in winter.
   const [width, height] = [PLANT_SCALE.tuft[0] * detail, PLANT_SCALE.tuft[1] * detail];
   const short = young === 1 || season === "spring" ? (growth === "sprout" ? 0.45 : 0.65) : 1;
-  return drawTuft(
+  return (cosy ? cosyTuft : drawTuft)(
     [Math.round(width), Math.max(2, Math.round(height * short))],
     random,
     season === "autumn" && young === 0,
@@ -1429,6 +1461,7 @@ export function colourArt(
     [INK.trunkDark]: [...shadeOf(wood, 0.72), 255],
     [INK.trunkLight]: [...shadeOf(wood, 1.3), 255],
     [INK.trunkDeep]: [...shadeOf(wood, 0.52), 255],
+    [INK.woodOutline]: [...inks.outline(wood), 255],
     [INK.accent]: [...hexToRgb(accent), 255],
     // In shade a colour is cooler as well as darker; in the light, warmer.
     [INK.deep]: [...toward(ramp[0], inks.deep, inks.deepMix), 255],

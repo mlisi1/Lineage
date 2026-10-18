@@ -21,8 +21,23 @@ try {
   if (address === undefined) throw new Error("the preview server gave no address");
   const page = await browser.newPage({ viewport: { width: 2200, height: 1200 } });
   page.setDefaultTimeout(600_000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`${address}land.html`);
-  await page.waitForFunction(() => window.__landReady === true, null, { timeout: 600_000 });
+  // Wait for the sheet, and give up at once if the page fails before it can say so.
+  let check;
+  try {
+    await Promise.race([
+      page.waitForFunction(() => window.__landReady === true, null, { timeout: 600_000 }),
+      new Promise((_, reject) => {
+        check = globalThis.setInterval(() => {
+          if (errors.length > 0) reject(new Error(`land.html: ${errors.join("; ")}`));
+        }, 200);
+      }),
+    ]);
+  } finally {
+    globalThis.clearInterval(check);
+  }
   const failure = await page.locator("#failure").textContent();
   if (failure) throw new Error(`land.html failed: ${failure}`);
 

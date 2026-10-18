@@ -1,0 +1,376 @@
+/**
+ * Plants in the cosy look, after Stardew Valley's (R1 proposal, ADR 0014): the same
+ * plants in the same places and sizes as the bundles of `plantart.ts`, drawn the way
+ * Stardew draws its trees and forage, seen from above as before.
+ *
+ *   broadleaf  a crown of a few large puffs piled like a cloud, three rows of them on a
+ *              grown tree, each puff scalloped at its rim, lit gold on its upper left
+ *              with flecks of leaves, violet in shade below, and throwing a band of
+ *              shade on the puffs behind it; a stout trunk that shows under the crown
+ *              and flares into roots
+ *   conifer    a few bold tiers with large teeth to their hems, each shading the next
+ *   bush       a dome of three to five puffs, sitting on the ground
+ *   grass      a tuft of broad blades that fan out, light at the tips
+ *   the rest   the small plants and stones as before, every one outlined
+ *
+ * Everything is outlined on its outside, wood as well as leaves: a bare branch carrying
+ * snow keeps its edge against snow on the ground. The outline is the drawing's own
+ * darkest tone taken toward plum (`looks.ts`), wood's toward plum from the bark.
+ */
+import { cellHash } from "../terrain/pixels";
+import type { Random } from "../rng";
+import {
+  BARE_TAPER,
+  INK,
+  LIGHT_X,
+  LIGHT_Y,
+  RICH_FROM,
+  berries,
+  blank,
+  blossom,
+  branches,
+  cast,
+  drawSmall,
+  girth,
+  limb,
+  put,
+  settle,
+  shadowOf,
+  snowCap,
+  tiers,
+  toneOf,
+  trim,
+  trunk,
+  underCrown,
+  type Ink,
+  type PlantArt,
+  type Size,
+  type Small,
+  type Standing,
+} from "./plantart";
+
+/** Inks that are wood: their outline is the bark's. (A function: `INK` is not there yet when this module loads.) */
+const isWood = (ink: number): boolean =>
+  ink === INK.trunk || ink === INK.trunkDark || ink === INK.trunkLight || ink === INK.trunkDeep;
+
+/**
+ * Outline everything drawn, on its outside: every clear pixel next to a drawn one takes
+ * the outline of what it is next to (wood's if any wood, else the leaves').
+ */
+export function rimAll(art: PlantArt): void {
+  const rim: [number, Ink][] = [];
+  const at = (x: number, y: number): number =>
+    x >= 0 && y >= 0 && x < art.width && y < art.height ? (art.ink[y * art.width + x] ?? 0) : 0;
+  for (let y = 0; y < art.height; y++) {
+    for (let x = 0; x < art.width; x++) {
+      if (at(x, y) !== INK.none) continue;
+      const near = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)].filter(
+        (ink) => ink !== INK.none && ink !== INK.outline && ink !== INK.woodOutline,
+      );
+      if (near.length === 0) continue;
+      rim.push([y * art.width + x, near.some(isWood) ? INK.woodOutline : INK.outline]);
+    }
+  }
+  for (const [index, ink] of rim) art.ink[index] = ink;
+}
+
+/** A puff's rim has this many scallops for each pixel of its radius, and bulges this much. */
+const SCALLOPS_PER_PIXEL = 0.9;
+const SCALLOP = 0.1;
+/** From this radius a puff carries flecks of leaves. */
+const FLECKS_FROM = 4;
+/** Where a puff's highlight is: this share of its radius toward the light. */
+const HIGHLIGHT = 0.42;
+
+/**
+ * One puff of leaves: a disc with a scalloped rim, lit from the upper left in five
+ * tones, with small flecks of leaves lighter on the lit side and darker in the shade.
+ * `lift` shifts all of its tones: +1 is a tone lighter.
+ */
+function puff(art: PlantArt, x: number, y: number, r: number, lift: number, salt: number): void {
+  const scallops = Math.max(5, Math.round(r * SCALLOPS_PER_PIXEL));
+  const phase = cellHash(Math.round(x * 5), Math.round(y * 5), salt) * Math.PI * 2;
+  for (let py = Math.floor(y - r - 1); py <= Math.ceil(y + r + 1); py++) {
+    for (let px = Math.floor(x - r - 1); px <= Math.ceil(x + r + 1); px++) {
+      const dx = px + 0.5 - x;
+      const dy = py + 0.5 - y;
+      const angle = Math.atan2(dy, dx);
+      // Scallops: bulges with dents between them.
+      const rim =
+        r * (1 - SCALLOP + SCALLOP * 2 * Math.abs(Math.sin((scallops * angle) / 2 + phase)));
+      const far = Math.hypot(dx, dy);
+      if (far > rim) continue;
+      // Lit as a ball: brightest round a spot up and to the left of its middle, in shade
+      // along its far rim, so that the tones curve with the puff instead of cutting it.
+      const lit = (dx * LIGHT_X + dy * LIGHT_Y) / r;
+      const spot = Math.hypot(dx - LIGHT_X * r * HIGHLIGHT, dy - LIGHT_Y * r * HIGHLIGHT) / r;
+      const rimmed = far / rim;
+      let level =
+        2 + lift + (spot < 0.32 ? 2 : spot < 0.62 ? 1 : rimmed > 0.78 && lit < -0.2 ? -1 : 0);
+      if (rimmed > 0.9 && lit < -0.45) level -= 1;
+      if (r >= FLECKS_FROM) {
+        // A fleck of leaves on a loose grid: two pixels side by side, a tone off.
+        const gx = Math.floor((px + (py % 2) * 1.5) / 3);
+        const gy = Math.floor(py / 2);
+        const fleck = cellHash(gx, gy, salt + 3);
+        if (fleck < 0.14 && (px + py) % 3 !== 0) level += spot < 0.75 ? 1 : -1;
+      }
+      put(art, px, py, toneOf(level));
+    }
+  }
+}
+
+interface Puff {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/**
+ * Draw puffs from the far side of the crown to the lit one; each throws a band of shade
+ * down and to the right on what is already drawn behind it, so that a crown reads as
+ * puffs piled on each other.
+ */
+function pile(art: PlantArt, puffs: Puff[], cx: number, cy: number, salt: number): void {
+  const facing = (p: Puff): number => (p.x - cx) * LIGHT_X + (p.y - cy) * LIGHT_Y;
+  puffs.sort((a, b) => facing(a) - facing(b));
+  for (const p of puffs) {
+    if (p.r >= 2.5) cast(art, p.x + p.r * 0.12, p.y + p.r * 0.22, p.r + 0.6);
+    puff(art, p.x, p.y, p.r, Math.max(-0.4, Math.min(0.5, facing(p) / Math.max(cx, 1))), salt);
+  }
+}
+
+/** The puffs of a crown `width` wide and `height` tall, in rows like a cloud: three on a big one. */
+function crownPuffs(width: number, height: number, random: Random): Puff[] {
+  const rows = height >= 36 ? 3 : 2;
+  const r = Math.min(width * (rows === 3 ? 0.25 : 0.3), height / (rows === 3 ? 2.6 : 2.2));
+  const puffs: Puff[] = [];
+  for (let row = 0; row < rows; row++) {
+    const up = row / (rows - 1);
+    // Widest low down, narrowing to one or two puffs on top.
+    const across =
+      row === rows - 1 ? (random() < 0.5 ? 1 : 2) : row === 0 ? 3 : 2 + (random() < 0.5 ? 1 : 0);
+    // A puff reaches up to `REACH` times its radius (larger by chance, scalloped).
+    const half = Math.max(width / 2 - r * REACH, 0) * (1 - 0.45 * up);
+    const y = height - r * 1.02 - up * (height - r * (1.02 + REACH));
+    for (let k = 0; k < across; k++) {
+      const x = width / 2 + (across === 1 ? 0 : (k / (across - 1) - 0.5) * 2 * half);
+      puffs.push({
+        x: x + (random() - 0.5) * r * 0.3,
+        y: y + (random() - 0.5) * r * 0.25,
+        r: r * (0.9 + 0.22 * random()) * (1 - 0.08 * up),
+      });
+    }
+  }
+  return puffs;
+}
+
+/** How far past its radius a puff can reach: its size by chance and its scallops. */
+const REACH = 1.14 * (1 + SCALLOP);
+
+/** From this share of a broadleaf's height down its trunk shows under the crown. */
+const CROWN_SHARE = 0.72;
+/** A cosy trunk is this much stouter than a bundled tree's. */
+const STOUT = 1.45;
+
+export function cosyBroadleaf(size: Size, random: Random, salt: number, look: Standing): PlantArt {
+  const [width, height] = size;
+  const art = blank(width, height);
+  const bare = look.season === "winter";
+  const old = look.growth === "old";
+  if (look.growth === "sprout") {
+    // A sapling: a stem, and a small puff or two at its top; two twigs when it is bare.
+    const top = height * 0.45;
+    limb(art, width / 2, height - 1, width / 2, top, width >= 14 ? 2 : 1);
+    if (bare) {
+      limb(art, width / 2, top + height * 0.12, width * 0.22, height * 0.2, 1);
+      limb(art, width / 2, top, width * 0.76, height * 0.12, 1);
+    } else {
+      const r = Math.max(1.8, width * 0.3);
+      pile(
+        art,
+        [
+          { x: width * 0.38, y: height * 0.34, r },
+          { x: width * 0.62, y: height * 0.26, r: r * 0.9 },
+        ],
+        width / 2,
+        height * 0.3,
+        salt,
+      );
+    }
+  } else {
+    const crown = height * CROWN_SHARE;
+    if (bare) {
+      const forkY = height * 0.5;
+      const thick = girth(width * STOUT, old);
+      trunk(art, width * STOUT, Math.round(forkY), height, width / 2, "furrowed", old, BARE_TAPER);
+      branches(
+        art,
+        width,
+        width / 2,
+        forkY,
+        crown,
+        height * 0.175,
+        thick * BARE_TAPER,
+        width >= RICH_FROM ? 4 : 3,
+        random,
+      );
+    } else {
+      trunk(art, width * STOUT, Math.round(crown * 0.62), height, width / 2, "furrowed", old);
+      pile(art, crownPuffs(width, crown, random), width / 2, crown / 2, salt);
+      if (look.season === "spring" && look.variant % 3 === 1) blossom(art, width, crown, random);
+      underCrown(art);
+    }
+  }
+  trim(art, height);
+  rimAll(art);
+  if (look.snow) snowCap(art, width >= RICH_FROM ? 2 : 1);
+  if (look.growth !== "sprout") art.shadow = shadowOf(width, bare ? 0.22 : 0.44);
+  return art;
+}
+
+/** A cosy conifer's tiers: fewer and bolder than the bundled one's, with larger teeth. */
+const COSY_TIERS = { tierPixels: 19, teeth: 5, stem: 0.12 };
+
+export function cosyConifer(size: Size, random: Random, salt: number, look: Standing): PlantArt {
+  const [width, height] = size;
+  const art = blank(width, height);
+  tiers(art, width, height, random, salt, look.season === "spring", look.snow, COSY_TIERS);
+  trim(art, height);
+  rimAll(art);
+  if (look.growth !== "sprout") art.shadow = shadowOf(width, 0.38);
+  return art;
+}
+
+export function cosyBush(size: Size, random: Random, salt: number, look: Standing): PlantArt {
+  const [width, height] = size;
+  const art = blank(width, height);
+  const sprout = look.growth === "sprout";
+  if (look.season === "winter") {
+    // Bare: a few stems that fan out from the foot and fork into twigs.
+    const stems = sprout ? 3 : Math.max(4, Math.round(width / 7));
+    for (let k = 0; k < stems; k++) {
+      const angle = ((k + 0.5) / stems - 0.5) * 2 + (random() - 0.5) * 0.2;
+      const length = height * (0.55 + 0.3 * random());
+      const x = Math.min(Math.max(width / 2 + Math.sin(angle) * length * 1.2, 1), width - 2);
+      const y = Math.max(height - 1 - Math.cos(angle) * length, 1);
+      const thick = width >= RICH_FROM ? 2 : 1;
+      limb(art, width / 2 + Math.sin(angle) * 1.5, height - 1, x, y, thick);
+      if (sprout) continue;
+      for (const side of [-1, 1]) {
+        const twig = angle + side * (0.5 + 0.3 * random());
+        limb(
+          art,
+          x,
+          y,
+          Math.min(Math.max(x + Math.sin(twig) * length * 0.4, 0), width - 1),
+          Math.max(y - Math.cos(twig) * length * 0.4, 0),
+          1,
+        );
+      }
+    }
+  } else {
+    // A dome: three puffs low down, one or two above.
+    const r = Math.max(1.8, Math.min(height * 0.42, width * 0.26));
+    const low = height - r;
+    const puffs: Puff[] = [
+      { x: r * REACH, y: low, r: r * (0.9 + 0.15 * random()) },
+      { x: width / 2, y: low + r * 0.08, r: r * (1 + 0.15 * random()) },
+      { x: width - r * REACH, y: low, r: r * (0.9 + 0.15 * random()) },
+    ];
+    if (!sprout) {
+      const up = Math.max(r * 1.02, height - r * 1.9);
+      puffs.push({ x: width * (0.38 + 0.08 * random()), y: up, r: r * 0.95 });
+      if (random() < 0.6)
+        puffs.push({ x: width * (0.64 + 0.06 * random()), y: up + r * 0.2, r: r * 0.85 });
+    }
+    pile(art, puffs, width / 2, height / 2, salt);
+    settle(art, height);
+    if (sprout) {
+      // Too young to flower or fruit.
+    } else if (look.season === "spring") {
+      if (look.variant % 3 !== 2) blossom(art, width, height, random);
+    } else if (look.variant % 3 === 1 || (look.season === "autumn" && look.variant % 3 === 0)) {
+      berries(art, width, height, random);
+    }
+  }
+  trim(art, height);
+  rimAll(art);
+  if (look.snow) snowCap(art, width >= RICH_FROM ? 2 : 1);
+  if (!sprout) art.shadow = shadowOf(width, look.season === "winter" ? 0.3 : 0.46);
+  return art;
+}
+
+/**
+ * A tuft of grass: broad blades that fan out from the foot, dark at the root and light
+ * at the tip, outlined. In seed its tallest blades carry a head of the accent; flat, it
+ * has been pressed down by winter. Too small for blades of two pixels (the middle view),
+ * it is a few strokes, unoutlined.
+ */
+export function cosyTuft(size: Size, random: Random, seeding = false, flat = false): PlantArt {
+  const [width, height] = size;
+  const art = blank(width, height);
+  if (width < 12) {
+    // A small fan: a stroke up the middle, one leaning out to each side.
+    const middle = Math.floor(width / 2);
+    for (const [dx, tall, ink] of [
+      [-2, 0.6, INK.dark],
+      [0, 1, INK.mid],
+      [2, 0.75, INK.mid],
+    ] as const) {
+      const rise = Math.max(1, Math.round(height * tall * (flat ? 0.5 : 1)));
+      for (let t = 0; t < rise; t++) {
+        const along = t / rise;
+        put(
+          art,
+          middle + dx * along,
+          height - 1 - t,
+          t === rise - 1 ? (seeding ? INK.accent : INK.light) : ink,
+        );
+      }
+    }
+    return art;
+  }
+  const blades = Math.max(4, Math.round(width / (flat ? 5 : 3.5)));
+  for (let k = 0; k < blades; k++) {
+    const spread = (k + 0.5) / blades - 0.5;
+    const lean = spread * width * (flat ? 1.5 : 0.9) + (random() - 0.5) * 2;
+    const tall =
+      height * (flat ? 0.45 : 0.6 + 0.4 * (1 - 2 * Math.abs(spread)) * (0.75 + 0.25 * random()));
+    const root = width / 2 + spread * width * 0.3;
+    for (let t = 0; t < tall; t++) {
+      const along = t / tall;
+      const x = root + lean * along * along;
+      const y = height - 1 - t;
+      const head = seeding && along > 0.78 && tall > height * 0.7;
+      const ink: Ink = head
+        ? along > 0.9
+          ? INK.accent
+          : INK.accentDark
+        : along > 0.78
+          ? INK.light
+          : along < 0.3
+            ? INK.dark
+            : INK.mid;
+      put(art, x, y, ink);
+      // Broad below, a pixel wide toward the tip; the side away from the light darker.
+      if (along < 0.55) put(art, x + (spread < 0 ? 1 : -1), y, along < 0.25 ? INK.deep : INK.dark);
+    }
+  }
+  rimAll(art);
+  return art;
+}
+
+/** The small things of the local view, as before, each outlined. */
+export function cosySmall(
+  kind: Small,
+  size: Size,
+  random: Random,
+  variant: number,
+  snow: boolean,
+): PlantArt {
+  const art = drawSmall(kind, size, random, variant, false, "bundles");
+  rimAll(art);
+  if (snow && art.shadow !== undefined) snowCap(art, Math.round(size[0]) >= 16 ? 2 : 1);
+  return art;
+}
