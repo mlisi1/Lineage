@@ -124,6 +124,18 @@ def temperature(cfg: FloraConfig, season_warmth: float, elevation: Grid) -> Grid
     return (_F(lowland_temperature(cfg, season_warmth)) - cooling).astype(_F)
 
 
+def snow_cover(cfg: FloraConfig, season_warmth: float, elevation: Grid) -> Grid:
+    """Depth of lying snow per cell in [0, 1]: none where the temperature index is at or
+    above ``snow_below_temperature``, full ``snow_depth_span`` below it; none on the sea.
+
+    Derived from the season and the height, never stored. The renderer draws it (R1);
+    nothing in the simulation depends on it yet.
+    """
+    cold = _F(cfg.snow_below_temperature) - temperature(cfg, season_warmth, elevation)
+    depth = np.clip(cold / _F(cfg.snow_depth_span), 0.0, 1.0)
+    return np.where(elevation > 0, depth, _F(0.0)).astype(_F)
+
+
 # --- Traits derived from the genome -----------------------------------------------------
 # ``genes`` is a float array of shape (8, …) in [0, 1]; ``rare`` a uint8 mask of shape (…).
 
@@ -350,6 +362,11 @@ class Flora:
             species_keys(self._genome[:, alive], self._rare[alive]), return_counts=True
         )
         return int(np.count_nonzero(counts >= self._cfg.species_min_cells))
+
+    def snow(self, instant: Instant) -> Grid:
+        """Depth of lying snow per cell at ``instant`` (`snow_cover`)."""
+        elevation = (self._terrain.height - _F(self._terrain.sea_level)).astype(_F)
+        return snow_cover(self._cfg, warmth(instant), elevation)
 
     def set_daylight(self, level: float) -> None:
         """Hook for the presence model: daylight in [0, 1] scales growth."""
