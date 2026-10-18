@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineage.local/protocol/1",
+  "title": "Message",
+  "description": "The state stream from the server to every renderer (desk kiosk and phone), one JSON message per WebSocket frame (CLAUDE.md §4.7). The TypeScript types in renderer/src/protocol.ts are generated from this file (`cd renderer && npm run protocol`); the Python encoder is server/lineage_server/protocol/encode.py. A renderer that meets a message type it does not know ignores it. Bump `protocol` only for a change an older renderer would misread.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ClockMessage"
+    },
+    {
+      "$ref": "#/$defs/LandMessage"
+    },
+    {
+      "$ref": "#/$defs/FaunaMessage"
+    },
+    {
+      "$ref": "#/$defs/CreaturesMessage"
+    },
+    {
+      "$ref": "#/$defs/SpeciesMessage"
+    }
+  ],
+  "$defs": {
+    "Protocol": {
+      "description": "Version of this protocol.",
+      "const": 1
+    },
+    "SimTime": {
+      "description": "Sim time in milliseconds since the world was created.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "Season": {
+      "type": "string",
+      "enum": ["spring", "summer", "autumn", "winter"]
+    },
+    "Grid": {
+      "description": "A grid of the world's cells, row by row from the top-left cell, as little-endian whole numbers in base64. A cell's value is its number divided by `scale`.",
+      "type": "object",
+      "required": ["encoding", "scale", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "description": "u8: one byte per cell; u16le: two bytes per cell, little-endian.",
+          "type": "string",
+          "enum": ["u8", "u16le"]
+        },
+        "scale": {
+          "description": "What a cell's whole number is divided by: 1 for classes and bit masks, 255 or 65535 for shares.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "data": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      }
+    },
+    "ClockMessage": {
+      "description": "Where the world is in time. Sent on connect and then often (every server tick): cheap.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "t_ms",
+        "date",
+        "season",
+        "season_progress",
+        "day_of_year",
+        "days_in_year"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "clock"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "t_ms": {
+          "$ref": "#/$defs/SimTime"
+        },
+        "date": {
+          "description": "The calendar date in the world (UTC), YYYY-MM-DD.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "season": {
+          "$ref": "#/$defs/Season"
+        },
+        "season_progress": {
+          "description": "Share of the current season gone by, 0–1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "day_of_year": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 366
+        },
+        "days_in_year": {
+          "type": "integer",
+          "minimum": 365,
+          "maximum": 366
+        }
+      }
+    },
+    "LandMessage": {
+      "description": "The land and what grows on it, every cell. Sent on connect and whenever it changes (once a sim-day, after the plants grow, and after terrain events). The palette is not sent: the renderer has the report maps' own (renderer/src/terrain/palette.json). Grids: heights: Height of each cell, 0–1 (u16le, scale 65535). cover: Land-cover class of each cell: an index into `cover_classes` (u8, scale 1). biomass: Plant biomass of each cell, 0–1 (u8, scale 255). snow: Depth of lying snow on each cell, 0–1 (u8, scale 255), as the simulation has it from the season and the height. plant_height: HEIGHT gene of the plant on each cell, 0–1 (u8, scale 255); 0 where none grows. plant_evergreen: EVERGREEN gene of the plant on each cell, 0–1 (u8, scale 255); 0 where none grows. plant_rare: Rare genes of the plant on each cell, as a bit mask (u8, scale 1): bit k is `rare_genes[k]`.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "t_ms",
+        "world",
+        "width",
+        "height",
+        "sea_level",
+        "cover_classes",
+        "heights",
+        "cover",
+        "biomass",
+        "snow",
+        "plant_height",
+        "plant_evergreen",
+        "plant_rare",
+        "rare_genes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "land"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "t_ms": {
+          "$ref": "#/$defs/SimTime"
+        },
+        "world": {
+          "description": "Which world this is: a new continent after an apocalypse has another seed.",
+          "type": "object",
+          "required": ["seed"],
+          "additionalProperties": false,
+          "properties": {
+            "seed": {
+              "type": "integer"
+            }
+          }
+        },
+        "width": {
+          "description": "Cells across.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "description": "Cells down.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "sea_level": {
+          "description": "Height of the sea, 0–1.",
+          "type": "number"
+        },
+        "cover_classes": {
+          "description": "Land-cover class names, in the order of their numbers in `cover`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "heights": {
+          "$ref": "#/$defs/Grid"
+        },
+        "cover": {
+          "$ref": "#/$defs/Grid"
+        },
+        "biomass": {
+          "$ref": "#/$defs/Grid"
+        },
+        "snow": {
+          "$ref": "#/$defs/Grid"
+        },
+        "plant_height": {
+          "$ref": "#/$defs/Grid"
+        },
+        "plant_evergreen": {
+          "$ref": "#/$defs/Grid"
+        },
+        "plant_rare": {
+          "$ref": "#/$defs/Grid"
+        },
+        "rare_genes": {
+          "description": "Names of the plants' rare genes, bit 0 first.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FaunaMessage": {
+      "description": "What every creature's body is derived from (R2). Sent on connect and when it changes. The renderer derives bodies itself (renderer/src/creatures/phenotype.ts); derived values are never sent.",
+      "type": "object",
+      "required": ["type", "protocol", "genes", "phenotype_config"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "fauna"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "genes": {
+          "description": "Creature gene names, in genome order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "phenotype_config": {
+          "description": "The [fauna] config keys the phenotype function reads (lineage_sim.fauna.phenotype.CONFIG_KEYS): numbers, and `learning` a boolean.",
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "boolean"]
+          }
+        }
+      }
+    },
+    "CreaturesMessage": {
+      "description": "Where every living creature is (R2). Sent after every fauna tick. A creature's genome comes once, the first time its id is sent; an id missing from `ids` has died.",
+      "type": "object",
+      "required": ["type", "protocol", "t_ms", "ids", "positions", "born"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "creatures"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "t_ms": {
+          "$ref": "#/$defs/SimTime"
+        },
+        "ids": {
+          "description": "Every living creature, by an id it keeps for its life.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "positions": {
+          "description": "Where each of `ids` is, in cells: [x, y].",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "species": {
+          "description": "The species of each of `ids` (M6; 0 for none yet). Absent before species exist.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "born": {
+          "description": "Creatures not sent before (all of them on connect): id and genome, genes in `FaunaMessage.genes` order, each 0–1.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "genome"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "genome": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SpeciesMessage": {
+      "description": "Every species that has lived (M6). Sent on connect and when a species is born or dies out.",
+      "type": "object",
+      "required": ["type", "protocol", "species"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "species"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "species": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "parent"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "description": "The species it split from; null for one of the first.",
+                "type": ["integer", "null"]
+              },
+              "extinct": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
