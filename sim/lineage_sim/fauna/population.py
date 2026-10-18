@@ -359,9 +359,9 @@ class Fauna:
         cfg, body = self._cfg, self._body
         land = self._terrain.land.astype(np.float32)
         biomass = self._flora.grazeable()
-        forms = self._flora.forms()
-        low = np.where(np.isin(forms, LOW_FORMS), biomass, np.float32(0.0)).astype(np.float32)
-        woody = np.where(np.isin(forms, WOODY_FORMS), biomass, np.float32(0.0)).astype(np.float32)
+        is_low, is_woody = self._flora.form_masks()
+        low = np.where(is_low, biomass, np.float32(0.0)).astype(np.float32)
+        woody = np.where(is_woody, biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
         senses = creature.sense(
             cfg,

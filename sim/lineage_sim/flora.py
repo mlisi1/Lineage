@@ -279,6 +279,7 @@ class Flora:
         self._genome: Bytes = np.zeros((GENE_COUNT, *shape), dtype=np.uint8)
         # Plant form of every cell, derived from the genome; None when the genome changed.
         self._forms: Bytes | None = None
+        self._form_masks: tuple[Mask, Mask] | None = None
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1], set by the presence model (M8); scales growth.
@@ -386,6 +387,14 @@ class Flora:
             self._forms = classify_form(self._cfg, self.genes())
         return self._forms
 
+    def form_masks(self) -> tuple[Mask, Mask]:
+        """Cells whose genome is low growth (lichen, grass) and woody growth (shrub,
+        trees). Cached with `forms`."""
+        if self._form_masks is None:
+            forms = self.forms()
+            self._form_masks = (np.isin(forms, LOW_FORMS), np.isin(forms, WOODY_FORMS))
+        return self._form_masks
+
     def defence_at(self, ys: Index, xs: Index) -> Grid:
         """Defence gene, in [0, 1], of the plants at cells (ys, xs)."""
         return self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
@@ -478,6 +487,7 @@ class Flora:
             raise ValueError(f"saved flora is {biomass.shape}, terrain is {shape}")
         self._biomass, self._genome = biomass, genome
         self._forms = None
+        self._form_masks = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
@@ -490,6 +500,7 @@ class Flora:
         self._biomass[dead] = 0.0
         self._genome[:, dead] = 0
         self._forms = None
+        self._form_masks = None
         self._rare[dead] = 0
 
     def _disperse(self, rng: Generator, temp: Grid, elevation: Grid, dt_years: float) -> None:
@@ -608,6 +619,7 @@ class Flora:
         kept = self._biomass[ys, xs] * _F(cfg.takeover_keep)
         self._genome[:, ys, xs] = genome
         self._forms = None
+        self._form_masks = None
         self._rare[ys, xs] = rare
         self._biomass[ys, xs] = np.maximum(kept, _F(cfg.seedling_biomass))
 
