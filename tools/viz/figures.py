@@ -301,7 +301,7 @@ def grouped_bars(
     A value of None (not measured) leaves a gap. ``reference`` draws a labelled
     horizontal line, such as a target.
     """
-    fig, ax = plt.subplots(figsize=(7.0, 3.4))
+    fig, ax = plt.subplots(figsize=(7.0, 3.4 if len(groups) <= 8 else 4.0))
     names = list(series)
     width = 0.8 / max(len(names), 1)
     positions = np.arange(len(groups), dtype=float)
@@ -323,12 +323,18 @@ def grouped_bars(
             linestyle="--",
             label=reference[1],
         )
-    ax.set_xticks(positions, groups)
+    # Past a handful of groups their names no longer fit side by side: slant them.
+    slanted = len(groups) > 8
+    if slanted:
+        ax.set_xticks(positions, groups, rotation=35, ha="right", rotation_mode="anchor")
+    else:
+        ax.set_xticks(positions, groups)
     ax.set_ylim(bottom=0.0)
     ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.grid(axis="x", visible=False)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncols=6, fontsize=8)
+    anchor = (0.5, -0.32) if slanted else (0.5, -0.12)
+    ax.legend(loc="upper center", bbox_to_anchor=anchor, ncols=6, fontsize=8)
     fig.tight_layout()
     return fig
 
