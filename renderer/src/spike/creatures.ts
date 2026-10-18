@@ -34,8 +34,6 @@ const SETTLE_REACH = 48;
 const MARKER_CELLS = 1;
 const MARKER_EDGE_CELLS = 0.5;
 const MARKER_EDGE = 0x1b1b1b;
-/** The dark edge of a leg: the colour of the outline round the body. */
-const EDGE = 0x1f1a17;
 /** Toward the light: up and to the left. */
 const LIGHT = Math.SQRT1_2;
 /**
@@ -277,10 +275,12 @@ export class CreatureLayer {
       return container.addChild(sprite);
     };
     const edges = plan.legs.map((leg): Sprite[] => {
+      // The dark edge of a leg is the colour of the outline round the body.
+      const edge = plan.outline;
       if (leg.edge === 0) return [];
-      if (leg.fin === 1) return [blade(EDGE, leg.length, leg.thickness, leg.edge)];
-      const bones = [bar(EDGE), bar(EDGE)];
-      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge, leg.fin > 0)] : bones;
+      if (leg.fin === 1) return [blade(edge, leg.length, leg.thickness, leg.edge)];
+      const bones = [bar(edge), bar(edge)];
+      return leg.foot > 0 ? [...bones, round(edge, leg.foot + leg.edge, leg.fin > 0)] : bones;
     });
     const legs = plan.legs.map((leg, index): Leg => {
       const flipper = leg.fin === 1;
@@ -304,6 +304,7 @@ export class CreatureLayer {
       const [texture, texels] = textures[part.shape] ?? [this.atlas.disc, DISC_SIZE];
       const sprite = new Sprite({ texture, anchor: 0.5 });
       sprite.tint = part.colour;
+      sprite.alpha = part.alpha ?? 1;
       sprite.scale.set(part.along / texels, part.across / texels);
       return container.addChild(sprite);
     });

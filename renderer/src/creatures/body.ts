@@ -11,6 +11,10 @@
  *            that the silhouette says what it is
  *   lit      the same plans with a dark outline around the animal, a lit back and a
  *            far side in shade; markings are shaded the same way, each on its own
+ *   cosy     lit, after Stardew Valley's palette (R2 proposal): richer colours, an
+ *            outline in the animal's own darkest tone rather than near black, shade
+ *            that turns violet and light that turns gold, larger eyes with a glint,
+ *            and a soft shadow on the ground under the animal
  *
  * A body is drawn from its `Look`: the values the phenotype derives from the genome
  * (`phenotype.ts`, the port of `fauna/phenotype.py`) and the genes that show.
@@ -54,8 +58,8 @@ export function lookOf(genome: Genome, body: Phenotype): Look {
   };
 }
 
-export type CreatureStyle = "circles" | "shapes" | "lit";
-export const CREATURE_STYLES: readonly CreatureStyle[] = ["circles", "shapes", "lit"];
+export type CreatureStyle = "circles" | "shapes" | "lit" | "cosy";
+export const CREATURE_STYLES: readonly CreatureStyle[] = ["circles", "shapes", "lit", "cosy"];
 
 export interface BodyOptions {
   style: CreatureStyle;
@@ -123,6 +127,7 @@ export type Shape = "disc" | "wedge" | "bar";
  * it, each stacked the same way on its own.
  */
 export const LAYER = {
+  ground: 0,
   outline: 1,
   under: 2,
   shade: 3,
@@ -150,6 +155,8 @@ export interface Part {
   lift: number;
   /** Drawn in its one colour even where a lit body would shade it: a stripe, a fade. */
   flat: boolean;
+  /** Opacity, 1 unless said: only the shadow on the ground lets the ground through. */
+  alpha?: number;
 }
 
 export interface LegPlan {
@@ -190,6 +197,8 @@ export interface BodyPlan {
   pace: number;
   /** The animal's own colour: what a marker on the map shows. */
   colour: number;
+  /** The colour of its outline, and of the edge round its legs. */
+  outline: number;
 }
 
 /** Body length in cells of a creature of mass 1; it grows with the cube root of mass. */
@@ -264,14 +273,78 @@ const SHADE_MIX = 0.36;
 /** What a lit marking is mixed with: a warm white. */
 const SUNLIT = 0xfff4d6;
 
+/**
+ * How a lit body is coloured. `lit` is the first: grey-black outline, cool shade. `cosy`
+ * follows Stardew Valley's animals: more saturated, the outline the animal's own colour
+ * taken almost to black and toward plum, shade toward violet, light toward gold, eyes a
+ * size larger, and a shadow under the animal on the ground.
+ */
+interface Palette {
+  saturation: number;
+  /** The outline of an animal of this hue. */
+  outline: (hue: number) => number;
+  shadow: number;
+  shadeMix: number;
+  /** How wide the shade along a mass's far edge is, as a share of the mass. */
+  shadeShare: number;
+  /** And no wider than this many pixels. */
+  shadeMaxPx: number;
+  sunlit: number;
+  /** The body's lit patch: the body toward `light` (the body's own pale tone) by this, then toward `warm`. */
+  lightMix: number;
+  warm: number;
+  warmMix: number;
+  eyes: number;
+  glintFromPx: number;
+  /** A shadow on the ground under the animal, this opaque; 0 for none. */
+  groundShadow: number;
+}
+const PLUM = 0x2b1630;
+const PALETTES: Readonly<Record<"lit" | "cosy", Palette>> = {
+  lit: {
+    saturation: SATURATION,
+    outline: () => OUTLINE,
+    shadow: SHADOW,
+    shadeMix: SHADE_MIX,
+    shadeShare: SHADE_SHARE,
+    shadeMaxPx: 1.5,
+    sunlit: SUNLIT,
+    lightMix: 0.5,
+    warm: SUNLIT,
+    warmMix: 0,
+    eyes: 1,
+    glintFromPx: GLINT_FROM_PX,
+    groundShadow: 0,
+  },
+  cosy: {
+    saturation: 0.82,
+    outline: (hue) => blend(colour(hue, 0.2, 0.85), PLUM, 0.35),
+    shadow: 0x4a2a7a,
+    shadeMix: 0.5,
+    shadeShare: 0.16,
+    shadeMaxPx: 2.5,
+    sunlit: 0xfff1b8,
+    lightMix: 0.65,
+    warm: 0xffe08a,
+    warmMix: 0.4,
+    eyes: 1.45,
+    glintFromPx: 2,
+    groundShadow: 0.38,
+  },
+};
+/** The shadow on the ground: its colour, and its size against the body it lies under. */
+const GROUND_SHADOW = 0x10081c;
+const GROUND_SHADOW_LONG = 1.0;
+const GROUND_SHADOW_WIDE = 2.0;
+
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 const clamp01 = (value: number): number => Math.min(Math.max(value, 0), 1);
 /** 0 at `from`, 1 at full gene value. */
 const above = (gene: number, from: number): number => clamp01((gene - from) / (1 - from));
 
 /** hue 0–1 → 0xRRGGBB at a fixed saturation, with `light` as lightness (0–1). */
-export function colour(hue: number, light: number): number {
-  const chroma = (1 - Math.abs(2 * light - 1)) * SATURATION;
+export function colour(hue: number, light: number, saturation = SATURATION): number {
+  const chroma = (1 - Math.abs(2 * light - 1)) * saturation;
   const sector = (((hue % 1) + 1) % 1) * 6;
   const second = chroma * (1 - Math.abs((sector % 2) - 1));
   const [r, g, b] =
@@ -435,8 +508,11 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
   const swims = seed.aquatic >= SWIMS_FROM;
   const pace =
     options.pace * (PACE_BASE + PACE_PER_SPEED * (swims ? seed.swimSpeed : seed.landSpeed));
-  const body = colour(seed.hue, 0.55);
-  const dark = colour(seed.hue, 0.3);
+  const palette = PALETTES[options.style === "cosy" ? "cosy" : "lit"];
+  /** The animal's colours, as saturated as the style has them. */
+  const tone = (hue: number, light: number): number => colour(hue, light, palette.saturation);
+  const body = tone(seed.hue, 0.55);
+  const dark = tone(seed.hue, 0.3);
   const parts: Part[] = [];
   const part = (
     shape: Shape,
@@ -488,7 +564,7 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
     seed.aquatic < FINS_FROM
       ? 0
       : reference * lerp(FIN_MIN, FIN_MAX, above(seed.aquatic, FINS_FROM));
-  const finColour = colour(seed.hue, 0.72);
+  const finColour = tone(seed.hue, 0.72);
   const legLength = HEAD_RADIUS * base * lerp(LEG_SLOW, LEG_FAST, seed.speed);
 
   if (options.style === "circles") {
@@ -548,7 +624,7 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
           i,
           2 * radius * (1 + shell),
           2 * radius * (1 + shell),
-          colour(seed.hue, 0.18),
+          tone(seed.hue, 0.18),
           LAYER.under,
         );
       const banded = pattern === "bands" && i % 2 === 1;
@@ -557,11 +633,11 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
         i,
         2 * radius,
         2 * radius,
-        banded ? colour(seed.hue + 0.08, 0.4) : body,
+        banded ? tone(seed.hue + 0.08, 0.4) : body,
         LAYER.body,
       );
       if (pattern === "spots" && i > 0)
-        part("disc", i, radius * 0.9, radius * 0.9, colour(seed.hue + 0.08, 0.8), LAYER.mark);
+        part("disc", i, radius * 0.9, radius * 0.9, tone(seed.hue + 0.08, 0.8), LAYER.mark);
     }
     pair("disc", 0, 2 * eye, 2 * eye, EYE, LAYER.face, reference * 0.35, reference * 0.55);
     const pairs = Math.round(seed.limbPairs);
@@ -597,6 +673,7 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
       swims,
       pace,
       colour: body,
+      outline: OUTLINE,
     });
   }
 
@@ -607,18 +684,17 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
   const spacing = length / (joints - 1);
   const radii = shares.map((share) => share * reference);
   const last = joints - 1;
-  const light = colour(seed.hue, 0.7);
-  const mark = colour(seed.hue + 0.08, 0.38);
-  const pale = colour(seed.hue + 0.08, 0.8);
-  const shellColour = colour(seed.hue, 0.24);
+  const light = tone(seed.hue, 0.7);
+  const mark = tone(seed.hue + 0.08, 0.38);
+  const pale = tone(seed.hue + 0.08, 0.8);
+  const shellColour = tone(seed.hue, 0.24);
   const head = radii[0] ?? reference;
 
   const { pattern, shade } = patternOf(seed.pattern);
   // The colour of the marking: darker, paler, or a colour from across the wheel.
   const accent =
-    [mark, pale, colour(seed.hue + 0.5, 0.6), colour(seed.hue + 0.33, 0.45)][
-      Math.floor(shade * 4)
-    ] ?? mark;
+    [mark, pale, tone(seed.hue + 0.5, 0.6), tone(seed.hue + 0.33, 0.45)][Math.floor(shade * 4)] ??
+    mark;
   // Under a shell or a carapace the trunk is not what catches the light.
   const covered = kind === "tortoise" || kind === "beetle" || kind === "crab";
   /**
@@ -1202,8 +1278,8 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
 
   // Eyes: on stalks for a crab, a cluster for a spider, on the sides for the rest. Their
   // size goes by the head they sit on, which is small on a beetle or a crab.
-  const sighted = 2 * head * lerp(EYE_MIN, EYE_MAX, seed.sense);
-  const stalked = reference * lerp(EYE_MIN, EYE_MAX, seed.sense);
+  const sighted = 2 * head * lerp(EYE_MIN, EYE_MAX, seed.sense) * palette.eyes;
+  const stalked = reference * lerp(EYE_MIN, EYE_MAX, seed.sense) * palette.eyes;
   if (kind === "crab") {
     pair("disc", 0, stalked, stalked, EYE, LAYER.face, 0.95 * reference, 0.5 * reference);
   } else if (kind === "spider") {
@@ -1212,7 +1288,7 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
   } else if (kind !== "worm" || seed.sense >= 0.5) {
     const bulge = kind === "hopper" || kind === "fish" ? 0.85 : 0.6;
     pair("disc", 0, sighted, sighted, EYE, LAYER.face, head * 0.3, head * bulge);
-    if (sighted * options.pixels >= GLINT_FROM_PX) {
+    if (sighted * options.pixels >= palette.glintFromPx) {
       // A glint, on the side of each eye the light comes from.
       pair(
         "disc",
@@ -1269,8 +1345,11 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
     swims,
     pace,
     colour: body,
+    outline: palette.outline(seed.hue),
   });
-  if (options.style === "lit") lightUp(plan, light, 1 / options.pixels);
+  if (options.style === "lit" || options.style === "cosy") {
+    lightUp(plan, light, 1 / options.pixels, palette);
+  }
   return plan;
 }
 
@@ -1285,7 +1364,7 @@ function finish(plan: BodyPlan): BodyPlan {
  * side in shade and its back lit; every marking large enough shaded the same way. Legs
  * thick enough to carry them get an edge and a foot, and so does every flipper.
  */
-function lightUp(plan: BodyPlan, light: number, edge: number): void {
+function lightUp(plan: BodyPlan, light: number, edge: number, palette: Palette): void {
   const parts: Part[] = [];
   const masses: Part[] = [];
   for (const part of plan.parts) {
@@ -1295,7 +1374,7 @@ function lightUp(plan: BodyPlan, light: number, edge: number): void {
         ...part,
         along: part.along + 2 * edge,
         across: part.across + 2 * edge,
-        colour: OUTLINE,
+        colour: plan.outline,
         layer: LAYER.outline,
       });
     }
@@ -1306,8 +1385,11 @@ function lightUp(plan: BodyPlan, light: number, edge: number): void {
     }
     // The side away from the light: the part as it was, darker, and on it the part
     // itself, smaller and toward the light, so that the dark shows along its far edge.
-    const shaded = { ...part, colour: blend(part.colour, SHADOW, SHADE_MIX) };
-    const rim = Math.min(Math.max(small * SHADE_SHARE, 0.5 * edge), 1.5 * edge);
+    const shaded = { ...part, colour: blend(part.colour, palette.shadow, palette.shadeMix) };
+    const rim = Math.min(
+      Math.max(small * palette.shadeShare, 0.5 * edge),
+      palette.shadeMaxPx * edge,
+    );
     part.along -= 2 * rim;
     part.across -= 2 * rim;
     part.lift += rim;
@@ -1326,7 +1408,9 @@ function lightUp(plan: BodyPlan, light: number, edge: number): void {
       ...part,
       along: part.along * 0.5,
       across: part.across * 0.5,
-      colour: marking ? blend(part.colour, SUNLIT, 0.4) : blend(part.colour, light, 0.5),
+      colour: marking
+        ? blend(part.colour, palette.sunlit, 0.4)
+        : blend(blend(part.colour, light, palette.lightMix), palette.warm, palette.warmMix),
       layer: marking ? LAYER.mark : LAYER.light,
       lift: part.lift + small * 0.14,
     };
@@ -1342,6 +1426,7 @@ function lightUp(plan: BodyPlan, light: number, edge: number): void {
     });
   }
   plan.parts = [...parts, ...masses];
+  if (palette.groundShadow > 0) plan.parts.push(groundShadow(plan, palette.groundShadow));
   finish(plan);
   for (const leg of plan.legs) {
     if (leg.fin === 1) {
@@ -1351,6 +1436,32 @@ function lightUp(plan: BodyPlan, light: number, edge: number): void {
     if (leg.thickness >= LEG_EDGE_FROM_PX * edge) leg.edge = edge;
     if (leg.thickness >= FOOT_FROM_PX * edge) leg.foot = Math.max(leg.foot, leg.thickness * 0.62);
   }
+}
+
+/**
+ * A soft shadow on the ground: one oval under the middle of the body, a little behind it
+ * and down and to the right, away from the light. One sprite whatever the body, so that
+ * it is evenly dark (overlapping see-through ovals would darken where they meet).
+ */
+function groundShadow(plan: BodyPlan, alpha: number): Part {
+  const middle = Math.floor(plan.joints / 2);
+  const widest = Math.max(...plan.radii);
+  return {
+    shape: "disc",
+    joint: middle,
+    along: plan.length * GROUND_SHADOW_LONG,
+    across: 2 * widest * GROUND_SHADOW_WIDE,
+    // Centred on the body: the chain runs from the head (joint 0) back.
+    forward: (middle - (plan.joints - 1) / 2) * plan.spacing,
+    side: 0,
+    turn: 0,
+    colour: GROUND_SHADOW,
+    layer: LAYER.ground,
+    // Away from the light: a negative lift moves it down and to the right.
+    lift: -widest * 0.9,
+    flat: true,
+    alpha,
+  };
 }
 
 /** Sprites a creature is made of, without building it. */
