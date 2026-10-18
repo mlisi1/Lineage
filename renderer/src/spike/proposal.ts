@@ -38,7 +38,8 @@ export function localBody(pixels: number, scale: number = CREATURE_SCALE): BodyO
   return { style: "cosy", scale, pixels, pace: 0.35 };
 }
 /**
- * How an animal that lives in the water is seen through it (`water.ts`): still to be
- * chosen between hue, murk and glass on the creature sheet.
+ * How an animal that lives in the water is seen through it (`water.ts`). Chosen: murk,
+ * its own hues darkened and partly the water's colour (ADR 0013); hue and glass stay on
+ * the creature sheet for comparison.
  */
-export const WATER_LOOK: WaterLook = "hue";
+export const WATER_LOOK: WaterLook = "murk";

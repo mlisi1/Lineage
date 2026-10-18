@@ -45,6 +45,19 @@ The shared tones (plum, violet, gold, warm white, ground shadow) are in
 `renderer/src/palette.ts`, which R1's ground and plants use as well, so the land and its
 animals share one light. `lit` stays in the code as the comparison in the creature sheet.
 
+### Under water (added 2026-10-18)
+
+An animal that lives in the water looked as if it walked on the sea. Mixing every swimmer
+toward one blue made reds purple; turning each colour toward the water's hue at its own
+lightness (`hue`) left some bodies looking tinted rather than submerged. The owner chose
+**murk** from three looks drawn side by side on the creature sheet (hue, murk, glass): the
+animal keeps its own hues, darkened (15 % in the shallows to 45 % in the deep), then
+takes some of the colour of the water where it is (15 % to 50 %), the water's colour and
+depth coming from the sea's bands at its place. It costs nothing per frame (a swimmer is
+recoloured when its water changes step). `glass`, the body see-through so that the sea's
+texture shows through it, looked the most like water but draws each swimmer on its own
+every frame; it stays on the sheet, and R5 may revisit it with numbers.
+
 ## Consequences
 
 - Cost: one sprite more per animal for the shadow, and two for the glints of animals whose

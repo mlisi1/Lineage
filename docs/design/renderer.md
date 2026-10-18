@@ -273,12 +273,12 @@ two). Stripes and fades are drawn flat, in their one colour.
 at every place (`seaIn` in `habitat.ts`): the colour of the sea's depth bands, as the
 ground paints them, blended between the bands' middles, and the depth as a share of the
 deepest band's middle, in 12 steps; a swimmer is recoloured only when its water changes
-step. How it is seen through the water is still to be chosen (`WATER_LOOK` in
-`proposal.ts`), between three looks the creature sheet shows side by side:
+step. How it is seen through the water is **murk** (`WATER_LOOK` in `proposal.ts`, ADR
+0013), chosen from three looks the creature sheet shows side by side:
 
-- **hue** (drawn now): each colour turns toward the water's hue at its own lightness (45 %
+- **hue** (the first try): each colour turns toward the water's hue at its own lightness (45 %
   in the shallows to 75 % in the deep), then into a haze of the water (10 % to 45 %);
-- **murk**: its own hues, darkened (15 % to 45 %), then some of the water's colour (15 % to
+- **murk** (chosen): its own hues, darkened (15 % to 45 %), then some of the water's colour (15 % to
   50 %), as if the water showed through it;
 - **glass**: its own hues, a little darkened (10 % to 30 %), and the whole body see-through
   as one (80 % opaque to 45 %, an `AlphaFilter` on the animal), so that the sea's own bands
