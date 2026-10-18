@@ -5,7 +5,7 @@ styles to choose between side by side: `report.html`, one self-contained file. A
 copy of `renderer/creatures.html` (`cd renderer && npm run dev`, then `/creatures.html`).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `240b49b93699`
+- Renderer build: `eb3cd1bd80a9-dirty`
 - 141 pictures, taken after the creatures have walked for 8 s;
   those with animals in them are loops of 6 s at 10 frames a second
   (animated PNG: they play in any browser, without a script)

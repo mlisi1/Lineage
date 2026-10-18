@@ -15,3 +15,9 @@ export const GOLD = 0xffe08a;
 export const SUNLIT = 0xfff1b8;
 /** Shadows cast on the ground: this colour, see-through. */
 export const GROUND_SHADOW = 0x10081c;
+/**
+ * Water, as seen over what is under it: what a submerged body is taken toward (the sea's
+ * middle depth band in the report maps), and the dark its outline turns to.
+ */
+export const WATER = 0x3b7fbf;
+export const DEEP_WATER = 0x1f437a;

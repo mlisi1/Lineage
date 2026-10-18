@@ -11,6 +11,7 @@ import {
   kindOf,
   patternOf,
   spriteCount,
+  submerge,
   type BodyOptions,
   type BodyPlan,
   type Kind,
@@ -204,6 +205,52 @@ describe("the cosy style (ADR 0013)", () => {
     const eye = (plan: BodyPlan): number =>
       Math.max(...inLayer(plan, LAYER.face).map((part) => part.along));
     expect(eye(cosy)).toBeGreaterThan(eye(lit));
+  });
+});
+
+describe("under water", () => {
+  const WATER = 0x3b7fbf;
+  const distance = (a: number, b: number): number => {
+    const [r1, g1, b1] = channels(a);
+    const [r2, g2, b2] = channels(b);
+    return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
+  };
+
+  it("takes every colour of a body toward the water's, and fades its shadow", () => {
+    const dry = bodyPlan(seed({ hue: 0.05 }), COSY);
+    const wet = structuredClone(dry);
+    submerge(wet);
+    dry.parts.forEach((part, i) => {
+      const under = wet.parts[i];
+      if (under === undefined) throw new Error("parts differ");
+      if (part.layer === LAYER.ground) {
+        expect(under.alpha).toBeCloseTo((part.alpha ?? 1) / 2);
+      } else if (part.colour !== WATER) {
+        expect(distance(under.colour, WATER)).toBeLessThan(distance(part.colour, WATER));
+      }
+    });
+    expect(channels(wet.outline)[2]).toBeGreaterThan(channels(wet.outline)[0]);
+    for (const part of inLayer(wet, LAYER.outline)) expect(part.colour).toBe(wet.outline);
+    dry.legs.forEach((leg, i) => {
+      expect(distance(wet.legs[i]?.colour ?? 0, WATER)).toBeLessThan(distance(leg.colour, WATER));
+    });
+    expect(wet.colour).toBe(dry.colour); // the dot on the map keeps its colour
+  });
+
+  it("is how every animal that lives in the water is drawn, and no other", () => {
+    const fish = bodyPlan(seed({ ...KINDS.fish, hue: 0.05 }), COSY);
+    const newt = bodyPlan(seed({ ...KINDS.newt, hue: 0.05 }), COSY);
+    expect([fish.swims, newt.swims]).toEqual([true, false]);
+    // A red fish's outline goes blue; a red newt on the shore keeps its own dark red.
+    expect(channels(fish.outline)[2]).toBeGreaterThan(channels(fish.outline)[0]);
+    expect(channels(newt.outline)[0]).toBeGreaterThan(channels(newt.outline)[2]);
+    // In both lit styles its head is nearer the water's colour than a land animal's of its hue.
+    for (const style of ["lit", "cosy"] as const) {
+      const head = (genes: Partial<Look>): number =>
+        inLayer(bodyPlan(seed({ ...genes, hue: 0.05 }), { ...COSY, style }), LAYER.body)[0]
+          ?.colour ?? 0;
+      expect(distance(head(KINDS.eel), WATER)).toBeLessThan(distance(head(KINDS.worm), WATER));
+    }
   });
 });
 
@@ -530,8 +577,10 @@ describe("body plans", () => {
       expect(edges).toHaveLength(solid.length);
       edges.forEach((edge, i) => {
         expect(edge.along).toBeCloseTo((solid[i]?.along ?? 0) + 0.25);
-        expect(edge.colour).toBe(0x1f1a17);
+        // Grey-black, but deep water's blue round an animal seen through the water.
+        expect(edge.colour).toBe(lit.swims ? lit.outline : 0x1f1a17);
       });
+      if (lit.swims) expect(lit.outline).not.toBe(0x1f1a17);
       expect(plain.parts.every((part) => part.lift === 0)).toBe(true);
       if (["beast", "tortoise", "beetle", "crab"].includes(plain.kind)) {
         expect(lit.parts.filter((part) => part.lift > 0).length).toBeGreaterThan(0);

@@ -268,6 +268,13 @@ and more is shaded as a mass is, on its own: its far edge in shade, and a sunlit
 if it is round (no more than 2.2 times as long as wide: a patch would cut a band in
 two). Stripes and fades are drawn flat, in their one colour.
 
+**Under water.** An animal that lives in the water (aquatic ≥ 0.6) is seen through it,
+or it would seem to walk on the sea: every colour of its body is taken 42 % toward the
+water's blue (`WATER` in `src/palette.ts`, the sea's middle depth band), which also
+lowers its contrast; its outline goes 60 % toward deep water instead of its own dark;
+glints keep more of their white; its shadow on the bottom is half as dark. Its dot on the
+map keeps its own colour, which a blue sea would swallow.
+
 **Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
 fraction of a cell every ten minutes, which watched in real time is stillness. A layer
 whose creatures are `anchored` keeps each near the place the sim last gave it (its

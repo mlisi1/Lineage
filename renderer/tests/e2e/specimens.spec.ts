@@ -15,6 +15,10 @@ test("the fifteen specimens look as they did", async ({ page }) => {
     const row = rows.nth(index);
     const name = (await row.locator("figcaption b").first().textContent()) ?? `${index}`;
     // Patch lit, patch cosy, portrait lit, portrait cosy.
-    await expect(row.locator("canvas").nth(3)).toHaveScreenshot(`specimen-${name}.png`);
+    // Pixel art: every pixel exactly (the default tolerance lets a whole tint through).
+    await expect(row.locator("canvas").nth(3)).toHaveScreenshot(`specimen-${name}.png`, {
+      threshold: 0,
+      maxDiffPixels: 0,
+    });
   }
 });

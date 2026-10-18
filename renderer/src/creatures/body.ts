@@ -332,6 +332,15 @@ const PALETTES: Readonly<Record<"lit" | "cosy", Palette>> = {
     groundShadow: 0.38,
   },
 };
+/**
+ * An animal that lives in the water is seen through it: every colour of its body this far
+ * toward the water's, its outline this far toward deep water, and its shadow on the bottom
+ * this much fainter. Glints and the whites of its eyes keep a little more of themselves.
+ */
+const SUBMERGED = 0.42;
+const SUBMERGED_OUTLINE = 0.6;
+const SUBMERGED_GLINT = 0.25;
+const SUBMERGED_SHADOW = 0.5;
 /** The shadow on the ground: its size against the body it lies under. */
 const GROUND_SHADOW_LONG = 1.0;
 const GROUND_SHADOW_WIDE = 2.0;
@@ -1348,6 +1357,7 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
   });
   if (options.style === "lit" || options.style === "cosy") {
     lightUp(plan, light, 1 / options.pixels, palette);
+    if (swims) submerge(plan);
   }
   return plan;
 }
@@ -1435,6 +1445,27 @@ function lightUp(plan: BodyPlan, light: number, edge: number, palette: Palette):
     if (leg.thickness >= LEG_EDGE_FROM_PX * edge) leg.edge = edge;
     if (leg.thickness >= FOOT_FROM_PX * edge) leg.foot = Math.max(leg.foot, leg.thickness * 0.62);
   }
+}
+
+/** Seen through water: every colour toward the water's (see `SUBMERGED`). */
+export function submerge(plan: BodyPlan): void {
+  const outline = plan.outline;
+  plan.outline = blend(outline, cosy.DEEP_WATER, SUBMERGED_OUTLINE);
+  for (const part of plan.parts) {
+    if (part.layer === LAYER.ground) {
+      part.alpha = (part.alpha ?? 1) * SUBMERGED_SHADOW;
+    } else if (part.colour === outline) {
+      part.colour = plan.outline;
+    } else {
+      const glint = part.layer === LAYER.face && part.colour === 0xffffff;
+      part.colour = blend(part.colour, cosy.WATER, glint ? SUBMERGED_GLINT : SUBMERGED);
+    }
+  }
+  for (const leg of plan.legs) {
+    leg.colour = blend(leg.colour, cosy.WATER, SUBMERGED);
+    leg.sole = blend(leg.sole, cosy.WATER, SUBMERGED);
+  }
+  // Not its colour on the map: a dot toward the sea's blue would be lost on the sea.
 }
 
 /**
