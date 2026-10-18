@@ -17,11 +17,15 @@ EMPTY_SAVE_BUDGET_S = 20e-3
 # Terrain ticks once per sim-day. 25 ms here leaves two orders of magnitude of headroom
 # under the device budget (25% of one core, CLAUDE.md §4.8) on a CPU ~10× slower.
 TERRAIN_TICK_BUDGET_S = 25e-3
+# The two below run 2–2.5× slower on GitHub's runners than on a desktop, and their
+# ceilings sit about twice above the runners' times: there they caught noise (the fauna
+# tick at 4.3 ms against 4 ms), not a regression.
 # A full sim-day of an inhabited world: terrain, flora, 24 fire ticks, 144 fauna ticks.
-WORLD_DAY_BUDGET_S = 400e-3
+# On a device 10× slower this is still about 0.01 % of a core.
+WORLD_DAY_BUDGET_S = 800e-3
 # One fauna tick (every 10 sim-minutes) with 150 creatures. On a device 10× slower this
-# is still under 0.01 % of a core.
-FAUNA_TICK_BUDGET_S = 4e-3
+# is still under 0.02 % of a core.
+FAUNA_TICK_BUDGET_S = 10e-3
 # Daily save of a full world: device budget is 2 s; allow a tenth of it here.
 WORLD_SAVE_BUDGET_S = 0.3
 
