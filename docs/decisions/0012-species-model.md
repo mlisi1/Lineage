@@ -1,4 +1,4 @@
-# 0012 — Species model: lineage labels, splits by interbreeding, genome names
+# 0012 — Species model: lineage labels, genome clusters, genome names
 
 - **Status**: proposed
 - **Date**: 2026-10-18
@@ -17,8 +17,9 @@ belongs together: two adults can breed when their genomes differ by at most
 
 Questions settled with the owner at the start of M6 (all as proposed):
 
-1. **Which genes count.** All 14, with the mating distance and threshold: a species is
-   the creatures that can interbreed. The learning genes count, as they do for mating.
+1. **Which genes count.** All 14, as for mating; the learning genes count. First decided
+   with the mating threshold too (a species is who can interbreed); revised after the
+   first runs (below, "Species are clusters, not breeding groups").
 2. **Identity.** Lineage labels plus splits, rather than NEAT-style assignment to the
    nearest moving centroid (which misses a species whose two halves sit either side of
    its centroid, each within the threshold of it, yet unable to interbreed).
@@ -40,11 +41,11 @@ Questions settled with the owner at the start of M6 (all as proposed):
   since the last census, the nearest living species of its lineage. Creatures of a
   lineage the island has not seen found a new root species: the founders are one, each
   group of strangers is another.
-- **Splits are reproductive isolation that lasts.** Each day, within each species, the
-  members are linked when they could breed (distance ≤ `compat_distance`), and the
-  connected groups are found. When at least two groups hold `min_members` (5) creatures
-  each, and that lasts `split_days` (7) days in a row, the largest group keeps the
-  species and each other large group becomes a daughter. Smaller strays stay in the
+- **Splits are clusters that last.** Each day, within each species, members are linked
+  when their genomes differ by at most `link_distance` (0.035), and the connected groups
+  are found. When at least two groups hold `min_members` (8) creatures each, and that
+  lasts `split_days` (3) days in a row, the largest group keeps the species and each
+  other large group becomes a daughter. Smaller strays stay in the
   species, so a few odd mutants never make one; a separation that heals or dwindles
   within the week resets the count.
 - **Extinction** is the census finding no member alive.
@@ -65,6 +66,41 @@ Questions settled with the owner at the start of M6 (all as proposed):
   after loading, each lineage becomes one root species, which later splits as its groups
   drift apart.
 
+## Species are clusters, not breeding groups (revised the same day)
+
+With the mating threshold (0.10), a 4-seed preview had about two species alive (the
+founders' herd and a group of strangers, which lasts a median of 28 days) and one split
+in 12 seed-years (M6.1 15 %, M6.2 0). The reason is structural: after 50–70 generations
+the founders' herd is genetically broad (mean pairwise distance 0.09, extremes
+0.16–0.20; many pairs could not breed directly), but it is one continuous cloud, linked
+through intermediates, and on one island nothing opens a gap in it. Speciation in that
+sense needs an isolating mechanism (assortative mating on hue and pattern, landmasses
+that split, disruptive selection).
+
+The owner chose a finer species definition over such a mechanism now: **a species is a
+cluster within the cloud**, linked by its own `link_distance`, finer than mating. Fauna
+does not change; mating still uses `compat_distance`. Two daughters may therefore still
+interbreed: a species here is a recognisable kind of animal, not a closed gene pool.
+
+The threshold was chosen from a sweep. Species are bookkeeping, so one run per seed can
+carry many censuses side by side (20 seeds × 3 years, settings in `[species]`):
+
+| link | split after | min group | in band (median seed) | splits / month |
+|---|---|---|---|---|
+| 0.10 (mating) | 7 d | 5 | 19 % | 0.00 |
+| 0.06 | 7 d | 5 | 36 % | 0.18 |
+| 0.05 | 3 d | 5 | 57 % | 1.27 |
+| 0.04 | 3 d | 10 | 77 % | 0.79 |
+| **0.035** | **3 d** | **8** | **81 %** | **1.00** |
+| 0.035 | 2 d | 10 | 83 % | 0.69 |
+
+Below about 0.035 the herd shatters into many small groups (up to 20 species at once);
+above about 0.05 it stays one. No setting reaches 90 % in the band: the first months
+after the founders land hold one or two species until the herd has spread genetically,
+and those months count. 0.035, 3 days, 8 creatures is the only region meeting M6.2 while
+keeping the count mostly within 3–12; it is a definition chosen to fit the bands, and
+M11 may revisit it with the rest.
+
 ## Consequences
 
 - No fauna change, so terrain, flora, fire and fauna states and streams are bit-identical
@@ -80,8 +116,9 @@ To be filled from `reports/M6-species/metrics.json`.
 ## References
 
 - **Mayr's biological species concept** (species as groups of interbreeding natural
-  populations, reproductively isolated from others): the reading behind "a species is
-  who can interbreed". Cited from general knowledge; no source was re-read for M6.
+  populations, reproductively isolated from others): the reading behind the first
+  definition, "a species is who can interbreed", later replaced by genome clusters.
+  Cited from general knowledge; no source was re-read for M6.
 - **Stanley, K. O. & Miikkulainen, R. (2002). Evolving neural networks through augmenting
   topologies.** *Evolutionary Computation* 10(2). NEAT's speciation (assignment to the
   first species whose representative is within a compatibility threshold) was the

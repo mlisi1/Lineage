@@ -145,17 +145,19 @@ the measure of evolutionary drift.
 
 ## Species (M6)
 
-A species is the creatures that can interbreed, directly or through others: genomes
-within the mating distance (`compat_distance`, all 14 genes, learning genes included).
-Decisions and alternatives: ADR 0012.
+A species is a cluster of similar genomes: creatures linked, directly or through others,
+by genetic steps of at most `link_distance` (0.035, mean gene difference over all 14
+genes, learning genes included). That is finer than who can mate (`compat_distance`
+0.10): a whole herd can interbreed through intermediates and still hold several species.
+Decisions, alternatives and the sweep behind the numbers: ADR 0012.
 
 - **Daily census** (`species.py`, after fauna at midnight; no randomness). Every living
   creature keeps the species it was given. A newcomer joins the species of its nearest
   relative: the genetically closest labelled creature of its lineage (the arrival it
   descends from through its mother). A lineage the island has not seen (the founders,
   each group of strangers) founds a new **root** species.
-- **Splits.** When a species' members fall into separate interbreeding groups of at least
-  `min_members` (5) and stay apart for `split_days` (7 days), the largest group keeps the
+- **Splits.** When a species' members fall into separate clusters of at least
+  `min_members` (8) and stay apart for `split_days` (3 days), the largest group keeps the
   species and every other one becomes a **daughter** species. Smaller strays stay; a
   separation that heals within the week does not count.
 - **Extinction**: the last member died.
@@ -168,7 +170,8 @@ Decisions and alternatives: ADR 0012.
 - **Phylogeny**: one record per species that ever lived (parent, lineage, born,
   extinct, members, peak, founding and current mean genome, name); ids are never reused
   and parents are always older, so it is a forest with one root per arrival.
-- **Outputs**: `SpeciesBorn` and `SpeciesExtinct`, for the chronicle (M9).
+- **Outputs**: `SpeciesBorn` and `SpeciesExtinct`, for the chronicle (M9);
+  `Species.labels_now()` gives every creature's species at any tick (for the renderer).
 
 ## Rare genes (M7)
 

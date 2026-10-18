@@ -161,6 +161,15 @@ def lifespans(run: Run) -> dict[str, np.ndarray]:
     return {"split": np.array(split), "arrived": np.array(arrived)}
 
 
+def largest_burst(table: np.ndarray) -> int:
+    """Most daughters one species gave rise to in a single census (0 without splits)."""
+    split = table[table[:, _P["parent"]] > 0]
+    if split.shape[0] == 0:
+        return 0
+    _, counts = np.unique(split[:, [_P["parent"], _P["born_day"]]], axis=0, return_counts=True)
+    return int(counts.max())
+
+
 def metrics(run: Run) -> dict[str, float]:
     seeds = per_seed(run)
     alive = np.concatenate([inhabited_days(daily(run, s)) for s in run.manifest.seeds])
@@ -184,6 +193,12 @@ def metrics(run: Run) -> dict[str, float]:
         "arrivals.per_month.median": float(np.nanmedian(seeds["arrivals"])),
         "extinctions.per_month.median": float(np.nanmedian(seeds["extinctions"])),
         "species_ever.per_seed.median": float(np.median(seeds["ever"])),
+        "speciation.largest_burst.median": float(
+            np.median([largest_burst(phylogeny(run, s)) for s in run.manifest.seeds])
+        ),
+        "speciation.largest_burst.max": float(
+            max(largest_burst(phylogeny(run, s)) for s in run.manifest.seeds)
+        ),
         "inhabited.months.median": float(np.median(seeds["months"])),
     }
     for kind, values in lived.items():
@@ -432,6 +447,15 @@ def _interpretation_section(run: Run) -> Section:
                 if arrivals > splits
                 else "Divergence on the island makes more species than arrivals do."
             ),
+        ),
+        (
+            "Splits come in bursts.",
+            f"The largest burst of a seed (daughters of one species born at one census) has "
+            f"a median of {m['speciation.largest_burst.median']:.0f} and reaches "
+            f"{m['speciation.largest_burst.max']:.0f}: when a herd has spread wide enough, "
+            "it breaks into several clusters at once rather than one at a time. Species are "
+            "clusters a little coarser than parent and young differ (ADR 0012), so their "
+            "number follows how widely the herd has spread genetically.",
         ),
         (
             "How long they last.",

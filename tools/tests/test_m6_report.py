@@ -94,3 +94,10 @@ def test_m6_report(tmp_path: Path) -> None:
     assert "What the plots show" in page
     assert "Phylogeny of seed" in page
     assert "Maleku" in page
+
+
+def test_largest_burst_counts_daughters_of_one_census() -> None:
+    table = _table([(1, 0, 0, -1, 9, 0), (2, 1, 5, -1, 9, 0), (3, 1, 5, -1, 9, 0),
+                    (4, 1, 9, -1, 9, 0), (5, 2, 9, -1, 9, 0)])  # fmt: skip
+    assert m6.largest_burst(table) == 2
+    assert m6.largest_burst(table[:1]) == 0
