@@ -12,10 +12,47 @@
  *   lit      the same plans with a dark outline around the animal, a lit back and a
  *            far side in shade; markings are shaded the same way, each on its own
  *
- * A first pass, to judge the look. R2 replaces it with the phenotype shared with
- * `fauna/phenotype.py`.
+ * A body is drawn from its `Look`: the values the phenotype derives from the genome
+ * (`phenotype.ts`, the port of `fauna/phenotype.py`) and the genes that show.
  */
-import type { CreatureSeed } from "./fixture";
+import { geneOf, type Genome } from "./genome";
+import type { Phenotype } from "./phenotype";
+
+/** What a body is drawn from: derived values of its phenotype, then the genes that show. */
+export interface Look {
+  mass: number;
+  limbPairs: number;
+  /** Cells per hour, on land and in water. */
+  landSpeed: number;
+  swimSpeed: number;
+  // Genes, each 0–1.
+  diet: number;
+  speed: number;
+  armour: number;
+  sense: number;
+  aquatic: number;
+  jaw: number;
+  hue: number;
+  pattern: number;
+}
+
+/** The look of a creature with this genome and the body the phenotype derives from it. */
+export function lookOf(genome: Genome, body: Phenotype): Look {
+  return {
+    mass: body.mass,
+    limbPairs: body.limbPairs,
+    landSpeed: body.landSpeed,
+    swimSpeed: body.swimSpeed,
+    diet: geneOf(genome, "DIET"),
+    speed: geneOf(genome, "SPEED"),
+    armour: geneOf(genome, "ARMOUR"),
+    sense: geneOf(genome, "SENSE"),
+    aquatic: geneOf(genome, "AQUATIC"),
+    jaw: geneOf(genome, "JAW"),
+    hue: geneOf(genome, "HUE"),
+    pattern: geneOf(genome, "PATTERN"),
+  };
+}
 
 export type CreatureStyle = "circles" | "shapes" | "lit";
 export const CREATURE_STYLES: readonly CreatureStyle[] = ["circles", "shapes", "lit"];
@@ -262,7 +299,7 @@ export function blend(from: number, to: number, t: number): number {
 }
 
 /** Which body plan a genome builds: leg pairs first, then water, armour and speed. */
-export function kindOf(seed: CreatureSeed): Kind {
+export function kindOf(seed: Look): Kind {
   const pairs = Math.round(seed.limbPairs);
   const finned = seed.aquatic >= FINS_FROM;
   const shelled = seed.armour >= SHELL_FROM;
@@ -393,7 +430,7 @@ const LEGS: Readonly<Record<Kind, readonly (readonly [number, number, number, nu
   ],
 };
 
-export function bodyPlan(seed: CreatureSeed, options: BodyOptions = FIRST_LOOK): BodyPlan {
+export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPlan {
   const base = options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass);
   const swims = seed.aquatic >= SWIMS_FROM;
   const pace =

@@ -5,9 +5,9 @@
  */
 import { Application, Container, Sprite } from "pixi.js";
 import type { Atlas } from "./atlas";
-import type { BodyOptions } from "./body";
+import type { BodyOptions } from "../creatures/body";
 import type { CellRect } from "./camera";
-import type { Point } from "./chain";
+import type { Point } from "../creatures/chain";
 import { CreatureLayer } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
 import type { Passable } from "./habitat";

@@ -10,9 +10,9 @@
  */
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import { ApngWriter, dataUri } from "./apng";
-import { PATTERNS, bodyPlan, kindOf, patternOf } from "./body";
+import { PATTERNS, bodyPlan, kindOf, patternOf } from "../creatures/body";
 import type { CellRect } from "./camera";
-import type { Point } from "./chain";
+import type { Point } from "../creatures/chain";
 import type { CreatureLayer } from "./creatures";
 import { parseFixture, type Cast, type CreatureSeed, type WorldFixture } from "./fixture";
 import { MAP_TILE, MID_TILE, paintGround, type Shadow } from "./ground";

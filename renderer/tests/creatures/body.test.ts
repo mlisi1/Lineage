@@ -14,14 +14,13 @@ import {
   type BodyOptions,
   type BodyPlan,
   type Kind,
-} from "../../src/spike/body";
+  type Look,
+} from "../../src/creatures/body";
 import { parseFixture, type CreatureSeed } from "../../src/spike/fixture";
 
 /** A plain mid-sized walker; tests change one thing at a time. */
-function seed(change: Partial<CreatureSeed> = {}): CreatureSeed {
+function seed(change: Partial<Look> = {}): Look {
   return {
-    x: 0,
-    y: 0,
     mass: 2,
     limbPairs: 2,
     landSpeed: 3,
@@ -54,7 +53,7 @@ const discs = (plan: BodyPlan): BodyPlan["parts"] =>
   inLayer(plan, LAYER.body).filter((part) => part.shape === "disc");
 
 /** A genome for every kind of animal. */
-const KINDS: Readonly<Record<Kind, Partial<CreatureSeed>>> = {
+const KINDS: Readonly<Record<Kind, Partial<Look>>> = {
   worm: { limbPairs: 0, speed: 0.2 },
   snake: { limbPairs: 0, speed: 0.8 },
   fish: { limbPairs: 0, aquatic: 0.9, speed: 0.7 },
@@ -329,7 +328,7 @@ describe("body plans", () => {
   });
 
   it("draw bars, bands, stripes and a shell's fade so that they read as what they are", () => {
-    const marks = (body: Partial<CreatureSeed>, k: number, options = SHAPES): BodyPlan["parts"] =>
+    const marks = (body: Partial<Look>, k: number, options = SHAPES): BodyPlan["parts"] =>
       inLayer(
         bodyPlan(seed({ ...body, mass: 12, pattern: (k + 0.5) / 12, jaw: 0 }), options),
         LAYER.mark,
@@ -577,7 +576,7 @@ describe("body plans", () => {
   });
 
   it("turn legs into fins as the aquatic gene rises", () => {
-    const legs = (aquatic: number, body: Partial<CreatureSeed> = KINDS.beast): BodyPlan["legs"] =>
+    const legs = (aquatic: number, body: Partial<Look> = KINDS.beast): BodyPlan["legs"] =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), CLOSE).legs;
     // On land: legs, with feet of the legs' own colour.
     expect(legs(0.2).every((leg) => leg.fin === 0 && leg.sole === leg.colour)).toBe(true);
@@ -597,7 +596,7 @@ describe("body plans", () => {
     expect(flippers.legs[0]?.thickness).toBeGreaterThan(1.4 * (walking.legs[0]?.thickness ?? 0));
     expect(spriteCount(flippers)).toBe(flippers.parts.length + 2 * flippers.legs.length);
     // An animal with legs grows no fins at the shoulders beside them; one without does.
-    const wedges = (body: Partial<CreatureSeed>, aquatic: number): number =>
+    const wedges = (body: Partial<Look>, aquatic: number): number =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
         (part) => part.shape === "wedge" && part.layer === LAYER.under && part.side !== 0,
       ).length;
@@ -609,11 +608,11 @@ describe("body plans", () => {
     expect(six.map((leg) => leg.fin)).toEqual([0, 0, 0, 0, 1, 1]);
     const eight = legs(0.45, KINDS.crab);
     expect(eight.filter((leg) => leg.fin > 0)).toHaveLength(2);
-    const shortened = (body: Partial<CreatureSeed>): number =>
+    const shortened = (body: Partial<Look>): number =>
       (legs(0.9, body).at(-1)?.length ?? 0) / (legs(0.2, body).at(-1)?.length ?? 1);
     expect(shortened(KINDS.beetle)).toBeLessThan(0.8 * shortened(KINDS.tortoise));
     // A fin at the end of the tail only where there is a tail: not under a shell.
-    const flukes = (body: Partial<CreatureSeed>, aquatic: number): number =>
+    const flukes = (body: Partial<Look>, aquatic: number): number =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
         (part) => part.shape === "wedge" && part.side === 0 && part.forward < 0 && part.turn === 0,
       ).length;

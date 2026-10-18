@@ -6,9 +6,15 @@
  */
 import { Container, Sprite, type Texture } from "pixi.js";
 import { DISC_SIZE, type Atlas } from "./atlas";
-import { FIRST_LOOK, bodyPlan, type BodyOptions, type BodyPlan, type LegPlan } from "./body";
+import {
+  FIRST_LOOK,
+  bodyPlan,
+  type BodyOptions,
+  type BodyPlan,
+  type LegPlan,
+} from "../creatures/body";
 import type { CellRect } from "./camera";
-import { followChain, solveKnee, type Point } from "./chain";
+import { followChain, solveKnee, type Point } from "../creatures/chain";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
 import type { Random } from "./rng";

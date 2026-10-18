@@ -17,6 +17,51 @@ from lineage_sim.fauna.genome import Gene, Genes
 
 Values = NDArray[np.float32]  # one value per creature
 
+# The `[fauna]` keys `phenotype` reads. With a genome they are all the renderer's port
+# needs, so they travel with its specimens and its world (R2).
+CONFIG_KEYS = (
+    "mass_min",
+    "mass_max",
+    "metabolic_exponent",
+    "limb_pairs_max",
+    "speed_base",
+    "speed_floor",
+    "limbless_speed",
+    "extra_limb_drag",
+    "armour_slowdown",
+    "armour_limb_relief",
+    "aquatic_land_slowdown",
+    "speed_mass_exponent",
+    "swim_speed",
+    "swim_floor",
+    "swim_limb_drag",
+    "cost_speed",
+    "cost_sense",
+    "cost_armour",
+    "cost_jaw",
+    "cost_limb_pair",
+    "cost_aquatic",
+    "cost_learning",
+    "lifespan_base",
+    "lifespan_mass_exponent",
+    "sense_base",
+    "sense_gain",
+    "basal_rate",
+    "move_cost",
+    "capacity_per_mass",
+    "graze_rate",
+    "graze_jaw_floor",
+    "diet_exponent",
+    "attack_jaw_floor",
+    "armour_strength",
+    "maturity_share",
+    "brood_max",
+    "learning",
+    "learning_rate_max",
+    "exploration_max",
+    "social_copy_max",
+)
+
 
 @dataclass(frozen=True)
 class Phenotype:
@@ -115,3 +160,8 @@ def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
         exploration=out(cfg.exploration_max * learns * g[:, Gene.EXPLORATION]),
         social=out(cfg.social_copy_max * learns * g[:, Gene.SOCIAL]),
     )
+
+
+def phenotype_config(cfg: FaunaConfig) -> dict[str, float | bool]:
+    """The values of `CONFIG_KEYS`, as the renderer's port of `phenotype` reads them."""
+    return {key: getattr(cfg, key) for key in CONFIG_KEYS}

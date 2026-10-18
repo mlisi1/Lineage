@@ -1,7 +1,18 @@
 /** Small hand-drawn worlds for tests. */
+import { readFileSync } from "node:fs";
+import { parsePhenotypeConfig, type PhenotypeConfig } from "../../src/creatures/phenotype";
 import type { Ramp, WorldFixture } from "../../src/spike/fixture";
 
 const CLASSES = ["WATER", "BARE", "LICHEN", "GRASS", "SHRUB", "BROADLEAF", "CONIFER", "BURNT"];
+
+/** The sim's default config, as its phenotype reads it. */
+export const PHENOTYPE_CONFIG: PhenotypeConfig = parsePhenotypeConfig(
+  (
+    JSON.parse(readFileSync("../sim/tests/fixtures/phenotypes.json", "utf8")) as {
+      config: unknown;
+    }
+  ).config,
+);
 
 /** The ramps of the report maps, as the fixture carries them. */
 export const PALETTE: Readonly<Record<string, Ramp>> = {
@@ -78,6 +89,7 @@ export function world(
     dormantClasses: ["LICHEN", "GRASS", "SHRUB"],
     creatures: [],
     casts: [],
+    phenotypeConfig: PHENOTYPE_CONFIG,
     herbivoreMaxDiet: 0.35,
     predatorMinDiet: 0.65,
     description: "",

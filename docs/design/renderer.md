@@ -198,10 +198,13 @@ the middle view, 93 for the local one).
 A creature is seen from above: a head that moves and a chain of joints that follows it
 at fixed distances, which bends the body by itself. Legs are placed by two-bone inverse
 kinematics: a foot stays planted until the body has left it behind. A body is a list of
-parts riding the joints (`body.ts`): discs, wedges and bars, each with a size, a place
+parts riding the joints (`src/creatures/body.ts`): discs, wedges and bars, each with a size, a place
 and a colour, all tinted sprites of one atlas, so a body costs no geometry, only
-transforms. The derived values (mass, leg pairs, speeds) come from `fauna/phenotype.py`
-through the fixture; R2 ports that function and replaces these drawings.
+transforms. The derived values (mass, leg pairs, speeds) come from
+`src/creatures/phenotype.ts`, a port of `fauna/phenotype.py` that a test holds to the
+sim's own values for the fifteen specimens of `sim/tests/fixtures/phenotypes.json`. The
+world sends genomes and the config keys the phenotype reads (`CONFIG_KEYS`), never
+derived values, so a retuned sim is drawn as it runs.
 
 The style is **body plans, outlined and lit**: a plan per kind of animal, so that the
 silhouette says what it is, and a dark outline one art pixel wide around the whole
@@ -486,8 +489,9 @@ image draws WebGL with the GPU.
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
-  (`lineage-spike-fixture/3`): the heights, cover and biomass of a save's world, the
-  maps' rules for colouring them, its creatures, and casts for the look sheet (the
+  (`lineage-spike-fixture/4`): the heights, cover and biomass of a save's world, the
+  maps' rules for colouring them, its creatures (where each is, and its genome to the
+  bit), the config keys of the phenotype, and casts for the look sheet (the
   specimens and the gene sweeps). R1 replaces it with the protocol generated from the
   server's schema; nothing else should depend on the fixture's shape.
 - **Creature bodies and motion.** Bodies are discs, wedges and bars; the wandering is

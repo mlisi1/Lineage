@@ -2,7 +2,7 @@
  * What the look sheet and the benchmark draw the three views with: the choices made so
  * far, and for what is still open the proposal the rest is held at.
  */
-import type { BodyOptions } from "./body";
+import type { BodyOptions } from "../creatures/body";
 import type { GroundStyle } from "./ground";
 
 /** Art pixels to the cell in each view. The map and the middle view are settled. */

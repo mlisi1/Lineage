@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { GENE_COUNT, geneOf } from "../../src/creatures/genome";
+import { phenotype } from "../../src/creatures/phenotype";
 import { decodeBase64, parseFixture } from "../../src/spike/fixture";
+import { PHENOTYPE_CONFIG } from "./worlds";
 import {
   ART,
   FORMS,
@@ -94,6 +97,17 @@ describe("the committed fixture", () => {
     expect(fixture.sea.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("derives every body from its genome with the sim's config", () => {
+    expect(fixture.phenotypeConfig).toEqual(PHENOTYPE_CONFIG);
+    for (const creature of [...fixture.creatures, ...fixture.casts.flatMap((c) => c.creatures)]) {
+      expect(creature.genome).toHaveLength(GENE_COUNT);
+      const body = phenotype(fixture.phenotypeConfig, creature.genome);
+      expect(creature.mass).toBe(body.mass);
+      expect(creature.limbPairs).toBe(body.limbPairs);
+      expect(creature.hue).toBe(geneOf(creature.genome, "HUE"));
+    }
+  });
+
   it("brings fifteen specimens and a five-step sweep of every gene with a look", () => {
     const [specimens, ...sweeps] = fixture.casts;
     expect(specimens?.name).toBe("specimens");
@@ -148,7 +162,9 @@ describe("parseFixture", () => {
     const flat = { ...(document as Record<string, unknown>), heights: "AAAA" };
     expect(() => parseFixture(flat)).toThrow("does not match");
     const short = { ...(document as Record<string, unknown>), creature_fields: ["x", "y"] };
-    expect(() => parseFixture(short)).toThrow('no creature field "mass"');
+    expect(() => parseFixture(short)).toThrow('no creature field "size"');
+    const unconfigured = { ...(document as Record<string, unknown>), phenotype_config: {} };
+    expect(() => parseFixture(unconfigured)).toThrow("phenotype config");
     const lopsided = {
       ...(document as Record<string, unknown>),
       casts: [{ name: "odd", members: ["a", "b"], creatures: [] }],

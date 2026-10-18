@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CLOSE_ZOOM, chunkVisible, viewAt } from "../../src/spike/camera";
-import { followChain, solveKnee, type Point } from "../../src/spike/chain";
+import { followChain, solveKnee, type Point } from "../../src/creatures/chain";
 
 const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 

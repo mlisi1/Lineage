@@ -4,7 +4,7 @@
  */
 import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
-import type { BodyOptions } from "./body";
+import type { BodyOptions } from "../creatures/body";
 import { viewAt, type View } from "./camera";
 import { CreatureLayer } from "./creatures";
 import type { WorldFixture } from "./fixture";
