@@ -7,6 +7,7 @@ Pure functions of the world: no I/O, no clock. The server sends them over the We
 from __future__ import annotations
 
 import base64
+import importlib
 from collections.abc import Iterable
 from typing import Any
 
@@ -96,11 +97,20 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
     ids = [int(value) for value in fauna.ids]
     known = sent if sent is not None else set()
     genes = fauna.genes
-    born = [
-        {"id": ident, "genome": [round(float(value), 6) for value in genes[row]]}
-        for row, ident in enumerate(ids)
-        if ident not in known
-    ]
+    # Rare genes (M7): the slots of each creature, and who is torpid, once the sim has them.
+    slots = getattr(fauna, "slots", None)
+    torpid = getattr(fauna, "torpid", None)
+    born: list[dict[str, Any]] = []
+    for row, ident in enumerate(ids):
+        if ident in known:
+            continue
+        entry: dict[str, Any] = {
+            "id": ident,
+            "genome": [round(float(value), 6) for value in genes[row]],
+        }
+        if slots is not None:
+            entry["slots"] = int(slots[row])
+        born.append(entry)
     known.update(ids)
     message: Message = {
         "type": "creatures",
@@ -113,7 +123,34 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
     species = getattr(world, "species", None)
     if species is not None:
         message["species"] = [int(label) for label in species.labels_now()]
+    if torpid is not None:
+        message["torpid"] = [ident for row, ident in enumerate(ids) if bool(torpid[row])]
     return message
+
+
+def rare_message(world: World) -> Message | None:
+    """The rare genes of both kingdoms and their looks (M7), or None before they exist."""
+    try:
+        rare = importlib.import_module("lineage_sim.rare")
+    except ModuleNotFoundError:
+        return None
+    table = getattr(rare, "signature_table", None)
+    if table is None:
+        return None
+    return {
+        "type": "rare",
+        "protocol": PROTOCOL,
+        "genes": [
+            {
+                "kingdom": str(row["kingdom"]),
+                "bit": int(row["bit"]),
+                "name": str(row["name"]),
+                "signature": str(row["signature"]),
+                "look": str(row["look"]),
+            }
+            for row in table()
+        ],
+    }
 
 
 def species_message(world: World) -> Message | None:
@@ -139,8 +176,8 @@ def species_message(world: World) -> Message | None:
 def connect_messages(world: World, sent: set[int] | None = None) -> list[Message]:
     """Everything a renderer needs when it connects, in the order to send it."""
     messages = [clock_message(world), land_message(world), fauna_message(world)]
-    species = species_message(world)
-    if species is not None:
-        messages.append(species)
+    for extra in (species_message(world), rare_message(world)):
+        if extra is not None:
+            messages.append(extra)
     messages.append(creatures_message(world, sent))
     return messages

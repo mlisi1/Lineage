@@ -152,3 +152,43 @@ def test_creatures_send_their_genomes_once(world: World) -> None:
 
 def test_messages_are_pure_functions_of_the_world(world: World) -> None:
     assert encode.connect_messages(world) == encode.connect_messages(world)
+
+
+def test_rare_genes_travel_once_the_sim_has_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    """M7's parts (lineage_sim.rare, Fauna.slots, Fauna.torpid) are read only when present:
+    a stand-in of the same shape shows what the messages carry then."""
+    import sys
+    import types
+
+    rare = types.ModuleType("lineage_sim.rare")
+    table = [
+        {"kingdom": "creature", "bit": 1, "name": "VENOM", "signature": "fangs", "look": "x"},
+        {"kingdom": "plant", "bit": 8, "name": "POISONOUS", "signature": "purple", "look": "y"},
+    ]
+    rare.signature_table = lambda: table  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "lineage_sim.rare", rare)
+    fauna = types.SimpleNamespace(
+        ids=np.array([7, 9], dtype=np.int64),
+        genes=np.zeros((2, 14), dtype=np.float32),
+        positions=np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        slots=np.array([1, 0], dtype=np.uint16),
+        torpid=np.array([False, True]),
+    )
+    world = types.SimpleNamespace(fauna=fauna, t_ms=5)
+    creatures = encode.creatures_message(world)  # type: ignore[arg-type]
+    assert errors(creatures, SCHEMA) == []
+    assert [born["slots"] for born in creatures["born"]] == [1, 0]
+    assert creatures["torpid"] == [9]
+    message = encode.rare_message(world)  # type: ignore[arg-type]
+    assert message is not None
+    assert errors(message, SCHEMA) == []
+    assert [gene["name"] for gene in message["genes"]] == ["VENOM", "POISONOUS"]
+
+
+def test_no_rare_message_before_the_sim_has_rare_genes(world: World) -> None:
+    import importlib
+
+    if hasattr(importlib.import_module("lineage_sim.rare"), "signature_table"):
+        pytest.skip("lineage_sim.rare has its table (M7 merged)")
+    assert encode.rare_message(world) is None
+    assert "torpid" not in encode.creatures_message(world)

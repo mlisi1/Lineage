@@ -18,6 +18,9 @@
     },
     {
       "$ref": "#/$defs/SpeciesMessage"
+    },
+    {
+      "$ref": "#/$defs/RareMessage"
     }
   ],
   "$defs": {
@@ -32,18 +35,30 @@
     },
     "Season": {
       "type": "string",
-      "enum": ["spring", "summer", "autumn", "winter"]
+      "enum": [
+        "spring",
+        "summer",
+        "autumn",
+        "winter"
+      ]
     },
     "Grid": {
       "description": "A grid of the world's cells, row by row from the top-left cell, as little-endian whole numbers in base64. A cell's value is its number divided by `scale`.",
       "type": "object",
-      "required": ["encoding", "scale", "data"],
+      "required": [
+        "encoding",
+        "scale",
+        "data"
+      ],
       "additionalProperties": false,
       "properties": {
         "encoding": {
           "description": "u8: one byte per cell; u16le: two bytes per cell, little-endian.",
           "type": "string",
-          "enum": ["u8", "u16le"]
+          "enum": [
+            "u8",
+            "u16le"
+          ]
         },
         "scale": {
           "description": "What a cell's whole number is divided by: 1 for classes and bit masks, 255 or 65535 for shares.",
@@ -141,7 +156,9 @@
         "world": {
           "description": "Which world this is: a new continent after an apocalypse has another seed.",
           "type": "object",
-          "required": ["seed"],
+          "required": [
+            "seed"
+          ],
           "additionalProperties": false,
           "properties": {
             "seed": {
@@ -203,7 +220,12 @@
     "FaunaMessage": {
       "description": "What every creature's body is derived from (R2). Sent on connect and when it changes. The renderer derives bodies itself (renderer/src/creatures/phenotype.ts); derived values are never sent.",
       "type": "object",
-      "required": ["type", "protocol", "genes", "phenotype_config"],
+      "required": [
+        "type",
+        "protocol",
+        "genes",
+        "phenotype_config"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -223,7 +245,10 @@
           "description": "The [fauna] config keys the phenotype function reads (lineage_sim.fauna.phenotype.CONFIG_KEYS): numbers, and `learning` a boolean.",
           "type": "object",
           "additionalProperties": {
-            "type": ["number", "boolean"]
+            "type": [
+              "number",
+              "boolean"
+            ]
           }
         }
       }
@@ -231,7 +256,14 @@
     "CreaturesMessage": {
       "description": "Where every living creature is (R2). Sent after every fauna tick. A creature's genome comes once, the first time its id is sent; an id missing from `ids` has died.",
       "type": "object",
-      "required": ["type", "protocol", "t_ms", "ids", "positions", "born"],
+      "required": [
+        "type",
+        "protocol",
+        "t_ms",
+        "ids",
+        "positions",
+        "born"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -274,7 +306,10 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "genome"],
+            "required": [
+              "id",
+              "genome"
+            ],
             "additionalProperties": false,
             "properties": {
               "id": {
@@ -285,8 +320,21 @@
                 "items": {
                   "type": "number"
                 }
+              },
+              "slots": {
+                "description": "Its rare genes, as the bits of `RareMessage.genes` of kingdom creature (M7); fixed for life. Absent before rare genes exist.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
               }
             }
+          }
+        },
+        "torpid": {
+          "description": "Ids of the creatures that are torpid now (hibernating, lying still: M7). Absent before rare genes exist.",
+          "type": "array",
+          "items": {
+            "type": "integer"
           }
         }
       }
@@ -294,7 +342,11 @@
     "SpeciesMessage": {
       "description": "Every species that has lived (M6). Sent on connect and when a species is born or dies out.",
       "type": "object",
-      "required": ["type", "protocol", "species"],
+      "required": [
+        "type",
+        "protocol",
+        "species"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -307,7 +359,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "name", "parent"],
+            "required": [
+              "id",
+              "name",
+              "parent"
+            ],
             "additionalProperties": false,
             "properties": {
               "id": {
@@ -319,10 +375,70 @@
               },
               "parent": {
                 "description": "The species it split from; null for one of the first.",
-                "type": ["integer", "null"]
+                "type": [
+                  "integer",
+                  "null"
+                ]
               },
               "extinct": {
                 "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RareMessage": {
+      "description": "The rare genes of both kingdoms and how each shows (M7): lineage_sim.rare.signature_table(). Sent on connect. Bits are stable; new genes only append. A creature's genes are the bits of its `slots`, a plant's the bits of `LandMessage.plant_rare`.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "genes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "rare"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "genes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kingdom",
+              "bit",
+              "name",
+              "signature",
+              "look"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kingdom": {
+                "type": "string",
+                "enum": [
+                  "creature",
+                  "plant"
+                ]
+              },
+              "bit": {
+                "description": "The gene's bit value in the kingdom's mask (1, 2, 4, …).",
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "signature": {
+                "description": "A key naming the visual signature, for the renderer to draw by.",
+                "type": "string"
+              },
+              "look": {
+                "description": "What the signature looks like, in words.",
+                "type": "string"
               }
             }
           }

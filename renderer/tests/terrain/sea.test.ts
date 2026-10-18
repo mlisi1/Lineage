@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { paintGround } from "../../src/terrain/ground";
 import { LAND_PALETTE } from "../../src/terrain/palette";
-import { BREATH_S, GLINT_SLOTS, glintAt, surfAlphas } from "../../src/terrain/sea";
+import { BREATH_S, GLINT_SLOTS, glintAt, seaAt, surfAlphas } from "../../src/terrain/sea";
 import { world } from "../spike/worlds";
 
 const land = {
@@ -58,6 +58,31 @@ describe("the moving sea", () => {
     const shown = Array.from({ length: 100 }, (_, step) => glintAt(land, 3, step * 0.1, view, 32));
     expect(shown.some((glint) => glint === null)).toBe(true);
     expect(shown.some((glint) => glint !== null)).toBe(true);
+  });
+});
+
+describe("the sea at a place, for creatures under water", () => {
+  it("is the depth band's colour and a depth, deeper away from the shore, none on land", () => {
+    // Depth falls off with distance from the shore here: from 0.01 by it to 0.4 far out.
+    const deep = {
+      ...world(["~~~~~~~~~~gggg"], 200, (x, _y, water) =>
+        water ? 0.4 - 0.04 * (10 - x) + 0.01 : 0.5,
+      ),
+      ...LAND_PALETTE,
+    };
+    const sea = seaAt(deep);
+    expect(sea(12.5, 0.5)).toBeNull();
+    const near = sea(9.5, 0.5);
+    const far = sea(0.5, 0.5);
+    if (near === null || far === null) throw new Error("no sea");
+    expect(far.depth).toBeGreaterThan(near.depth);
+    expect(far.depth).toBeLessThanOrEqual(1);
+    const colours = LAND_PALETTE.relief.seaBands.map((band) =>
+      Number.parseInt(band.colour.slice(1), 16),
+    );
+    expect(colours).toContain(near.colour);
+    expect(colours).toContain(far.colour);
+    expect(far.colour).not.toBe(near.colour);
   });
 });
 

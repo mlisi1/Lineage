@@ -47,6 +47,29 @@ function heightAt(land: Land, x: number, y: number): number {
   );
 }
 
+/** What the sea is at a place: its colour (0xRRGGBB) and how deep, 0–1 down to the palette's deepest band. */
+export type SeaAt = (x: number, y: number) => { colour: number; depth: number } | null;
+
+/**
+ * The sea of `land` at a place (x, y in cells from the world's corner), as the ground
+ * paints it: the colour of its depth band, and its depth as a share of the way down to
+ * the deepest band; null on land. For creatures under water to take its colour (R2).
+ */
+export function seaAt(land: Land): SeaAt {
+  const bands = land.relief.seaBands.map((band) => ({
+    limit: band.limit,
+    colour: Number.parseInt(band.colour.replace("#", ""), 16),
+  }));
+  // The last band reaches to any depth: depth 1 is where the one before it ends.
+  const deepest = bands.length > 1 ? (bands[bands.length - 2]?.limit ?? 1) : 1;
+  return (x, y) => {
+    const below = land.seaLevel - heightAt(land, x, y);
+    if (below <= 0) return null;
+    const band = bands.find((candidate) => below <= candidate.limit) ?? bands[bands.length - 1];
+    return { colour: band?.colour ?? 0, depth: Math.min(below / deepest, 1) };
+  };
+}
+
 /** Where in the swell each band's crest is (share of `BREATH_S`), from the shore out, and how long it lasts. */
 const CRESTS: readonly number[] = [0.62, 0.38, 0.14];
 const CREST_WIDTH = 0.26;

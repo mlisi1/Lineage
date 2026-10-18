@@ -516,8 +516,9 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
 | `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
 | `fauna` | on connect | creature gene names and the phenotype's config keys (R2) |
-| `creatures` | every fauna tick | ids, positions, species; genomes once per id (R2, M6) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
+| `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
 
 The palette is not sent: the renderer has the report maps' own. `tools/stream.py`
 records the stream from a save, and `src/stream.ts` decodes it. Two recordings are
@@ -593,7 +594,9 @@ of lighter water far out, one nearer, and the foam at the shore. A crest comes i
 (three opacities a frame). Glints, short white strokes, grow on the open water, drift a
 little and go, forty slots to a view, each on its own clock and somewhere new each time
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
-it at its first moment, which the snapshots use. The land sheet films it.
+it at its first moment, which the snapshots use. The land sheet films it. `seaAt(land)`
+gives the sea's colour and depth at a place, from the same bands, for creatures under
+water to take its colour (R2).
 
 **The turn of the year** (`plants/turning.ts`): around each change of season places turn
 one after another over about four weeks, in fronts across the land; the hills first into
@@ -652,12 +655,13 @@ autumn recording and two on the winter recording's snow line, taken with `still`
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local
-  view's pauses is still to be measured on the board, and so is the GPU memory the
-  middle view's surf takes (three more pictures of the whole world, about 30 MB).
+  view's pauses is to be measured on the board in R5 (the owner moved every device
+  benchmark there, once R1–R4 are in), and so is the GPU memory the middle view's surf
+  takes (three more pictures of the whole world, about 30 MB).
 - **Still on the page's thread**: the middle view's shadows for the whole island, once
   a day (0.3 s at the board's estimated speed), and drawing the plants again when the
   seasons in play change (entering or leaving a turn, eight times a year; about 1 s).
-  Both could go to the worker if the board shows a stutter.
+  Both could go to the worker if R5 shows a stutter on the board.
 - **The server's stream** has not been tried: there is no server until S1.
 - **Creature motion between sim ticks.** The simulation moves a creature a few cells per
   hour and ticks every ten minutes. Watched in real time that is stillness, most of all

@@ -6,7 +6,8 @@
 /**
  * The state stream from the server to every renderer (desk kiosk and phone), one JSON message per WebSocket frame (CLAUDE.md §4.7). The TypeScript types in renderer/src/protocol.ts are generated from this file (`cd renderer && npm run protocol`); the Python encoder is server/lineage_server/protocol/encode.py. A renderer that meets a message type it does not know ignores it. Bump `protocol` only for a change an older renderer would misread.
  */
-export type Message = ClockMessage | LandMessage | FaunaMessage | CreaturesMessage | SpeciesMessage;
+export type Message =
+  ClockMessage | LandMessage | FaunaMessage | CreaturesMessage | SpeciesMessage | RareMessage;
 /**
  * Version of this protocol.
  */
@@ -133,7 +134,15 @@ export interface CreaturesMessage {
   born: {
     id: number;
     genome: number[];
+    /**
+     * Its rare genes, as the bits of `RareMessage.genes` of kingdom creature (M7); fixed for life. Absent before rare genes exist.
+     */
+    slots?: number;
   }[];
+  /**
+   * Ids of the creatures that are torpid now (hibernating, lying still: M7). Absent before rare genes exist.
+   */
+  torpid?: number[];
 }
 /**
  * Every species that has lived (M6). Sent on connect and when a species is born or dies out.
@@ -149,5 +158,28 @@ export interface SpeciesMessage {
      */
     parent: number | null;
     extinct?: boolean;
+  }[];
+}
+/**
+ * The rare genes of both kingdoms and how each shows (M7): lineage_sim.rare.signature_table(). Sent on connect. Bits are stable; new genes only append. A creature's genes are the bits of its `slots`, a plant's the bits of `LandMessage.plant_rare`.
+ */
+export interface RareMessage {
+  type: "rare";
+  protocol: Protocol;
+  genes: {
+    kingdom: "creature" | "plant";
+    /**
+     * The gene's bit value in the kingdom's mask (1, 2, 4, …).
+     */
+    bit: number;
+    name: string;
+    /**
+     * A key naming the visual signature, for the renderer to draw by.
+     */
+    signature: string;
+    /**
+     * What the signature looks like, in words.
+     */
+    look: string;
   }[];
 }
