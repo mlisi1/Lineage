@@ -1,12 +1,12 @@
 # R1 land sheet
 
-How R1 draws the ground and the plants, in each look side by side (`maps`, the R0
-look, and `cosy`, the proposal after Stardew Valley): `report.html`, one
-self-contained file. A still copy of `renderer/land.html`
-(`cd renderer && npm run dev`, then open `/land.html`).
+How R1 draws the ground and the plants in the cosy look, after Stardew Valley
+(ADR 0014): `report.html`, one self-contained file. A still copy of
+`renderer/land.html` (`cd renderer && npm run dev`, then open `/land.html`;
+`?look=all` adds the R0 look beside it).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `4467bc6514eb-dirty`
+- Renderer build: `b3682c8775d3`
 - 50 pictures
 
 Regenerate with `cd renderer && npm run land`; do not edit by hand. It is a view of
