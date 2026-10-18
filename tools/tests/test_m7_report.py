@@ -93,6 +93,8 @@ def test_m7_report(tmp_path: Path) -> None:
     # One seed of four held giants above 90 % for 110 days.
     assert metrics["giant.fixation_days.max"] == 110.0
     assert metrics["fixation.share_of_seeds_without_long_fixation"] == 0.75
+    key = "fixation.share_of_seeds_without_long_fixation.excluding_photosynthesis"
+    assert metrics[key] == 0.75  # the giants are not excused
     assert metrics["venom.share_among_predators.median"] > 0.0
     assert metrics["venom.share_among_herbivores.median"] == 0.0
     # Born here: plain 20 days, longevity carrier 40 days; arrivals are left out.
