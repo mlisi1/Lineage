@@ -30,8 +30,10 @@ A result under 30 frames a second on a monitor does not settle it, the screen be
 work.
 
 **How it connects.** Mini HDMI is the board's only output for a display. Its two USB-C
-ports are USB 2.0, for power and data: they carry no video. So one of these is needed,
-whatever the display: a mini-HDMI to HDMI adapter, or a mini-HDMI to HDMI cable.
+ports are USB 2.0 and carry no video, so one of these is needed, whatever the display: a
+mini-HDMI to HDMI adapter, or a mini-HDMI to HDMI cable. **Power it from the USB-C port
+next to the mini HDMI.** Powered from the other one, the board does not boot from the
+card (see "If it does not work").
 
 ## 1. Flash Armbian
 
@@ -51,7 +53,8 @@ Why this one:
 The board is community-maintained in Armbian, not officially supported. If this image
 does not boot or shows no picture, see "If it does not work" at the end.
 
-Flash it with Armbian Imager (<https://imager.armbian.com>), or by hand:
+Take a stable build, not a "trunk" one: the Imager offers both, and trunk builds are
+nightly. Flash it with Armbian Imager (<https://imager.armbian.com>), or by hand:
 
 ```sh
 lsblk                                   # find the card: its size gives it away, e.g. /dev/sdb
@@ -60,6 +63,10 @@ xz -dc Armbian_*_Orangepizero2w_trixie_current_*_minimal.img.xz \
 ```
 
 Writing to the wrong `/dev/sdX` destroys that disk. Check twice.
+
+If the Imager offers to set up the network, choose DHCP, not a static address. A static
+address left empty there is written to the board as `- /0`: the Wi-Fi never comes up and
+the first boot never finishes.
 
 ## 2. Give it the Wi-Fi before it first boots
 
@@ -92,7 +99,8 @@ Set the country code (two letters, for the Wi-Fi's channels) and the timezone (a
 boards reports that changing it breaks the creation of the user). The passwords
 sit on the card in plain text until the first boot has used them.
 
-Put the card in the board and power it. The first boot grows the filesystem and takes two
+Put the card in the board and power it from the USB-C port next to the mini HDMI. The
+first boot grows the filesystem and takes two
 or three minutes. Find the board's address in the router's list of devices (it calls
 itself `orangepizero2w`), then:
 
@@ -297,6 +305,16 @@ it says so, and how many times the screen's pixels it had to fill.
 ## If it does not work
 
 In the order they are likely:
+
+- **The board boots, but not from the card**: on a serial console or screen, lines such
+  as `RootDevice is /dev/mtdblock4`, `Try to load Nor` and a failed mount. It started
+  from its SPI flash, which happens when it is powered from the wrong USB-C port. Power
+  it from the one next to the mini HDMI, then check the supply and the card before
+  suspecting the image.
+- **The first boot never finishes** (no `lineage` user, the preset file still on the
+  card, tty1 saying "First login setup is already running on another console"): a
+  network preset it could not apply, such as the Imager's static address left empty.
+  Logs live in RAM and are gone after a power cut, so look on the console while it runs.
 
 - **No profile uses the GPU, though step 5 found the driver.** Try other flags without
   editing anything: end the command of step 7 (or the unit's `ExecStart` line) with
