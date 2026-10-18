@@ -6,16 +6,27 @@
  *
  * Low forms are 8×8 art pixels; grown trees are 8×12 and overlap the cell above.
  */
-import type { Ramp } from "./fixture";
+import { SPRITE_WIDTH, type Form, type PlantLook, type Stage } from "../plants/look";
+import type { Ramp } from "../terrain/land";
+import { hexToRgb, type Pixels } from "../terrain/pixels";
 
-export const SPRITE_WIDTH = 8;
+export { cellHash, hexToRgb, type Pixels } from "../terrain/pixels";
+export {
+  FORMS,
+  MATURE_FROM,
+  SPRITE_WIDTH,
+  STAGES,
+  VARIANTS,
+  VISIBLE_FROM,
+  plantLook,
+  plantOffset,
+  standsAlone,
+  type Form,
+  type PlantLook,
+  type Stage,
+} from "../plants/look";
+
 export const TRUNK_COLOUR = "#5a4632";
-
-export type Form = "LICHEN" | "GRASS" | "SHRUB" | "BROADLEAF" | "CONIFER";
-export type Stage = "young" | "mature";
-export const FORMS: readonly Form[] = ["LICHEN", "GRASS", "SHRUB", "BROADLEAF", "CONIFER"];
-export const STAGES: readonly Stage[] = ["young", "mature"];
-export const VARIANTS = 2;
 
 type Bitmap = readonly string[];
 
@@ -269,19 +280,6 @@ export const ART: Readonly<Record<Form, Readonly<Record<Stage, readonly Bitmap[]
   },
 };
 
-export interface Pixels {
-  width: number;
-  height: number;
-  /** RGBA bytes, row by row. */
-  rgba: Uint8ClampedArray<ArrayBuffer>;
-}
-
-/** "#rrggbb" → [r, g, b]. */
-export function hexToRgb(colour: string): [number, number, number] {
-  const value = Number.parseInt(colour.replace("#", ""), 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
 /** Paint a bitmap with a three-tone ramp. */
 export function rasterise(bitmap: Bitmap, ramp: Ramp): Pixels {
   const height = bitmap.length;
@@ -325,67 +323,6 @@ export function wedge(size: number): Pixels {
     }
   }
   return { width: size, height: size, rgba };
-}
-
-/** Biomass (0–255) from which a plant is drawn grown. */
-export const MATURE_FROM = 128;
-/** Biomass (0–255) below which a cell shows bare ground instead of a plant. */
-export const VISIBLE_FROM = 20;
-
-export interface PlantLook {
-  form: Form;
-  stage: Stage;
-  variant: number;
-  dormant: boolean;
-}
-
-/** Which sprite a cell shows, or null when it has no plant worth drawing. */
-export function plantLook(
-  coverClass: string,
-  biomass: number,
-  x: number,
-  y: number,
-  dormantBelow: number,
-  dormantClasses: readonly string[],
-): PlantLook | null {
-  if (biomass < VISIBLE_FROM || !(FORMS as readonly string[]).includes(coverClass)) return null;
-  return {
-    form: coverClass as Form,
-    stage: biomass >= MATURE_FROM ? "mature" : "young",
-    // A cheap position hash, so neighbours do not all look alike.
-    variant: (((x * 73856093) ^ (y * 19349663)) >>> 0) % VARIANTS,
-    dormant: biomass < dormantBelow && dormantClasses.includes(coverClass),
-  };
-}
-
-/** A number in [0, 1) that depends only on the cell (and on `salt`, to draw several). */
-export function cellHash(x: number, y: number, salt: number): number {
-  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(salt, 1274126177)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-/** Share of the cells of grown grass that carry a tuft of their own in the scattered style. */
-const TUFT_SHARE = 1 / 3;
-
-/**
- * In the scattered style the ground itself is painted with what grows low; only some
- * plants stand on it as drawings of their own: every tree, every shrub in leaf, and a
- * tuft of grown grass here and there.
- */
-export function standsAlone(look: PlantLook, x: number, y: number): boolean {
-  // What has died back to its roots is ground, not a plant to look at.
-  if (look.form === "LICHEN" || look.dormant) return false;
-  if (look.form !== "GRASS") return true;
-  return look.stage === "mature" && cellHash(x, y, 11) < TUFT_SHARE;
-}
-
-/**
- * How far a plant that stands alone is from the middle of its cell, in art pixels
- * (eighths of a cell): up to two either side, up to two back and one forward.
- */
-export function plantOffset(x: number, y: number): [number, number] {
-  return [Math.floor(cellHash(x, y, 12) * 5) - 2, Math.floor(cellHash(x, y, 13) * 4) - 2];
 }
 
 /** Name of a look in the atlas. */

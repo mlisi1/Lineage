@@ -8,10 +8,10 @@ import {
   paintGround,
   valueNoise,
   type GroundStyle,
-} from "../../src/spike/ground";
-import { hexToRgb, type Pixels } from "../../src/spike/pixelart";
-import { SEASONS, seasonRamp, type Season } from "../../src/spike/seasons";
-import { DEPTH, LAND, MAP, PALETTE, SEA, SEA_LEVEL, SHORE_OUTLINE, world } from "./worlds";
+} from "../../src/terrain/ground";
+import { hexToRgb, type Pixels } from "../../src/terrain/pixels";
+import { SEASONS, seasonRamp, type Season } from "../../src/plants/seasons";
+import { DEPTH, LAND, MAP, PALETTE, SEA, SEA_LEVEL, SHORE_OUTLINE, world } from "../spike/worlds";
 
 const rows = (letter: string, width: number, height: number): string[] =>
   Array.from({ length: height }, () => letter.repeat(width));
