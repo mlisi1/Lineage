@@ -13,9 +13,9 @@ from lineage_sim.config import Config, FaunaConfig
 from lineage_sim.events import OutputEvent
 from lineage_sim.fauna import brain
 from lineage_sim.fauna.genome import Gene
-from lineage_sim.fauna.phenotype import phenotype
 from lineage_sim.fauna.population import Fauna
 from lineage_sim.flora import Flora
+from lineage_sim.rare import body_of
 from lineage_sim.subsystem import Context
 from lineage_sim.terrain import Terrain
 from numpy.random import PCG64, Generator
@@ -91,12 +91,15 @@ class Site:
         energy_share: float = 0.9,
         age_days: float = 20.0,
         idle_days: float = 0.0,
+        slots: int = 0,
     ) -> NDArray[np.int64]:
-        """Put creatures with ``genome`` at ``positions``; returns their ids."""
+        """Put creatures with ``genome`` (and rare genes ``slots``) at ``positions``;
+        returns their ids."""
         count = len(positions)
         genes = np.repeat(genes_of(genome), count, axis=0)
+        rare = np.full(count, slots, dtype=np.uint16)
         state = self.fauna.get_state()
-        body = phenotype(self.cfg, genes)
+        body = body_of(self.cfg, genes, rare)
         ids = np.arange(state["next_id"], state["next_id"] + count, dtype=np.int64)
         weights = brain.founder_weights(Generator(PCG64(7)), self.cfg, genes)
         extra: dict[str, Any] = {
@@ -107,7 +110,7 @@ class Site:
             "heading": np.zeros(count, dtype=np.float32),
             "genes": genes,
             "weights": weights,
-            "slots": np.zeros(count, dtype=np.uint16),
+            "slots": rare,
             "ids": ids,
             "origin": np.full(count, len(state["ancestors"]), dtype=np.int32),
             "generation": np.zeros(count, dtype=np.int32),
@@ -129,6 +132,7 @@ class Site:
         return ids
 
     def run(self, hours: float, when: dt.date = dt.date(2026, 6, 1)) -> list[OutputEvent]:
+        """Fauna ticks for ``hours``, on ``when`` (June: summer in the default calendar)."""
         outputs: list[OutputEvent] = []
         for _ in range(round(hours * 3600 / TICK_S)):
             self.t_ms += int(TICK_S * 1000)
