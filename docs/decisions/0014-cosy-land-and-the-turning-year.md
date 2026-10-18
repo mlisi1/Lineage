@@ -59,7 +59,7 @@ snowy tree is barely told from snowy ground.
 ## References
 
 - Stardew Valley (ConcernedApe, 2016): its trees, bushes, grass and forage as the
-  reference for shapes and palette, looked at in play and in its published screenshots,
+  reference for shapes and palette, as the owner asked for it,
   <https://www.stardewvalley.net/>.
 - Raymond Schlitter (Slynyrd), *Pixelblog 44 — Top Down Trees* (one bundle of foliage
   repeated and layered by the light: ADR 0007's T1, from which the puffs differ in size
