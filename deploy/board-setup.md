@@ -261,8 +261,8 @@ board's own console, `cd ~/lineage-r0 && cage -s -- python3 kiosk_bench.py --dis
 does the same.)
 
 **You should see** the scene on the screen within half a minute, changing every ten
-seconds, and in the journal a table per browser profile. It takes about a quarter of an
-hour: five profiles, twelve scenarios each, 2 s of warm-up and 8 s measured per scenario.
+seconds, and in the journal a table per browser profile. It takes about twenty minutes:
+five profiles, fourteen scenarios each, 2 s of warm-up and 8 s measured per scenario.
 Leave the board alone meanwhile. `Ctrl-C` leaves the journal; the run goes on.
 
 When it has finished, the screen goes dark. `sudo systemctl start getty@tty1` brings the
