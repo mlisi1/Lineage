@@ -41,13 +41,15 @@ State at 2026-10-18 (after merging R0), for the next session:
   "What the plots show".
 - **M5 is done** (ADR 0009 accepted): report regenerated at `0f7b41e`; slow tests green on
   this state (the five existing ones and `tools/tests/test_m5_statistical.py`).
-- **Next steps, in order**:
+- **Next steps, in order** (ADR 0011: features first, tuning once in M11):
   1. Merge `m5-lifetime-learning` into `main` (owner; `main` is already merged in, so no
-     conflicts are expected). From the merge, schema v6 and `v6.lzma` are frozen: any
-     further change to saved fields needs v7.
-  2. M6: species, names, phylogeny (CLAUDE.md §8).
-  3. Later: rest (with M8's day and night), and the other candidates in ADR 0009
-     (learning danger, cover refuge, evolved rewards).
+     conflicts are expected). From the merge, schema v6 and `v6.lzma` are frozen.
+  2. M6: species, names, phylogeny. Then M7 (with poisonous plants and diet traditions
+     that matter), M8 (day and night: pick up the parked work on `m8-daylight`; check
+     for weekend extinctions), M9 (chronicle; make learning visible), M10, and M11
+     (tune everything together).
+  3. Between milestones keep the island viable (no collapse, both diets present), not
+     tuned.
 - **Owner's standing choices**:
   - balancing calls may be made autonomously, provided M4's criteria still pass;
   - sources go in the ADR's References;
