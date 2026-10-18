@@ -38,10 +38,10 @@ test("the spike benchmark runs scenarios and reports results", async ({ page }) 
   // The close-up skips the chunks that are off screen.
   expect(close?.plant_sprites).toBeGreaterThan(0);
   expect(close?.plant_sprites).toBeLessThan(results.world.plant_cells / 4);
-  // The acceptance scenario was not among those run: no verdict.
-  expect(results.acceptance).toMatchObject({ scenario: "spec-1x", pass: null });
+  // The views R0 is judged on were not among those run: no verdict.
+  expect(results.acceptance).toMatchObject({ fps_median: null, pass: null });
 
-  await expect(page.getByTestId("verdict")).toContainText("was not run");
+  await expect(page.getByTestId("verdict")).toContainText("were not all run");
   await expect(page.getByTestId("drawn-by")).toContainText("Drawn by WebGL on ");
   await expect(page.locator("#results tr")).toHaveCount(5);
 });
@@ -81,8 +81,8 @@ test("the three views of the chosen look run as scenarios", async ({ page }) => 
   expect(local?.creature_sprites).toBeGreaterThan(mid?.creature_sprites ?? Infinity);
 });
 
-test("the spike gives a verdict when the acceptance scenario runs", async ({ page }) => {
-  await page.goto("/spike.html?seconds=0.5&warmup=0.2&only=spec-1x");
+test("the spike gives a verdict when the views it is judged on run", async ({ page }) => {
+  await page.goto("/spike.html?seconds=0.5&warmup=0.2&only=map-view,mid-view,mid-crowd,local-view");
   const handle = await page.waitForFunction(() => window.__spikeResults, null, { timeout: 30_000 });
   const results = (await handle.jsonValue()) as Results;
   expect(results.error).toBeNull();

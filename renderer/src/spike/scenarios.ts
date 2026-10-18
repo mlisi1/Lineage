@@ -170,8 +170,18 @@ export const SCENARIOS: readonly Scenario[] = [
   },
 ];
 
-/** R0 passes when this scenario reaches the target at its median frame time. */
-export const ACCEPTANCE_SCENARIO = "spec-1x";
+/**
+ * R0 passes when every one of these reaches the target at its median frame time: the
+ * three views as chosen, the middle one also with every creature alive (ADR 0010).
+ * `spec-1x`, the scene R0 was first written against, is measured but not judged: on the
+ * board it hangs the GPU.
+ */
+export const ACCEPTANCE_SCENARIOS: readonly string[] = [
+  "map-view",
+  "mid-view",
+  "mid-crowd",
+  "local-view",
+];
 export const TARGET_FPS = 30;
 
 /** The scenarios to run: all of them, or the named ones in table order. */

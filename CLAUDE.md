@@ -373,8 +373,10 @@ needs a note in `docs/decisions/`.
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,
   plant sprites and a full-screen tint, in Chromium kiosk on the Orange Pi at 1024×600.
 - **Measure**: fps (median, 1% low), CPU, GPU driver in use, RAM.
-- **Accept**: ≥ 30 fps median. Otherwise write an ADR choosing the native fallback. A
-  larger HDMI display may stand in for the 7" screen (ADR 0008).
+- **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one
+  (ADR 0010; the first scene, a sprite in every cell, is measured but not judged).
+  Otherwise write an ADR choosing the native fallback. A larger HDMI display may stand
+  in for the 7" screen (ADR 0008).
 
 ### R1 — Terrain and plants from the state stream
 - **Deliver**: protocol types generated from the schema; the ground painted from the

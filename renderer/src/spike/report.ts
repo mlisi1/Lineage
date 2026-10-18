@@ -45,10 +45,10 @@ export function showResults(panel: HTMLElement, results: Results): void {
   if (results.error !== null) {
     verdict.textContent = `Failed: ${results.error}`;
   } else if (acceptance.fps_median === null) {
-    verdict.textContent = `${acceptance.scenario} was not run, so there is no verdict.`;
+    verdict.textContent = `${acceptance.scenarios.join(", ")} were not all run, so there is no verdict.`;
   } else {
     verdict.textContent =
-      `${acceptance.scenario}: ${acceptance.fps_median.toFixed(1)} fps median, ` +
+      `${acceptance.scenarios.join(", ")}: ${acceptance.fps_median.toFixed(1)} fps median at the lowest, ` +
       `target ${acceptance.target_fps}: ${acceptance.pass === true ? "PASS" : "FAIL"}`;
   }
   const environment = document.createElement("p");

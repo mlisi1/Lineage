@@ -1,7 +1,7 @@
 /** The benchmark: run each scenario for a fixed time and time every frame. */
 import type { SpikeParams } from "./params";
 import type { Applied, GpuInfo, SpikeScene } from "./scene";
-import { ACCEPTANCE_SCENARIO, TARGET_FPS, type Scenario } from "./scenarios";
+import { ACCEPTANCE_SCENARIOS, TARGET_FPS, type Scenario } from "./scenarios";
 import { median, percentile, summariseFrames, type FrameStats } from "./stats";
 
 declare const __BUILD_COMMIT__: string;
@@ -47,8 +47,9 @@ export interface Results {
   settings: { warmup_s: number; measure_s: number; backend: string; seed: number };
   scenarios: ScenarioResult[];
   acceptance: {
-    scenario: string;
+    scenarios: string[];
     target_fps: number;
+    /** The lowest median frame rate among them. */
     fps_median: number | null;
     pass: boolean | null;
   };
@@ -179,7 +180,7 @@ export function describeRun(
     },
     scenarios: [],
     acceptance: {
-      scenario: ACCEPTANCE_SCENARIO,
+      scenarios: [...ACCEPTANCE_SCENARIOS],
       target_fps: TARGET_FPS,
       fps_median: null,
       pass: null,
@@ -188,10 +189,15 @@ export function describeRun(
   };
 }
 
-/** Fill in the acceptance verdict from the scenarios that ran. */
+/** Fill in the acceptance verdict from the scenarios that ran: all of them, or none. */
 export function judge(results: Results): void {
-  const measured = results.scenarios.find((scenario) => scenario.name === ACCEPTANCE_SCENARIO);
-  if (measured === undefined || measured.frames === 0) return;
-  results.acceptance.fps_median = measured.fps_median;
-  results.acceptance.pass = measured.fps_median >= TARGET_FPS;
+  const rates: number[] = [];
+  for (const name of ACCEPTANCE_SCENARIOS) {
+    const measured = results.scenarios.find((scenario) => scenario.name === name);
+    if (measured === undefined || measured.frames === 0) return;
+    rates.push(measured.fps_median);
+  }
+  const lowest = Math.min(...rates);
+  results.acceptance.fps_median = lowest;
+  results.acceptance.pass = lowest >= TARGET_FPS;
 }

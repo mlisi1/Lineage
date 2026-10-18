@@ -650,8 +650,8 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
         if acceptance.get("pass") is not None:
             verdict = "PASS" if acceptance["pass"] else "FAIL"
             lines.append(
-                f"  {acceptance['scenario']}: {acceptance['fps_median']:.1f} fps median, "
-                f"target {acceptance['target_fps']}: {verdict}"
+                f"  {', '.join(acceptance['scenarios'])}: {acceptance['fps_median']:.1f} fps "
+                f"median at the lowest, target {acceptance['target_fps']}: {verdict}"
             )
     return lines
 

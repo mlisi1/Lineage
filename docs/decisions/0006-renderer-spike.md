@@ -1,6 +1,6 @@
 # 0006 — Renderer spike: what it measures and how R0 is judged
 
-- **Status**: accepted (the measurement on the device is pending)
+- **Status**: accepted; its acceptance scenario is replaced by ADR 0010 (the three views)
 - **Date**: 2026-10-10
 
 ## Context

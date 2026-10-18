@@ -287,7 +287,7 @@ def test_summary_table() -> None:
                         },
                     ],
                     "acceptance": {
-                        "scenario": "spec-1x",
+                        "scenarios": ["mid-view", "local-view"],
                         "fps_median": 41.2,
                         "target_fps": 30,
                         "pass": True,
@@ -307,7 +307,7 @@ def test_summary_table() -> None:
     text = "\n".join(kb.summary_lines(document))
     assert "[gpu] ok" in text
     assert "drawn by: WebGL on Mali-G31" in text
-    assert "spec-1x: 41.2 fps median, target 30: PASS" in text
+    assert "mid-view, local-view: 41.2 fps median at the lowest, target 30: PASS" in text
     assert "87" in text
     assert "301" in text
     assert "[software] timeout no results after 210 s" in text

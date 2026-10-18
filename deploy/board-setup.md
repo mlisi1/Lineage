@@ -290,7 +290,8 @@ uv run python -m tools.report R0 --runs runs/r0-device
 
 This writes `reports/R0-renderer-spike/`, with the evidence file in it. The report
 passes only if the run was on the board, on a display, with the page 1024×600 or larger,
-and the best profile reaches 30 frames a second in the acceptance scenario. On a monitor
+and the best profile reaches 30 frames a second in each of the three views and the
+crowded middle one (ADR 0010). On a monitor
 it says so, and how many times the screen's pixels it had to fill.
 
 ## If it does not work

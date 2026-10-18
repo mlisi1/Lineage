@@ -378,7 +378,7 @@ the 1 % low, the script time per frame and the graphics driver the browser gave 
 | Scenario | Drawn at | Plants | Creatures | Answers |
 |---|---|---|---|---|
 | `floor` | 1024×600 | none | 0 | what the browser costs before any scene |
-| `spec-1x` | 1024×600 | 16 504 sprites | 50 | **the R0 scene by the letter: the acceptance** |
+| `spec-1x` | 1024×600 | 16 504 sprites | 50 | the R0 scene by the letter: measured, not judged (ADR 0010) |
 | `spec-still` | 1024×600 | 16 504 sprites | 0 | the same with nothing moving: what the plants cost alone |
 | `spec-apart` | 1024×600 | 16 504 sprites, a render group of their own | 50 | the same with the creatures over the plants, not among their rows |
 | `spec-2x` | 512×300 | sprites | 50 | the same with art pixels of 2 screen pixels |
@@ -400,9 +400,12 @@ On the board (a first run on a virtual display) `spec-1x` spends 88 ms of script
 whatever the art scale, and waits several times longer on the GPU at 1024×600. The
 creatures stand in the plants' rows, so one stepping into the next row changes the
 scene's structure and PixiJS rebuilds the batches of all 16 504 plants; `spec-apart`
-takes that away, `spec-still` takes away all change. The last four draw the three views
-as chosen. The acceptance scenario should move to them once
-the local view is settled, with a note in `docs/decisions/`.
+takes that away, `spec-still` takes away all change. Neither helps the frame rate: every
+frame of the three ends with the kernel killing a GPU job after half a second, so 1.8 fps
+is the timeout, not a speed ([ADR 0010](../decisions/0010-r0-judged-on-the-three-views.md)).
+The last four draw the three views as chosen, and **R0 is judged on them**: `map-view`,
+`mid-view`, `mid-crowd` and `local-view`, each at 30 fps median with the same browser
+profile.
 
 Page parameters: `?demo=<scenario>` shows one scenario indefinitely with the frame rate
 in a corner; `only=a,b` picks scenarios; `seconds`, `warmup` set the timing;
@@ -432,7 +435,8 @@ The procedure is in [`deploy/README.md`](../../deploy/README.md), and from a boa
 box in [`deploy/board-setup.md`](../../deploy/board-setup.md). The file it produces
 becomes `reports/R0-renderer-spike/` through `tools.report R0`. The report passes R0 only
 if the numbers were taken as specified (ARM board, kiosk on a display, the page 1024×600
-or larger) and the best profile reaches 30 fps median in `spec-1x`. A larger display may
+or larger) and the best profile reaches 30 fps median in each of the four views (ADR
+0010). A larger display may
 stand in for the 7" screen, which is not bought yet
 ([ADR 0008](../decisions/0008-r0-on-a-stand-in-display.md)): the scene is drawn at the
 same size and stretched further, which is at least as hard. The report names the display

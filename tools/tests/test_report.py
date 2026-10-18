@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -342,10 +343,19 @@ def _bench_scenario(name: str, fps: float, sprites: int = 17_281) -> dict[str, A
     }
 
 
+# The scene R0 was first written against, as it ran on the board: recorded, not judged.
+FIRST_LOOK_FPS = 1.8
+R0_IDS = ("R0.1", "R0.2", "R0.3", "R0.4", "R0.5")
+
+
+def _r0_statuses(doc: dict[str, Any]) -> dict[str, str]:
+    return {a["id"]: a["status"] for a in doc["acceptance"]}
+
+
 def _bench_run(
     profile: str, fps: float | None, *, cpu: float = 180.0, driver: str = "Mali-G31 (Panfrost)"
 ) -> dict[str, Any]:
-    """One browser profile: ``fps`` of None is a profile that never reported back."""
+    """One browser profile, ``fps`` in every view R0 is judged on; None: it never reported back."""
     run: dict[str, Any] = {
         "profile": profile,
         "about": f"about {profile}",
@@ -367,7 +377,11 @@ def _bench_run(
         "gpu": {"api": "webgl", "unmasked_renderer": driver, "software": software},
         "world": {"description": "seed 42, 2027-08-03 (summer)"},
         "settings": {"backend": "webgl"},
-        "scenarios": [_bench_scenario("floor", 60.0, 0), _bench_scenario("spec-1x", fps)],
+        "scenarios": [
+            _bench_scenario("floor", 60.0, 0),
+            _bench_scenario("spec-1x", FIRST_LOOK_FPS),
+            *(_bench_scenario(name, fps) for name in r0.ACCEPTANCE_SCENARIOS),
+        ],
     }
     usage = {
         "cpu_pct": cpu,
@@ -376,7 +390,9 @@ def _bench_run(
         "pss_mb": 310.0,
         "temperature_c": 61.5,
     }
-    run["usage"] = {"floor": usage | {"cpu_pct": 20.0}, "spec-1x": usage}
+    run["usage"] = {"floor": usage | {"cpu_pct": 20.0}, "spec-1x": usage} | {
+        name: usage for name in r0.ACCEPTANCE_SCENARIOS
+    }
     run["peak"] = {"pss_mb": 334.0, "rss_sum_mb": 910.0, "temperature_c": 63.0, "processes": 9}
     return run
 
@@ -433,15 +449,14 @@ def test_r0_report_from_device_evidence(tmp_path: Path) -> None:
     assert doc["drawn_by"] == "WebGL on Mali-G31 (Panfrost)"
     assert doc["off_spec"] == []
     assert doc["host"]["model"] == "OrangePi Zero 2W"
-    assert [(a["id"], a["status"]) for a in doc["acceptance"]] == [
-        ("R0.1", "PASS"),
-        ("R0.2", "PASS"),
-    ]
+    assert [(a["id"], a["status"]) for a in doc["acceptance"]] == [(i, "PASS") for i in R0_IDS]
     metrics = doc["metrics"]
-    assert metrics["best.spec-1x.fps_median"] == 41.2
-    assert metrics["best.spec-1x.cpu_pct"] == 180.0
+    assert metrics["best.mid-crowd.fps_median"] == 41.2
+    assert metrics["best.mid-crowd.cpu_pct"] == 180.0
+    # Recorded, not judged.
+    assert metrics["best.spec-1x.fps_median"] == FIRST_LOOK_FPS
     assert metrics["best.drawn_by_gpu"] == 1.0
-    assert metrics["default.spec-1x.fps_median"] == 14.0
+    assert metrics["default.local-view.fps_median"] == 14.0
     assert metrics["gpu.floor.cpu_pct"] == 20.0
     assert not any(name.startswith("software.") for name in metrics)
 
@@ -462,20 +477,19 @@ def test_r0_report_from_device_evidence(tmp_path: Path) -> None:
     assert page.external == [], "report must be self-contained"
     assert len(page.img_srcs) == 2  # frame rate and CPU
     readme = (out / "README.md").read_text(encoding="utf-8")
-    assert "**PASS** R0.2" in readme
+    assert "**PASS** R0.5" in readme
     assert "Best profile: `gpu`" in readme
 
 
 def test_r0_fails_below_the_target_and_away_from_the_device(tmp_path: Path) -> None:
     slow = build_report("R0", _bench_evidence(tmp_path, [_bench_run("gpu", 22.0)]), tmp_path / "a")
     slow_doc = json.loads((slow / "metrics.json").read_text(encoding="utf-8"))
-    statuses = {a["id"]: a["status"] for a in slow_doc["acceptance"]}
-    assert statuses == {"R0.1": "PASS", "R0.2": "FAIL"}
+    assert _r0_statuses(slow_doc) == {"R0.1": "PASS"} | dict.fromkeys(R0_IDS[1:], "FAIL")
 
     desk = _bench_evidence(tmp_path, [_bench_run("gpu", 60.0)], machine="x86_64", headless=True)
     out = build_report("R0", desk, tmp_path / "b")
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-    assert {a["id"]: a["status"] for a in doc["acceptance"]} == {"R0.1": "FAIL", "R0.2": "PASS"}
+    assert _r0_statuses(doc) == {"R0.1": "FAIL"} | dict.fromkeys(R0_IDS[1:], "PASS")
     assert doc["off_spec"] == [
         "measured on x86_64, not on the ARM board",
         "Chromium ran headless, not as a kiosk on the display",
@@ -503,7 +517,7 @@ def test_r0_counts_a_larger_display_as_at_least_as_hard(tmp_path: Path) -> None:
         "the page was 1920×1080, 3.4 times the pixels of the 1024×600 screen: "
         "at least as hard to draw"
     ]
-    assert {a["id"]: a["status"] for a in monitor["acceptance"]} == {"R0.1": "PASS", "R0.2": "PASS"}
+    assert _r0_statuses(monitor) == dict.fromkeys(R0_IDS, "PASS")
     assert "**On a stand-in display:**" in monitor["readme"]
     assert "standing in for the 7″ screen" in monitor["text"]
     assert "1920×1080, page 1920×1080" in monitor["text"]
@@ -514,7 +528,7 @@ def test_r0_counts_a_larger_display_as_at_least_as_hard(tmp_path: Path) -> None:
     small = on(800, 480, "small")
     assert small["stand_in"] == []
     assert small["off_spec"] == ["the page was 800×480, smaller than 1024×600"]
-    assert {a["id"]: a["status"] for a in small["acceptance"]}["R0.1"] == "FAIL"
+    assert _r0_statuses(small)["R0.1"] == "FAIL"
     # Wider and lower is not larger: it does not hold the screen's 600 rows.
     assert on(1280, 480, "wide")["off_spec"] == ["the page was 1280×480, smaller than 1024×600"]
 
@@ -529,10 +543,10 @@ def test_r0_does_not_take_a_virtual_display_for_the_screen(tmp_path: Path) -> No
     out = build_report("R0", source, tmp_path / "virtual")
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     assert doc["off_spec"] == ["the display was a virtual one: the GPU drew, no screen showed it"]
-    assert {a["id"]: a["status"] for a in doc["acceptance"]} == {"R0.1": "FAIL", "R0.2": "PASS"}
+    assert _r0_statuses(doc) == {"R0.1": "FAIL"} | dict.fromkeys(R0_IDS[1:], "PASS")
     # What it is good for is still there: what drew the page, and how fast.
     assert doc["drawn_by"] == "WebGL on Mali-G31 (Panfrost)"
-    assert doc["metrics"]["best.spec-1x.fps_median"] == 58.0
+    assert doc["metrics"]["best.mid-view.fps_median"] == 58.0
 
 
 def test_r0_best_profile_at_equal_frame_rate_uses_less_cpu(tmp_path: Path) -> None:
@@ -544,14 +558,14 @@ def test_r0_best_profile_at_equal_frame_rate_uses_less_cpu(tmp_path: Path) -> No
     out = build_report("R0", _bench_evidence(tmp_path, runs), tmp_path / "reports")
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     assert doc["best_profile"] == "gpu"
-    assert doc["metrics"]["best.spec-1x.cpu_pct"] == 95.0
+    assert doc["metrics"]["best.mid-crowd.cpu_pct"] == 95.0
 
 
 def test_r0_without_a_finished_profile_has_no_verdict(tmp_path: Path) -> None:
     evidence = _bench_evidence(tmp_path, [_bench_run("default", None), _bench_run("gpu", None)])
     out = build_report("R0", evidence, tmp_path / "reports")
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-    assert {a["id"]: a["status"] for a in doc["acceptance"]} == {"R0.1": "PASS", "R0.2": "MISSING"}
+    assert _r0_statuses(doc) == {"R0.1": "PASS"} | dict.fromkeys(R0_IDS[1:], "MISSING")
     assert doc["best_profile"] is None
     assert "No profile measured anything" in " ".join(_parse(out / "report.html").text)
 
@@ -578,8 +592,24 @@ def test_r0_needs_the_device_benchmark_file(tmp_path: Path) -> None:
     assert not (tmp_path / "reports").exists()
 
 
-def test_r0_judges_the_scenario_the_page_judges() -> None:
-    """The acceptance scenario and target are written down twice: here and in the page."""
+def test_r0_judges_the_scenarios_the_page_judges() -> None:
+    """The acceptance scenarios and target are written down twice: here and in the page."""
     page = (REPO_ROOT / "renderer" / "src" / "spike" / "scenarios.ts").read_text(encoding="utf-8")
-    assert f'ACCEPTANCE_SCENARIO = "{r0.ACCEPTANCE_SCENARIO}"' in page
+    listed = re.search(r"ACCEPTANCE_SCENARIOS[^=]*= \[(.*?)\];", page, re.DOTALL)
+    assert listed is not None
+    assert tuple(re.findall(r'"([^"]+)"', listed.group(1))) == r0.ACCEPTANCE_SCENARIOS
     assert f"TARGET_FPS = {r0.TARGET_FPS:g};" in page
+    assert r0.FIRST_LOOK_SCENARIO not in r0.ACCEPTANCE_SCENARIOS
+
+
+def test_r0_needs_every_view_from_one_profile(tmp_path: Path) -> None:
+    """The kiosk runs one profile, so every view is judged from the same one."""
+    partial = _bench_run("gpu", 60.0)
+    partial["results"]["scenarios"] = [
+        s for s in partial["results"]["scenarios"] if s["name"] != "local-view"
+    ]
+    runs = [partial, _bench_run("default", 35.0)]
+    out = build_report("R0", _bench_evidence(tmp_path, runs), tmp_path / "reports")
+    doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert doc["best_profile"] == "default"
+    assert _r0_statuses(doc) == dict.fromkeys(R0_IDS, "PASS")

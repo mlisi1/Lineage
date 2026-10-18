@@ -16,7 +16,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started | — |
-| R0 | Renderer spike on the device | in progress: spike, benchmark and report tooling built; look chosen for all three views (ADR 0007); vegetation drawn by stage of growth and season, snow in winter still to be decided; the measurement on the device is pending | look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md); measurement: built from the device's `kiosk-bench.json` |
+| R0 | Renderer spike on the device | in progress: spike, benchmark and report tooling built; look chosen for all three views (ADR 0007); vegetation drawn by stage of growth and season, snow in winter still to be decided; on a virtual display the three views run (mid-view 62 fps) and a sprite in every cell hangs the GPU, so R0 is judged on the three views (ADR 0010); the measurement on a real display is pending | look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md); measurement: built from the device's `kiosk-bench.json` |
 | R1 | Terrain and plants from the state stream | not started | — |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |

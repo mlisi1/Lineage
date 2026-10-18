@@ -19,8 +19,13 @@ from tools.milestones.base import Criterion, Section, figure_html
 from tools.viz import figures, style
 
 EVIDENCE = "kiosk-bench.json"
-# The scenario that is the R0 scene by the letter, and its target (CLAUDE.md §8).
-ACCEPTANCE_SCENARIO = "spec-1x"
+# The scenarios R0 is judged on, each against the target (ADR 0010): the three views,
+# the middle one also with every creature alive. The scene R0 was first written against
+# is still measured and recorded, not judged: on the board it hangs the GPU.
+ACCEPTANCE_SCENARIOS = ("map-view", "mid-view", "mid-crowd", "local-view")
+FIRST_LOOK_SCENARIO = "spec-1x"
+# The costliest of them, whose CPU and memory the report breaks down.
+HEAVIEST_SCENARIO = "mid-crowd"
 TARGET_FPS = 30.0
 SPEC_VIEWPORT = (1024, 600)
 ARM_MACHINES = ("aarch64", "arm64", "armv7l", "armv8l")
@@ -35,12 +40,22 @@ CRITERIA = [
         "evidence.as_specified",
         low=1.0,
     ),
-    Criterion(
-        "R0.2",
-        "Median frame rate of the R0 scene (spec-1x: 50 creatures, a sprite per plant, "
-        "terrain, tint) with the best browser profile (fps)",
-        f"best.{ACCEPTANCE_SCENARIO}.fps_median",
-        low=TARGET_FPS,
+    *(
+        Criterion(
+            f"R0.{index}",
+            f"Median frame rate of {name} ({about}) with the best browser profile (fps)",
+            f"best.{name}.fps_median",
+            low=TARGET_FPS,
+        )
+        for index, (name, about) in enumerate(
+            [
+                ("map-view", "the map view: the whole island, every creature a dot"),
+                ("mid-view", "the middle view: a region, its plants, 50 creatures"),
+                ("mid-crowd", "the middle view with every creature the sim can hold"),
+                ("local-view", "the local view: the camera on one creature"),
+            ],
+            start=2,
+        )
     ),
 ]
 
@@ -76,20 +91,25 @@ def scenario_names(evidence: dict[str, Any]) -> list[str]:
 
 
 def best_run(evidence: dict[str, Any]) -> dict[str, Any] | None:
-    """The profile with the best median frame rate in the acceptance scenario.
+    """The profile whose slowest acceptance scenario is fastest: the kiosk runs one.
 
     Frame rates within one frame per second count as equal (several profiles sit at the
-    display's refresh rate); among those the one using the least CPU wins, then the
-    earlier, plainer profile.
+    display's refresh rate); among those the one using the least CPU over the acceptance
+    scenarios wins, then the earlier, plainer profile. A profile that did not measure
+    every acceptance scenario is not a candidate.
     """
     best: tuple[float, float] | None = None
     winner: dict[str, Any] | None = None
     for run in evidence["runs"]:
-        scenario = _scenario(run, ACCEPTANCE_SCENARIO)
-        if run["status"] != "ok" or scenario is None or scenario["frames"] == 0:
+        if run["status"] != "ok":
             continue
-        cpu = run["usage"].get(ACCEPTANCE_SCENARIO, {}).get("cpu_pct")
-        key = (-float(round(scenario["fps_median"])), float("inf") if cpu is None else cpu)
+        measured = [_scenario(run, name) for name in ACCEPTANCE_SCENARIOS]
+        if any(scenario is None or scenario["frames"] == 0 for scenario in measured):
+            continue
+        slowest = min(float(scenario["fps_median"]) for scenario in measured if scenario)
+        cpus = [run["usage"].get(name, {}).get("cpu_pct") for name in ACCEPTANCE_SCENARIOS]
+        cpu = float("inf") if None in cpus else sum(c for c in cpus if c is not None)
+        key = (-float(round(slowest)), cpu)
         if best is None or key < best:
             best, winner = key, run
     return winner
@@ -159,9 +179,10 @@ def metrics(evidence: dict[str, Any]) -> dict[str, float]:
                 record(f"{run['profile']}.{scenario['name']}", run, scenario)
     best = best_run(evidence)
     if best is not None:
-        scenario = _scenario(best, ACCEPTANCE_SCENARIO)
-        assert scenario is not None
-        record(f"best.{ACCEPTANCE_SCENARIO}", best, scenario)
+        for name in (*ACCEPTANCE_SCENARIOS, FIRST_LOOK_SCENARIO):
+            scenario = _scenario(best, name)
+            if scenario is not None and scenario["frames"] > 0:
+                record(f"best.{name}", best, scenario)
         gpu = (best["results"] or {}).get("gpu") or {}
         out["best.drawn_by_gpu"] = 0.0 if gpu.get("software", True) else 1.0
     return out
@@ -383,7 +404,8 @@ def _frame_rate_section(evidence: dict[str, Any]) -> Section:
     )
     caption = (
         "Median frame rate per scenario, one bar per browser profile; the dashed line is "
-        f"the R0 target, which applies to {ACCEPTANCE_SCENARIO}"
+        f"the R0 target, which applies to {', '.join(ACCEPTANCE_SCENARIOS)}; "
+        f"{FIRST_LOOK_SCENARIO} is recorded, not judged (ADR 0010)"
     )
     rate_rows = [
         [e(n)]
@@ -431,7 +453,7 @@ def _cpu_section(evidence: dict[str, Any]) -> Section:
     rows = [[e(n)] + [_number(v, ".0f", " %") for v in cpu[n]] for n in names]
     kinds: list[list[str]] = []
     for run in evidence["runs"]:
-        usage = run["usage"].get(ACCEPTANCE_SCENARIO)
+        usage = run["usage"].get(HEAVIEST_SCENARIO)
         if usage is None:
             continue
         split = usage.get("cpu_pct_by_kind", {})
@@ -445,7 +467,7 @@ def _cpu_section(evidence: dict[str, Any]) -> Section:
         "CPU",
         figure_html(e(caption), figures.to_data_uri(figure))
         + _table(["Scenario", *(e(profile) for profile in profiles)], rows)
-        + f'<p class="note">Where it goes in {e(ACCEPTANCE_SCENARIO)}, by Chromium process: '
+        + f'<p class="note">Where it goes in {e(HEAVIEST_SCENARIO)}, by Chromium process: '
         "the renderer process runs the script of the page, the GPU process draws (on the CPU "
         "when rendering is in software). The last column is the whole machine, in percent "
         "of all its cores.</p>"
@@ -457,7 +479,7 @@ def _memory_section(evidence: dict[str, Any]) -> Section:
     e = html.escape
     rows: list[list[str]] = []
     for run in evidence["runs"]:
-        usage, peak = run["usage"].get(ACCEPTANCE_SCENARIO, {}), run.get("peak") or {}
+        usage, peak = run["usage"].get(HEAVIEST_SCENARIO, {}), run.get("peak") or {}
         rows.append(
             [
                 e(run["profile"]),
@@ -482,7 +504,7 @@ def _memory_section(evidence: dict[str, Any]) -> Section:
         + _table(
             [
                 "Profile",
-                f"PSS in {e(ACCEPTANCE_SCENARIO)}",
+                f"PSS in {e(HEAVIEST_SCENARIO)}",
                 "Peak PSS",
                 "Peak RSS sum",
                 "Peak temperature",

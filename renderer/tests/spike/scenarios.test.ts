@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { judge, type Results, type ScenarioResult } from "../../src/spike/bench";
 import { DEFAULTS, parseParams } from "../../src/spike/params";
 import {
-  ACCEPTANCE_SCENARIO,
+  ACCEPTANCE_SCENARIOS,
   CROWD_CREATURES,
   SCENARIOS,
   SPEC_CREATURES,
@@ -22,8 +22,8 @@ describe("scenarios", () => {
     }
   });
 
-  it("include the R0 scene as the acceptance scenario", () => {
-    const acceptance = SCENARIOS.find((scenario) => scenario.name === ACCEPTANCE_SCENARIO);
+  it("include the R0 scene as first written, measured but not judged", () => {
+    const acceptance = SCENARIOS.find((scenario) => scenario.name === "spec-1x");
     // R0: 50 creatures, a terrain bitmap, plant sprites and a full-screen tint at 1024×600.
     expect(acceptance).toMatchObject({
       artScale: 1,
@@ -34,14 +34,22 @@ describe("scenarios", () => {
     });
     expect(SPEC_CREATURES).toBe(50);
     expect(TARGET_FPS).toBe(30);
+    expect(ACCEPTANCE_SCENARIOS).not.toContain("spec-1x");
+  });
+
+  it("judge R0 on the three views, the middle one also crowded (ADR 0010)", () => {
+    expect(ACCEPTANCE_SCENARIOS).toEqual(["map-view", "mid-view", "mid-crowd", "local-view"]);
+    const judged = SCENARIOS.filter((scenario) => ACCEPTANCE_SCENARIOS.includes(scenario.name));
+    expect(judged).toHaveLength(ACCEPTANCE_SCENARIOS.length);
+    for (const scenario of judged) expect(scenario.plants).toBe("painted");
   });
 
   it("tell what the R0 scene costs with nothing moving, and with the plants apart", () => {
-    const acceptance = SCENARIOS.find((scenario) => scenario.name === ACCEPTANCE_SCENARIO);
+    const acceptance = SCENARIOS.find((scenario) => scenario.name === "spec-1x");
     const still = SCENARIOS.find((scenario) => scenario.name === "spec-still");
     const apart = SCENARIOS.find((scenario) => scenario.name === "spec-apart");
     expect(acceptance?.plantsApart).toBeUndefined();
-    // Each differs from the acceptance scenario in one thing only.
+    // Each differs from spec-1x in one thing only.
     expect(still).toEqual({ ...acceptance, name: "spec-still", creatures: 0, about: still?.about });
     expect(apart).toEqual({
       ...acceptance,
@@ -112,7 +120,8 @@ describe("parseParams", () => {
 });
 
 describe("judge", () => {
-  const results = (fps: number | null): Results => ({
+  /** Results in which `rates` gives the median frame rate of the scenarios that ran. */
+  const results = (rates: Record<string, number>): Results => ({
     tool: "lineage-renderer-spike",
     version: 1,
     build_commit: "test",
@@ -126,31 +135,41 @@ describe("judge", () => {
     gpu: null,
     world: { cells: [256, 150], plant_cells: 0, description: "" },
     settings: { warmup_s: 0, measure_s: 1, backend: "webgl", seed: 1 },
-    scenarios:
-      fps === null
-        ? []
-        : [{ name: ACCEPTANCE_SCENARIO, frames: 100, fps_median: fps } as ScenarioResult],
+    scenarios: Object.entries(rates).map(
+      ([name, fps]) => ({ name, frames: 100, fps_median: fps }) as ScenarioResult,
+    ),
     acceptance: {
-      scenario: ACCEPTANCE_SCENARIO,
+      scenarios: [...ACCEPTANCE_SCENARIOS],
       target_fps: TARGET_FPS,
       fps_median: null,
       pass: null,
     },
     error: null,
   });
+  const views = (fps: number): Record<string, number> =>
+    Object.fromEntries(ACCEPTANCE_SCENARIOS.map((name) => [name, fps]));
 
-  it("passes at or above the target and fails below it", () => {
-    const fast = results(30);
+  it("passes when every view reaches the target and fails on the slowest", () => {
+    const fast = results({ ...views(60), "mid-crowd": 30 });
     judge(fast);
     expect(fast.acceptance).toMatchObject({ fps_median: 30, pass: true });
-    const slow = results(29.9);
+    const slow = results({ ...views(60), "local-view": 29.9 });
     judge(slow);
-    expect(slow.acceptance.pass).toBe(false);
+    expect(slow.acceptance).toMatchObject({ fps_median: 29.9, pass: false });
   });
 
-  it("gives no verdict when the acceptance scenario did not run", () => {
-    const none = results(null);
+  it("does not judge spec-1x", () => {
+    const hung = results({ ...views(60), "spec-1x": 1.8 });
+    judge(hung);
+    expect(hung.acceptance).toMatchObject({ fps_median: 60, pass: true });
+  });
+
+  it("gives no verdict unless all of them ran", () => {
+    const none = results({});
     judge(none);
     expect(none.acceptance).toMatchObject({ fps_median: null, pass: null });
+    const some = results({ "mid-view": 60 });
+    judge(some);
+    expect(some.acceptance).toMatchObject({ fps_median: null, pass: null });
   });
 });
