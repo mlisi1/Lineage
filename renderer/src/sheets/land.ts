@@ -20,6 +20,8 @@ import { heightAt } from "../spike/habitat";
 import { GROUND, LOCAL_PIXELS, MAP_GROUND } from "../spike/proposal";
 import { findSite, forest, meadow, shore } from "../spike/sites";
 import { Stage, type Picture } from "../spike/stage";
+import type { ClockMessage, LandMessage, Message } from "../protocol";
+import { Camera, clockAfter, type Cue } from "./films";
 
 /** Replaced by Vite with the commit the page was built from. */
 declare const __BUILD_COMMIT__: string;
@@ -272,6 +274,90 @@ function groundSamples(host: HTMLElement, land: WorldFixture, look: Look): void 
   sample("under broadleaves", "BROADLEAF", 230, 0.1);
   sample("under conifers", "CONIFER", 230, 0.1);
   sample("burnt", "BURNT", 0, 0.1);
+}
+
+/** A film on the sheet: an animated PNG, shown as large as the other pictures. */
+function filmFigure(host: HTMLElement, uri: string, title: string, note: string): void {
+  const made = create("figure", "tile");
+  const image = create("img");
+  image.src = uri;
+  image.alt = title;
+  image.style.width = `${512 * SHOWN}px`;
+  image.style.height = `${300 * SHOWN}px`;
+  const caption = create("figcaption");
+  caption.append(create("b", "", title), create("span", "", ` ${note}`));
+  made.append(image, caption);
+  host.append(made);
+}
+
+/** The films: the sea moving, and the year turning day by day. */
+async function filmSection(host: HTMLElement): Promise<void> {
+  const response = await fetch("stream/recording.json");
+  if (!response.ok) throw new Error(`stream/recording.json: HTTP ${response.status}`);
+  const messages = ((await response.json()) as { messages: Message[] }).messages;
+  const clocks = messages.filter((message): message is ClockMessage => message.type === "clock");
+  const lands = messages.filter((message): message is LandMessage => message.type === "land");
+  const lastClock = clocks.at(-1);
+  const lastLand = lands.at(-1);
+  if (lastClock === undefined || lastLand === undefined) throw new Error("the recording is empty");
+  const camera = await Camera.create();
+  const sea = { seconds: 7.2, fps: 8, fadeS: 0.4 };
+
+  filmFigure(
+    host,
+    await camera.film({ view: "local", x: 26, y: 47 }, [lastClock, lastLand], [], sea),
+    "The sea, from close.",
+    "The surf comes in and goes back every 3.6 s; glints grow on the open water and go.",
+  );
+  filmFigure(
+    host,
+    await camera.film({ view: "middle", x: 40, y: 40 }, [lastClock, lastLand], [], sea),
+    "The sea, from the middle view.",
+    "The same, smaller.",
+  );
+
+  // Summer into autumn: the recording's own days, from 2 September, one every half second.
+  const from = 30;
+  const day = 0.5;
+  const startClock = clocks[from];
+  const startLand = lands[1];
+  if (startClock !== undefined && startLand !== undefined) {
+    const cues: Cue[] = clocks.slice(from + 1).map((clock, index) => ({
+      at: (index + 1) * day,
+      message: clock,
+    }));
+    cues.push({ at: (clocks.length - 1 - from) * day, message: lastLand });
+    filmFigure(
+      host,
+      await camera.film({ view: "middle", x: 60, y: 60 }, [startClock, startLand], cues, {
+        seconds: cues.length * day + 1.5,
+        fps: 10,
+        fadeS: 0.4,
+      }),
+      `Summer into autumn, ${startClock.date} to ${lastClock.date}.`,
+      "A day every half second, each fading in over the one before: the wood turns tree by tree, the hills first.",
+    );
+  }
+
+  // Autumn into winter: the recording ends in September, so the clock is run on over its last land.
+  const winterFrom = 68;
+  const every = 2;
+  const winterCues: Cue[] = Array.from({ length: 16 }, (_, index) => ({
+    at: (index + 1) * 0.6,
+    message: clockAfter(lastClock, winterFrom + (index + 1) * every),
+  }));
+  const first = clockAfter(lastClock, winterFrom);
+  const final = clockAfter(lastClock, winterFrom + 16 * every);
+  filmFigure(
+    host,
+    await camera.film({ view: "middle", x: 60, y: 60 }, [first, lastLand], winterCues, {
+      seconds: 16 * 0.6 + 1.5,
+      fps: 10,
+      fadeS: 0.4,
+    }),
+    `Autumn into winter, ${first.date} to ${final.date}.`,
+    "Two days every 0.6 s. The clock is run on over the recording's last land (28 September), so the plants are September's and no snow has come: the leaves go, the bushes brown.",
+  );
 }
 
 async function main(): Promise<void> {
@@ -528,6 +614,9 @@ async function main(): Promise<void> {
       }
     }
   }
+
+  // In motion: the R1 scene itself, from the committed recording, filmed.
+  await filmSection(element("films"));
 
   window.__landStandalone = () => {
     const copy = document.documentElement.cloneNode(true) as HTMLElement;
