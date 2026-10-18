@@ -422,6 +422,7 @@ class FaunaConfig:
     longevity_factor: float
     longevity_brood_factor: float
     longevity_burn_cost: float
+    longevity_cooldown_factor: float
     amphibious_burn_cost: float
     hibernation_burn_cost: float
     hibernation_daylight: float
@@ -539,7 +540,7 @@ class FaunaConfig:
         check(self.mass_min < self.mass_max, "mass_min must be below mass_max")
         check(self.rare_slots <= 16, "rare_slots must fit in 16 bits")
         for key in ("venom_attack_factor", "giant_mass_factor", "giant_maturity_factor",
-                    "longevity_factor"):  # fmt: skip
+                    "longevity_factor", "longevity_cooldown_factor"):  # fmt: skip
             check(getattr(self, key) >= 1.0, f"{key} must be at least 1")
         check(self.herbivore_max_diet < self.predator_min_diet, "diet classes overlap")
         check(

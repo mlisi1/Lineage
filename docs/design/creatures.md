@@ -192,7 +192,7 @@ mass^0.75). Numbers are `[fauna]` keys.
 | `VENOM` | attack × 3: a hunter kills prey far larger than itself | burn | `venom`: bright fangs |
 | `TOXIC` | warning colours: a hunter's kill chance × 0.2 | burn | `warning`: bold bands |
 | `GIANT` | mass × 2, with everything that scales with mass (reserve, attack, defence, speed, lifespan) | burn (mass and extra), matures 1.5× later | `giant`: drawn larger |
-| `LONGEVITY` | lifespan × 2, maturity unchanged | broods halved (at least one young), burn | `elder`: grizzled |
+| `LONGEVITY` | lifespan × 2, maturity unchanged | broods halved (at least one young), twice the wait between broods, burn | `elder`: grizzled |
 | `AMPHIBIOUS` | walks as a land animal and swims as a swimmer; no struggle in water | burn | `gills` |
 | `HIBERNATION` | torpid in winter (and in darkness, M8) while its reserve is above 30 %: burns 20 %, ages at 25 % | torpid: does not move, eat or breed, cannot flee; burn | `coat`; curled while torpid |
 | `PHOTOSYNTHESIS` | energy from sunlight on land (less under a canopy) | land speed × 0.7; burn, so it starves faster in the dark | `leaves`: green tint |

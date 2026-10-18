@@ -37,7 +37,7 @@ class CreatureRare(IntFlag):
     VENOM = 1  # attack power multiplied: kills prey far larger than itself
     TOXIC = 2  # warning colours: hunters seldom kill it
     GIANT = 4  # twice the mass (reserve, attack, defence), later maturity
-    LONGEVITY = 8  # lives twice as long, smaller broods
+    LONGEVITY = 8  # lives twice as long, breeds more slowly
     AMPHIBIOUS = 16  # walks like a land animal and swims like a fish
     HIBERNATION = 32  # torpid in winter and in long darkness: burns and ages slowly
     PHOTOSYNTHESIS = 64  # feeds on sunlight on open land; slow, and starves in the dark
@@ -209,6 +209,14 @@ def kill_factor(cfg: FaunaConfig, slots: Slots) -> Values:
     """Multiplier on the chance of killing each creature: toxic prey are seldom killed."""
     toxic = carries(slots, CreatureRare.TOXIC)
     return np.where(toxic, np.float32(cfg.toxic_kill_factor), np.float32(1.0)).astype(np.float32)
+
+
+def cooldown_factor(cfg: FaunaConfig, slots: Slots) -> Values:
+    """Multiplier on the wait between broods: long-lived creatures breed slowly."""
+    longevity = carries(slots, CreatureRare.LONGEVITY)
+    return np.where(longevity, np.float32(cfg.longevity_cooldown_factor), np.float32(1.0)).astype(
+        np.float32
+    )
 
 
 def waterproof(slots: Slots) -> Flags:

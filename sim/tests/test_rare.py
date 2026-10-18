@@ -95,6 +95,16 @@ def test_longevity_doubles_life_and_halves_broods(config: Config) -> None:
     assert float(single.brood[0]) == 1.0  # never fewer than one young
 
 
+def test_long_lived_creatures_breed_slowly(config: Config) -> None:
+    days = config.fauna.repro_cooldown_days * 1.5  # past the usual wait, short of twice it
+    site = Site(config)
+    site.add(GRAZER, [(20.0, 20.0)], idle_days=days)
+    site.add(GRAZER, [(40.0, 20.0)], idle_days=days, slots=CreatureRare.LONGEVITY)
+    assert site.fauna.ready.tolist() == [True, False]
+    factor = rare.cooldown_factor(config.fauna, _slots(CreatureRare.LONGEVITY))
+    assert float(factor[0]) == config.fauna.longevity_cooldown_factor
+
+
 def test_amphibians_walk_and_swim(config: Config) -> None:
     walker, swimmer = _body(config, GRAZER), _body(config, _with(GRAZER, Gene.AQUATIC, 1.0))
     amphibian = _body(config, _with(GRAZER, Gene.AQUATIC, 0.5), CreatureRare.AMPHIBIOUS)

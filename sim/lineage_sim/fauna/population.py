@@ -254,7 +254,10 @@ class Fauna:
         return (
             self.adult
             & (self._energy >= cfg.repro_energy_share * self._body.capacity)
-            & (self._idle_h >= cfg.repro_cooldown_days * _HOURS_PER_DAY)
+            & (
+                self._idle_h
+                >= cfg.repro_cooldown_days * _HOURS_PER_DAY * rare.cooldown_factor(cfg, self._slots)
+            )
             & ~self._torpid
         )
 

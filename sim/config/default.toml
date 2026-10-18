@@ -507,10 +507,13 @@ giant_mass_factor = 2.0
 giant_maturity_factor = 1.5
 giant_burn_cost = 0.2
 # Longevity: lifespan × longevity_factor (maturity unchanged); broods × longevity_brood_factor
-# (rounded, at least one young).
+# (rounded, at least one young), and longevity_cooldown_factor times as long a wait between
+# broods (about as many young in a lifetime, but generations come slower: M7's first run
+# saw longevity sweep a herd when only broods were halved).
 longevity_factor = 2.0
 longevity_brood_factor = 0.5
 longevity_burn_cost = 0.15
+longevity_cooldown_factor = 2.0
 # Amphibious: walks as fast as a land animal and swims as fast as a swimmer (each speed as
 # if its swimming gene were 0 and 1), and does not struggle in water.
 amphibious_burn_cost = 0.25
