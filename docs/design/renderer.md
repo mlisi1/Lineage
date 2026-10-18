@@ -320,7 +320,16 @@ by half in the middle view, to a dot a cell wide on the map. Seen from close eno
 that mass 1 is some thirty pixels long, the same bodies are portraits, as a bestiary
 will want them: the look sheet draws the markings that way. Kinds change at thresholds,
 so two animals of one species either side of one will look like different kinds; whether
-that needs softening is for R2.
+that needed softening was for R2, and is done: **one body plan per species**
+(`src/creatures/species.ts`). Each species (M6; the fixture's `species` column, the
+protocol's optional `species`) is drawn as the kind of its average member, and within that
+plan each animal still shows its own genes. An animal takes its species' kind only where
+it lives where its species does (in the water or on land), so that a fish is never drawn
+on the shore; an animal of no species yet (0) is drawn as its own genes make it. In the
+fixture's world (v7, day 520) 10 of the 186 members of species 1 would be hoppers on their
+own genes (the leg gene rounding to one pair) and are drawn as beasts. A layer works the
+plans out from its creatures; when the census changes them, the creatures are drawn again
+with the new plans (R3, with the state stream).
 
 **Creatures are drawn in `cosy`** ([ADR 0013](../decisions/0013-cosy-creature-style.md)),
 after Stardew Valley's animals with the camera kept straight above: the plans and layers
@@ -419,7 +428,7 @@ it: 50 animated creatures, a terrain bitmap, plant sprites and a full-screen tin
 ≥ 30 fps median in Chromium kiosk on the Orange Pi. If not, an ADR picks a native
 renderer that consumes the same protocol.
 
-`renderer/spike.html` draws a real world (the save fixture `sim/tests/fixtures/saves/v4.lzma`,
+`renderer/spike.html` draws a real world (the save fixture `sim/tests/fixtures/saves/v7.lzma`,
 exported by `tools/replay.py` into `renderer/public/spike/`) and benchmarks itself: it
 runs each scenario for a fixed time, counts frames, and reports the median frame rate,
 the 1 % low, the script time per frame and the graphics driver the browser gave it.
@@ -563,6 +572,5 @@ image draws WebGL with the GPU.
 - **Painting ground off the frame**: see the cost above.
 - **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
   what remains is R3's: which animal the camera follows, and when it cuts.
-- **Kinds at their thresholds**: see Creatures.
 - **Seasons**: the standing plants have one drawing each; bare, flowering and snowed-on
   ones belong to R1.

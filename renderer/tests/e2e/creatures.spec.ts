@@ -22,6 +22,7 @@ test("the creature sheet checks the phenotype and draws both styles", async ({ p
     await expect(page.locator(`#underwater-${look} canvas`)).toHaveCount(32);
   }
   await expect(page.locator("#underwater-scene canvas")).toHaveCount(3);
+  await expect(page.locator("#species canvas")).toHaveCount(20);
   await expect(page.locator("#specimens .specimen")).toHaveCount(15);
   await expect(page.locator("#specimens canvas")).toHaveCount(60);
   await expect(page.locator("#patterns canvas")).toHaveCount(24);

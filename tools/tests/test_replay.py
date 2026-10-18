@@ -17,7 +17,7 @@ from tools import replay
 from tools.runs import REPO_ROOT
 from tools.viz import pixelmap
 
-SAVE = Path("sim/tests/fixtures/saves/v4.lzma")
+SAVE = Path("sim/tests/fixtures/saves/v7.lzma")
 SPIKE_FIXTURE = REPO_ROOT / "renderer" / "public" / "spike"
 
 
@@ -75,9 +75,13 @@ def test_renderer_fixture_describes_the_world(world: replay.World) -> None:
 
     # Every creature comes with its whole genome, to the bit: the renderer derives the
     # body from it with the same keys of the config as the sim.
-    assert ("x", "y", *(gene.name.lower() for gene in Gene)) == replay.CREATURE_FIELDS
-    genomes = rows[:, 2:].astype(np.float32)
+    assert ("x", "y", *(gene.name.lower() for gene in Gene), "species") == replay.CREATURE_FIELDS
+    genomes = rows[:, 2:-1].astype(np.float32)
     assert np.array_equal(genomes, world.fauna.genes)
+    # Each with its species as the sim has it now: several in a world of 520 days.
+    species = rows[:, -1].astype(np.int64)
+    assert np.array_equal(species, world.species.labels_now())
+    assert len(set(species.tolist()) - {0}) >= 3
     assert document["phenotype_config"] == phenotype_config(world.fauna.config)
 
     for name, ramp in document["palette"].items():
@@ -112,7 +116,8 @@ def test_casts_show_the_range_of_bodies(world: replay.World) -> None:
     for row, specimen in zip(specimens["creatures"], reference, strict=True):
         assert len(row) == len(replay.CREATURE_FIELDS)
         assert row[field("x")] == row[field("y")] == 0.0  # the renderer places them
-        assert row[2:] == pytest.approx(specimen["genome"], abs=1e-7)
+        assert row[2:-1] == pytest.approx(specimen["genome"], abs=1e-7)
+        assert row[-1] == 0  # a specimen belongs to no species
 
     assert [sweep["name"] for sweep in sweeps] == [
         f"sweep-{gene.name.lower()}" for gene in replay.SWEEP_GENES
@@ -123,9 +128,9 @@ def test_casts_show_the_range_of_bodies(world: replay.World) -> None:
         assert sweep["members"] == ["0", "0.25", "0.5", "0.75", "1"]
         rows = np.array(sweep["creatures"])
         # Only the swept gene changes from one step to the next.
-        for other in Gene:
-            column = rows[:, field(other.name.lower())]
-            if other is gene:
+        for other in [*(g.name.lower() for g in Gene), "species"]:
+            column = rows[:, field(other)]
+            if other == gene.name.lower():
                 assert column.tolist() == pytest.approx(list(replay.SWEEP_STEPS))
             else:
                 assert np.ptp(column) == 0.0

@@ -14,6 +14,7 @@ import { PATTERNS, bodyPlan, kindOf, type CreatureStyle } from "../creatures/bod
 import type { Point } from "../creatures/chain";
 import { parsePhenotypeConfig, phenotype, type Phenotype } from "../creatures/phenotype";
 import { WATER_LOOKS, type Sea } from "../creatures/water";
+import { kindFor, speciesPlans } from "../creatures/species";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
 import type { CreatureLayer } from "./creatures";
@@ -75,6 +76,8 @@ const SIM_TICK_S = 3;
 const SIM_STEP_CELLS = 1.6;
 /** The seed of the specimens' own random stream (see section 3). */
 const SPECIMEN_STREAM = 1515;
+/** At most this many animals whose kind differs from their species' are shown. */
+const MAX_STRAYS = 12;
 /** Hues an eel is shown in under water, to judge every colour against the sea. */
 const WATER_HUES = [0, 0.16, 0.33, 0.85];
 /** Swimmers in the shore-to-deep picture: the swimming specimens and eels of every hue. */
@@ -149,6 +152,7 @@ function lookGenes(genome: readonly number[]): Omit<CreatureSeed, keyof Phenotyp
   const gene = (name: string): number => genome[reference.genes.indexOf(name)] ?? 0;
   return {
     genome,
+    species: 0,
     diet: gene("DIET"),
     speed: gene("SPEED"),
     armour: gene("ARMOUR"),
@@ -463,6 +467,50 @@ async function main(): Promise<void> {
           centre: coast,
         },
         ART,
+      );
+    }
+  }
+
+  // One body plan per species: the world's animals whose own genes would make them another
+  // kind than their species, drawn both ways.
+  {
+    const plans = speciesPlans(fixture.creatures);
+    const strays = fixture.creatures
+      .map((seed, index) => ({ seed, index }))
+      .filter(({ seed }) => kindOf(seed) !== kindFor(seed, plans));
+    const census = [...plans]
+      .sort(([a], [b]) => a - b)
+      .map(([species, plan]) => `species ${species}: ${plan.members} drawn as ${plan.kind}`)
+      .join("; ");
+    element("species-census").textContent = census;
+    element("species-strays").textContent = String(strays.length);
+    const asItself = fixture.creatures.map((seed) => ({ ...seed, species: 0 }));
+    const options = {
+      style: "cosy",
+      scale: CREATURE_SCALE,
+      pixels: PORTRAIT_PIXELS,
+      pace: 0.35,
+    } as const;
+    const own = stage.cast(asItself, 10, options);
+    const bySpecies = stage.cast(fixture.creatures, 10, options);
+    const sand = packed(fixture.palette["BARE"]?.[2] ?? "#cdbd9f");
+    for (const { seed, index } of strays.slice(0, MAX_STRAYS)) {
+      const pictures = [own, bySpecies].map((layer): Picture => ({
+        ...base,
+        ...SWATCH,
+        zoom: PORTRAIT_PIXELS,
+        ground: sand,
+        cast: layer,
+        follow: index,
+        centre: middle(island),
+      }));
+      element("species").append(
+        pair(
+          `species ${seed.species}`,
+          `${kindOf(seed)} by its own genes, ${kindFor(seed, plans)} as its species`,
+          pictures,
+          SWATCH.enlarged,
+        ),
       );
     }
   }

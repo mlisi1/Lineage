@@ -21,6 +21,8 @@ export interface CreatureSeed extends Look {
   x: number;
   y: number;
   genome: Genome;
+  /** Its species as the sim has it, 0 for none yet (specimens, newcomers). */
+  species: number;
   /** Cells it is kept within, when a picture wants it to stay in frame; the sim sets none. */
   pen?: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -157,7 +159,7 @@ export function parseFixture(raw: unknown): WorldFixture {
     shoreOutline: field(shading, "shore_outline", isString),
   };
 
-  // A row is where the creature is, then its genome; the columns are named.
+  // A row is where the creature is, its genome, then its species; the columns are named.
   const fields = field(raw, "creature_fields", isStrings);
   const column = (name: string): number => {
     const index = fields.indexOf(name);
@@ -167,6 +169,7 @@ export function parseFixture(raw: unknown): WorldFixture {
   const x = column("x");
   const y = column("y");
   const genes = GENE_NAMES.map((name) => column(name.toLowerCase()));
+  const species = column("species");
   const phenotypeConfig = parsePhenotypeConfig(raw["phenotype_config"]);
   const seed = (row: readonly number[]): CreatureSeed => {
     const genome = genes.map((index) => row[index] ?? 0);
@@ -174,6 +177,7 @@ export function parseFixture(raw: unknown): WorldFixture {
       x: row[x] ?? 0,
       y: row[y] ?? 0,
       genome,
+      species: row[species] ?? 0,
       ...lookOf(genome, phenotype(phenotypeConfig, genome)),
     };
   };

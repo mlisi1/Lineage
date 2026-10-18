@@ -502,7 +502,15 @@ const LEGS: Readonly<Record<Kind, readonly (readonly [number, number, number, nu
   ],
 };
 
-export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPlan {
+/**
+ * The plan of a body with this look. `kind` overrides the kind its own genes give (one
+ * plan per species, `species.ts`); the rest still follows its own genes.
+ */
+export function bodyPlan(
+  seed: Look,
+  options: BodyOptions = FIRST_LOOK,
+  kind: Kind = kindOf(seed),
+): BodyPlan {
   const base = options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass);
   const swims = seed.aquatic >= SWIMS_FROM;
   const pace =
@@ -676,7 +684,6 @@ export function bodyPlan(seed: Look, options: BodyOptions = FIRST_LOOK): BodyPla
     });
   }
 
-  const kind = kindOf(seed);
   const length = base * STRETCH[kind];
   const shares = widths(kind, base);
   const joints = shares.length;

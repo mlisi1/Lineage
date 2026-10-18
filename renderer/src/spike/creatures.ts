@@ -17,6 +17,7 @@ import {
 import type { CellRect } from "./camera";
 import { followChain, solveKnee, type Point } from "../creatures/chain";
 import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
+import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
 import {
   opacityUnderWater,
   seaKey,
@@ -153,7 +154,12 @@ export class CreatureLayer {
     private readonly sea: SeaAt | null = null,
     /** How they are seen through it. */
     private readonly water: WaterLook = "hue",
-  ) {}
+  ) {
+    this.plans = speciesPlans(seeds);
+  }
+
+  /** What each species among the seeds is drawn as (one plan per species). */
+  private readonly plans: ReadonlyMap<number, SpeciesPlan>;
 
   /**
    * Where the sim now has creature `index`, in cells. An anchored creature walks there
@@ -307,7 +313,7 @@ export class CreatureLayer {
     const seed = this.seeds[index % this.seeds.length];
     if (seed === undefined) throw new Error("the fixture has no creatures");
     const random = this.random;
-    const plan = bodyPlan(seed, this.body);
+    const plan = bodyPlan(seed, this.body, kindFor(seed, this.plans));
     // Past the fixture's creatures, reuse them a few cells away.
     const clone = index >= this.seeds.length;
     const { x, y } = this.settle(

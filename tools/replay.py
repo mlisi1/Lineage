@@ -39,10 +39,11 @@ FIXTURE_FORMAT = "lineage-spike-fixture/4"
 # Heights are stored as whole numbers: this many steps between 0 and 1.
 HEIGHT_STEPS = 65535
 MS_PER_DAY = 86_400_000
-# One row per creature in ``world.json``: where it is (cells), then its whole genome. The
-# renderer derives the body from the genome with its port of the phenotype function and
-# the keys of ``phenotype_config`` (R2), as the sim does.
-CREATURE_FIELDS = ("x", "y", *(gene.name.lower() for gene in Gene))
+# One row per creature in ``world.json``: where it is (cells), its whole genome, then its
+# species (0: none yet). The renderer derives the body from the genome with its port of
+# the phenotype function and the keys of ``phenotype_config`` (R2), as the sim does, and
+# draws one body plan per species.
+CREATURE_FIELDS = ("x", "y", *(gene.name.lower() for gene in Gene), "species")
 
 # The specimen genomes shared with the renderer's phenotype check (R2).
 SPECIMENS = REPO_ROOT / "sim" / "tests" / "fixtures" / "phenotypes.json"
@@ -125,8 +126,11 @@ def render_still(world: World, scale: int = 1) -> np.ndarray:
     )
 
 
-def creature_rows(genes: np.ndarray, positions: np.ndarray | None = None) -> list[list[float]]:
-    """One row of ``CREATURE_FIELDS`` per creature; without positions they are all at 0, 0.
+def creature_rows(
+    genes: np.ndarray, positions: np.ndarray | None = None, species: np.ndarray | None = None
+) -> list[list[float]]:
+    """One row of ``CREATURE_FIELDS`` per creature; without positions they are all at 0, 0,
+    and without species of none (0).
 
     Positions are rounded to a thousandth of a cell. Genes are written as the shortest
     decimal that reads back as the same 32-bit number, so the renderer's body is the sim's
@@ -134,11 +138,13 @@ def creature_rows(genes: np.ndarray, positions: np.ndarray | None = None) -> lis
     """
     if positions is None:
         positions = np.zeros((len(genes), 2), dtype=np.float32)
+    if species is None:
+        species = np.zeros(len(genes), dtype=np.int64)
     places = np.round(positions.astype(np.float64), 3).tolist()
     genomes = genes.astype(np.float32)
     return [
-        [*place, *(float(str(value)) for value in genome)]
-        for place, genome in zip(places, genomes, strict=True)
+        [*place, *(float(str(value)) for value in genome), int(label)]
+        for place, genome, label in zip(places, genomes, species.tolist(), strict=True)
     ]
 
 
@@ -186,7 +192,7 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
     rows, columns = terrain.height.shape
     ground = pixelmap.render(terrain.height, terrain.sea_level)
     vegetated = pixelmap.render(terrain.height, terrain.sea_level, flora.cover(), flora.biomass)
-    creatures = creature_rows(fauna.genes, fauna.positions)
+    creatures = creature_rows(fauna.genes, fauna.positions, world.species.labels_now())
     palette = {cover.name: list(ramp) for cover, ramp in pixelmap.LAND_RAMPS.items()}
     palette["DORMANT"] = list(pixelmap.DORMANT)
     document = {
