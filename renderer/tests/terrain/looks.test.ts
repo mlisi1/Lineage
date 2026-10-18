@@ -1,40 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { COSY, LOOKS, MAPS, dressed } from "../../src/looks";
+import { COSY, DEFAULT_LOOK, R0, dressed } from "../../src/looks";
 import { paintGround } from "../../src/terrain/ground";
+import { LAND_PALETTE } from "../../src/terrain/palette";
 import { hexToRgb } from "../../src/terrain/pixels";
 import { PALETTE, world } from "../spike/worlds";
 
 describe("the looks", () => {
-  it("dresses the land in a look's palette, or leaves it as it comes", () => {
+  it("draw in cosy unless told otherwise, in the palette the land comes with", () => {
+    expect(DEFAULT_LOOK).toBe(COSY);
     const land = world(["gg", "gg"]);
-    expect(dressed(land, MAPS)).toBe(land);
-    const worn = dressed(land, COSY);
-    expect(worn.palette).toBe(COSY.land?.palette);
-    expect(worn.relief).toBe(COSY.land?.relief);
+    expect(dressed(land, COSY)).toBe(land);
+  });
+
+  it("keep the R0 look's own palette, for the record", () => {
+    const land = { ...world(["gg", "gg"]), ...LAND_PALETTE };
+    const worn = dressed(land, R0);
+    expect(worn.palette).toBe(R0.land?.palette);
+    expect(worn.palette["GRASS"]).toEqual(PALETTE["GRASS"]);
     expect(worn.cover).toBe(land.cover);
   });
 
-  it("gives every look a ramp for every class the maps colour", () => {
-    for (const look of LOOKS) {
-      if (look.land === undefined) continue;
-      expect(Object.keys(look.land.palette).sort()).toEqual(Object.keys(PALETTE).sort());
-      expect(look.land.relief.seaBands.length).toBeGreaterThan(0);
-    }
+  it("give the shared palette a ramp for every class the R0 look colours", () => {
+    expect(Object.keys(LAND_PALETTE.palette).sort()).toEqual(Object.keys(PALETTE).sort());
+    expect(LAND_PALETTE.relief.seaBands.length).toBeGreaterThan(0);
   });
 
-  it("paints the same land in other colours, on the same shore", () => {
-    const land = world(["~~gggg", "~~gggg", "~~gggg"]);
+  it("paint the same land in other colours, on the same shore", () => {
+    const land = { ...world(["~~gggg", "~~gggg", "~~gggg"]), ...LAND_PALETTE };
     const options = { tile: 8, style: "blended", grain: true } as const;
-    const maps = paintGround(land, options);
-    const cosy = paintGround(dressed(land, COSY), { ...options, look: COSY });
-    expect(cosy.width).toBe(maps.width);
+    const cosy = paintGround(land, { ...options, look: COSY });
+    const r0 = paintGround(dressed(land, R0), { ...options, look: R0 });
+    expect(cosy.width).toBe(r0.width);
     let differ = 0;
-    for (let at = 0; at < maps.rgba.length; at += 4) {
-      if (maps.rgba[at] !== cosy.rgba[at] || maps.rgba[at + 1] !== cosy.rgba[at + 1]) differ += 1;
+    for (let at = 0; at < r0.rgba.length; at += 4) {
+      if (r0.rgba[at] !== cosy.rgba[at] || r0.rgba[at + 1] !== cosy.rgba[at + 1]) differ += 1;
     }
-    expect(differ).toBeGreaterThan(maps.rgba.length / 4 / 2);
-    // The shore's outline stands where it did, in the look's own colour.
-    const outline = hexToRgb(COSY.land?.relief.shoreOutline ?? "#000000");
+    expect(differ).toBeGreaterThan(r0.rgba.length / 4 / 2);
+    // The shore's outline stands where it did, in each look's own colour.
     const outlined = (rgba: Uint8ClampedArray, colour: readonly number[]): number[] => {
       const found: number[] = [];
       for (let at = 0; at < rgba.length; at += 4) {
@@ -44,6 +46,8 @@ describe("the looks", () => {
       }
       return found;
     };
-    expect(outlined(cosy.rgba, outline)).toEqual(outlined(maps.rgba, hexToRgb("#3d3528")));
+    const cosyLine = outlined(cosy.rgba, hexToRgb(LAND_PALETTE.relief.shoreOutline));
+    expect(cosyLine.length).toBeGreaterThan(0);
+    expect(cosyLine).toEqual(outlined(r0.rgba, hexToRgb(R0.land?.relief.shoreOutline ?? "")));
   });
 });

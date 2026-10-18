@@ -3,12 +3,12 @@
  * views, through the seasons and from one season into the next.
  *
  *   land.html             the sheet
- *   land.html?look=cosy   only one look
+ *   land.html?look=r0     another look; ?look=all for every one side by side
  *
  * `npm run land` turns it into a self-contained report in `reports/R1-land-sheet/`. The
  * words are in land.html; this file fills in the pictures.
  */
-import { LOOKS, dressed, type Look } from "../looks";
+import { DEFAULT_LOOK, LOOKS, dressed, type Look } from "../looks";
 import { colourArt, type PlantArt } from "../plants/plantart";
 import { standingArts, standingPlants } from "../plants/plants";
 import { seasonRamp, type Season } from "../plants/seasons";
@@ -53,7 +53,6 @@ const SEASONS_SHOWN: readonly { name: string; season: Season; snow: boolean }[] 
   { name: "summer", season: "summer", snow: false },
   { name: "autumn", season: "autumn", snow: false },
   { name: "winter", season: "winter", snow: false },
-  { name: "snow", season: "winter", snow: true },
 ];
 
 function element(id: string): HTMLElement {
@@ -278,7 +277,10 @@ function groundSamples(host: HTMLElement, land: WorldFixture, look: Look): void 
 async function main(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const only = params.get("look");
-  const looks = LOOKS.filter((look) => only === null || look.name === only);
+  // The chosen look alone, unless asked for another or for all of them.
+  const looks = LOOKS.filter((look) =>
+    only === "all" ? true : only === null ? look === DEFAULT_LOOK : look.name === only,
+  );
   const response = await fetch("spike/world.json");
   if (!response.ok) throw new Error(`spike/world.json: HTTP ${response.status}`);
   const fixture = parseFixture(await response.json());

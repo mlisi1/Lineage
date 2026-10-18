@@ -77,8 +77,18 @@ export interface SeasonTones {
   pale: string;
 }
 
-/** The seasons of the report maps' palette: the first look. */
-export const MAP_SEASONS: SeasonTones = {
+/** The seasons of the cosy look (ADR 0014): strong golds and reds. */
+export const COSY_SEASONS: SeasonTones = {
+  fresh: "#c8f05a",
+  gold: ["#c07a18", "#eea828", "#ffd85a"],
+  flame: ["#a8341e", "#de5a28", "#f8903c"],
+  russet: ["#7e4a28", "#a26634", "#c88a46"],
+  rust: ["#94381e", "#c4582c", "#e8823a"],
+  cold: "#2a3a6a",
+  pale: "#c8b8a8",
+};
+/** The seasons of the R0 look. */
+export const R0_SEASONS: SeasonTones = {
   fresh: "#b4dc52",
   gold: ["#a8761f", "#d29a2a", "#eec24a"],
   flame: ["#8f3a1e", "#c25a26", "#e8853a"],
@@ -99,7 +109,7 @@ export function seasonRamp(
   form: string,
   season: Season,
   variant = 0,
-  tones: SeasonTones = MAP_SEASONS,
+  tones: SeasonTones = COSY_SEASONS,
 ): Ramp {
   const ramp = palette[form] ?? NO_RAMP;
   const dry = palette["DORMANT"] ?? ramp;
@@ -136,7 +146,7 @@ export function floorRamp(
   palette: Readonly<Record<string, Ramp>>,
   form: string,
   season: Season,
-  tones: SeasonTones = MAP_SEASONS,
+  tones: SeasonTones = COSY_SEASONS,
 ): Ramp {
   const ramp = palette[form] ?? NO_RAMP;
   if (season === "autumn" && form === "BROADLEAF") return blend(ramp, tones.russet, 0.6);

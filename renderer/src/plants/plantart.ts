@@ -22,7 +22,7 @@
  * see ADR 0007. No plant carries a shadow: the ground paints it, so that shadows do not
  * darken each other.
  */
-import { MAPS, type PlantInks } from "../looks";
+import { DEFAULT_LOOK, type PlantInks } from "../looks";
 import { mulberry32, type Random } from "../rng";
 import type { Ramp } from "../terrain/land";
 import { cellHash, hexToRgb, type Pixels } from "../terrain/pixels";
@@ -1391,7 +1391,7 @@ export function drawStanding(
   snow = false,
   shapes: Shapes = "bundles",
 ): PlantArt {
-  const look: Standing = { form, growth, variant, season, snow: snow && season === "winter" };
+  const look: Standing = { form, growth, variant, season, snow };
   const cosy = shapes === "cosy";
   const tree = form === "BROADLEAF" || form === "CONIFER";
   const [wider, taller] = BUILDS[variant % BUILDS.length] ?? [1, 1];
@@ -1435,7 +1435,7 @@ export function colourArt(
   ramp: Ramp,
   accent = "#b8443a",
   wood = TRUNK,
-  inks: PlantInks = MAPS.plants,
+  inks: PlantInks = DEFAULT_LOOK.plants,
 ): Pixels {
   type Rgb = [number, number, number];
   const shadeOf = (colour: string, factor: number): Rgb => {
@@ -1446,6 +1446,8 @@ export function colourArt(
       Math.min(255, Math.round(b * factor)),
     ];
   };
+  const hexOf = (rgb: Readonly<Rgb>): string =>
+    `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
   const toward = (colour: string, other: Readonly<Rgb>, share: number): Rgb => {
     const from = hexToRgb(colour);
     return [0, 1, 2].map((i) =>
@@ -1464,7 +1466,7 @@ export function colourArt(
     [INK.woodOutline]: [...inks.outline(wood), 255],
     [INK.accent]: [...hexToRgb(accent), 255],
     // In shade a colour is cooler as well as darker; in the light, warmer.
-    [INK.deep]: [...toward(ramp[0], inks.deep, inks.deepMix), 255],
+    [INK.deep]: [...toward(hexOf(shadeOf(ramp[0], inks.deepShade)), inks.deep, inks.deepMix), 255],
     [INK.bright]: [...toward(ramp[2], inks.bright, inks.brightMix), 255],
     [INK.accentDark]: [...toward(accent, inks.deep, 0.3), 255],
     [INK.core]: [...hexToRgb(inks.core), 255],

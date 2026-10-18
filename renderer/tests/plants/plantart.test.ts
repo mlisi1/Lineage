@@ -398,10 +398,11 @@ describe("the seasons", () => {
     expect(extent(tuft("winter")).tall).toBeLessThan(extent(tuft("summer")).tall * 0.75);
   });
 
-  it("lay snow on what stands out in winter, and only then", () => {
+  it("lay snow on what stands out when it is asked for, in whatever season", () => {
     for (const form of STANDING) {
       expect(count(near(form, 0, "grown", "winter"), SNOW)).toBe(0);
-      expect(count(near(form, 0, "grown", "summer", true), SNOW)).toBe(0);
+      // The simulation's snow lies on the hills in autumn and spring too.
+      expect(count(near(form, 0, "grown", "autumn", true), SNOW), form).toBeGreaterThan(10);
       const snowed = near(form, 0, "grown", "winter", true);
       expect(count(snowed, SNOW), form).toBeGreaterThan(20);
       // It lies on top: the snow's middle is above the middle of the plant.

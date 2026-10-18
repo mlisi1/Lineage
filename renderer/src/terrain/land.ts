@@ -59,4 +59,6 @@ export interface Land extends LandPalette {
    */
   plantHeight?: Uint8Array;
   plantEvergreen?: Uint8Array;
+  /** Depth of lying snow per cell, 0–255, as the simulation has it (absent in the R0 fixture). */
+  snow?: Uint8Array;
 }

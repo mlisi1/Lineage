@@ -22,7 +22,7 @@
  * rock. It can also be given the shadows of what stands on it.
  */
 import { VISIBLE_FROM } from "../plants/look";
-import { MAPS, type Look } from "../looks";
+import { DEFAULT_LOOK, type Look } from "../looks";
 import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
@@ -77,7 +77,11 @@ export interface GroundOptions {
    * whatever its biomass (the simulation's own winter has it die back). Summer if left out.
    */
   season?: Season;
-  /** Winter with snow lying on the land: in patches, thinner under trees. */
+  /**
+   * Winter with snow lying on the land: in patches, thinner under trees. Where the land
+   * carries the simulation's snow (`Land.snow`) that is what lies, in any season, and
+   * this is not read.
+   */
   snow?: boolean;
   /**
    * The season at each place, in cells, where the year is turning from one season to the
@@ -139,6 +143,8 @@ const FLOOR_LITTER: readonly number[] = [0, 0, 0, 0.18, 0.4, 0.46, 0];
 const SNOW_OPEN = 0.64;
 const SNOW_UNDER_TREES = 0.46;
 const SNOW_PATCH = 2.4;
+/** Snow as deep as the simulation's full depth over this share of it lies as thick as it gets. */
+const SNOW_FULL_FROM = 1.6;
 /** How much more or less of what comes and goes with the year the ground shows. */
 const BLOOMING: Readonly<Record<Season, number>> = { spring: 2.5, summer: 1, autumn: 0, winter: 0 };
 const LEAF_FALL: Readonly<Record<Season, number>> = {
@@ -378,7 +384,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const bare = packRamp(world.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
   const rock = packRamp(relief.highRock);
   const snow = packRamp(relief.snow);
-  const look = options.look ?? MAPS;
+  const look = options.look ?? DEFAULT_LOOK;
   const tones = look.ground;
   const burnt = packRamp(world.palette["BURNT"] ?? ["#3a302b", "#4f423a", "#66564b"]);
   /** What the time of year paints with: one season everywhere, or each place its own. */
@@ -414,6 +420,24 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     return made;
   };
   const { seasonAt } = options;
+  // How deep snow lies at a place, from the simulation's cells where the land carries
+  // them; otherwise everywhere or nowhere, as `snow` says.
+  const snowCells = world.snow;
+  const snowDepth =
+    snowCells === undefined
+      ? null
+      : (u: number, v: number): number => {
+          const x0 = Math.floor(u);
+          const y0 = Math.floor(v);
+          const fx = u - x0;
+          const fy = v - y0;
+          const at = (x: number, y: number): number =>
+            (snowCells[clampY(y) * width + clampX(x)] ?? 0) / 255;
+          return (
+            (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+            (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
+          );
+        };
   // The season of the pixel being painted.
   let now = seasonalOf(options.season ?? "summer");
   const dries = FORMS.map((form) => world.dormantClasses.includes(form));
@@ -731,13 +755,15 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         toned[at] = step;
         thick[at] = Math.round(grown * 255);
       }
-      if (now.snowing) {
-        // Snow in patches cells across, with a dithered edge; less of it under trees.
+      const depth = snowDepth === null ? (now.snowing ? 1 : 0) : snowDepth(u, v);
+      if (depth > 0) {
+        // Snow in patches cells across, with a dithered edge; less of it under trees, and
+        // where it lies thin, patches with ground between.
         const lying =
           0.82 * valueNoise(u / SNOW_PATCH, v / SNOW_PATCH, 40) +
           0.18 * valueNoise(worldX / PATCH, worldY / PATCH, 41);
         const under = grows === 4 || grows === 5 ? SNOW_UNDER_TREES : SNOW_OPEN;
-        if (lying + 0.04 * dither < under) {
+        if (lying + 0.04 * dither < under * Math.min(1, depth * SNOW_FULL_FROM)) {
           colours[at] = snow[step] ?? 0xffffff;
           if (detailed) matter[at] = MATTER.snow;
           continue;

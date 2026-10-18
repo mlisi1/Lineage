@@ -1,19 +1,19 @@
 /**
- * The looks the land and its plants can be drawn in: the colours that are not the cells'
- * own. Two so far:
+ * The looks the land and its plants can be drawn in: the colours besides the palette the
+ * land comes with, and the rules plants are drawn by.
  *
- *   maps   the report maps' palette (`tools/viz/pixelmap.py`), as the R0 spike chose it
- *   cosy   after Stardew Valley (R1 proposal, ADR 0014): warmer and more saturated
- *          greens, earth that is orange-brown rather than grey, a bright teal sea, shade
- *          toward violet and light toward gold, outlines in each thing's own darkest tone
- *          taken toward plum rather than grey. The creatures' `cosy` palette (R2) is the
- *          same idea; the plum, the violet and the gold come from `palette.ts`.
+ *   cosy   the look (ADR 0014), after Stardew Valley: in the report maps' palette
+ *          (`tools/viz/pixelmap.py`, which is cosy too), shade toward violet and light
+ *          toward gold, outlines in each thing's own darkest tone taken toward plum,
+ *          plants in Stardew's shapes (`plants/cosyart.ts`). The creatures' cosy palette
+ *          (R2) is the same idea; the plum, the violet and the gold come from `palette.ts`.
+ *   r0     the R0 look, kept for the record: the earlier palette and the bundles of T1.
  *
  * Seen from above as before: the look changes colours and edges, not the camera.
  */
 import * as TONES from "./palette";
 import type { Shapes } from "./plants/plantart";
-import { MAP_SEASONS, type SeasonTones } from "./plants/seasons";
+import { COSY_SEASONS, R0_SEASONS, type SeasonTones } from "./plants/seasons";
 import type { LandPalette, Ramp } from "./terrain/land";
 
 type Rgb = readonly [number, number, number];
@@ -49,6 +49,8 @@ export interface PlantInks {
   /** In shade a colour is cooler as well as darker; in the light, warmer: toward these, so far. */
   deep: Rgb;
   deepMix: number;
+  /** The darkest tone is first darkened by this (1 for none), so shade never lightens it. */
+  deepShade: number;
   bright: Rgb;
   brightMix: number;
   /** Bark by form. */
@@ -62,7 +64,7 @@ export interface PlantInks {
 
 export interface Look {
   name: string;
-  /** The palette of the land, in place of the one the land comes with; the land's own if left out. */
+  /** A palette of the land in place of the one it comes with; the land's own if left out. */
   land?: LandPalette;
   seasons: SeasonTones;
   ground: GroundTones;
@@ -85,10 +87,40 @@ const toward = (from: Rgb, to: Rgb, share: number): Rgb => [
   Math.round(from[2] * (1 - share) + to[2] * share),
 ];
 
-export const MAPS: Look = {
-  name: "maps",
+const ramp = (dark: string, mid: string, light: string): Ramp => [dark, mid, light];
+
+/** The R0 look, kept for the record: the report maps' palette before ADR 0014, the bundles of T1. */
+export const R0: Look = {
+  name: "r0",
   shapes: "bundles",
-  seasons: MAP_SEASONS,
+  land: {
+    palette: {
+      BARE: ramp("#8f7f68", "#b3a188", "#cdbd9f"),
+      LICHEN: ramp("#8b9a7a", "#a9b792", "#c3cfa8"),
+      GRASS: ramp("#6f9a3f", "#8fbf4f", "#aad468"),
+      SHRUB: ramp("#4f7d3a", "#6a9a45", "#84b356"),
+      BROADLEAF: ramp("#2f6230", "#3f7d3a", "#55964a"),
+      CONIFER: ramp("#1f4a3a", "#2b6149", "#3a7a5a"),
+      BURNT: ramp("#3a302b", "#4f423a", "#66564b"),
+      DORMANT: ramp("#8f8448", "#b3a65c", "#cdc177"),
+    },
+    relief: {
+      seaBands: [
+        { limit: 0.02, colour: "#8ecbe6" },
+        { limit: 0.06, colour: "#5aa7d6" },
+        { limit: 0.14, colour: "#3b7fbf" },
+        { limit: 0.26, colour: "#2c5f9e" },
+        { limit: 9.99, colour: "#1f437a" },
+      ],
+      slope: 0.012,
+      highRockFrom: 0.3,
+      highRock: ramp("#77716c", "#98928c", "#b5b0aa"),
+      snowFrom: 0.46,
+      snow: ramp("#c9d3dc", "#e6edf2", "#ffffff"),
+      shoreOutline: "#3d3528",
+    },
+  },
+  seasons: R0_SEASONS,
   ground: {
     litter: 0x6a5637,
     leafOchre: 0xb08a4a,
@@ -111,6 +143,7 @@ export const MAPS: Look = {
     outline: (dark) => shaded(dark, 0.62),
     deep: [18, 30, 56],
     deepMix: 0.34,
+    deepShade: 1,
     bright: [246, 240, 150],
     brightMix: 0.34,
     wood: { BROADLEAF: "#5a4632", CONIFER: "#6e4a34", SHRUB: "#5e4834" },
@@ -126,47 +159,11 @@ const rgbOf = (colour: number): Rgb => [colour >> 16, (colour >> 8) & 255, colou
 const PLUM = rgbOf(TONES.PLUM);
 const VIOLET = rgbOf(TONES.SHADE);
 
-const ramp = (dark: string, mid: string, light: string): Ramp => [dark, mid, light];
-
+/** The look chosen (ADR 0014), in the palette the land comes with: the report maps' own. */
 export const COSY: Look = {
   name: "cosy",
   shapes: "cosy",
-  land: {
-    palette: {
-      BARE: ramp("#8a6a4c", "#a8865e", "#c2a274"),
-      LICHEN: ramp("#7f9a58", "#9fb86a", "#c0d484"),
-      GRASS: ramp("#4f9a30", "#6cb83a", "#94d24a"),
-      SHRUB: ramp("#3d8434", "#55a03e", "#76bc48"),
-      BROADLEAF: ramp("#2c6a2c", "#42903a", "#6ab646"),
-      CONIFER: ramp("#1d5a48", "#277456", "#3a9064"),
-      BURNT: ramp("#4a3238", "#604248", "#7a5658"),
-      DORMANT: ramp("#b08a3c", "#d2ac4e", "#ead070"),
-    },
-    relief: {
-      seaBands: [
-        { limit: 0.02, colour: "#7fd8e8" },
-        { limit: 0.06, colour: "#4ab8de" },
-        { limit: 0.14, colour: "#3192d0" },
-        { limit: 0.26, colour: "#2a70bc" },
-        { limit: 9.99, colour: "#24529c" },
-      ],
-      slope: 0.012,
-      highRockFrom: 0.3,
-      highRock: ramp("#7a6a7c", "#9a8c9a", "#bcb0b8"),
-      snowFrom: 0.46,
-      snow: ramp("#c4cce8", "#e4eaf8", "#ffffff"),
-      shoreOutline: "#6a4030",
-    },
-  },
-  seasons: {
-    fresh: "#c8f05a",
-    gold: ["#c07a18", "#eea828", "#ffd85a"],
-    flame: ["#a8341e", "#de5a28", "#f8903c"],
-    russet: ["#7e4a28", "#a26634", "#c88a46"],
-    rust: ["#94381e", "#c4582c", "#e8823a"],
-    cold: "#2a3a6a",
-    pale: "#c8b8a8",
-  },
+  seasons: COSY_SEASONS,
   ground: {
     litter: 0x8a5a30,
     leafOchre: 0xd09a48,
@@ -181,7 +178,8 @@ export const COSY: Look = {
     twig: 0x7a4c2c,
     ash: 0xc8bcb8,
     petals: [0xfff6e8, 0xffd84a],
-    shadow: TONES.SHADE,
+    // The creatures' shadow on the ground: dark enough to darken even a conifer's floor.
+    shadow: TONES.GROUND_SHADOW,
     shadowMix: 0.3,
     foamMix: 0.75,
     sand: 0xe8cc94,
@@ -190,6 +188,7 @@ export const COSY: Look = {
     outline: (dark) => toward(shaded(dark, 0.5), PLUM, 0.4),
     deep: VIOLET,
     deepMix: 0.18,
+    deepShade: 0.74,
     bright: rgbOf(TONES.GOLD),
     brightMix: 0.38,
     wood: { BROADLEAF: "#8a5a34", CONIFER: "#94583a", SHRUB: "#80563a" },
@@ -200,7 +199,9 @@ export const COSY: Look = {
   },
 };
 
-export const LOOKS: readonly Look[] = [MAPS, COSY];
+export const LOOKS: readonly Look[] = [COSY, R0];
+/** What everything is drawn in unless told otherwise. */
+export const DEFAULT_LOOK = COSY;
 
 /** `land` in the colours of `look`. */
 export function dressed<T extends LandPalette>(land: T, look: Look): T {

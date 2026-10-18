@@ -6,8 +6,8 @@ self-contained file. A still copy of `renderer/land.html`
 (`cd renderer && npm run dev`, then open `/land.html`).
 
 - World: seed 42, 2027-08-03 (summer)
-- Renderer build: `d0038430cd7a-dirty`
-- 108 pictures
+- Renderer build: `4467bc6514eb-dirty`
+- 50 pictures
 
 Regenerate with `cd renderer && npm run land`; do not edit by hand. It is a view of
 the look, not a measurement: nothing here is an acceptance criterion.

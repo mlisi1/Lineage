@@ -15,7 +15,7 @@
  * them, for the ground to paint.
  */
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
-import { MAPS, type Look, type PlantInks } from "../looks";
+import { DEFAULT_LOOK, type Look, type PlantInks } from "../looks";
 import { mulberry32 } from "../rng";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
@@ -93,6 +93,8 @@ export class PlantLayer {
   private readonly tall: number;
   private sprites = 0;
   private faded: Sprite[] = [];
+  /** What else goes with the layer when it is destroyed: the texture its drawings are in. */
+  private readonly owned: { destroy: () => void }[] = [];
 
   /** `place` says what stands on a cell (whose plant, if any, is `look`). */
   constructor(
@@ -112,6 +114,18 @@ export class PlantLayer {
     if (options.eager === true) {
       this.cull({ x0: 0, y0: 0, x1: land.width, y1: land.height });
     }
+  }
+
+  /** Let `thing` be destroyed with the layer. */
+  own(thing: { destroy: () => void }): void {
+    this.owned.push(thing);
+  }
+
+  /** Take the layer off the screen for good, with what it owns. */
+  destroy(): void {
+    this.container.destroy({ children: true });
+    for (const thing of this.owned) thing.destroy();
+    this.owned.length = 0;
   }
 
   /** Number of plant sprites built so far: all of them for an eager layer. */
@@ -269,7 +283,10 @@ interface Drawing {
 const SHEET_WIDTH = 1024;
 
 /** Draw `arts` into one texture, in rows, a clear pixel between them. */
-function strip(arts: readonly StandingArt[], inks: PlantInks): Map<string, Drawing> {
+function strip(
+  arts: readonly StandingArt[],
+  inks: PlantInks,
+): { drawings: Map<string, Drawing>; source: CanvasSource } {
   // Where each goes: along a row until it is full, then on the next.
   const places: { left: number; top: number }[] = [];
   let left = 1;
@@ -302,7 +319,7 @@ function strip(arts: readonly StandingArt[], inks: PlantInks): Map<string, Drawi
     drawings.set(key, { texture: new Texture({ source, frame }), art });
   });
   source.update();
-  return drawings;
+  return { drawings, source };
 }
 
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
@@ -349,6 +366,8 @@ const DRIFT_CELLS = 4;
 /** `HEIGHT` gene (0–255) below which a tree or bush is drawn broad and low, and from which slender and tall. */
 const BROAD_BELOW = 85;
 const TALL_FROM = 170;
+/** Snow (0–255) on a cell from which the plants on it carry some. */
+const PLANT_SNOW_FROM = 96;
 
 /**
  * What a standing plant of `form` is coloured with in `season`: the tones of its
@@ -359,7 +378,7 @@ export function standingColours(
   form: string,
   variant: number,
   season: Season,
-  look: Look = MAPS,
+  look: Look = DEFAULT_LOOK,
 ): { ramp: Ramp; accent: string; wood: string } {
   const flowers =
     form === "BROADLEAF"
@@ -424,8 +443,9 @@ export function standingArts(
 ): StandingArt[] {
   const close = options.close === true;
   const season = options.season ?? land.season;
-  const snow = options.snow === true && season === "winter";
-  const look = options.look ?? MAPS;
+  // The simulation's snow lies in any season; the spike's only in winter.
+  const snow = options.snow === true && (season === "winter" || land.snow !== undefined);
+  const look = options.look ?? DEFAULT_LOOK;
   const detail = tile / SPRITE_WIDTH;
   const arts: StandingArt[] = [];
   const ramp = (form: string, variant = 0): Ramp =>
@@ -526,14 +546,25 @@ export function standingPlants(
   const close = options.close === true;
   const season = options.season ?? land.season;
   const { time } = options;
-  // Every drawing in each season some of the plants are in, named "season:key".
+  // Where the simulation has snow lying, a plant on a cell under enough of it carries
+  // some, in whatever season; without the simulation's snow, `options.snow` says.
+  const snowCells = land.snow;
+  const anySnow = snowCells?.some((depth) => depth >= PLANT_SNOW_FROM) ?? false;
+  // Every drawing in each season some of the plants are in, with snow and without where
+  // some lies: named "season:key" and "season+snow:key".
   const arts = (time === undefined ? [season] : seasonsInPlay(time)).flatMap((shown) =>
-    standingArts(land, tile, { ...options, season: shown }).map((art) => ({
-      ...art,
-      key: `${shown}:${art.key}`,
-    })),
+    (snowCells === undefined ? [options.snow === true] : anySnow ? [false, true] : [false]).flatMap(
+      (snowy) =>
+        standingArts(land, tile, { ...options, season: shown, snow: snowy }).map((art) => ({
+          ...art,
+          key: `${shown}${snowy && snowCells !== undefined ? "+snow" : ""}:${art.key}`,
+        })),
+    ),
   );
-  const drawings = strip(arts, (options.look ?? MAPS).plants);
+  /** The name of drawing `key` in `shown`, with snow on it if its cell (x, y) has snow. */
+  const named = (shown: Season, x: number, y: number, key: string): string =>
+    `${shown}${(snowCells?.[y * land.width + x] ?? 0) >= PLANT_SNOW_FROM ? "+snow" : ""}:${key}`;
+  const { drawings, source } = strip(arts, (options.look ?? DEFAULT_LOOK).plants);
   const aboveSea = (x: number, y: number): number =>
     (land.heights[y * land.width + x] ?? 0) - land.seaLevel;
   /** The season the ground of cell (x, y) is in, and the season of the plant standing on it. */
@@ -593,7 +624,8 @@ export function standingPlants(
     const here = groundSeason(x, y);
     const inSeason = IN_SEASON[here];
     const flowersNow = FLOWERS[here];
-    const put = (key: string, dx: number, dy: number): Placed[] => placed(`${here}:${key}`, dx, dy);
+    const put = (key: string, dx: number, dy: number): Placed[] =>
+      placed(named(here, x, y, key), dx, dy);
     let salt = 100;
     /** One of `kind` somewhere on the cell, with `chance`; `variants` drawings to pick from. */
     const maybe = (kind: string, chance: number, variants: number): void => {
@@ -686,7 +718,7 @@ export function standingPlants(
   };
 
   const tall = Math.max(...arts.map(({ art }) => art.height)) / tile;
-  return new PlantLayer(
+  const layer = new PlantLayer(
     land,
     (look, x, y) => {
       const out = close ? among(look, x, y) : [];
@@ -696,16 +728,28 @@ export function standingPlants(
         // Close up the grass is the tufts above, not one in three cells.
         if (close) return out;
         const [dx, dy] = plantOffset(x, y);
-        const key = `${groundSeason(x, y)}:${standingKey("GRASS", "grown", variantOf(x, y, 17))}`;
+        const key = named(
+          groundSeason(x, y),
+          x,
+          y,
+          standingKey("GRASS", "grown", variantOf(x, y, 17)),
+        );
         return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
       }
       const density = look.form === "SHRUB" ? PLANT_SCALE.bushDensity : PLANT_SCALE.treeDensity;
       if (cellHash(x, y, 16) >= density) return out;
       const [dx, dy] = plantOffset(x, y);
-      const key = `${plantSeason(x, y)}:${standingKey(look.form, growthOf(biomass), buildOf(x, y))}`;
+      const key = named(
+        plantSeason(x, y),
+        x,
+        y,
+        standingKey(look.form, growthOf(biomass), buildOf(x, y)),
+      );
       return [...out, ...placed(key, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH)];
     },
     // Close up, plants and animals are large enough to be sorted four rows to the cell.
     close ? { tall, rowsPerCell: 4 } : { tall, eager: options.lazy !== true },
   );
+  layer.own(source);
+  return layer;
 }
