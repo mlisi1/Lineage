@@ -439,6 +439,41 @@ uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 1000 --snaps
 uv run python -m tools.fastforward --years 3 --seeds 20 --save-days 1000 --snapshot-days 0 --set fauna.meat_energy=900.0 --out runs/scav-on-meat900
 ```
 
+## Scavenging measured; final report (2026-10-18)
+
+- **Balance with scavenging** (learning on, 20 seeds × 3 years):
+
+  | Run | M4.3 final-year mean | ≥ 3 predators, years 1–3 | Extinct seed-years | Diet gene | Step |
+  |---|---|---|---|---|---|
+  | M4 report | 0.62 | 0.61 | 0.05 | 0.110 | 194 ms |
+  | Before scavenging | 0.58 | 0.48 | 0.03 | 0.101 | 343 ms |
+  | **Scavenging, `meat_energy` 1 600 (kept)** | **0.66** | **0.60** | 0.03 | **0.146** | 403 ms |
+  | Scavenging, `meat_energy` 900 | 0.56 | 0.53 | 0.02 | 0.121 | 409 ms |
+
+  Scavenging restores the predators and passes M4.3. The diet gene rises (meat pays
+  more), though true omnivores stay rare.
+- **Step cost**: scavenging pushed the step over budget (403 ms). Smelling all four
+  fields from one set of sample points and caching the plant-form masks brought it to
+  **308 ms**, bit-identical (`0f7b41e`).
+- **Final report** (`reports/M5-fauna-learning/`, commit `0f7b41e`):
+  - **M5.1 PASS**: diet fit positive in 20 of 20 seeds (median +0.29).
+  - **M5.2 FAIL**: time to competence falls in 50 % of seeds, against 55 % with
+    learning off.
+  - **M5.3 PASS**: 308 ms per sim-day.
+  - **M4.3 PASS** with learning on: final-year mean 0.66.
+- **Shielding again**: the inherited diet bias ends at +0.069 with learning on and
+  +0.183 off, with a learned bias of +0.096. Learning takes over the diet rule, so the
+  genes do not carry it.
+- **Open for the owner: M5.2.** A Baldwin trend (time to competence falling over
+  generations) is what CLAUDE.md asks, but every run shows shielding, its opposite, and
+  the share hovers around a coin toss (40–60 %) with learning on and off alike.
+  Options:
+  - (a) Make M5.2 an observation, not a pass/fail: report time to competence and
+    shielding versus assimilation.
+  - (b) Keep it and accept that M5 does not pass M5.2.
+  - (c) Change the world so a Baldwin effect can appear, e.g. a much longer horizon
+    (Ackley & Littman needed millions of steps), which is M11's territory.
+
 ## Candidate features (researched 2026-10-17, owner asked for ideas)
 
 Ranked by fit for the gadget: what they add to evolution, how intriguing the learning

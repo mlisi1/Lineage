@@ -435,6 +435,19 @@ attack_softness = 0.35
 # Energy an attempt costs the hunter, per unit mass.
 attack_cost = 1.5
 
+# --- Carrion (scavenging) ---
+# The dead leave carrion on land, in units of meat mass: what a hunter could not eat of
+# its kill, and carcass_share of the body of those that starved or died of age (the
+# drowned are lost). It rots with time constant carrion_decay_hours. Creatures that digest
+# meat (diet gene ≥ attack_min_diet) eat it where they stand, at scavenge_rate ×
+# mass^metabolic_exponent meat mass per hour, for meat_energy × their meat efficiency.
+carcass_share = 0.5
+carrion_decay_hours = 72.0
+scavenge_rate = 0.5
+# Carrion is smelled through a scent spread over the box of this half-width (cells)
+# around it: a carcass is a single cell, which the sparse sampling of smell would miss.
+carrion_scent_cells = 3
+
 # --- Reproduction ---
 # Two adults can breed when their body genomes differ by at most compat_distance (mean
 # absolute difference per gene), they are within reach, and each holds at least
@@ -472,6 +485,8 @@ instinct_flee = 2.0
 instinct_mate = 2.5
 instinct_land = 1.5
 instinct_space = 1.2
+# Founders head for carrion in proportion to their diet gene.
+instinct_scavenge = 1.6
 # Standard deviation of the other weights of a founder's brain.
 founder_brain_sigma = 0.1
 
