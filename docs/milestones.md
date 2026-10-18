@@ -9,7 +9,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M2 | Terrain generation and dynamics | done | [reports/M2-terrain](../reports/M2-terrain/README.md) |
 | M3 | Flora | done | [reports/M3-flora](../reports/M3-flora/README.md) |
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
-| M5 | Fauna II: lifetime learning | **done** 2026-10-18 on branch `m5-lifetime-learning` (merge into `main` pending): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
+| M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | next: start on a branch from `main` once M5 is merged (handoff below) | — |
 | M7 | Rare genes (creatures and plants) | not started | — |
 | M8 | Presence, calendar, god powers | not started | — |
@@ -33,37 +33,24 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 State at 2026-10-18, end of M5, for the next session.
 
-### Closing M5 (owner)
+### M5 closed
 
-M5 is done on branch `m5-lifetime-learning` (ADR 0009 accepted; report and slow tests
-green). `main`, with R0, is already merged into it, so the merge back has no conflicts.
+M5 was merged into `main` on 2026-10-18 (`f87f592`); lint, types, the fast suite (441)
+and the renderer tests (130) passed after the merge.
 
-1. *(Optional)* Validate on seeds the tuning never saw (about 17 minutes, all cores),
-   and compare its README with the committed report's:
+- **Schema v6 and `sim/tests/fixtures/saves/v6.lzma` are frozen**: any change to saved
+  fields needs v7 and a migration.
+- Branch `m8-daylight` (`67dfeb6`) parks the started day/night work. When M8 starts,
+  branch from `main` and bring that commit over (`git cherry-pick 67dfeb6`); it does not
+  type-check until M8 wires it in.
+- *(Optional, not done)* Validate M5 on seeds the tuning never saw (seeds 20–39; about 17
+  minutes on all cores). `docs/m11-plan.md` §2 makes this M11's first step anyway.
 
-   ```sh
-   uv run python -m tools.fastforward --years 3 --seeds 20 --seed-base 20 --save-days 30 --snapshot-days 60 --fork-days 60 --fork-length 28 --out runs/m5-on-fresh
-   uv run python -m tools.fastforward --years 3 --seeds 20 --seed-base 20 --save-days 30 --snapshot-days 60 --set fauna.learning=false --out runs/m5-off-fresh
-   uv run python -m tools.report M5 --runs runs/m5-on-fresh --baseline runs/m5-off-fresh --out /tmp/m5-fresh
-   ```
-
-2. Push the branch, then merge it into `main` with a merge commit (as R0 was), and check:
-
-   ```sh
-   git push origin m5-lifetime-learning
-   git switch main && git pull
-   git merge --no-ff m5-lifetime-learning -m "Merge branch 'm5-lifetime-learning': M5 lifetime learning done [M5]"
-   env -u PYTHONPATH uv run ruff check . && env -u PYTHONPATH uv run ruff format --check . && env -u PYTHONPATH uv run pyright
-   env -u PYTHONPATH uv run pytest -m "not slow"
-   (cd renderer && npm test)
-   git push origin main
-   ```
-
-3. From the merge on, **schema v6 and `sim/tests/fixtures/saves/v6.lzma` are frozen**:
-   any later change to saved fields needs v7 and a migration.
-4. Branch `m8-daylight` (`67dfeb6`) parks the started day/night work and is based on the
-   M5 branch. When M8 starts, branch from `main` and bring that commit over
-   (`git cherry-pick 67dfeb6`); it does not type-check until M8 wires it in.
+  ```sh
+  uv run python -m tools.fastforward --years 3 --seeds 20 --seed-base 20 --save-days 30 --snapshot-days 60 --fork-days 60 --fork-length 28 --out runs/m5-on-fresh
+  uv run python -m tools.fastforward --years 3 --seeds 20 --seed-base 20 --save-days 30 --snapshot-days 60 --set fauna.learning=false --out runs/m5-off-fresh
+  uv run python -m tools.report M5 --runs runs/m5-on-fresh --baseline runs/m5-off-fresh --out /tmp/m5-fresh
+  ```
 
 ### Starting M6 (species, names, phylogeny)
 
