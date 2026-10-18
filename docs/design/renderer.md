@@ -269,18 +269,26 @@ if it is round (no more than 2.2 times as long as wide: a patch would cut a band
 two). Stripes and fades are drawn flat, in their one colour.
 
 **Under water** (`src/creatures/water.ts`). An animal that lives in the water (aquatic
-≥ 0.6) is seen through the water where it swims, or it would seem to walk on the sea. The
-stage knows the water at every place (`seaIn` in `habitat.ts`): the colour of the sea's
-depth bands, as the ground paints them, blended between the bands' middles, and the depth
-as a share of the deepest band's middle, in 12 steps. Each colour of the body turns toward
-the water's hue at its own lightness (45 % of the way in the shallows, 75 % in the deep),
-so that its shading and markings still read, then into a haze of the water itself (10 % to
-45 %): in the shallows it is seen as through clear water, in the deep it fades into the
-dark. A glint keeps more of itself; its shadow on the bottom fades with depth. A swimmer is
-recoloured only when its water changes step, not every frame. Its dot on the map keeps its
-own colour. (Mixing every colour toward one blue, the first try, turned reds purple and
-flattened every body alike.) The creature sheet shows every swimmer out of the water and in
-three waters, and a stretch of sea from the shore to the deep.
+≥ 0.6) must look as if it were in the water, not walking on it. The stage knows the water
+at every place (`seaIn` in `habitat.ts`): the colour of the sea's depth bands, as the
+ground paints them, blended between the bands' middles, and the depth as a share of the
+deepest band's middle, in 12 steps; a swimmer is recoloured only when its water changes
+step. How it is seen through the water is still to be chosen (`WATER_LOOK` in
+`proposal.ts`), between three looks the creature sheet shows side by side:
+
+- **hue** (drawn now): each colour turns toward the water's hue at its own lightness (45 %
+  in the shallows to 75 % in the deep), then into a haze of the water (10 % to 45 %);
+- **murk**: its own hues, darkened (15 % to 45 %), then some of the water's colour (15 % to
+  50 %), as if the water showed through it;
+- **glass**: its own hues, a little darkened (10 % to 30 %), and the whole body see-through
+  as one (80 % opaque to 45 %, an `AlphaFilter` on the animal), so that the sea's own bands
+  and waves show through it; each swimmer in sight is then drawn on its own every frame.
+
+In every look a glint keeps more of itself, the shadow on the bottom fades with depth, and
+the dot on the map keeps its own colour. A swimmer keeps its head 0.012 below the sea's
+surface (a walker 0.004 above it), so that the body trailing behind it is in the water and
+not lying on the beach. (Mixing every colour toward one blue, the first try, turned reds
+purple and flattened every body alike.)
 
 **Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
 fraction of a cell every ten minutes, which watched in real time is stillness. A layer

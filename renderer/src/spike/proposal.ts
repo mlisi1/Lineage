@@ -3,6 +3,7 @@
  * far, and for what is still open the proposal the rest is held at.
  */
 import type { BodyOptions } from "../creatures/body";
+import type { WaterLook } from "../creatures/water";
 import type { GroundStyle } from "./ground";
 
 /** Art pixels to the cell in each view. The map and the middle view are settled. */
@@ -36,3 +37,8 @@ export const MID_BODY: BodyOptions = midBody();
 export function localBody(pixels: number, scale: number = CREATURE_SCALE): BodyOptions {
   return { style: "cosy", scale, pixels, pace: 0.35 };
 }
+/**
+ * How an animal that lives in the water is seen through it (`water.ts`): still to be
+ * chosen between hue, murk and glass on the creature sheet.
+ */
+export const WATER_LOOK: WaterLook = "hue";

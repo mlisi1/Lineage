@@ -5,8 +5,13 @@ import type { WorldFixture } from "./fixture";
 /** Can a creature be at this place (in cells)? `swims` asks for water instead of land. */
 export type Passable = (x: number, y: number, swims: boolean) => boolean;
 
-/** How far above the sea a walker stays, and below it a swimmer, to keep off the waterline. */
+/** How far above the sea a walker stays, to keep off the waterline. */
 const SHORE_CLEARANCE = 0.004;
+/**
+ * How far below it a swimmer's head stays: deeper, so that its body, which trails behind,
+ * is in the sea too and not lying on the beach (about half the shallowest band).
+ */
+const SWIM_CLEARANCE = 0.012;
 
 /**
  * Height at a place between cells: interpolated between the four nearest cells' middles,
@@ -36,7 +41,7 @@ export function passableIn(fixture: WorldFixture): Passable {
   return (x, y, swims) => {
     if (x < 1 || y < 1 || x >= fixture.width - 1 || y >= fixture.height - 1) return false;
     const above = heightAt(fixture, x, y) - fixture.seaLevel;
-    return swims ? above < -SHORE_CLEARANCE : above > SHORE_CLEARANCE;
+    return swims ? above < -SWIM_CLEARANCE : above > SHORE_CLEARANCE;
   };
 }
 

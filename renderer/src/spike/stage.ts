@@ -11,7 +11,8 @@ import type { Point } from "../creatures/chain";
 import { CreatureLayer, type Life } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
 import { seaIn, type Passable } from "./habitat";
-import type { SeaAt } from "../creatures/water";
+import type { SeaAt, WaterLook } from "../creatures/water";
+import { WATER_LOOK } from "./proposal";
 import { PIXEL_ART, groundSprite, loadWorldLayers } from "./layers";
 import { lightTint, type Light } from "./light";
 import type { Pixels } from "./pixelart";
@@ -123,6 +124,7 @@ export class Stage {
     body?: BodyOptions,
     life: Life = "wander",
     sea: SeaAt = this.sea,
+    water: WaterLook = WATER_LOOK,
   ): CreatureLayer {
     const layer = new CreatureLayer(
       this.atlas,
@@ -132,6 +134,7 @@ export class Stage {
       body,
       life,
       sea,
+      water,
     );
     layer.setCount(seeds.length);
     layer.show("hidden");

@@ -13,7 +13,7 @@ import reference from "../../../sim/tests/fixtures/phenotypes.json";
 import { PATTERNS, bodyPlan, kindOf, type CreatureStyle } from "../creatures/body";
 import type { Point } from "../creatures/chain";
 import { parsePhenotypeConfig, phenotype, type Phenotype } from "../creatures/phenotype";
-import type { Sea } from "../creatures/water";
+import { WATER_LOOKS, type Sea } from "../creatures/water";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
 import type { CreatureLayer } from "./creatures";
@@ -76,7 +76,7 @@ const SIM_STEP_CELLS = 1.6;
 /** The seed of the specimens' own random stream (see section 3). */
 const SPECIMEN_STREAM = 1515;
 /** Hues an eel is shown in under water, to judge every colour against the sea. */
-const WATER_HUES = [0, 0.08, 0.16, 0.33, 0.5, 0.7, 0.85];
+const WATER_HUES = [0, 0.16, 0.33, 0.85];
 /** Swimmers in the shore-to-deep picture: the swimming specimens and eels of every hue. */
 const SWIMMING_SPECIMENS = ["eel", "all-one", "random-1", "random-5"];
 /** The local view's scenes: who is in each. */
@@ -380,41 +380,46 @@ async function main(): Promise<void> {
       passable,
       random,
     );
-    const layers = waters.map(({ sea }) =>
-      stage.cast(
-        placed,
-        8,
-        { style: "cosy", scale: CREATURE_SCALE, pixels: PORTRAIT_PIXELS, pace: 0.35 },
-        "wander",
-        () => sea,
-      ),
-    );
-    const head = create("div", "water-head");
-    for (const water of ["", ...waters.map((w) => w.name)]) head.append(create("span", "", water));
-    element("underwater").append(head);
-    swimmers.forEach((swimmer, index) => {
-      const row = create("div", "water-row");
-      row.append(create("span", "", swimmer.name));
-      waters.forEach((water, w) => {
-        const canvas = create("canvas");
-        canvas.setAttribute("aria-label", `${swimmer.name}, ${water.name}`);
-        row.append(canvas);
-        show(
-          canvas,
-          {
-            ...base,
-            ...SWATCH,
-            zoom: PORTRAIT_PIXELS,
-            ground: water.ground,
-            cast: layers[w] ?? null,
-            follow: index,
-            centre: middle(island),
-          },
-          SWATCH.enlarged,
-        );
+    for (const look of WATER_LOOKS) {
+      const host = element(`underwater-${look}`);
+      const layers = waters.map(({ sea }) =>
+        stage.cast(
+          placed,
+          8,
+          { style: "cosy", scale: CREATURE_SCALE, pixels: PORTRAIT_PIXELS, pace: 0.35 },
+          "wander",
+          () => sea,
+          look,
+        ),
+      );
+      const head = create("div", "water-head");
+      for (const water of ["", ...waters.map((w) => w.name)])
+        head.append(create("span", "", water));
+      host.append(head);
+      swimmers.forEach((swimmer, index) => {
+        const row = create("div", "water-row");
+        row.append(create("span", "", swimmer.name));
+        waters.forEach((water, w) => {
+          const canvas = create("canvas");
+          canvas.setAttribute("aria-label", `${swimmer.name}, ${water.name}, ${look}`);
+          row.append(canvas);
+          show(
+            canvas,
+            {
+              ...base,
+              ...SWATCH,
+              zoom: PORTRAIT_PIXELS,
+              ground: water.ground,
+              cast: layers[w] ?? null,
+              follow: index,
+              centre: middle(island),
+            },
+            SWATCH.enlarged,
+          );
+        });
+        host.append(row);
       });
-      element("underwater").append(row);
-    });
+    }
 
     // From the shore out to the deep, full size: the swimmers roam it, coloured by the
     // water where each one is.
@@ -434,28 +439,32 @@ async function main(): Promise<void> {
       passable,
       random,
     ).map((seed) => ({ ...seed, pen: view }));
-    const figure = create("figure", "screen");
-    const canvas = create("canvas");
-    canvas.setAttribute("aria-label", "from the shore to the deep");
-    figure.append(canvas, create("figcaption", "", "from the shore to the deep, full size"));
-    element("underwater-scene").append(figure);
-    show(
-      canvas,
-      {
-        ...base,
-        zoom: LOCAL_PIXELS,
-        ground: "sea",
-        plants: "local",
-        cast: stage.cast(roaming, 9, {
-          style: "cosy",
-          scale: CREATURE_SCALE,
-          pixels: LOCAL_PIXELS,
-          pace: 0.35,
-        }),
-        centre: coast,
-      },
-      ART,
-    );
+    for (const look of WATER_LOOKS) {
+      const figure = create("figure", "screen");
+      const canvas = create("canvas");
+      canvas.setAttribute("aria-label", `from the shore to the deep, ${look}`);
+      figure.append(canvas, create("figcaption", "", look));
+      element("underwater-scene").append(figure);
+      show(
+        canvas,
+        {
+          ...base,
+          zoom: LOCAL_PIXELS,
+          ground: "sea",
+          plants: "local",
+          cast: stage.cast(
+            roaming,
+            9,
+            { style: "cosy", scale: CREATURE_SCALE, pixels: LOCAL_PIXELS, pace: 0.35 },
+            "wander",
+            stage.sea,
+            look,
+          ),
+          centre: coast,
+        },
+        ART,
+      );
+    }
   }
 
   // 2. The middle view: the specimens and some of the herd on a shore.

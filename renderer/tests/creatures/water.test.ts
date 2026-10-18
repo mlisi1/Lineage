@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { colour } from "../../src/creatures/body";
-import { seaKey, shadowUnderWater, underWater, type Sea } from "../../src/creatures/water";
+import {
+  opacityUnderWater,
+  seaKey,
+  shadowUnderWater,
+  underWater,
+  type Sea,
+} from "../../src/creatures/water";
 import { seaIn } from "../../src/spike/habitat";
 import { SEA_LEVEL, world } from "../spike/worlds";
 
@@ -92,6 +98,39 @@ describe("an animal seen through water", () => {
     expect(seaKey(SHALLOW)).toBe(seaKey({ ...SHALLOW }));
     expect(seaKey(SHALLOW)).not.toBe(seaKey(DEEP));
     expect(seaKey({ ...SHALLOW, depth: 0.5 })).not.toBe(seaKey(SHALLOW));
+  });
+});
+
+describe("murk and glass: its own hues, darker", () => {
+  it("keeps each colour's hue in glass, and darkens it more with depth", () => {
+    for (const tone of WHEEL) {
+      const shallow = underWater(tone, SHALLOW, false, "glass");
+      const deep = underWater(tone, DEEP, false, "glass");
+      expect(hueGap(shallow, tone)).toBeLessThan(2);
+      expect(hueGap(deep, tone)).toBeLessThan(2);
+      expect(lightness(deep)).toBeLessThan(lightness(shallow));
+      expect(lightness(shallow)).toBeLessThan(lightness(tone));
+    }
+  });
+
+  it("lets murk take more of the water the deeper it is, and keep its shading", () => {
+    const tone = colour(0, 0.5, 0.8);
+    const at = (depth: number): number =>
+      distance(underWater(tone, { ...DEEP, depth }, false, "murk"), DEEP.colour);
+    expect(at(1)).toBeLessThan(at(0.1));
+    for (const sea of [SHALLOW, DEEP]) {
+      const tones = [0.2, 0.4, 0.6, 0.8].map((light) => colour(0.05, light, 0.8));
+      const seen = tones.map((t) => lightness(underWater(t, sea, false, "murk")));
+      expect([...seen].sort((a, b) => a - b)).toEqual(seen);
+    }
+  });
+
+  it("draws only glass see-through, less opaque the deeper it is", () => {
+    expect(opacityUnderWater(DEEP, "hue")).toBe(1);
+    expect(opacityUnderWater(DEEP, "murk")).toBe(1);
+    expect(opacityUnderWater(SHALLOW, "glass")).toBeLessThan(1);
+    expect(opacityUnderWater(DEEP, "glass")).toBeLessThan(opacityUnderWater(SHALLOW, "glass"));
+    expect(opacityUnderWater(DEEP, "glass")).toBeGreaterThan(0.3);
   });
 });
 

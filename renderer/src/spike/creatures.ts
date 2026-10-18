@@ -4,7 +4,7 @@
  * Everything is a sprite of the atlas (tinted discs, wedges and stretched squares), so a
  * creature costs no geometry rebuild, only transforms.
  */
-import { Container, Sprite, type Texture } from "pixi.js";
+import { AlphaFilter, Container, Sprite, type Texture } from "pixi.js";
 import { DISC_SIZE, type Atlas } from "./atlas";
 import {
   FIRST_LOOK,
@@ -17,7 +17,14 @@ import {
 import type { CellRect } from "./camera";
 import { followChain, solveKnee, type Point } from "../creatures/chain";
 import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
-import { seaKey, shadowUnderWater, underWater, type SeaAt } from "../creatures/water";
+import {
+  opacityUnderWater,
+  seaKey,
+  shadowUnderWater,
+  underWater,
+  type SeaAt,
+  type WaterLook,
+} from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
 import type { Random } from "./rng";
@@ -112,6 +119,8 @@ interface Creature {
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
   seaKey: number;
+  /** Glass: what draws the body see-through, once it needs one. */
+  glass?: AlphaFilter;
   /** The joint at its widest, which breathes; and how far into a breath it started. */
   chest: number;
   breathOffset: number;
@@ -142,6 +151,8 @@ export class CreatureLayer {
     private readonly life: Life = "wander",
     /** The water at a place: swimmers are coloured as seen through it. */
     private readonly sea: SeaAt | null = null,
+    /** How they are seen through it. */
+    private readonly water: WaterLook = "hue",
   ) {}
 
   /**
@@ -427,8 +438,17 @@ export class CreatureLayer {
         // The one see-through part is its shadow on the bottom.
         sprite.alpha = shadowUnderWater(alpha, sea);
       } else {
-        sprite.tint = underWater(colour, sea, colour === GLINT);
+        sprite.tint = underWater(colour, sea, colour === GLINT, this.water);
       }
+    }
+    // Glass: the body is see-through as one, so that its parts do not show through each other.
+    const opacity = sea === null ? 1 : opacityUnderWater(sea, this.water);
+    if (opacity < 1) {
+      creature.glass ??= new AlphaFilter();
+      creature.glass.alpha = opacity;
+      creature.container.filters = [creature.glass];
+    } else {
+      creature.container.filters = [];
     }
   }
 
