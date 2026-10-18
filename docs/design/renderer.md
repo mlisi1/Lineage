@@ -268,12 +268,19 @@ and more is shaded as a mass is, on its own: its far edge in shade, and a sunlit
 if it is round (no more than 2.2 times as long as wide: a patch would cut a band in
 two). Stripes and fades are drawn flat, in their one colour.
 
-**Under water.** An animal that lives in the water (aquatic ≥ 0.6) is seen through it,
-or it would seem to walk on the sea: every colour of its body is taken 42 % toward the
-water's blue (`WATER` in `src/palette.ts`, the sea's middle depth band), which also
-lowers its contrast; its outline goes 60 % toward deep water instead of its own dark;
-glints keep more of their white; its shadow on the bottom is half as dark. Its dot on the
-map keeps its own colour, which a blue sea would swallow.
+**Under water** (`src/creatures/water.ts`). An animal that lives in the water (aquatic
+≥ 0.6) is seen through the water where it swims, or it would seem to walk on the sea. The
+stage knows the water at every place (`seaIn` in `habitat.ts`): the colour of the sea's
+depth bands, as the ground paints them, blended between the bands' middles, and the depth
+as a share of the deepest band's middle, in 12 steps. Each colour of the body turns toward
+the water's hue at its own lightness (45 % of the way in the shallows, 75 % in the deep),
+so that its shading and markings still read, then into a haze of the water itself (10 % to
+45 %): in the shallows it is seen as through clear water, in the deep it fades into the
+dark. A glint keeps more of itself; its shadow on the bottom fades with depth. A swimmer is
+recoloured only when its water changes step, not every frame. Its dot on the map keeps its
+own colour. (Mixing every colour toward one blue, the first try, turned reds purple and
+flattened every body alike.) The creature sheet shows every swimmer out of the water and in
+three waters, and a stretch of sea from the shore to the deep.
 
 **Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
 fraction of a cell every ten minutes, which watched in real time is stillness. A layer

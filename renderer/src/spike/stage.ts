@@ -10,7 +10,8 @@ import type { CellRect } from "./camera";
 import type { Point } from "../creatures/chain";
 import { CreatureLayer, type Life } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
-import type { Passable } from "./habitat";
+import { seaIn, type Passable } from "./habitat";
+import type { SeaAt } from "../creatures/water";
 import { PIXEL_ART, groundSprite, loadWorldLayers } from "./layers";
 import { lightTint, type Light } from "./light";
 import type { Pixels } from "./pixelart";
@@ -44,6 +45,8 @@ export interface Picture {
 export class Stage {
   readonly atlas: Atlas;
   readonly passable: Passable;
+  /** The water at a place, which swimmers are seen through. */
+  readonly sea: SeaAt;
   private readonly world = new Container({ isRenderGroup: true });
   private readonly grounds = new Map<string, Sprite>();
   private readonly plantLayers = new Map<string, PlantLayer>();
@@ -59,9 +62,11 @@ export class Stage {
     private readonly app: Application,
     atlas: Atlas,
     passable: Passable,
+    sea: SeaAt,
   ) {
     this.atlas = atlas;
     this.passable = passable;
+    this.sea = sea;
     this.tint = new Sprite({ texture: atlas.white, blendMode: "multiply" });
     this.flat = new Sprite(atlas.white);
     for (const cover of [this.tint, this.flat]) {
@@ -88,7 +93,7 @@ export class Stage {
     const app = new Application();
     await app.init({ ...PIXEL_ART, width, height });
     const layers = await loadWorldLayers(fixture, folder);
-    const stage = new Stage(app, layers.atlas, layers.passable);
+    const stage = new Stage(app, layers.atlas, layers.passable, seaIn(fixture));
     stage.addSprite("terrain.png", layers.ground);
     stage.addSprite("map.png", layers.map);
     stage.addPlants("icons", layers.plants);
@@ -117,8 +122,17 @@ export class Stage {
     seed: number,
     body?: BodyOptions,
     life: Life = "wander",
+    sea: SeaAt = this.sea,
   ): CreatureLayer {
-    const layer = new CreatureLayer(this.atlas, seeds, this.passable, mulberry32(seed), body, life);
+    const layer = new CreatureLayer(
+      this.atlas,
+      seeds,
+      this.passable,
+      mulberry32(seed),
+      body,
+      life,
+      sea,
+    );
     layer.setCount(seeds.length);
     layer.show("hidden");
     this.casts.push(layer);

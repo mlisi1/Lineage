@@ -13,6 +13,7 @@ import reference from "../../../sim/tests/fixtures/phenotypes.json";
 import { PATTERNS, bodyPlan, kindOf, type CreatureStyle } from "../creatures/body";
 import type { Point } from "../creatures/chain";
 import { parsePhenotypeConfig, phenotype, type Phenotype } from "../creatures/phenotype";
+import type { Sea } from "../creatures/water";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
 import type { CreatureLayer } from "./creatures";
@@ -72,6 +73,12 @@ const STILL_STEP_S = 1 / 30;
  */
 const SIM_TICK_S = 3;
 const SIM_STEP_CELLS = 1.6;
+/** The seed of the specimens' own random stream (see section 3). */
+const SPECIMEN_STREAM = 1515;
+/** Hues an eel is shown in under water, to judge every colour against the sea. */
+const WATER_HUES = [0, 0.08, 0.16, 0.33, 0.5, 0.7, 0.85];
+/** Swimmers in the shore-to-deep picture: the swimming specimens and eels of every hue. */
+const SWIMMING_SPECIMENS = ["eel", "all-one", "random-1", "random-5"];
 /** The local view's scenes: who is in each. */
 const SCENES = {
   meadow: ["grazer", "giant", "mouse", "hunter", "random-3", "tank"],
@@ -242,6 +249,8 @@ async function main(): Promise<void> {
       stage.cast(seeds, seed, { style, scale, pixels, pace: pixels >= LOCAL_PIXELS ? 0.35 : 1 }),
     );
 
+  const roomyArea: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };
+
   // 1. The local view: two scenes, the whole screen, in each style.
   const localCells = [VIEW.width / LOCAL_PIXELS, Math.ceil(VIEW.height / LOCAL_PIXELS)] as const;
   const sites = {
@@ -339,6 +348,116 @@ async function main(): Promise<void> {
     );
   }
 
+  // Under water: every swimmer out of the water and in three waters, then a stretch of
+  // sea from the shore to the deep for them to cross.
+  {
+    const swimmers = [
+      ...SWIMMING_SPECIMENS.map((name) => ({ name, seed: specimen(name) })),
+      ...WATER_HUES.map((hue) => ({
+        name: `eel, hue ${hue}`,
+        seed: { ...specimen("eel"), hue },
+      })),
+    ];
+    const band = (index: number): number =>
+      packed(fixture.sea[Math.min(index, fixture.sea.length - 1)] ?? "#3b7fbf");
+    const waters: readonly { name: string; sea: Sea | null; ground: number }[] = [
+      {
+        name: "out of the water",
+        sea: null,
+        ground: packed(fixture.palette["BARE"]?.[2] ?? "#cdbd9f"),
+      },
+      { name: "shallows", sea: { colour: band(0), depth: 0.1 }, ground: band(0) },
+      { name: "middle depth", sea: { colour: band(2), depth: 0.5 }, ground: band(2) },
+      {
+        name: "deep",
+        sea: { colour: band(fixture.sea.length - 1), depth: 1 },
+        ground: band(fixture.sea.length - 1),
+      },
+    ];
+    const placed = scatter(
+      swimmers.map((swimmer) => swimmer.seed),
+      roomyArea,
+      passable,
+      random,
+    );
+    const layers = waters.map(({ sea }) =>
+      stage.cast(
+        placed,
+        8,
+        { style: "cosy", scale: CREATURE_SCALE, pixels: PORTRAIT_PIXELS, pace: 0.35 },
+        "wander",
+        () => sea,
+      ),
+    );
+    const head = create("div", "water-head");
+    for (const water of ["", ...waters.map((w) => w.name)]) head.append(create("span", "", water));
+    element("underwater").append(head);
+    swimmers.forEach((swimmer, index) => {
+      const row = create("div", "water-row");
+      row.append(create("span", "", swimmer.name));
+      waters.forEach((water, w) => {
+        const canvas = create("canvas");
+        canvas.setAttribute("aria-label", `${swimmer.name}, ${water.name}`);
+        row.append(canvas);
+        show(
+          canvas,
+          {
+            ...base,
+            ...SWATCH,
+            zoom: PORTRAIT_PIXELS,
+            ground: water.ground,
+            cast: layers[w] ?? null,
+            follow: index,
+            centre: middle(island),
+          },
+          SWATCH.enlarged,
+        );
+      });
+      element("underwater").append(row);
+    });
+
+    // From the shore out to the deep, full size: the swimmers roam it, coloured by the
+    // water where each one is.
+    const deepCells = [VIEW.width / LOCAL_PIXELS, Math.ceil(VIEW.height / LOCAL_PIXELS)] as const;
+    const coast = middle(
+      findSite(
+        fixture,
+        ...deepCells,
+        (shares) => (shares["WATER"] ?? 0) - Math.abs((shares["WATER"] ?? 0) - 0.8) * 2,
+      ),
+    );
+    paint("sea", coast, LOCAL_PIXELS, VIEW.width, VIEW.height, true);
+    const view = pen(coast, { x: deepCells[0] / 2 - 0.5, y: deepCells[1] / 2 - 0.5 });
+    const roaming = scatter(
+      swimmers.map((swimmer) => swimmer.seed),
+      view,
+      passable,
+      random,
+    ).map((seed) => ({ ...seed, pen: view }));
+    const figure = create("figure", "screen");
+    const canvas = create("canvas");
+    canvas.setAttribute("aria-label", "from the shore to the deep");
+    figure.append(canvas, create("figcaption", "", "from the shore to the deep, full size"));
+    element("underwater-scene").append(figure);
+    show(
+      canvas,
+      {
+        ...base,
+        zoom: LOCAL_PIXELS,
+        ground: "sea",
+        plants: "local",
+        cast: stage.cast(roaming, 9, {
+          style: "cosy",
+          scale: CREATURE_SCALE,
+          pixels: LOCAL_PIXELS,
+          pace: 0.35,
+        }),
+        centre: coast,
+      },
+      ART,
+    );
+  }
+
   // 2. The middle view: the specimens and some of the herd on a shore.
   const midPlants = standingPlants(fixture, MID_TILE);
   const midCells = [VIEW.width / MID_TILE, Math.ceil(VIEW.height / MID_TILE)] as const;
@@ -379,8 +498,11 @@ async function main(): Promise<void> {
   });
 
   // 3. Each specimen: on its patch at the local view's size, and as a portrait on sand.
+  // A random stream of its own, so that the snapshot tests of these pictures do not move
+  // when another section draws more or fewer numbers.
+  const placing = mulberry32(SPECIMEN_STREAM);
   const roomy: CellRect = { x0: 8, y0: 8, x1: fixture.width - 8, y1: fixture.height - 8 };
-  const standing = scatter(specimens.creatures, roomy, passable, random).map((seed) => ({
+  const standing = scatter(specimens.creatures, roomy, passable, placing).map((seed) => ({
     ...seed,
     pen: pen(seed, SPECIMEN_PEN),
   }));
@@ -397,7 +519,7 @@ async function main(): Promise<void> {
     centre: middle(island),
   });
   const portraits = casts(
-    scatter(specimens.creatures, roomy, passable, random),
+    scatter(specimens.creatures, roomy, passable, placing),
     3,
     PORTRAIT_PIXELS,
     CREATURE_SCALE,

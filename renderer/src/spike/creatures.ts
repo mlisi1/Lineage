@@ -17,6 +17,7 @@ import {
 import type { CellRect } from "./camera";
 import { followChain, solveKnee, type Point } from "../creatures/chain";
 import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
+import { seaKey, shadowUnderWater, underWater, type SeaAt } from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
 import type { Random } from "./rng";
@@ -64,6 +65,8 @@ export type Showing = "bodies" | "markers" | "hidden";
  * between sim ticks (`motion.ts`).
  */
 export type Life = "wander" | "anchored";
+/** A glint in an eye: it keeps more of itself under water. */
+const GLINT = 0xffffff;
 /** At a full breath the chest is this much wider. */
 const BREATH_WIDENS = 0.08;
 
@@ -105,6 +108,10 @@ interface Creature {
   motion: Motion | null;
   /** Its mass, which sets how slowly it breathes. */
   mass: number;
+  /** Every sprite of the body with its colour and opacity out of water. */
+  paints: { sprite: Sprite; colour: number; alpha: number }[];
+  /** The water it was last coloured for (`seaKey`), -1 for none. */
+  seaKey: number;
   /** The joint at its widest, which breathes; and how far into a breath it started. */
   chest: number;
   breathOffset: number;
@@ -133,6 +140,8 @@ export class CreatureLayer {
     private readonly random: Random,
     private readonly body: BodyOptions = FIRST_LOOK,
     private readonly life: Life = "wander",
+    /** The water at a place: swimmers are coloured as seen through it. */
+    private readonly sea: SeaAt | null = null,
   ) {}
 
   /**
@@ -247,7 +256,10 @@ export class CreatureLayer {
           head.x <= view.x1 + reach &&
           head.y >= view.y0 - reach &&
           head.y <= view.y1 + reach);
-      if (inView && posed) this.pose(creature, dtS);
+      if (inView && posed) {
+        this.pose(creature, dtS);
+        if (creature.plan.swims) this.wet(creature, head);
+      }
       if (creature.inView !== inView) {
         creature.inView = inView;
         this.reveal(creature, index);
@@ -383,6 +395,10 @@ export class CreatureLayer {
       chest: plan.radii.indexOf(Math.max(...plan.radii)),
       breathOffset: random(),
       mass: seed.mass,
+      paints: container.children
+        .filter((child): child is Sprite => child instanceof Sprite)
+        .map((sprite) => ({ sprite, colour: sprite.tint, alpha: sprite.alpha })),
+      seaKey: -1,
       pen: seed.pen,
       container,
       marker,
@@ -395,6 +411,25 @@ export class CreatureLayer {
       legs,
       inView: true,
     };
+  }
+
+  /** Colour a swimmer as seen through the water at its head, when that water changes. */
+  private wet(creature: Creature, head: Point): void {
+    const sea = this.sea?.(head.x, head.y) ?? null;
+    const key = seaKey(sea);
+    if (key === creature.seaKey) return;
+    creature.seaKey = key;
+    for (const { sprite, colour, alpha } of creature.paints) {
+      if (sea === null) {
+        sprite.tint = colour;
+        sprite.alpha = alpha;
+      } else if (alpha < 1) {
+        // The one see-through part is its shadow on the bottom.
+        sprite.alpha = shadowUnderWater(alpha, sea);
+      } else {
+        sprite.tint = underWater(colour, sea, colour === GLINT);
+      }
+    }
   }
 
   /** Anchored: live near where the sim has it, and pull the chain after the head. */
