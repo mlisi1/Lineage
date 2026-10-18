@@ -80,6 +80,8 @@ interface Leg {
   sole: Sprite | null;
   /** The foot is webbed: a paddle set across the way the leg points. */
   webbed: boolean;
+  /** Its foot has been put down once; until then it is put where it rests, not swung there. */
+  planted: boolean;
 }
 
 interface Creature {
@@ -343,6 +345,7 @@ export class CreatureLayer {
         edges: edges[index] ?? [],
         sole: !flipper && leg.foot > 0 ? round(leg.sole, leg.foot, leg.fin > 0) : null,
         webbed: leg.fin > 0,
+        planted: false,
       };
     });
     const textures: Record<string, [Texture, number]> = {
@@ -512,6 +515,13 @@ export class CreatureLayer {
     if (Math.hypot(leg.target.x - restX, leg.target.y - restY) > length * 0.8) {
       leg.target.x = restX + forwardX * length * 0.5;
       leg.target.y = restY + forwardY * length * 0.5;
+    }
+    if (!leg.planted) {
+      leg.target.x = restX;
+      leg.target.y = restY;
+      leg.foot.x = restX;
+      leg.foot.y = restY;
+      leg.planted = true;
     }
     const swing = Math.min(1, dtS * STEP_RATE);
     leg.foot.x += (leg.target.x - leg.foot.x) * swing;

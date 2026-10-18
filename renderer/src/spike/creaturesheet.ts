@@ -488,6 +488,8 @@ async function main(): Promise<void> {
   let filming = false;
   if (still !== null) {
     const steps = Math.round(Math.min(Math.max(Number(still) || 0, 0), 120) / STILL_STEP_S);
+    // Pose every body once, so that a sheet taken at once (still=0) shows them.
+    stage.tick(0);
     for (let step = 0; step < steps; step++) stage.tick(STILL_STEP_S);
     drawAll();
   } else {
