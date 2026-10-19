@@ -9,7 +9,7 @@ import {
   type Motion,
   type Walker,
 } from "../../src/creatures/motion";
-import { mulberry32 } from "../../src/spike/rng";
+import { mulberry32 } from "../../src/rng";
 
 const STEP_S = 1 / 30;
 const everywhere = (): boolean => true;

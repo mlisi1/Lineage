@@ -8,13 +8,13 @@ import type { BodyOptions } from "../creatures/body";
 import { viewAt, type View } from "./camera";
 import { CreatureLayer } from "./creatures";
 import type { WorldFixture } from "./fixture";
-import { MID_TILE, MAP_TILE, paintGround } from "./ground";
+import { MID_TILE, MAP_TILE, paintGround } from "../terrain/ground";
 import { GroundPieces, PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";
 import { cycleTint } from "./light";
 import type { Backend } from "./params";
-import { standingPlants, type PlantLayer } from "./plants";
+import { standingPlants, type PlantLayer } from "../plants/plants";
 import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, localBody } from "./proposal";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../rng";
 import type { Scenario } from "./scenarios";
 
 export interface GpuInfo {

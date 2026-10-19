@@ -14,14 +14,14 @@ import type { CellRect } from "./camera";
 import type { Point } from "../creatures/chain";
 import type { CreatureLayer } from "./creatures";
 import { parseFixture, type Cast, type CreatureSeed, type WorldFixture } from "./fixture";
-import { MAP_TILE, MID_TILE, paintGround, type Shadow } from "./ground";
+import { MAP_TILE, MID_TILE, paintGround, type Shadow } from "../terrain/ground";
 import { heightAt } from "./habitat";
 import { LIGHT_ORDER } from "./light";
-import { colourArt, type PlantArt } from "./plantart";
-import { outIn, standingArts, standingPlants, type StandingArt } from "./plants";
+import { colourArt, type PlantArt } from "../plants/plantart";
+import { outIn, standingArts, standingPlants, type StandingArt } from "../plants/plants";
 import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, PORTRAIT_PIXELS, localBody } from "./proposal";
-import { seasonRamp, type Season } from "./seasons";
-import { mulberry32 } from "./rng";
+import { seasonRamp, type Season } from "../plants/seasons";
+import { mulberry32 } from "../rng";
 import { findSite, forest, meadow, shore } from "./sites";
 import {
   around,

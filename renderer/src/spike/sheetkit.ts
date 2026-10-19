@@ -9,7 +9,7 @@ import type { CellRect } from "./camera";
 import type { CreatureSeed, WorldFixture } from "./fixture";
 import type { Passable } from "./habitat";
 import { hexToRgb } from "./pixelart";
-import type { Random } from "./rng";
+import type { Random } from "../rng";
 import type { Picture, Stage } from "./stage";
 
 declare global {

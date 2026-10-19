@@ -20,7 +20,7 @@ import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
 import type { CreatureLayer } from "./creatures";
 import { parseFixture, type Cast, type CreatureSeed } from "./fixture";
-import { MID_TILE, paintGround } from "./ground";
+import { MID_TILE, paintGround } from "../terrain/ground";
 import {
   CREATURE_SCALE,
   GROUND,
@@ -28,7 +28,7 @@ import {
   MID_CREATURE_SCALE,
   PORTRAIT_PIXELS,
 } from "./proposal";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../rng";
 import {
   around,
   create,
@@ -43,7 +43,7 @@ import {
   type Drawn,
 } from "./sheetkit";
 import { findSite, meadow, shore } from "./sites";
-import { standingPlants } from "./plants";
+import { standingPlants } from "../plants/plants";
 import { Stage, type Picture } from "./stage";
 
 /** Replaced by Vite with the commit the page was built from. */

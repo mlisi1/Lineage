@@ -4,7 +4,7 @@
  */
 import type { BodyOptions } from "../creatures/body";
 import type { WaterLook } from "../creatures/water";
-import type { GroundStyle } from "./ground";
+import type { GroundStyle } from "../terrain/ground";
 
 /** Art pixels to the cell in each view. The map and the middle view are settled. */
 export const MAP_PIXELS = 2;

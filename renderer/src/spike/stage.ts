@@ -16,8 +16,8 @@ import { WATER_LOOK } from "./proposal";
 import { PIXEL_ART, groundSprite, loadWorldLayers } from "./layers";
 import { lightTint, type Light } from "./light";
 import type { Pixels } from "./pixelart";
-import type { PlantLayer } from "./plants";
-import { mulberry32 } from "./rng";
+import type { PlantLayer } from "../plants/plants";
+import { mulberry32 } from "../rng";
 
 export interface Picture {
   /** Size the picture is drawn at, in art pixels. */

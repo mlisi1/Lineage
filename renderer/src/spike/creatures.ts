@@ -28,7 +28,7 @@ import {
 } from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
-import type { Random } from "./rng";
+import type { Random } from "../rng";
 
 /** Wandering: how fast the turn rate drifts and settles (per second). */
 const TURN_JITTER = 6;

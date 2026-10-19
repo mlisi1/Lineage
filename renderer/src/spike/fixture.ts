@@ -14,7 +14,7 @@ import {
   type RareConfig,
   type Signatures,
 } from "../creatures/rare";
-import { seasonOf, type Season } from "./seasons";
+import { seasonOf, type Season } from "../plants/seasons";
 
 export const FIXTURE_FORMAT = "lineage-spike-fixture/5";
 

@@ -3,10 +3,11 @@ import { Assets, CanvasSource, Container, Sprite, Texture, type ApplicationOptio
 import { buildAtlas, type Atlas } from "./atlas";
 import type { CellRect } from "./camera";
 import type { WorldFixture } from "./fixture";
-import { paintGround, type GroundStyle, type Shadow } from "./ground";
+import { paintGround, type GroundStyle, type Shadow } from "../terrain/ground";
 import type { Pixels } from "./pixelart";
 import { passableIn, type Passable } from "./habitat";
-import { iconPlants, type PlantLayer } from "./plants";
+import type { PlantLayer } from "../plants/plants";
+import { iconPlants } from "./iconplants";
 
 /** The deepest sea colour of the palette: what shows beyond the map. */
 const BACKGROUND = "#1f437a";
