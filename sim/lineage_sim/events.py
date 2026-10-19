@@ -206,3 +206,22 @@ class GodPowerRefused(OutputEvent):
 @dataclass(frozen=True)
 class GodPowerReady(OutputEvent):
     """The cooldown is over: the button works again (the LED's cue)."""
+
+
+@dataclass(frozen=True)
+class ChronicleEntry(OutputEvent):
+    """A line of the island's history (M9): entry ``number`` (from 1) of the chronicle.
+
+    ``importance`` runs from 1 (background) through 3 (notable) to 5 (historic); entries
+    at the config's ``major_importance`` and above are pushed to the phone (S4).
+    ``species`` is the species it is about (0: none); (x, y) the cell where it happened,
+    (-1, -1) when it has no one place.
+    """
+
+    number: int
+    kind: str
+    importance: int
+    text: str
+    species: int
+    x: float
+    y: float

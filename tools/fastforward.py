@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from lineage_sim.chronicle import KINDS, Kind
 from lineage_sim.config import Config, parse_config
 from lineage_sim.events import (
     CraterFormed,
@@ -129,6 +130,11 @@ LIVES_COLUMNS = ("first_day", "last_day", "slots", "arrived")
 # Columns of the daily presence table (``_presence_daily``, M8): one row per day, the
 # day's mean light (sampled hourly) and the hours the owner was present.
 PRESENCE_DAILY_COLUMNS = ("light", "present_hours")
+# Columns of the chronicle table (``_chronicle``, M9): one row per entry the world's
+# chronicle holds at the end of the run (power cuts included): its sim-day, importance,
+# kind (index into `lineage_sim.chronicle.KINDS`) and species (0: none). The texts are in
+# ``_chronicle_text``, row for row.
+CHRONICLE_COLUMNS = ("day", "importance", "kind", "species")
 DAY_MS = DAY_S * 1000
 _LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
@@ -463,6 +469,19 @@ class Probes:
         }
 
 
+def chronicle_tables(world: World) -> dict[str, np.ndarray]:
+    """The world's chronicle (`CHRONICLE_COLUMNS`) and its texts."""
+    entries = world.chronicle.entries()
+    table = np.array(
+        [[e.t_ms / DAY_MS, e.importance, KINDS.index(Kind(e.kind)), e.species] for e in entries],
+        dtype=np.float64,
+    ).reshape(-1, len(CHRONICLE_COLUMNS))
+    return {
+        EXTRA_PREFIX + "chronicle": table,
+        EXTRA_PREFIX + "chronicle_text": np.array([e.text for e in entries], dtype=np.str_),
+    }
+
+
 def fork(config_text: str, world: World, days: int, schedule: str = "always") -> list[list[float]]:
     """Run copies of ``world`` on for ``days`` with lifetime learning on and off. Returns
     a `FORK_COLUMNS` row for every youth of a creature born in the first half of that
@@ -567,6 +586,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     series = probes.series()
     series[EXTRA_PREFIX + "final_genes"] = probes.final_genes(world)
     series |= probes.phylogeny(world)
+    series |= chronicle_tables(world)
     series[EXTRA_PREFIX + "fork"] = np.array(forks, dtype=np.float64).reshape(-1, len(FORK_COLUMNS))
     return series, world.state_hash()
 

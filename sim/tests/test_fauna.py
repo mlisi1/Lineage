@@ -29,12 +29,12 @@ from numpy.random import PCG64, Generator
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "725e881029e8f1acbf1eeac67c78fe9ff07cef48a5cc96e40fc7161029e300de"
+GOLDEN_FAUNA_SEED_42 = "97dbd3b143a67a3b772187dc8bd215de6d0011370fcb06ae0af4ae05e1be8f40"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "3bfe7afe0e0fe43400add74747ecb203247a844130f25d4657bdc0d612e601d9"
+GOLDEN_AFTER_THREE_DAYS = "7cfecb5a1983e9ca8d7146bb122a04dd9349bd2770ce950f09cc23b71813d458"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "73fa2df52e10cfd84a8f03be1ded9e3626fc111831f7bb1727cea77ec05f3454"
+GOLDEN_BARE_ROCK_520_DAYS = "35d5ada7cab9861ef5210410245cb07fd8b88de79d4ba7f361edac4141fdaece"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 

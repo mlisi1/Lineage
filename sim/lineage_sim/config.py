@@ -622,6 +622,75 @@ class PresenceConfig:
 
 
 @dataclass(frozen=True)
+class ChronicleConfig:
+    """``[chronicle]``; units and intent of every key are documented in default.toml."""
+
+    notable_importance: int
+    major_importance: int
+    daily_cap: int
+    dedup_days: float
+    importance_first_life: int
+    importance_last_creature: int
+    importance_first: int
+    importance_god_power: int
+    importance_volcano: int
+    importance_meteor: int
+    importance_earthquake: int
+    importance_split: int
+    importance_rejoin: int
+    importance_arrival: int
+    importance_speciation: int
+    importance_extinction: int
+    importance_minor_extinction: int
+    importance_record: int
+    importance_boom: int
+    importance_crash: int
+    importance_migration: int
+    importance_fire: int
+    importance_huge_fire: int
+    importance_anniversary: int
+    importance_dark_age: int
+    importance_dawn: int
+    importance_season: int
+    notable_species_days: float
+    notable_species_peak: int
+    fire_cells: int
+    huge_fire_cells: int
+    record_after_days: float
+    record_margin: float
+    record_gap_days: float
+    swing_days: int
+    boom_factor: float
+    crash_factor: float
+    swing_min_members: int
+    migration_min_members: int
+    migration_gap_days: float
+    swimmer_min_aquatic: float
+    dark_age_hours: float
+    species_anniversary_days: float
+
+    def __post_init__(self) -> None:
+        def check(ok: bool, message: str) -> None:
+            if not ok:
+                raise ConfigError(f"[chronicle] {message}")
+
+        for f in fields(self):
+            if f.name.startswith("importance_") or f.name.endswith("_importance"):
+                check(1 <= getattr(self, f.name) <= 5, f"{f.name} must be within [1, 5]")
+        check(self.notable_importance <= self.major_importance, "notable above major")
+        for key in ("daily_cap", "notable_species_peak", "fire_cells", "swing_days",
+                    "swing_min_members", "migration_min_members", "dark_age_hours",
+                    "species_anniversary_days"):  # fmt: skip
+            check(getattr(self, key) > 0, f"{key} must be positive")
+        for key in ("dedup_days", "notable_species_days", "record_after_days", "record_margin",
+                    "record_gap_days", "migration_gap_days"):  # fmt: skip
+            check(getattr(self, key) >= 0, f"{key} must not be negative")
+        check(self.huge_fire_cells >= self.fire_cells, "huge_fire_cells below fire_cells")
+        check(self.boom_factor > 1 and self.crash_factor > 1, "swing factors must exceed 1")
+        check(0 <= self.swimmer_min_aquatic <= 1, "swimmer_min_aquatic must be within [0, 1]")
+
+
+@dataclass(frozen=True)
 class Config:
     config_version: int
     calendar: CalendarConfig
@@ -630,6 +699,7 @@ class Config:
     fauna: FaunaConfig
     species: SpeciesConfig
     presence: PresenceConfig
+    chronicle: ChronicleConfig
     # Subsystem name -> tick period in sim seconds.
     schedule: Mapping[str, float]
 
@@ -723,6 +793,7 @@ def parse_config(text: str) -> Config:
         "fauna",
         "species",
         "presence",
+        "chronicle",
     }
     if unknown:
         raise ConfigError(f"unknown sections: {sorted(unknown)}")
@@ -737,5 +808,6 @@ def parse_config(text: str) -> Config:
         _numeric_section(raw, "fauna", FaunaConfig),
         _numeric_section(raw, "species", SpeciesConfig),
         _numeric_section(raw, "presence", PresenceConfig),
+        _numeric_section(raw, "chronicle", ChronicleConfig),
         _schedule(raw),
     )

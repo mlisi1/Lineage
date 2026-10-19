@@ -185,3 +185,13 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 - Holidays are survived in every seed (97 absences); there is room to make them darker
   (`moonlight`, `moonlight_after_hours`) if dark ages should leave a mark.
 
+### M9 — chronicle and bestiary (ADR 0017, reports/M9-chronicle)
+
+- Both criteria pass under the office schedule (3.5 notable entries per month, largest
+  type 18.9 %); recheck them in every sweep, since the chronicle reads everything.
+- Fires: only 5 of 150 reach `fire_cells` (300) in office light; lower it or accept a
+  quiet fire record. Booms and crashes are 23 % of entries together (`boom_factor`,
+  `crash_factor`, `swing_min_members`).
+- The year before life is quiet (about 2 notable entries a month); a late founding seed
+  falls below the band.
+

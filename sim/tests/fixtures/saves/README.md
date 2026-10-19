@@ -14,6 +14,7 @@ One save per released schema version (`vN.lzma`). **Never edit or delete these**
 | `v6.lzma` | 6 | Default M5 world, revised (plant-form and carrion senses, meal value, `SOCIAL` gene, 246 weights, carrion and scent): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days. Amended while v6 was unreleased (branch `m5-lifetime-learning`); frozen from its merge |
 | `v7.lzma` | 7 | Default M6 world (species: labels, phylogeny, names): seed 42, epoch 2026-03-01 00:00 UTC, stepped 520 days |
 | `v8.lzma` | 8 | Default M8 world (presence and god powers): seed 42, epoch 2026-03-01 00:00 UTC, stepped 513 days present, then 7 days of office hours (absent from day 513, 9:00–18:00 on weekdays), the rain god power used at 12:00 on day 519; saved at day 520, the owner away |
+| `v9.lzma` | 9 | Default M9 world (chronicle and bestiary): seed 42, epoch 2026-03-01 00:00 UTC, stepped 505 days present, away from day 505 to 9:00 on day 512 (a dark age, then the dawn), then office hours (9:00–18:00 on weekdays), the ark god power used at 12:00 on day 515; saved at day 520, the owner away |
 
 When bumping the schema to vN+1, add `vN+1.lzma` saved by the new code, alongside the
 `vN_to_vN+1.py` migration and its test.
