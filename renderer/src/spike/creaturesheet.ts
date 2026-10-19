@@ -15,6 +15,7 @@ import type { Point } from "../creatures/chain";
 import { parsePhenotypeConfig, phenotype, type Phenotype } from "../creatures/phenotype";
 import { WATER_LOOKS, type Sea } from "../creatures/water";
 import { kindFor, speciesPlans } from "../creatures/species";
+import { withRare } from "../creatures/rare";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
 import type { CreatureLayer } from "./creatures";
@@ -74,8 +75,12 @@ const STILL_STEP_S = 1 / 30;
  */
 const SIM_TICK_S = 3;
 const SIM_STEP_CELLS = 1.6;
+/** The seed of the rare genes' portraits' random stream. */
+const RARE_STREAM = 715;
 /** The seed of the specimens' own random stream (see section 3). */
 const SPECIMEN_STREAM = 1515;
+/** The specimens each rare gene is shown on, besides the sim's plain carrier. */
+const RARE_ON = ["grazer", "hunter", "giant", "eel"];
 /** At most this many animals whose kind differs from their species' are shown. */
 const MAX_STRAYS = 12;
 /** Hues an eel is shown in under water, to judge every colour against the sea. */
@@ -153,6 +158,8 @@ function lookGenes(genome: readonly number[]): Omit<CreatureSeed, keyof Phenotyp
   return {
     genome,
     species: 0,
+    slots: 0,
+    torpid: false,
     diet: gene("DIET"),
     speed: gene("SPEED"),
     armour: gene("ARMOUR"),
@@ -513,6 +520,69 @@ async function main(): Promise<void> {
         ),
       );
     }
+  }
+
+  // Rare genes (M7): each on the sim's plain carrier and on a few specimens, as portraits.
+  {
+    const carriers = cast("rare");
+    const plainCarrier = carriers.creatures[0];
+    if (plainCarrier === undefined) throw new Error("the rare cast is empty");
+    const rows: { name: string; seeds: CreatureSeed[] }[] = [
+      {
+        name: "none",
+        seeds: [{ ...plainCarrier, rare: [], torpid: false }, ...RARE_ON.map(specimen)],
+      },
+      ...carriers.creatures.map((carrier, index) => ({
+        name: carriers.members[index] ?? "",
+        seeds: [
+          carrier,
+          ...RARE_ON.map((on) => ({
+            ...withRare(specimen(on), carrier.rare ?? [], fixture.rareConfig),
+            torpid: carrier.torpid,
+          })),
+        ],
+      })),
+    ];
+    const seeds = rows.flatMap((row) => row.seeds);
+    const layer = stage.cast(scatter(seeds, roomyArea, passable, mulberry32(RARE_STREAM)), 11, {
+      style: "cosy",
+      scale: CREATURE_SCALE,
+      pixels: PORTRAIT_PIXELS,
+      pace: 0.35,
+    });
+    const sand = packed(fixture.palette["BARE"]?.[2] ?? "#cdbd9f");
+    const sea = packed(fixture.sea[1] ?? "#5aa7d6");
+    const head = create("div", "rare-row");
+    for (const title of ["", "plain carrier (sim)", ...RARE_ON])
+      head.append(create("span", "", title));
+    element("rare").append(head);
+    let index = 0;
+    for (const row of rows) {
+      const line = create("div", "rare-row");
+      line.append(create("b", "", row.name));
+      for (const seed of row.seeds) {
+        const canvas = create("canvas");
+        canvas.setAttribute("aria-label", `${row.name}`);
+        line.append(canvas);
+        show(
+          canvas,
+          {
+            ...base,
+            ...SWATCH,
+            zoom: PORTRAIT_PIXELS,
+            ground: bodyPlan(seed).swims ? sea : sand,
+            cast: layer,
+            follow: index,
+            centre: middle(island),
+          },
+          SWATCH.enlarged,
+        );
+        index += 1;
+      }
+      element("rare").append(line);
+    }
+    const giants = fixture.creatures.filter((seed) => seed.rare?.includes("giant")).length;
+    element("rare-world").textContent = String(giants);
   }
 
   // 2. The middle view: the specimens and some of the herd on a shore.

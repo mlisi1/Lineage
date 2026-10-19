@@ -170,6 +170,15 @@
         color: var(--text);
         font-size: 1rem;
       }
+      .rare-row {
+        display: grid;
+        grid-template-columns: 112px repeat(5, 168px);
+        gap: 6px;
+        align-items: center;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin: 4px 0;
+      }
       .water-head,
       .water-row {
         display: grid;
@@ -327,6 +336,20 @@
         species (right).
       </p>
       <div id="species" class="tiles"></div>
+      <h3>Rare genes <span class="pick new">new</span></h3>
+      <p>
+        The eight rare creature genes of M7, each drawn by the signature the sim gives it (never by
+        its bit), on the sim's plain carrier (a plain animal carrying that gene alone) and on four
+        specimens; the first row carries none. <b>venom</b>: fangs in acid green and a dark tip at
+        the end of the body. <b>warning</b>: bold bands across the back, black on a light body and
+        yellow on a dark one, whatever its pattern gene. <b>giant</b>: drawn at the mass the sim
+        gives it, twice its genes'. <b>elder</b>: greyer, with pale flecks. <b>gills</b>: three
+        frills either side behind the head. <b>coat</b>: a soft, wide outline, and in the last row
+        curled up, as a hibernator lies torpid. <b>leaves</b>: turned toward leaf green, with leaves
+        along the back. <b>glow</b>: pale spots along the back, which the night will light (R4, M8).
+        In this world <b id="rare-world">…</b> animal carries the giant gene.
+      </p>
+      <div id="rare"></div>
       <h3>The middle view, full size</h3>
       <div id="mid"></div>
       <h3>The fifteen specimens</h3>

@@ -15,7 +15,7 @@ import {
   type LegPlan,
 } from "../creatures/body";
 import type { CellRect } from "./camera";
-import { followChain, solveKnee, type Point } from "../creatures/chain";
+import { curl, followChain, solveKnee, type Point } from "../creatures/chain";
 import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
 import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
 import {
@@ -75,6 +75,8 @@ export type Showing = "bodies" | "markers" | "hidden";
 export type Life = "wander" | "anchored";
 /** A glint in an eye: it keeps more of itself under water. */
 const GLINT = 0xffffff;
+/** A torpid animal breathes this many times slower. */
+const TORPID_BREATH = 3;
 /** At a full breath the chest is this much wider. */
 const BREATH_WIDENS = 0.08;
 
@@ -116,6 +118,8 @@ interface Creature {
   motion: Motion | null;
   /** Its mass, which sets how slowly it breathes. */
   mass: number;
+  /** Lying torpid: curled up, still, breathing slowly. */
+  torpid: boolean;
   /** Every sprite of the body with its colour and opacity out of water. */
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
@@ -264,7 +268,12 @@ export class CreatureLayer {
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
-      const head = creature.motion === null ? this.wander(creature, dtS) : this.live(creature, dtS);
+      // A torpid animal lies where it is; the others move.
+      const head = creature.torpid
+        ? (creature.joints[0] ?? { x: 0, y: 0 })
+        : creature.motion === null
+          ? this.wander(creature, dtS)
+          : this.live(creature, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -326,6 +335,7 @@ export class CreatureLayer {
       x: x - Math.cos(heading) * plan.spacing * i,
       y: y - Math.sin(heading) * plan.spacing * i,
     }));
+    if (seed.torpid) curl(joints, plan.spacing, heading);
 
     const container = new Container();
     this.container.addChild(container);
@@ -412,6 +422,7 @@ export class CreatureLayer {
       chest: plan.radii.indexOf(Math.max(...plan.radii)),
       breathOffset: random(),
       mass: seed.mass,
+      torpid: seed.torpid,
       paints: container.children
         .filter((child): child is Sprite => child instanceof Sprite)
         .map((sprite) => ({ sprite, colour: sprite.tint, alpha: sprite.alpha })),
@@ -536,7 +547,8 @@ export class CreatureLayer {
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
       // The chest breathes: its masses (not what lies on them) widen and narrow.
       if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
-        const full = breath(this.clock, creature.mass, creature.breathOffset);
+        const clock = creature.torpid ? this.clock / TORPID_BREATH : this.clock;
+        const full = breath(clock, creature.mass, creature.breathOffset);
         const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
         sprite.scale.y = (part.across / texels) * (1 + BREATH_WIDENS * full);
       }

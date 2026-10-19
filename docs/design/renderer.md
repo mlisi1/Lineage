@@ -290,6 +290,23 @@ surface (a walker 0.004 above it), so that the body trailing behind it is in the
 not lying on the beach. (Mixing every colour toward one blue, the first try, turned reds
 purple and flattened every body alike.)
 
+**Rare genes** (M7, `src/creatures/rare.ts`). The sim sends each creature's rare-gene
+slots (bits) and, once, the signature each bit is drawn by (`rare.CREATURE_SIGNATURES`);
+the renderer draws by signature, never by bit, and leaves out signatures it does not know.
+A **giant** is drawn at the mass the sim gives it, the phenotype's mass times
+`giant_mass_factor` (`rare.render_config`, beside `phenotype_config`); the other seven are
+overlays on the body plan (`body.ts`), outlined and lit with it: **venom**, fangs in acid
+green and a dark tip at the end of the body; **warning**, bold bands across the back,
+black on a light body and yellow on a dark one, whatever the pattern gene; **elder**,
+colours at 55 % of the saturation and pale flecks; **gills**, three frills either side
+behind the head; **coat**, an outline 3.5 times as wide and 60 % of the way to the body's
+colour, a soft fur; **leaves**, the hue turned 85 % of the way to leaf green and leaves
+along the back; **glow**, pale spots in pairs along the back, which the night will light
+(R4, M8). A **torpid** animal (a hibernator in winter or long darkness, `Fauna.torpid`)
+lies curled up (`curl` in `chain.ts`: its chain round 0.85 of a circle from the head), does
+not move, and breathes three times slower. The creature sheet shows every gene, and none,
+on the sim's plain carrier and on four specimens.
+
 **Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
 fraction of a cell every ten minutes, which watched in real time is stillness. A layer
 whose creatures are `anchored` keeps each near the place the sim last gave it (its
