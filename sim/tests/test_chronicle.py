@@ -352,6 +352,77 @@ def test_god_meteor_is_one_entry(island: Island) -> None:
     assert [e.kind for e in found] == ["god_power"]
 
 
+def _records(found: list[ChronicleEntry], words: str) -> list[ChronicleEntry]:
+    return [e for e in entries(found, Kind.RECORD) if words in e.text]
+
+
+def test_species_alive_record_once_per_gap(config: Config) -> None:
+    cfg = chronicle_config(config, record_after_days=10.0, daily_cap=100)
+    island = Island(cfg, config)
+    island.herd.add(10, origin=1, gene=0.2)
+    assert _records(island.days(12), "at once") == []  # one species: nothing beaten yet
+    island.herd.add(10, origin=2, gene=0.5)
+    found = _records(island.days(1), "at once")
+    assert len(found) == 1
+    assert found[0].text.startswith("2 species")
+    island.herd.add(10, origin=3, gene=0.8)
+    assert _records(island.days(1), "at once") == []  # within record_gap_days
+    island.days(round(cfg.record_gap_days))
+    island.herd.add(10, origin=4, gene=0.65)
+    later = _records(island.days(1), "at once")
+    assert len(later) == 1
+    assert later[0].text.startswith("4 species")
+
+
+def test_largest_species_record_needs_another_species_by_the_margin(config: Config) -> None:
+    cfg = chronicle_config(config, record_after_days=10.0, daily_cap=100)
+    island = Island(cfg, config)
+    island.herd.add(20, origin=1, gene=0.2)
+    island.days(12)
+    island.herd.add(10, origin=1, gene=0.2)  # the holder grows: no news
+    assert _records(island.days(3), "largest species") == []
+    island.herd.add(31, origin=2, gene=0.8)  # 31 < 30 × 1.1: not by the margin
+    assert _records(island.days(3), "largest species") == []
+    newcomer = island.species.record(2)
+    island.herd.add(10, origin=2, gene=0.8)  # 41: taken
+    found = _records(island.days(3), "largest species")
+    assert len(found) == 1
+    assert found[0].species == newcomer.id
+    assert newcomer.name in found[0].text
+    assert "41" in found[0].text
+    assert _records(island.days(40), "largest species") == []  # still its own
+
+
+def test_oldest_species_record_goes_to_the_survivor_once(config: Config) -> None:
+    cfg = chronicle_config(config, record_after_days=10.0, daily_cap=100)
+    island = Island(cfg, config)
+    first = island.herd.add(10, origin=1, gene=0.2)
+    island.days(4)
+    island.herd.add(10, origin=2, gene=0.8)
+    island.days(8)  # the first species holds the record, silently while young
+    island.herd.remove(first)
+    found = _records(island.days(30), "longer than any species")
+    assert len(found) == 1  # the survivor passes the dead species' 12 days by 10 %
+    survivor = island.species.record(2)
+    assert found[0].species == survivor.id
+    assert survivor.name in found[0].text
+    assert found[0].t_ms - survivor.born_t_ms >= 12 * 1.1 * DAY_MS
+    assert _records(island.days(60), "longer than any species") == []
+
+
+def test_fire_record_is_beaten_by_the_margin(island: Island) -> None:
+    cfg = island.chronicle.config
+    island.t_ms += round(cfg.record_after_days * DAY_MS)
+    first = island.see(FireEnded(island.t_ms, cfg.fire_cells, 5.0))
+    assert [e.kind for e in first] == ["record"]
+    island.t_ms += round(cfg.record_gap_days * DAY_MS)
+    close = cfg.fire_cells + 1  # bigger, but not by the margin: an ordinary big fire
+    assert [e.kind for e in island.see(FireEnded(island.t_ms, close, 5.0))] == ["fire"]
+    island.t_ms += round(cfg.record_gap_days * DAY_MS)
+    bigger = round(cfg.fire_cells * (1 + 2 * cfg.record_margin))
+    assert [e.kind for e in island.see(FireEnded(island.t_ms, bigger, 5.0))] == ["record"]
+
+
 def test_fires_by_size(island: Island) -> None:
     cfg = island.chronicle.config
     island.see(FireStarted(island.t_ms, 3.0, 4.0))  # the first fire
