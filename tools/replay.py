@@ -200,7 +200,8 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
     rows, columns = terrain.height.shape
     ground = pixelmap.render(terrain.height, terrain.sea_level)
     vegetated = pixelmap.render(terrain.height, terrain.sea_level, flora.cover(), flora.biomass)
-    creatures = creature_rows(fauna.body, fauna.genes, fauna.positions)
+    # Bodies from the genes alone; rare genes (M7) are overlays the renderer adds itself.
+    creatures = creature_rows(phenotype(fauna.config, fauna.genes), fauna.genes, fauna.positions)
     palette = {cover.name: list(ramp) for cover, ramp in pixelmap.LAND_RAMPS.items()}
     palette["DORMANT"] = list(pixelmap.DORMANT)
     document = {

@@ -20,10 +20,22 @@ Eight genes, each in `[0, 1]` (stored as a byte), each with a benefit and a cost
 | `EVERGREEN` | keeps its biomass through winter | slower growth |
 | `DEFENCE` | refuses part of each bite and poisons the rest (M4, M5) | slower growth |
 
-**Rare genes** (starter set; full table in M7): fire-pine (survives fire), nitrogen-fixer
-(needs less fertility, builds soil 3× faster), mangrove (lives in shallow water and
-ignores shore wind). Each costs growth. They appear and are lost by chance when a plant
-establishes.
+**Rare genes** (M7; bits of the per-cell mask `flora.Rare`): each appears with
+probability `rare_gain_probability` (0.0002) and is lost with `rare_loss_probability`
+(0.01) when a plant establishes; seeds from outside carry none.
+
+| Gene | Bonus | Cost | Signature |
+|---|---|---|---|
+| `FIRE_PINE` | keeps 60 % of its biomass through a fire | growth | `bark` |
+| `NITROGEN_FIXER` | needs 60 % less fertility, builds soil 3× faster | growth | `clover` |
+| `MANGROVE` | lives in shallow water, ignores shore wind | growth | `stilts` |
+| `POISONOUS` | grazers refuse half of each bite, and what they eat costs them energy (× 1 − 1.5) | growth | `berries` |
+| `FRUITING` | animals carry its fruit far: far seeds go out as from the lightest seed | growth; grazers get 1.5× the energy from it | `fruit` |
+| `EMERGENT` | a crown above the canopy: height × 1.5 for light (shade and competition) | 30 % more fertility needed, 2× wind exposure, growth | `crown` |
+
+Poison makes the diet learning of M5 matter: a grazer's meal value from a poisonous
+plant is negative, so learning from meals turns it away from that plant form. The
+emergent crown scales with height, so it matters in trees and hardly in grass.
 
 ## Forms
 
