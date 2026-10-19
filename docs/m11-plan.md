@@ -172,3 +172,16 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
   enough to test diet learning at scale (ADR 0009/0011's hope); a higher
   `rare_gain_probability` for poison, or a poisonous form, would.
 
+### M8 — presence and god powers (ADR 0016, reports/M8-presence)
+
+- **M8.1 is deferred here** by the owner (p = 0.15 vs 0.05, 2026-10-19). Hibernation is
+  selected by the nights in about a third of office seeds; glow never is. Levers:
+  `glow_burn_cost`, `night_sight` (how blind the dark is), and whether a glower is seen
+  as far as it sees (a glow that lights the way without lighting the glower would pay
+  for hunters). Recheck with the office schedule, the gadget's real light.
+- **Run every M11 sweep under `--schedule office`.** Founders and plant growth match the
+  always-lit runs (plants follow a week's light), but rare genes do not: photosynthesis
+  is selected against by night (median 0.7 ‰ against 10 ‰).
+- Holidays are survived in every seed (97 absences); there is room to make them darker
+  (`moonlight`, `moonlight_after_hours`) if dark ages should leave a mark.
+

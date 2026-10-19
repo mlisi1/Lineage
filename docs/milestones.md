@@ -12,7 +12,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | **done** 2026-10-18, merged into `main` (`1dd1720`): M6.2 1.08 splits / month PASS; M6.1 79 % of inhabited time with 3–12 species FAIL, deferred to M11 by the owner (ADR 0012). Species are genome clusters (`link_distance` 0.035); predator species split from groups of 5 | [reports/M6-species](../reports/M6-species/README.md) |
 | M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
-| M8 | Presence, calendar, god powers | not started | — |
+| M8 | Presence, calendar, god powers | **done** 2026-10-19 on `m8-presence`, not yet merged: M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
@@ -31,6 +31,24 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### M8 closed (branch `m8-presence`, 2026-10-19)
+
+- What M8 left: `sim/lineage_sim/presence.py` (light from `PresenceChanged`; the button,
+  `GodPower()`, with weighted powers and a cooldown), `[presence]` in `default.toml`,
+  schema v8 (`v7_to_v8`, fixture `v8.lzma`), `tools/schedules.py` and
+  `fastforward --schedule`, `tools/milestones/m8.py` (`--baseline` is repeatable).
+  Design: `docs/design/presence.md`; decisions and results: ADR 0016.
+- **Hardware change** (owner): a push button, not a covered switch; S2 builds
+  `button.py`. The LED follows `GodPowerReady` / `Presence.ready_t_ms`.
+- Golden hashes changed (schema version and the presence stream); an always-present
+  world is otherwise bit-identical to M7.
+- For R4: `Presence.light` is the light of the moment, `Fauna.torpid` who sleeps.
+- For M9: `GodPowerUsed`, `GodPowerRefused`, `GodPowerReady` outputs; long absences
+  (the dark ages) can be read from `Presence.present` and the light.
+- Tests: fast suite 578 passed; slow `tools/tests/test_m8_statistical.py` passed
+  (3 m 48 s at 8 workers).
+
 
 ### R2 closed (merged into `main` at `0168618`, 2026-10-19)
 

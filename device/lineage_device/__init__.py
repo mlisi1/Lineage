@@ -1,6 +1,6 @@
 """Lineage device layer: the only code that touches GPIO (CLAUDE.md §4.6).
 
-Planned modules (S2): ``presence`` (PIR), ``switch`` (covered god-power switch), ``led``
+Planned modules (S2): ``presence`` (PIR), ``button`` (god-power push button), ``led``
 (cooldown LED), ``backlight``, ``power`` (UPS mains-loss sense), and ``fake`` which exposes
 the same interface driven from the keyboard / a small web panel so everything runs on a PC.
 """
