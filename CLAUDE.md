@@ -68,7 +68,7 @@ lineage/
 │   │   ├── species.py        # clustering, persistent ids, names, phylogeny
 │   │   ├── rare.py           # rare gene tables (creatures + plants)
 │   │   ├── presence.py       # presence/daylight model, god powers, cooldown
-│   │   ├── chronicle.py      # event detectors → entries; bestiary records
+│   │   ├── chronicle.py      # event detectors → entries; bestiary records (M9)
 │   │   ├── apocalypse.py     # end-of-world detection, new continent
 │   │   ├── events.py         # input events (presence, button, power) and output events
 │   │   └── state/
@@ -394,7 +394,9 @@ needs a note in `docs/decisions/`.
 - **Report**: sample 3-year chronicle (rendered), entries per month histogram, importance
   distribution.
 - **Accept**: `[2–15]` notable entries per sim-month median; no event type > 30% of all
-  entries.
+  entries. (As built, ADR 0017: importance 1–5, notable ≥ 3, major ≥ 4 pushed; English
+  text; the history lives in the save, schema v9; the World hands outputs to observers.
+  M9.1 3.5 per month and M9.2 18.9 % PASS under the office schedule.)
 
 ### M10 — Apocalypse and worlds
 - **Deliver**: collapse detection, end-of-world event, new continent with new seed,

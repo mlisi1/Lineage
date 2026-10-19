@@ -13,7 +13,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M6 | Species, names, phylogeny | **done** 2026-10-18, merged into `main` (`1dd1720`): M6.2 1.08 splits / month PASS; M6.1 79 % of inhabited time with 3–12 species FAIL, deferred to M11 by the owner (ADR 0012). Species are genome clusters (`link_distance` 0.035); predator species split from groups of 5 | [reports/M6-species](../reports/M6-species/README.md) |
 | M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
-| M9 | Chronicle and bestiary | **in progress** on `m9-chronicle`: chronicle, bestiary, schema v9, report module and nightly test committed; first 20-seed office run M9.1 3.25 / month PASS, M9.2 19 % PASS (before the migration fix); final report and ADR 0017 pending (handoff below) | — |
+| M9 | Chronicle and bestiary | **done** 2026-10-19 on `m9-chronicle` (not merged yet): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
@@ -32,23 +32,26 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M9 in progress (branch `m9-chronicle`, 2026-10-19)
+### M9 done (branch `m9-chronicle`, 2026-10-19; merge pending)
 
-- Owner's choices: importance 1–5 (notable ≥ 3, major ≥ 4 pushed by S4), English text,
-  the chronicle and bestiary live in the save. Design: `docs/design/chronicle.md`.
-- Done: `sim/lineage_sim/chronicle.py`, `Observer` hook in `World`, `[chronicle]` config,
-  schema v9 (`v8_to_v9`, fixture `v9.lzma`), `tools/milestones/m9.py`,
-  `tools/tests/test_m9_statistical.py` (slow, not yet run). Fast suite 615 passed before
-  the last fix; chronicle, migration and fauna tests re-run after it.
-- First run (before the fix): M9.1 3.25 notable / month (19/20 seeds in band; seed 18
-  low, its founders land on day 443), M9.2 extinction 19.1 % (max seed 22.7 %). Fires
-  ≥ 300 cells are rare in office light (5 of 150); migrations were 0: creatures cross
-  one at a time, so a migration is now a species *settling* a landmass (fixed in
-  `08fa6a9`).
-- To finish: `uv run python -m tools.report M9 --runs runs/m9-office` (run at
-  `08fa6a9`, re-run it if missing), read the plots, write ADR 0017 (claimed on the
-  coordination board), CLAUDE.md §8 M9 "as built", run the fast suite and the slow M9
-  test, then merge.
+- What M9 leaves: `sim/lineage_sim/chronicle.py` (detectors, filters, templates,
+  `entries()`, `bestiary()`), `subsystem.Observer` and the hook in `World`,
+  `[chronicle]` in `default.toml`, schema v9 (`v8_to_v9`, fixture `v9.lzma`),
+  `Presence.absent_hours`, fast-forward's `_chronicle` tables, `tools/milestones/m9.py`
+  (sample chronicle, entries per month, types, importance, bestiary), the slow
+  `tools/tests/test_m9_statistical.py`. Design: `docs/design/chronicle.md`; decisions
+  and results: ADR 0017.
+- Report run `m9-office` (office schedule) is stamped `cf5a408-dirty`: files outside the
+  sim changed while it ran; the sim code was that of `08fa6a9`. A clean rerun takes about
+  18 min at 10 jobs.
+- Before merging: run the fast suite and the slow M9 test; regenerate `v9.lzma` with the
+  final code (it predates a template fix; unreleased, so allowed).
+- For R3: captions from `ChronicleEntry` (`kind`, `importance`, `text`, `species`, `x`,
+  `y`, -1 when no place); the wire schema does not carry entries yet.
+- For S4: push `importance >= config.chronicle.major_importance` (about 0.7 a month).
+- For M10: the archive of a world is its save; `Chronicle.bestiary()` gives the records.
+- For M11: big fires are rare in office light (5 of 150 reach 300 cells); booms and
+  crashes are 23 % of entries together.
 
 ### M8 closed (merged into `main` at `ab0165b`, 2026-10-19)
 
