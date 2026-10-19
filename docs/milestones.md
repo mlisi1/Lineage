@@ -18,7 +18,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
-| R2 | Procedural creatures | not started | — |
+| R2 | Procedural creatures | **done** 2026-10-19: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | not started | — |
 | R4 | Atmosphere | not started | — |
 | R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
@@ -31,6 +31,36 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### R2 closed (2026-10-19)
+
+Worked in `/home/elechim/Lineage-r2` (branch `r2-creatures`, which merged M7 and then
+main with R1); notes with the other agents in `/home/elechim/Lineage-coord/`.
+
+- **Done and tested on the PC**: renderer 209 unit tests, 22 Playwright tests (the 15
+  specimens compared pixel for pixel from the canvas, not from a page screenshot);
+  Python fast suite; ruff, pyright, eslint, prettier clean. Design in
+  `docs/design/renderer.md` (Creatures: cosy, under water, rare genes, between sim ticks,
+  one plan per species), decisions in ADR 0013 and its "Under water" amendment.
+- **Where things are**: `renderer/src/creatures/` (genome, phenotype port, body plans,
+  chain and curl, motion between ticks, species plans, water, rare genes);
+  `CreatureLayer` is still `renderer/src/spike/creatures.ts` (it leans on the spike's
+  atlas, habitat and camera types). The creature sheet is `renderer/creatures.html`
+  (`npm run creatures`). The spike fixture is format 5 from `v7.lzma` (genomes, species,
+  slots, torpid, `phenotype_config`, `rare_config`, signatures, casts).
+- **For R3 (creatures in the real scene)**: feed the stream into a `CreatureLayer` with
+  `life: "anchored"`: on each `creatures` message call `layer.anchor(i, x, y)`, never move
+  bodies directly; genomes arrive in `born[]` (derive looks with `phenotype()` and
+  `withRare()` from `fauna.phenotype_config` / `rare_config`); `species` per creature
+  gives one plan per species (`speciesPlans`), to be recomputed when the census changes;
+  `torpid` curls an animal up. Put the layer's containers among `Landscape.plants` rows
+  (`hostIn`), and use R1's `seaAt(land)` (`src/terrain/sea.ts`) as the layer's `SeaAt`
+  in place of the spike's `seaIn` (same bands).
+- **On the board: in R5.** Cosy adds a ground shadow (and small glints) per animal: 2.5 %
+  more sprites in the middle view; mid-crowd held exactly 30 fps in R0. `glass`, the
+  see-through water look, stays on the sheet if R5 wants to try it (an `AlphaFilter` per
+  swimmer in sight).
+- **Glow** spots are drawn but never lit: the night and the glow pass are M8 and R4.
 
 ### R1 closed (merged into `main` at `8e51666`, 2026-10-19)
 
@@ -97,13 +127,14 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Parallel work (other agents)
 
-R1 is merged (2026-10-19); R2 (`r2-creatures`, `/home/elechim/Lineage-r2`) is next. They coordinate through
+R1 and R2 are merged (2026-10-19). Agents coordinate through
 `/home/elechim/Lineage-coord` (status files and inboxes). R1's protocol already carries
 the rare-gene table, `born[].slots`, `torpid` and the plant rare mask; R1 has M7's
 descriptions of the plant looks. R2 has M7's notes on the creature overlays (only GIANT
 changes body size). On merge: M7 changed one line of `tools/replay.py`
 (`write_renderer_fixture` draws genes-only bodies); R2's replay supersedes it.
 ADR numbers: 0013 R2, 0014 R1, 0015 M7; the next free is 0016 (check the board).
+R2's `tools/replay.py` (fixture format 5) is the one in `main`.
 
 ### Working notes
 
