@@ -840,8 +840,9 @@ export function standingPlants(
     };
     const cell = y * land.width + x;
     const above = (land.heights[cell] ?? 0) - land.seaLevel;
+    // Nothing small grows in the sea, not even round a mangrove's roots.
+    if (above <= 0) return out;
     if (look === null) {
-      if (above <= 0) return out;
       if (land.cover[cell] === burntClass) {
         maybe("stump", CHANCE.burnt.stump, 2);
         maybe("log", CHANCE.burnt.log, 2);
@@ -954,7 +955,6 @@ export function standingPlants(
     );
     return [...own, ...overlays];
   };
-  const waterClass = land.coverClasses.indexOf("WATER");
 
   const layer = new PlantLayer(
     land,
@@ -977,24 +977,9 @@ export function standingPlants(
           ...withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH, true),
         ];
       }
-      if (look === null) {
-        // A mangrove (rare, M7) stands in the shallow water where nothing else grows: a
-        // broadleaf on stilt roots, in leaf all year.
-        if (
-          land.cover[cell] !== waterClass ||
-          !looks.includes("stilts") ||
-          biomass < VISIBLE_FROM
-        ) {
-          return out;
-        }
-        const shown = plantSeason(x, y);
-        const base = `${standingKey("BROADLEAF", growthOf(biomass), buildOf(x, y))}${shown === "winter" ? "/leafy" : ""}`;
-        const [dx, dy] = plantOffset(x, y);
-        return [
-          ...out,
-          ...withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
-        ];
-      }
+      // A mangrove in the sea is classed by its form (a bush, sometimes a tree), so it
+      // stands below like any other plant: on stilt roots, being one.
+      if (look === null) return out;
       if (!standsAlone(look, x, y)) return out;
       if (look.form === "GRASS") {
         // Close up the grass is the tufts above, not one in three cells.

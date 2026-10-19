@@ -625,13 +625,14 @@ a plant with several rare genes carries each look:
 |---|---|
 | FIRE_PINE | the wood a warm red-brown (the same drawing, coloured otherwise); after a fire it stands on the burnt ground, trunk charred, crown kept |
 | NITROGEN_FIXER | small three-lobed leaves round the foot, pale flowers on some |
-| MANGROVE | arched stilt roots; the only plants standing in shallow water (as a broadleaf, in leaf all year) |
+| MANGROVE | arched stilt roots; the only plants standing in shallow water (the simulation classes a mangrove in the sea by its form, a bush or a tree, so it is drawn as one) |
 | POISONOUS | clusters of three violet berries on the leaves (not on grass) |
 | FRUITING | three or four bright orange fruits on a woody plant; a seed head on grass |
 | EMERGENT | a tree drawn half as tall again (1.45) |
 
 Berries, fruit, clover and stilts are overlays the size of the drawing they lie on, with
-its foot, scaled to its size (a pixel in the middle view). The drawings are made only for
+its foot, scaled to its size (a pixel in the middle view). Nothing small (ferns, herbs,
+flowers) grows on a cell below the sea, mangrove or not. The drawings are made only for
 the looks some plant of the land has. A fire pine after a fire needs no scorch in the
 stream: the simulation marks a scorched cell burnt, and a fire leaves biomass only on a
 fire pine, so a burnt cell with biomass and the gene is one (drawn as a conifer if its

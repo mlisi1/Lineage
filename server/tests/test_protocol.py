@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from lineage_server.protocol import SCHEMA_PATH, encode
 from lineage_sim.config import parse_config
-from lineage_sim.flora import Cover
+from lineage_sim.flora import RARE_GENES, Cover
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -136,7 +136,9 @@ def test_the_land_carries_the_world_cell_for_cell(world: World) -> None:
     assert np.any(height_gene[flora.biomass > 0] > 0)
     snow = decode(land["snow"], count)
     assert np.all((snow >= 0) & (snow <= 1))
-    assert land["rare_genes"] == ["FIRE_PINE", "NITROGEN_FIXER", "MANGROVE"]
+    # The plants' rare genes by bit, as the simulation names them (M7: six).
+    assert land["rare_genes"] == [rare.name for rare in RARE_GENES]
+    assert land["rare_genes"][:3] == ["FIRE_PINE", "NITROGEN_FIXER", "MANGROVE"]
 
 
 def test_creatures_send_their_genomes_once(world: World) -> None:
