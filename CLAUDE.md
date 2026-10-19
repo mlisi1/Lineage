@@ -396,7 +396,7 @@ needs a note in `docs/decisions/`.
 - **Accept**: `[2–15]` notable entries per sim-month median; no event type > 30% of all
   entries. (As built, ADR 0017: importance 1–5, notable ≥ 3, major ≥ 4 pushed; English
   text; the history lives in the save, schema v9; the World hands outputs to observers.
-  M9.1 3.5 per month and M9.2 18.9 % PASS under the office schedule.)
+  M9.1 3.5 per month and M9.2 18.9 % PASS under the office schedule; merged 2026-10-19.)
 
 ### M10 — Apocalypse and worlds
 - **Deliver**: collapse detection, end-of-world event, new continent with new seed,
