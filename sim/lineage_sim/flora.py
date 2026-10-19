@@ -80,6 +80,9 @@ class Rare(IntFlag):
     FIRE_PINE = 1  # survives fire
     NITROGEN_FIXER = 2  # grows on poor ground and builds soil fast
     MANGROVE = 4  # lives in shallow water
+    POISONOUS = 8  # grazers refuse much of it, and what they eat costs them energy
+    FRUITING = 16  # fruit carried far by animals; grazers relish it
+    EMERGENT = 32  # a crown above the canopy: shades all, but needs rich soil and breaks in wind
 
 
 RARE_GENES = tuple(Rare)
@@ -157,7 +160,15 @@ def fertility_need(cfg: FloraConfig, genes: Grid, rare: Bytes) -> Grid:
         - _F(cfg.need_frugality) * genes[Gene.FRUGALITY]
     )
     relief = np.where(has(rare, Rare.NITROGEN_FIXER), _F(1.0 - cfg.nitrogen_fixer_need_relief), 1)
-    return np.maximum(need * relief, _F(cfg.need_floor)).astype(_F)
+    greed = np.where(has(rare, Rare.EMERGENT), _F(1.0 + cfg.emergent_need_factor), _F(1.0))
+    return np.maximum(need * relief * greed, _F(cfg.need_floor)).astype(_F)
+
+
+def stature(cfg: FloraConfig, genes: Grid, rare: Bytes) -> Grid:
+    """Height that counts for light: the height gene, raised by a crown above it for
+    emergents (in proportion to their height: an emergent grass stays low)."""
+    crown = np.where(has(rare, Rare.EMERGENT), _F(1.0 + cfg.emergent_height_bonus), _F(1.0))
+    return (genes[Gene.HEIGHT] * crown).astype(_F)
 
 
 def suitability(cfg: FloraConfig, genes: Grid, rare: Bytes, temp: Grid, fertility: Grid) -> Grid:
@@ -183,6 +194,9 @@ def growth_rate(cfg: FloraConfig, genes: Grid, rare: Bytes) -> Grid:
         (Rare.FIRE_PINE, cfg.fire_pine_growth_cost),
         (Rare.NITROGEN_FIXER, cfg.nitrogen_fixer_growth_cost),
         (Rare.MANGROVE, cfg.mangrove_growth_cost),
+        (Rare.POISONOUS, cfg.poisonous_growth_cost),
+        (Rare.FRUITING, cfg.fruiting_growth_cost),
+        (Rare.EMERGENT, cfg.emergent_growth_cost),
     ):
         factor: Grid = np.where(has(rare, gene), _F(1.0 - cost), _F(1.0))
         rate = rate * factor
@@ -200,12 +214,14 @@ def exposure(cfg: FloraConfig, elevation: Grid) -> Grid:
 def mortality(cfg: FloraConfig, genes: Grid, rare: Bytes, elevation: Grid) -> Grid:
     """Biomass loss rate per year: fast growers die young, tall plants are long-lived,
     but wind breaks tall plants where the site is exposed. Mangroves are built for the
-    shore: in the water and on the beach they feel no exposure."""
+    shore: in the water and on the beach they feel no exposure. Emergent crowns catch
+    emergent_wind_factor times more wind."""
     rate = _F(cfg.mortality_base_per_year) + _F(cfg.mortality_growth_per_year) * genes[Gene.GROWTH]
     rate = rate * (_F(1.0) - _F(cfg.mortality_stature_relief) * genes[Gene.HEIGHT])
     exposed = exposure(cfg, elevation)
     at_shore = elevation < _F(cfg.shore_span)
     exposed = np.where(has(rare, Rare.MANGROVE) & at_shore, _F(0.0), exposed)
+    exposed = np.where(has(rare, Rare.EMERGENT), exposed * _F(cfg.emergent_wind_factor), exposed)
     return (rate + _F(cfg.exposure_per_year) * exposed * genes[Gene.HEIGHT]).astype(_F)
 
 
@@ -232,10 +248,10 @@ def winter_dieback(cfg: FloraConfig, genes: Grid, temp: Grid) -> Grid:
     return (_F(cfg.winter_dieback_per_year) * stress * exposed).astype(_F)
 
 
-def canopy(cfg: FloraConfig, biomass: Grid, height_gene: Grid) -> Grid:
-    """Share of light a population intercepts, in [0, 1]."""
+def canopy(cfg: FloraConfig, biomass: Grid, height: Grid) -> Grid:
+    """Share of light a population intercepts, in [0, 1]. ``height`` is its `stature`."""
     base = _F(cfg.canopy_base)
-    return (biomass * (base + (_F(1.0) - base) * height_gene)).astype(_F)
+    return np.minimum(biomass * (base + (_F(1.0) - base) * height), _F(1.0)).astype(_F)
 
 
 def soil_cap(cfg: FloraConfig, genes: Grid) -> Grid:
@@ -377,14 +393,16 @@ class Flora:
     def graze(self, ys: Index, xs: Index, demand: Grid) -> Grid:
         """Grazers ask for ``demand`` biomass at cells (ys, xs); returns what each gets.
 
-        Defended plants refuse part of every bite; several grazers on one cell share what
-        is there in proportion to their demand. Roots are out of reach: biomass up to
-        ``grazing_reserve_biomass`` is never eaten, so grazed plants regrow. Only the
-        grazed cells are touched.
+        Defended and poisonous plants refuse part of every bite; several grazers on one
+        cell share what is there in proportion to their demand. Roots are out of reach:
+        biomass up to ``grazing_reserve_biomass`` is never eaten, so grazed plants regrow.
+        Only the grazed cells are touched.
         """
         cfg = self._cfg
         defence = self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
         wanted = demand.astype(_F) * (_F(1.0) - _F(cfg.defence_strength) * defence)
+        poisonous = has(self._rare[ys, xs], Rare.POISONOUS)
+        wanted = np.where(poisonous, wanted * _F(1.0 - cfg.poisonous_refusal), wanted).astype(_F)
         width = self._biomass.shape[1]
         cells, group = np.unique(ys * width + xs, return_inverse=True)
         cell_y, cell_x = cells // width, cells % width
@@ -415,6 +433,18 @@ class Flora:
     def defence_at(self, ys: Index, xs: Index) -> Grid:
         """Defence gene, in [0, 1], of the plants at cells (ys, xs)."""
         return self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
+
+    def meal_factor(self, ys: Index, xs: Index) -> Grid:
+        """Multiplier on the energy grazers get from the plants at cells (ys, xs), from
+        their rare genes: fruit is richer, poison costs more than it gives (negative)."""
+        cfg, rare = self._cfg, self._rare[ys, xs]
+        fruit = np.where(has(rare, Rare.FRUITING), _F(1.0 + cfg.fruiting_meal_bonus), _F(1.0))
+        poison = np.where(has(rare, Rare.POISONOUS), _F(1.0 - cfg.poisonous_toxicity), _F(1.0))
+        return (fruit * poison).astype(_F)
+
+    def shade(self) -> Grid:
+        """Share of sunlight the plants intercept on every cell, in [0, 1]."""
+        return canopy(self._cfg, self._biomass, stature(self._cfg, self.genes(), self._rare))
 
     def grazeable(self) -> Grid:
         """Biomass grazers can reach in each cell (what they see as food)."""
@@ -540,7 +570,9 @@ class Flora:
             ready = np.clip((self._biomass - _F(cfg.seed_min_biomass)) / span, 0.0, 1.0)
             seed_gene = self._genome[Gene.SEED].astype(_F) / _F(_GENE_MAX)
             if far:
-                weight = _F(1.0) - seed_gene
+                # Animals carry fruit far whatever the seed is like.
+                fruit = has(self._rare, Rare.FRUITING)
+                weight = np.where(fruit, _F(1.0), _F(1.0) - seed_gene).astype(_F)
             else:
                 weight = _F(cfg.near_weight_wind) + _F(1.0 - cfg.near_weight_wind) * seed_gene
             chance = attempts * ready * weight
@@ -603,17 +635,18 @@ class Flora:
 
         resident_biomass = self._biomass[ys, xs]
         resident_genes = self._genome[:, ys, xs].astype(_F) / _F(_GENE_MAX)
-        shade = canopy(cfg, resident_biomass, resident_genes[Gene.HEIGHT])
+        resident_rare = self._rare[ys, xs]
+        resident_stature = stature(cfg, resident_genes, resident_rare)
+        shade = canopy(cfg, resident_biomass, resident_stature)
         light = (_F(1.0) - shade) + shade * genes[Gene.SHADE]
         occupied = resident_biomass > 0
         base = _F(cfg.competition_base)
-        score = prospect * (base + genes[Gene.HEIGHT])
-        resident_rare = self._rare[ys, xs]
+        score = prospect * (base + stature(cfg, genes, rare))
         resident_fit = suitability(cfg, resident_genes, resident_rare, site_temp, site_fertility)
         resident_prospect = resident_fit * viability(
             cfg, resident_genes, resident_rare, resident_fit, site_elevation
         )
-        resident_score = resident_prospect * (base + resident_genes[Gene.HEIGHT])
+        resident_score = resident_prospect * (base + resident_stature)
         lead = score - resident_score - _F(cfg.competition_margin)
         edge = np.clip(lead / _F(cfg.competition_softness), -30.0, 30.0)
         wins = np.where(occupied, _F(1.0) / (_F(1.0) + np.exp(-edge)), _F(1.0))

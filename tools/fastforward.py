@@ -57,6 +57,7 @@ from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import Gene
 from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Cover, Rare
 from lineage_sim.flora import Gene as PlantGene
+from lineage_sim.rare import CREATURE_GENES, PLANT_GENES, carries
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -103,6 +104,20 @@ FORK_COLUMNS = ("fork_day", "learning", *YOUTH_COLUMNS[1:])
 PHYLOGENY_COLUMNS = (
     "id", "parent", "lineage", "born_day", "extinct_day", "peak", "diet", "size", "hue",
 )  # fmt: skip
+# Columns of the daily rare-gene table (``_rare_daily``, M7): one row per day. Totals
+# first (creatures, herbivores, predators, torpid creatures, vegetated cells), then per
+# creature rare gene its carriers, carriers among herbivores and among predators, then
+# per plant rare gene the vegetated cells carrying it.
+RARE_DAILY_COLUMNS = (
+    "creatures", "herbivores", "predators", "torpid", "vegetated",
+    *(f"{(g.name or '').lower()}{suffix}" for g in CREATURE_GENES
+      for suffix in ("", "_herbivores", "_predators")),
+    *(f"plant_{(g.name or '').lower()}" for g in PLANT_GENES),
+)  # fmt: skip
+# Columns of the lives table (``_lives``, M7): one row per creature whose death was seen,
+# from the daily census: the days it was first and last seen alive, its rare genes, and
+# whether it arrived from elsewhere (its true age is then unknown).
+LIVES_COLUMNS = ("first_day", "last_day", "slots", "arrived")
 DAY_MS = DAY_S * 1000
 _LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
@@ -239,6 +254,10 @@ class Probes:
         self.burnt_cells = 0
         self.youths: list[list[float]] = []
         self.species_daily: list[int] = []
+        self.rare_daily: list[list[float]] = []
+        # Living creatures by id: (first day seen, rare genes, arrived from elsewhere).
+        self._alive: dict[int, tuple[int, int, bool]] = {}
+        self.lives: list[list[float]] = []
         self.counts |= {"species_splits": 0, "species_arrivals": 0, "species_extinctions": 0}
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
@@ -256,6 +275,34 @@ class Probes:
                 self.youths.append(youth_row(output))
         self._step_s += step_s
         self._steps += 1
+
+    def census(self, world: World, day: int) -> None:
+        """Once a day: rare-gene carriers (`RARE_DAILY_COLUMNS`) and who died (`_lives`)."""
+        fauna, flora = world.fauna, world.flora
+        cfg = fauna.config
+        diet = fauna.genes[:, Gene.DIET]
+        herbivore, predator = diet <= cfg.herbivore_max_diet, diet >= cfg.predator_min_diet
+        vegetated = flora.biomass > 0
+        row = [
+            float(fauna.count), float(herbivore.sum()), float(predator.sum()),
+            float(fauna.torpid.sum()), float(vegetated.sum()),
+        ]  # fmt: skip
+        for gene in CREATURE_GENES:
+            has = carries(fauna.slots, gene)
+            row += [float(has.sum()), float((has & herbivore).sum()), float((has & predator).sum())]
+        for plant_gene in PLANT_GENES:
+            row.append(float(np.count_nonzero(vegetated & ((flora.rare & plant_gene) != 0))))
+        self.rare_daily.append(row)
+
+        ids = fauna.ids.tolist()
+        now = set(ids)
+        for gone in sorted(set(self._alive) - now):
+            first, slots, arrived = self._alive.pop(gone)
+            self.lives.append([first, day - 1, slots, float(arrived)])
+        for i, creature_id in enumerate(ids):
+            if creature_id not in self._alive:
+                arrived = bool(fauna.generation[i] == 0)
+                self._alive[creature_id] = (day, int(fauna.slots[i]), arrived)
 
     def sample(self, world: World, day: int, save_kib: float, samples_per_year: int) -> None:
         terrain = world.terrain
@@ -345,6 +392,12 @@ class Probes:
         series[EXTRA_PREFIX + "fire_sizes"] = np.array(self.fire_sizes, dtype=np.int64)
         series[EXTRA_PREFIX + "youth"] = np.array(self.youths, dtype=np.float64).reshape(
             -1, len(YOUTH_COLUMNS)
+        )
+        series[EXTRA_PREFIX + "rare_daily"] = np.array(self.rare_daily, dtype=np.float32).reshape(
+            -1, len(RARE_DAILY_COLUMNS)
+        )
+        series[EXTRA_PREFIX + "lives"] = np.array(self.lives, dtype=np.float64).reshape(
+            -1, len(LIVES_COLUMNS)
         )
         return series
 
@@ -439,6 +492,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         outputs = world.step(DAY_S)
         probes.observe(outputs, time.perf_counter() - started)
         probes.species_daily.append(world.species.alive_count)
+        probes.census(world, day)
         day += 1
         if day % job.save_days == 0 or day == job.days:
             save_kib = save()

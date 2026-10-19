@@ -151,3 +151,24 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 - **M6.1 is deferred here** by the owner (79 % vs 90 % with the predator rule, 2026-10-18).
 - `[species]` settings come from a 20-seed sweep (ADR 0012 table); recheck them after
   any fauna tuning — they are cheap to sweep (many censuses per run).
+
+### M7 — rare genes (ADR 0015, reports/M7-rare-genes)
+
+- **Rare genes stay rare.** Each creature gene holds about 0.1 % of the population
+  (median of seeds) and mostly dies out with its first carriers within 10–20 days;
+  peaks of 20–45 % happen in single seeds. The loss rate is not the brake (a preview at
+  a quarter of it gave the same peaks): drift is. If rare genes should be seen on screen
+  more often, the levers are `rare_gain_probability` and the size of each bonus.
+- **Photosynthesis needs nights to be balanced** (M7.2, deferred to M8): in constant
+  daylight it sweeps a few herds. Re-judge after M8 with real schedules; with office
+  hours it may instead never pay (`photosynthesis_rate`).
+- **Longevity** swept a herd until it was given slower breeding
+  (`longevity_cooldown_factor` 2); it still swept one seed of 20 (171 days).
+- **Predators carry no rare genes to speak of**: too few of them (cap 16) for a gain to
+  arise; venom, the obvious hunter's gene, never took hold. Ties to the predator levers
+  of §6 M6.
+- Plants keep their rare genes for a year or more but at 0.1–1 % of cells; emergent
+  trees and mangroves reach 5–25 % in the top seeds. Poisonous plants never spread far
+  enough to test diet learning at scale (ADR 0009/0011's hope); a higher
+  `rare_gain_probability` for poison, or a poisonous form, would.
+

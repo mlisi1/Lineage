@@ -274,7 +274,7 @@ mutation_sigma = 0.03
 # Colonises bare rock and brings back forms that went extinct.
 seed_rain_per_year = 40000.0
 
-# --- Rare genes (starter set; the full table arrives in M7) ---
+# --- Rare genes (M7; table in lineage_sim/rare.py and docs/design/plants.md) ---
 # Probability that an establishing plant gains each rare gene, and loses one it carries.
 rare_gain_probability = 0.0002
 rare_loss_probability = 0.01
@@ -289,6 +289,24 @@ nitrogen_fixer_growth_cost = 0.25
 # Mangrove: lives in water up to this depth (height units); costs growth.
 mangrove_max_depth = 0.015
 mangrove_growth_cost = 0.30
+# Poisonous: grazers refuse this share of each bite, and energy from what they eat is
+# multiplied by 1 − poisonous_toxicity (beyond 1 a meal costs more than it gives, so
+# grazers that learn from meals learn to avoid its form); costs growth.
+poisonous_toxicity = 1.5
+poisonous_refusal = 0.5
+poisonous_growth_cost = 0.15
+# Fruiting: animals carry its fruit far, so its far seeds go out as if it had the lightest
+# seed (on top of its near seeds); grazers get this much more energy from it; costs growth.
+fruiting_meal_bonus = 0.5
+fruiting_growth_cost = 0.15
+# Emergent: a crown above the canopy: its height counts × (1 + emergent_height_bonus) for
+# light (shade cast and competition), so it matters most in trees; needs this much more
+# fertility (× 1 + factor), catches this many times more wind where the site is exposed,
+# and costs growth.
+emergent_height_bonus = 0.5
+emergent_need_factor = 0.3
+emergent_wind_factor = 2.0
+emergent_growth_cost = 0.1
 
 # --- Grazing (hook for fauna, M4) ---
 # Share of a bite refused at defence gene 1.
@@ -475,10 +493,57 @@ asexual_cost_factor = 1.6
 mutation_sigma_body = 0.025
 mutation_sigma_brain = 0.06
 # Rare-gene slots: probability a newborn gains each rare gene, or loses one it carries.
-# (The genes themselves and their effects arrive in M7.)
+# Arrivals carry none.
 rare_gain_probability = 0.0005
 rare_loss_probability = 0.02
 rare_slots = 8
+
+# --- Rare genes (M7; table in lineage_sim/rare.py and docs/design/creatures.md) ---
+# Each rare gene costs resting burn, like a body gene: basal_rate × mass^metabolic_exponent
+# × its *_burn_cost, on top of the body's own.
+# Venom: attack power × venom_attack_factor, so a hunter kills prey far larger than itself.
+venom_attack_factor = 3.0
+venom_burn_cost = 0.2
+# Toxic (warning colours): a hunter's chance of killing it is × toxic_kill_factor.
+toxic_kill_factor = 0.2
+toxic_burn_cost = 0.15
+# Giant: mass × giant_mass_factor, and everything that scales with mass scales with it as
+# for the size gene (reserve, attack, defence, burn, speed, lifespan); matures
+# giant_maturity_factor times later on top.
+giant_mass_factor = 2.0
+giant_maturity_factor = 1.5
+giant_burn_cost = 0.2
+# Longevity: lifespan × longevity_factor (maturity unchanged); broods × longevity_brood_factor
+# (rounded, at least one young), and longevity_cooldown_factor times as long a wait between
+# broods (about as many young in a lifetime, but generations come slower: M7's first run
+# saw longevity sweep a herd when only broods were halved).
+longevity_factor = 2.0
+longevity_brood_factor = 0.5
+longevity_burn_cost = 0.15
+longevity_cooldown_factor = 2.0
+# Amphibious: walks as fast as a land animal and swims as fast as a swimmer (each speed as
+# if its swimming gene were 0 and 1), and does not struggle in water.
+amphibious_burn_cost = 0.25
+# Hibernation: torpid in winter, and whenever daylight is below hibernation_daylight (M8),
+# while its reserve is above hibernation_wake_share of capacity (below it, it wakes to
+# feed). Torpid, it does not move, eat or breed, burns hibernation_burn_share of its
+# resting burn and ages at hibernation_ageing_share of the normal rate.
+hibernation_burn_cost = 0.1
+hibernation_daylight = 0.2
+hibernation_wake_share = 0.3
+hibernation_burn_share = 0.2
+hibernation_ageing_share = 0.25
+# Photosynthesis: gains photosynthesis_rate × mass^metabolic_exponent energy per hour in
+# full daylight on land, less under plants that shade it (flora canopy), none in water or
+# in the dark; land speed × photosynthesis_land_speed.
+photosynthesis_rate = 1.2
+photosynthesis_burn_cost = 0.3
+photosynthesis_land_speed = 0.7
+# Glow: in darkness (M8) every creature sees others only out to night_sight of its sense
+# range at full dark (scaling up to full range in daylight); a glowing one sees out to its
+# full range and is seen by everyone from theirs. Smell is not affected.
+glow_burn_cost = 0.15
+night_sight = 0.3
 
 # --- Brain ---
 # Roaming: every creature keeps a heading that drifts by wander_turn radians per

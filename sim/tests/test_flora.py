@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "c6d946ce6fbf161984f72b26b94f8f27cb080e735c6e327ca1bad425afdb15b9"
+GOLDEN_FLORA_SEED_42 = "54dbbd32d1d56998267598bbf1e753ae082cc770c0bc86cf1630d89324c01223"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -502,6 +502,93 @@ def test_grazing_respects_defence_and_shares_what_is_there(config: Config) -> No
     after = float(site.flora.biomass.sum(dtype=np.float64))
     assert before - after == pytest.approx(float(eaten.sum()), rel=1e-4)
     assert float(site.flora.biomass.min()) >= 0.0
+
+
+# --- Rare genes (M7) --------------------------------------------------------------------
+
+
+def _patch(*cells: tuple[int, int]) -> NDArray[np.bool_]:
+    patch = np.zeros((ROWS, COLUMNS), dtype=np.bool_)
+    for y, x in cells:
+        patch[y, x] = True
+    return patch
+
+
+def test_poisonous_plants_refuse_grazers_and_poison_them(config: Config) -> None:
+    site = Site(config, _plain(), 0.5)
+    site.plant(_all(), GRASS, 0.5)
+    site.plant(_patch((0, 0)), GRASS, 0.5, rare=Rare.POISONOUS)
+    ys, xs = np.array([0, 5]), np.array([0, 5])
+    eaten = site.flora.graze(ys, xs, np.array([0.2, 0.2], dtype=np.float32))
+    assert float(eaten[0]) == pytest.approx((1 - site.cfg.poisonous_refusal) * float(eaten[1]))
+    factor = site.flora.meal_factor(ys, xs)
+    assert float(factor[0]) < 0.0  # a meal that costs energy
+    assert float(factor[1]) == 1.0
+
+
+def test_fruit_feeds_grazers_better(config: Config) -> None:
+    site = Site(config, _plain(), 0.5)
+    site.plant(_all(), GRASS, 0.5)
+    site.plant(_patch((0, 0)), GRASS, 0.5, rare=Rare.FRUITING)
+    factor = site.flora.meal_factor(np.array([0, 5]), np.array([0, 5]))
+    assert float(factor[0]) == pytest.approx(1.0 + site.cfg.fruiting_meal_bonus)
+
+
+def _far_cells(site: Site, source: NDArray[np.bool_], reach: int) -> int:
+    alive = site.flora.biomass > 0
+    ys, xs = np.nonzero(source)
+    y0, x0 = float(ys.mean()), float(xs.mean())
+    yy, xx = np.mgrid[0:ROWS, 0:COLUMNS]
+    far = np.hypot(yy - y0, xx - x0) > reach
+    return int(np.count_nonzero(alive & far))
+
+
+def test_animals_carry_fruit_far(config: Config) -> None:
+    """Heavy seeds stay near; the same plant bearing fruit lands far away."""
+    heavy = list(GRASS)
+    heavy[Gene.SEED] = 1.0
+    source = np.zeros((ROWS, COLUMNS), dtype=np.bool_)
+    source[18:22, 28:32] = True
+    counts: dict[int, int] = {}
+    for rare in (0, int(Rare.FRUITING)):
+        site = Site(config, _plain(), 0.5)
+        site.plant(source, tuple(heavy), 0.9, rare=rare)
+        site.grow(20)
+        counts[rare] = _far_cells(site, source, 8)
+    assert counts[0] == 0
+    assert counts[int(Rare.FRUITING)] > 0
+
+
+def test_emergent_crowns_shade_more_but_need_soil_and_shelter(config: Config) -> None:
+    cfg = config.flora
+    genes, emergent = _genes(*BROADLEAF), np.array([Rare.EMERGENT], dtype=np.uint8)
+    tall = fl.stature(cfg, genes, emergent)
+    assert _value(tall) == pytest.approx(BROADLEAF[Gene.HEIGHT] * (1 + cfg.emergent_height_bonus))
+    grass = fl.stature(cfg, _genes(*GRASS), emergent)
+    assert _value(grass) < SHRUB[Gene.HEIGHT]  # an emergent grass does not overtop shrubs
+    biomass = np.full(1, 0.6, dtype=np.float32)
+    assert _value(fl.canopy(cfg, biomass, tall)) > _value(
+        fl.canopy(cfg, biomass, fl.stature(cfg, genes, _none()))
+    )
+    assert _value(fl.canopy(cfg, np.ones(1, np.float32), tall)) <= 1.0
+    assert _value(fl.fertility_need(cfg, genes, emergent)) > _value(
+        fl.fertility_need(cfg, genes, _none())
+    )
+    shore = np.full(1, 0.3 * cfg.shore_span, dtype=np.float32)
+    assert _value(fl.mortality(cfg, genes, emergent, shore)) > _value(
+        fl.mortality(cfg, genes, _none(), shore)
+    )
+
+
+def test_emergents_overtop_a_closed_forest(config: Config) -> None:
+    site = Site(config, _plain(), 0.8)
+    site.plant(_all(), BROADLEAF, 0.9)
+    grove = np.zeros((ROWS, COLUMNS), dtype=np.bool_)
+    grove[:, :3] = True
+    site.plant(grove, BROADLEAF, 0.9, rare=Rare.EMERGENT)
+    site.grow(150)
+    crowns = int(np.count_nonzero(fl.has(site.flora.rare, Rare.EMERGENT)))
+    assert crowns > 3 * int(grove.sum())
 
 
 # --- Fire -------------------------------------------------------------------------------

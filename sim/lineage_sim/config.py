@@ -227,6 +227,15 @@ class FloraConfig:
     nitrogen_fixer_growth_cost: float
     mangrove_max_depth: float
     mangrove_growth_cost: float
+    poisonous_toxicity: float
+    poisonous_refusal: float
+    poisonous_growth_cost: float
+    fruiting_meal_bonus: float
+    fruiting_growth_cost: float
+    emergent_height_bonus: float
+    emergent_need_factor: float
+    emergent_growth_cost: float
+    emergent_wind_factor: float
     defence_strength: float
     grazing_reserve_biomass: float
     fire_ignitions_per_year: float
@@ -283,6 +292,10 @@ class FloraConfig:
             "nitrogen_fixer_need_relief",
             "nitrogen_fixer_growth_cost",
             "mangrove_growth_cost",
+            "poisonous_refusal",
+            "poisonous_growth_cost",
+            "fruiting_growth_cost",
+            "emergent_growth_cost",
             "defence_strength",
             "grazing_reserve_biomass",
             "fire_wet_spread",
@@ -402,6 +415,28 @@ class FaunaConfig:
     rare_gain_probability: float
     rare_loss_probability: float
     rare_slots: int
+    venom_attack_factor: float
+    venom_burn_cost: float
+    toxic_kill_factor: float
+    toxic_burn_cost: float
+    giant_mass_factor: float
+    giant_maturity_factor: float
+    giant_burn_cost: float
+    longevity_factor: float
+    longevity_brood_factor: float
+    longevity_burn_cost: float
+    longevity_cooldown_factor: float
+    amphibious_burn_cost: float
+    hibernation_burn_cost: float
+    hibernation_daylight: float
+    hibernation_wake_share: float
+    hibernation_burn_share: float
+    hibernation_ageing_share: float
+    photosynthesis_rate: float
+    photosynthesis_burn_cost: float
+    photosynthesis_land_speed: float
+    glow_burn_cost: float
+    night_sight: float
     wander_noise: float
     wander_turn: float
     instinct_food: float
@@ -492,6 +527,14 @@ class FaunaConfig:
             "carcass_share",
             "social_copy_max",
             "rare_loss_probability",
+            "toxic_kill_factor",
+            "longevity_brood_factor",
+            "hibernation_daylight",
+            "hibernation_wake_share",
+            "hibernation_burn_share",
+            "hibernation_ageing_share",
+            "photosynthesis_land_speed",
+            "night_sight",
             "herbivore_max_diet",
             "predator_min_diet",
         )
@@ -499,6 +542,9 @@ class FaunaConfig:
             check(getattr(self, key) <= 1.0, f"{key} must be within [0, 1]")
         check(self.mass_min < self.mass_max, "mass_min must be below mass_max")
         check(self.rare_slots <= 16, "rare_slots must fit in 16 bits")
+        for key in ("venom_attack_factor", "giant_mass_factor", "giant_maturity_factor",
+                    "longevity_factor", "longevity_cooldown_factor"):  # fmt: skip
+            check(getattr(self, key) >= 1.0, f"{key} must be at least 1")
         check(self.herbivore_max_diet < self.predator_min_diet, "diet classes overlap")
         check(
             self.repro_investment_share < self.repro_energy_share,
