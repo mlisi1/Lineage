@@ -7,9 +7,16 @@
 import { lookOf, type Look } from "../creatures/body";
 import { GENE_NAMES, type Genome } from "../creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "../creatures/phenotype";
+import {
+  parseRareConfig,
+  rareLooks,
+  withRare,
+  type RareConfig,
+  type Signatures,
+} from "../creatures/rare";
 import { seasonOf, type Season } from "./seasons";
 
-export const FIXTURE_FORMAT = "lineage-spike-fixture/4";
+export const FIXTURE_FORMAT = "lineage-spike-fixture/5";
 
 export type Ramp = readonly [string, string, string];
 
@@ -23,6 +30,10 @@ export interface CreatureSeed extends Look {
   genome: Genome;
   /** Its species as the sim has it, 0 for none yet (specimens, newcomers). */
   species: number;
+  /** Its rare-gene slots (bits), as the sim has them. */
+  slots: number;
+  /** Lying torpid (a hibernator in winter or long darkness): curled up, still. */
+  torpid: boolean;
   /** Cells it is kept within, when a picture wants it to stay in frame; the sim sets none. */
   pen?: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -72,6 +83,9 @@ export interface WorldFixture {
   casts: readonly Cast[];
   /** The sim's config as its phenotype reads it: what bodies are derived with. */
   phenotypeConfig: PhenotypeConfig;
+  /** What rare genes are drawn with, and the signature each slot bit is drawn by. */
+  rareConfig: RareConfig;
+  rareSignatures: Signatures;
   /** Diet gene at or below which a creature is a herbivore, at or above which a predator. */
   herbivoreMaxDiet: number;
   predatorMinDiet: number;
@@ -170,15 +184,29 @@ export function parseFixture(raw: unknown): WorldFixture {
   const y = column("y");
   const genes = GENE_NAMES.map((name) => column(name.toLowerCase()));
   const species = column("species");
+  const slots = column("slots");
+  const torpid = column("torpid");
   const phenotypeConfig = parsePhenotypeConfig(raw["phenotype_config"]);
+  const rareConfig = parseRareConfig(raw["rare_config"]);
+  const rareSignatures = new Map<number, string>();
+  for (const entry of field(raw, "rare_signatures", Array.isArray)) {
+    if (!isObject(entry) || !isNumber(entry["bit"]) || !isString(entry["signature"])) {
+      throw new Error("fixture: bad rare signature");
+    }
+    rareSignatures.set(entry["bit"], entry["signature"]);
+  }
   const seed = (row: readonly number[]): CreatureSeed => {
     const genome = genes.map((index) => row[index] ?? 0);
+    const bits = row[slots] ?? 0;
+    const look = lookOf(genome, phenotype(phenotypeConfig, genome));
     return {
       x: row[x] ?? 0,
       y: row[y] ?? 0,
       genome,
       species: row[species] ?? 0,
-      ...lookOf(genome, phenotype(phenotypeConfig, genome)),
+      slots: bits,
+      torpid: (row[torpid] ?? 0) !== 0,
+      ...withRare(look, rareLooks(bits, rareSignatures), rareConfig),
     };
   };
   const creatures = field(raw, "creatures", isRows).map(seed);
@@ -208,6 +236,8 @@ export function parseFixture(raw: unknown): WorldFixture {
     creatures,
     casts,
     phenotypeConfig,
+    rareConfig,
+    rareSignatures,
     herbivoreMaxDiet: field(diet, "herbivore_max", isNumber),
     predatorMinDiet: field(diet, "predator_min", isNumber),
     description: `seed ${String(source["seed"])}, ${String(source["date"])} (${String(source["season"])})`,

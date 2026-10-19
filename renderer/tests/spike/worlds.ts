@@ -90,6 +90,8 @@ export function world(
     creatures: [],
     casts: [],
     phenotypeConfig: PHENOTYPE_CONFIG,
+    rareConfig: { giant_mass_factor: 2 },
+    rareSignatures: new Map(),
     herbivoreMaxDiet: 0.35,
     predatorMinDiet: 0.65,
     description: "",

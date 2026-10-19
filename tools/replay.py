@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from lineage_sim import rare
 from lineage_sim.config import parse_config
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import phenotype_config
@@ -35,15 +36,23 @@ from PIL import Image
 from tools.runs import DEFAULT_CONFIG, REPO_ROOT
 from tools.viz import pixelmap
 
-FIXTURE_FORMAT = "lineage-spike-fixture/4"
+FIXTURE_FORMAT = "lineage-spike-fixture/5"
 # Heights are stored as whole numbers: this many steps between 0 and 1.
 HEIGHT_STEPS = 65535
 MS_PER_DAY = 86_400_000
-# One row per creature in ``world.json``: where it is (cells), its whole genome, then its
-# species (0: none yet). The renderer derives the body from the genome with its port of
-# the phenotype function and the keys of ``phenotype_config`` (R2), as the sim does, and
-# draws one body plan per species.
-CREATURE_FIELDS = ("x", "y", *(gene.name.lower() for gene in Gene), "species")
+# One row per creature in ``world.json``: where it is (cells), its whole genome, its
+# species (0: none yet), its rare-gene slots (bits of ``rare.CreatureRare``) and whether it
+# lies torpid (1) or not (0). The renderer derives the body from the genome with its port
+# of the phenotype function and the keys of ``phenotype_config`` (R2), as the sim does,
+# draws one body plan per species, and lays each rare gene's overlay on it.
+CREATURE_FIELDS = (
+    "x",
+    "y",
+    *(gene.name.lower() for gene in Gene),
+    "species",
+    "slots",
+    "torpid",
+)
 
 # The specimen genomes shared with the renderer's phenotype check (R2).
 SPECIMENS = REPO_ROOT / "sim" / "tests" / "fixtures" / "phenotypes.json"
@@ -127,10 +136,14 @@ def render_still(world: World, scale: int = 1) -> np.ndarray:
 
 
 def creature_rows(
-    genes: np.ndarray, positions: np.ndarray | None = None, species: np.ndarray | None = None
+    genes: np.ndarray,
+    positions: np.ndarray | None = None,
+    species: np.ndarray | None = None,
+    slots: np.ndarray | None = None,
+    torpid: np.ndarray | None = None,
 ) -> list[list[float]]:
     """One row of ``CREATURE_FIELDS`` per creature; without positions they are all at 0, 0,
-    and without species of none (0).
+    without species of none (0), without slots carrying no rare gene, and awake.
 
     Positions are rounded to a thousandth of a cell. Genes are written as the shortest
     decimal that reads back as the same 32-bit number, so the renderer's body is the sim's
@@ -138,25 +151,37 @@ def creature_rows(
     """
     if positions is None:
         positions = np.zeros((len(genes), 2), dtype=np.float32)
-    if species is None:
-        species = np.zeros(len(genes), dtype=np.int64)
+    count = len(genes)
+    species = np.zeros(count, dtype=np.int64) if species is None else species
+    slots = np.zeros(count, dtype=np.uint16) if slots is None else slots
+    torpid = np.zeros(count, dtype=np.bool_) if torpid is None else torpid
     places = np.round(positions.astype(np.float64), 3).tolist()
     genomes = genes.astype(np.float32)
+    extras = zip(species.tolist(), slots.tolist(), torpid.tolist(), strict=True)
     return [
-        [*place, *(float(str(value)) for value in genome), int(label)]
-        for place, genome, label in zip(places, genomes, species.tolist(), strict=True)
+        [*place, *(float(str(value)) for value in genome), int(label), int(bits), int(still)]
+        for place, genome, (label, bits, still) in zip(places, genomes, extras, strict=True)
     ]
 
 
-def _cast(name: str, members: list[str], genomes: np.ndarray) -> dict[str, Any]:
-    return {"name": name, "members": members, "creatures": creature_rows(genomes)}
+def _cast(
+    name: str,
+    members: list[str],
+    genomes: np.ndarray,
+    slots: np.ndarray | None = None,
+    torpid: np.ndarray | None = None,
+) -> dict[str, Any]:
+    rows = creature_rows(genomes, slots=slots, torpid=torpid)
+    return {"name": name, "members": members, "creatures": rows}
 
 
 def casts() -> list[dict[str, Any]]:
     """Creatures chosen to show the range of bodies, for the renderer's look sheet.
 
     ``specimens`` are the genomes of ``phenotypes.json``. Each ``sweep-<gene>`` is the
-    plain animal of ``SWEEP_BASE`` with that one gene at each of ``SWEEP_STEPS``.
+    plain animal of ``SWEEP_BASE`` with that one gene at each of ``SWEEP_STEPS``. ``rare``
+    is that plain animal carrying each creature rare gene on its own, members named by the
+    gene's signature key, then a hibernator lying torpid (``coat, torpid``).
     """
     specimens = json.loads(SPECIMENS.read_text(encoding="utf-8"))["specimens"]
     out = [
@@ -174,6 +199,16 @@ def casts() -> list[dict[str, Any]]:
         genomes[:, gene] = SWEEP_STEPS
         members = [f"{step:g}" for step in SWEEP_STEPS]
         out.append(_cast(f"sweep-{gene.name.lower()}", members, genomes))
+    rare_genes = [*rare.CREATURE_GENES, rare.CreatureRare.HIBERNATION]
+    out.append(
+        _cast(
+            "rare",
+            [rare.CREATURE_SIGNATURES[gene].key for gene in rare.CREATURE_GENES] + ["coat, torpid"],
+            np.tile(base, (len(rare_genes), 1)),
+            slots=np.array([int(gene) for gene in rare_genes], dtype=np.uint16),
+            torpid=np.array([False] * len(rare.CREATURE_GENES) + [True]),
+        )
+    )
     return out
 
 
@@ -192,7 +227,9 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
     rows, columns = terrain.height.shape
     ground = pixelmap.render(terrain.height, terrain.sea_level)
     vegetated = pixelmap.render(terrain.height, terrain.sea_level, flora.cover(), flora.biomass)
-    creatures = creature_rows(fauna.genes, fauna.positions, world.species.labels_now())
+    creatures = creature_rows(
+        fauna.genes, fauna.positions, world.species.labels_now(), fauna.slots, fauna.torpid
+    )
     palette = {cover.name: list(ramp) for cover, ramp in pixelmap.LAND_RAMPS.items()}
     palette["DORMANT"] = list(pixelmap.DORMANT)
     document = {
@@ -230,6 +267,13 @@ def renderer_fixture(world: World, source: str) -> tuple[np.ndarray, np.ndarray,
         "creature_fields": list(CREATURE_FIELDS),
         "creatures": creatures,
         "phenotype_config": phenotype_config(fauna.config),
+        # Rare genes (M7): what the renderer needs beside the phenotype, and the signature
+        # each creature gene is drawn by.
+        "rare_config": rare.render_config(fauna.config),
+        "rare_signatures": [
+            {"bit": int(gene), "name": str(gene.name).lower(), "signature": signature.key}
+            for gene, signature in rare.CREATURE_SIGNATURES.items()
+        ],
         "casts": casts(),
     }
     return ground, vegetated, document

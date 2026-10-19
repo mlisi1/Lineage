@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { GENE_COUNT, geneOf } from "../../src/creatures/genome";
 import { phenotype } from "../../src/creatures/phenotype";
+import { RARE_LOOKS } from "../../src/creatures/rare";
 import { decodeBase64, parseFixture } from "../../src/spike/fixture";
 import { PHENOTYPE_CONFIG } from "./worlds";
 import {
@@ -102,14 +103,17 @@ describe("the committed fixture", () => {
     for (const creature of [...fixture.creatures, ...fixture.casts.flatMap((c) => c.creatures)]) {
       expect(creature.genome).toHaveLength(GENE_COUNT);
       const body = phenotype(fixture.phenotypeConfig, creature.genome);
-      expect(creature.mass).toBe(body.mass);
+      // A giant (M7) is drawn at the rare-adjusted mass, as the sim has it.
+      const giant = creature.rare?.includes("giant") ? fixture.rareConfig.giant_mass_factor : 1;
+      expect(creature.mass).toBeCloseTo(body.mass * giant, 9);
       expect(creature.limbPairs).toBe(body.limbPairs);
       expect(creature.hue).toBe(geneOf(creature.genome, "HUE"));
     }
   });
 
   it("brings fifteen specimens and a five-step sweep of every gene with a look", () => {
-    const [specimens, ...sweeps] = fixture.casts;
+    const [specimens, ...others] = fixture.casts;
+    const sweeps = others.filter((cast) => cast.name.startsWith("sweep-"));
     expect(specimens?.name).toBe("specimens");
     expect(specimens?.members).toHaveLength(15);
     expect(specimens?.members).toContain("giant");
@@ -133,6 +137,21 @@ describe("the committed fixture", () => {
     expect(size[4]?.mass).toBeCloseTo(16);
     const limbs = sweeps.find((cast) => cast.name === "sweep-limbs")?.creatures ?? [];
     expect(limbs.map((creature) => creature.limbPairs)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("knows each rare gene by its signature, and brings a plain carrier of each", () => {
+    expect([...fixture.rareSignatures.values()].sort()).toEqual([...RARE_LOOKS].sort());
+    const rare = fixture.casts.find((cast) => cast.name === "rare");
+    expect(rare?.members).toEqual([...RARE_LOOKS, "coat, torpid"]);
+    rare?.creatures.forEach((creature, index) => {
+      const key = RARE_LOOKS[index] ?? "coat";
+      expect(creature.rare).toEqual([key]);
+      expect(creature.torpid).toBe(index === RARE_LOOKS.length);
+    });
+    // In the world: a giant, drawn at twice its genes' mass.
+    const giants = fixture.creatures.filter((creature) => creature.rare?.includes("giant"));
+    expect(giants.length).toBeGreaterThan(0);
+    expect(fixture.rareConfig.giant_mass_factor).toBeGreaterThan(1);
   });
 
   it("has thousands of cells to draw as plant sprites", () => {

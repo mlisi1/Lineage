@@ -37,13 +37,16 @@ const NUMBERS = [
 
 /** The plan of every species among `members`, from its average member. */
 export function speciesPlans(members: readonly Member[]): Map<number, SpeciesPlan> {
-  const sums = new Map<number, { look: Record<keyof Look, number>; count: number }>();
+  const sums = new Map<number, { look: Record<(typeof NUMBERS)[number], number>; count: number }>();
   for (const member of members) {
     if (member.species === 0) continue;
     let sum = sums.get(member.species);
     if (sum === undefined) {
       sum = {
-        look: Object.fromEntries(NUMBERS.map((key) => [key, 0])) as Record<keyof Look, number>,
+        look: Object.fromEntries(NUMBERS.map((key) => [key, 0])) as Record<
+          (typeof NUMBERS)[number],
+          number
+        >,
         count: 0,
       };
       sums.set(member.species, sum);
@@ -53,7 +56,7 @@ export function speciesPlans(members: readonly Member[]): Map<number, SpeciesPla
   }
   const plans = new Map<number, SpeciesPlan>();
   for (const [species, { look, count }] of sums) {
-    const mean = {} as Record<keyof Look, number>;
+    const mean = {} as Record<(typeof NUMBERS)[number], number>;
     for (const key of NUMBERS) mean[key] = look[key] / count;
     plans.set(species, { kind: kindOf(mean), swims: mean.aquatic >= SWIMS_FROM, members: count });
   }
