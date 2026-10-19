@@ -17,7 +17,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
-| R1 | Terrain and plants from the state stream | **in review** on `r1-terrain` (2026-10-18), not merged: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
+| R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | not started | — |
 | R3 | Documentary camera and captions | not started | — |
 | R4 | Atmosphere | not started | — |
@@ -31,13 +31,13 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### R1 (terrain and plants from the state stream): in review on `r1-terrain`
+### R1 closed (terrain and plants from the state stream)
 
-State at 2026-10-18. Worked in `/home/elechim/Lineage-r1`; the agents of M6 and R2 work
-beside it and exchange notes in `/home/elechim/Lineage-coord/` (not in git).
+Merged into `main` on 2026-10-19, after M7. Worked in `/home/elechim/Lineage-r1` (branch
+`r1-terrain`); the other agents exchange notes in `/home/elechim/Lineage-coord/` (not in git).
 
-- **Done and tested on the PC**: renderer 160 unit tests, 20 Playwright tests (seven
-  snapshots, the leak test); Python fast suite; ruff, pyright, eslint, prettier clean.
+- **Done and tested on the PC**: renderer 166 unit tests, 20 Playwright tests (seven
+  snapshots, the leak test); Python fast suite (533); ruff, pyright, eslint, prettier clean.
   Design in `docs/design/renderer.md` "The land from the state stream", decisions in
   ADR 0014 and its amendment.
 - **On the board: in R5**, which the owner made the home of every device benchmark once
@@ -47,16 +47,14 @@ beside it and exchange notes in `/home/elechim/Lineage-coord/` (not in git).
   30 MB of GPU memory); `?painter=inline` to compare. If a day's pause shows, move the
   middle view's island-wide shadows and the plant drawings at a turn of season into the
   worker (renderer.md, Open).
-- **Merging** (the owner decides when): `main` with M6 is merged into `r1-terrain`
-  already. With `r2-creatures` expect conflicts in `renderer/public/spike/*` (regenerate
-  with R2's `tools/replay.py` from `v7.lzma`), `renderer/vite.config.ts`,
-  `renderer/package.json`; with `m7-rare-genes` in `sim/lineage_sim/flora.py`, `config.py`
-  and `default.toml` (R1's two `[flora]` snow keys and `snow_cover` beside M7's rare ones). After R2 is in,
-  remove the re-export shims in `renderer/src/spike/{ground,seasons,plantart,plants,rng}.ts`
-  and put R2's creatures among the plant rows of the real scene (`Landscape.plants`).
+- **R2's merge** (next): expect conflicts in `renderer/public/spike/*` (regenerate with
+  R2's `tools/replay.py` from `v7.lzma`), `renderer/vite.config.ts`,
+  `renderer/package.json`, `docs/design/renderer.md`. After R2 is in, remove the re-export
+  shims in `renderer/src/spike/{ground,seasons,plantart,plants,rng}.ts` and put R2's
+  creatures among the plant rows of the real scene (`Landscape.plants`; R3's scene).
 - **Rare plants** (M7's signatures) are drawn from the stream's `plant_rare`, fire pines
   surviving a fire included; the stream also carries M7's `born[].slots`, `torpid` and
-  the `rare` table, read from M7's code once it is merged.
+  the `rare` table.
 - **Two worktrees, one test port**: Playwright reuses a server already on its port, so
   R1's and R2's browser tests run at once tested each other's build (the "flaky" first
   runs). `PLAYWRIGHT_PORT` sets the port (R1 used 4573, R2 4373; 4173 by default).
@@ -98,8 +96,7 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Parallel work (other agents)
 
-R1 (`r1-terrain`, `/home/elechim/Lineage-r1`) is in review; R2 (`r2-creatures`,
-`/home/elechim/Lineage-r2`) is in progress. They coordinate through
+R1 is merged (2026-10-19); R2 (`r2-creatures`, `/home/elechim/Lineage-r2`) is next. They coordinate through
 `/home/elechim/Lineage-coord` (status files and inboxes). R1's protocol already carries
 the rare-gene table, `born[].slots`, `torpid` and the plant rare mask; R1 has M7's
 descriptions of the plant looks. R2 has M7's notes on the creature overlays (only GIANT
