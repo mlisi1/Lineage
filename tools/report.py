@@ -2,7 +2,7 @@
 
 Usage::
 
-    uv run python -m tools.report <milestone> --runs runs/<id> [--baseline runs/<id>]
+    uv run python -m tools.report <milestone> --runs runs/<id> [--baseline runs/<id>]...
         [--out reports]
 
 Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metrics.json``,
@@ -10,8 +10,9 @@ Writes ``reports/<MID>-<slug>/`` with ``report.html`` (self-contained), ``metric
 
 Milestones with statistical behaviour have a module in ``tools/milestones/`` providing
 their metrics, acceptance criteria and figures; the others get a generic report with
-every recorded series. A milestone whose module sets ``NEEDS_BASELINE`` compares two
-runs (an ablation, M5) and needs ``--baseline``, the run with the mechanism off.
+every recorded series. A milestone whose module sets ``NEEDS_BASELINE`` compares runs and
+needs ``--baseline``: the run with the mechanism off (an ablation, M5), or, repeated, the
+runs under other presence schedules (M8).
 
 Milestones measured on the device (R0) are built from the file the device benchmark
 wrote instead of a run: ``--runs`` is that file or the directory holding it. The file is
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -31,7 +33,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4, m5, m6, m7, r0
+from tools.milestones import m2, m3, m4, m5, m6, m7, m8, r0
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -68,7 +70,15 @@ MILESTONES: dict[str, Milestone] = {
 }
 
 # Milestones with their own metrics and report sections.
-MODULES: dict[str, ModuleType] = {"M2": m2, "M3": m3, "M4": m4, "M5": m5, "M6": m6, "M7": m7}
+MODULES: dict[str, ModuleType] = {
+    "M2": m2,
+    "M3": m3,
+    "M4": m4,
+    "M5": m5,
+    "M6": m6,
+    "M7": m7,
+    "M8": m8,
+}
 
 # Milestones measured on the device rather than by fast-forward: the module reads its
 # own evidence file and provides the header, metrics and sections from it.
@@ -82,6 +92,7 @@ CRITERIA: dict[str, list[Criterion]] = {
     "M5": m5.CRITERIA,
     "M6": m6.CRITERIA,
     "M7": m7.CRITERIA,
+    "M8": m8.CRITERIA,
     "R0": r0.CRITERIA,
 }
 
@@ -95,6 +106,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     **m5.SERIES_LABELS,
     **m6.SERIES_LABELS,
     **m7.SERIES_LABELS,
+    **m8.SERIES_LABELS,
 }
 
 
@@ -360,7 +372,7 @@ def build_report(
     milestone_id: str,
     run_dir: Path,
     out_root: Path = DEFAULT_OUT,
-    baseline_dir: Path | None = None,
+    baseline_dir: Path | Sequence[Path] | None = None,
 ) -> Path:
     try:
         milestone = MILESTONES[milestone_id]
@@ -380,11 +392,11 @@ def build_report(
     compared: tuple[Run, ...] = ()
     if module is not None and getattr(module, "NEEDS_BASELINE", False):
         if baseline_dir is None:
-            raise ValueError(f"{milestone.mid} compares two runs: pass --baseline runs/<id>")
-        baseline = read_run(baseline_dir)
-        if baseline.manifest.seeds != run.manifest.seeds:
+            raise ValueError(f"{milestone.mid} compares runs: pass --baseline runs/<id>")
+        dirs = [baseline_dir] if isinstance(baseline_dir, Path) else list(baseline_dir)
+        compared = tuple(read_run(d) for d in dirs)
+        if any(b.manifest.seeds != run.manifest.seeds for b in compared):
             raise ValueError("the baseline run must use the same seeds")
-        compared = (baseline,)
     # A milestone module reports its own, curated numbers; the generic per-series spread
     # is for milestones without one.
     metrics = compute_metrics(run) if module is None else module.metrics(run, *compared)
@@ -428,7 +440,10 @@ def main(argv: list[str] | None = None) -> None:
         help="run directory, runs/<id>; for R0 the device benchmark file or its directory",
     )
     parser.add_argument(
-        "--baseline", type=Path, help="run with the mechanism off, for ablations (M5)"
+        "--baseline",
+        type=Path,
+        action="append",
+        help="run to compare with: the mechanism off (M5); other schedules (M8, repeatable)",
     )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")
     args = parser.parse_args(argv)
