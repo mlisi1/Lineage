@@ -12,7 +12,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | **done** 2026-10-18, merged into `main` (`1dd1720`): M6.2 1.08 splits / month PASS; M6.1 79 % of inhabited time with 3–12 species FAIL, deferred to M11 by the owner (ADR 0012). Species are genome clusters (`link_distance` 0.035); predator species split from groups of 5 | [reports/M6-species](../reports/M6-species/README.md) |
 | M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
-| M8 | Presence, calendar, god powers | **done** 2026-10-19 on `m8-presence`, not yet merged: M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
+| M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
@@ -32,7 +32,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M8 closed (branch `m8-presence`, 2026-10-19)
+### M8 closed (merged into `main` at `ab0165b`, 2026-10-19)
 
 - What M8 left: `sim/lineage_sim/presence.py` (light from `PresenceChanged`; the button,
   `GodPower()`, with weighted powers and a cooldown), `[presence]` in `default.toml`,
@@ -48,6 +48,34 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   (the dark ages) can be read from `Presence.present` and the light.
 - Tests: fast suite 578 passed; slow `tools/tests/test_m8_statistical.py` passed
   (3 m 48 s at 8 workers).
+- Branches `m8-presence` and `m8-daylight` deleted (both in `main`); nothing pushed.
+
+### Starting M9 (chronicle and bestiary)
+
+- **Branch**: `git switch main && git switch -c m9-chronicle`. Spec: CLAUDE.md §8 M9 and
+  `docs/design/chronicle.md` (open: the importance scale and the "major" threshold for
+  notifications; ask the owner).
+- **What exists**: `sim/lineage_sim/chronicle.py` is a skeleton; the `CHRONICLE` random
+  stream is reserved in `rng.py`. Output events already returned by `World.step` /
+  `World.apply` (`events.py`): `DayStarted`, `SeasonStarted`, `VolcanoErupted`,
+  `EarthquakeStruck`, `CraterFormed`, `LandmassSplit`, `LandmassesRejoined`,
+  `FireStarted`, `FireEnded`, `CreaturesArrived`, `PopulationExtinct`, `JuvenileGrown`,
+  `SpeciesBorn`, `SpeciesExtinct`, `GodPowerUsed`, `GodPowerRefused`, `GodPowerReady`.
+  The chronicle subsystem can read these plus world state (species records and names in
+  `Species.records()`, populations, rare carriers, `Presence.present`/`light` for dark
+  ages). Detectors still to build: firsts, records, booms and crashes, migrations,
+  anniversaries, dark ages (long absences).
+- **Order**: a chronicle subsystem that sees other subsystems' outputs needs either a
+  hook in `World` (outputs handed to it) or detectors run by the world after each step;
+  decide in the plan. Its state (dedup/rate-limit memory, bestiary) is saved: schema v9.
+- **Bestiary**: one record per species ever (genome snapshot for the portrait = the
+  species' founding/centroid genome, `Species.records()`), dates, ancestry, facts.
+- **Report** (CLAUDE.md §7, §8 M9): a sample 3-year chronicle, entries per month,
+  importance distribution; run under `--schedule office` (ADR 0016: the gadget's light).
+  Accept: `[2–15]` notable entries per sim-month median; no event type > 30 %.
+- **Machine**: other simulations share this PC; pass `--jobs 8`–`10` to fast-forward
+  (the default is every core). A 20-seed × 3-year run takes about 10 min at 10 jobs.
+- Next free ADR: 0017 (check `/home/elechim/Lineage-coord/README.md`).
 
 
 ### R2 closed (merged into `main` at `0168618`, 2026-10-19)
