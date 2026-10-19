@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from pathlib import Path
 from typing import TypeVar
@@ -23,7 +24,15 @@ from lineage_sim.events import (
     OutputEvent,
     PresenceChanged,
 )
-from lineage_sim.presence import POWERS, Power, choose, next_light, plant_light, target_light
+from lineage_sim.presence import (
+    POWERS,
+    Power,
+    choose,
+    next_light,
+    plant_light,
+    recent_light,
+    target_light,
+)
 from lineage_sim.presence import weights as power_weights
 from lineage_sim.state import io
 from lineage_sim.world import World, default_subsystems
@@ -100,12 +109,36 @@ def test_leaving_brings_dusk_then_night_then_moonlight(config: Config) -> None:
     assert world.fauna.daylight == cfg.moonlight  # a holiday: moonlight
 
 
-def test_plants_get_the_days_mean_light(config: Config) -> None:
+def test_plants_remember_about_a_week_of_light(config: Config) -> None:
+    cfg = config.presence
+    week = cfg.plant_light_days
+    assert recent_light(cfg, 1.0, 0.0, week) == pytest.approx(math.exp(-1))
+    assert recent_light(cfg, 0.3, 0.3, 5.0) == pytest.approx(0.3)
+    # Two days split equal one whole.
+    two = recent_light(cfg, recent_light(cfg, 0.8, 0.1, 1.0), 0.1, 1.0)
+    assert two == pytest.approx(recent_light(cfg, 0.8, 0.1, 2.0))
+
+
+def test_an_office_week_keeps_plants_growing_and_a_holiday_slows_them(config: Config) -> None:
+    cfg = config.presence
+    recent, lowest = 1.0, 1.0
+    for day in range(10 * 7):
+        weekday_light = 0.4 if day % 7 < 5 else cfg.night_light
+        recent = recent_light(cfg, recent, weekday_light, 1.0)
+        lowest = min(lowest, plant_light(cfg, recent)) if day > 21 else lowest
+    assert lowest > 0.9
+    for _ in range(21):
+        recent = recent_light(cfg, recent, cfg.moonlight, 1.0)
+    assert 0.5 < plant_light(cfg, recent) < 0.8
+
+
+def test_plants_get_the_recent_light(config: Config) -> None:
     world = _world(config)  # absent since 18:00 of the last day, now midnight
-    world.step(2 * DAY_S)  # two whole days in the dark
-    assert world.flora.daylight == pytest.approx(
-        plant_light(config.presence, config.presence.night_light)
-    )
+    before = world.flora.daylight
+    world.step(10 * DAY_S)  # ten whole days away: night, then moonlight
+    after = world.flora.daylight
+    assert after < before
+    assert after > plant_light(config.presence, config.presence.night_light)
 
 
 @settings(max_examples=40, deadline=None)

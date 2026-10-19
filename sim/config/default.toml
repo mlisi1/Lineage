@@ -648,10 +648,13 @@ dusk_hours = 1.5
 night_light = 0.05
 moonlight = 0.15
 moonlight_after_hours = 72.0
-# Plants grow at their full rate once the day's mean light reaches plant_full_light, and
-# proportionally less below it. An office week lights about 0.3 of the hours, so plants
-# keep the growth they were tuned with (M3); a holiday in moonlight halves it.
-plant_full_light = 0.3
+# Plants grow with the recent light: a running mean of each day's mean light that forgets
+# over plant_light_days (sim-days). At plant_full_light or more they grow at their full
+# rate, proportionally less below it. An office week lights about 0.3 of the hours, and
+# its mean dips to about 0.24 after a weekend, so plants keep the growth they were tuned
+# with (M3); a long holiday in moonlight (0.15) brings them down to about 0.6.
+plant_full_light = 0.25
+plant_light_days = 7.0
 # God powers: a button fires one, at most once per god_cooldown_days (sim-days). The
 # island draws which: power p has weight god_weight_p × (1 + god_need_gain × need_p),
 # needs in [0, 1]: rain, a fire burning (1) or the season's dryness; seed, the share of

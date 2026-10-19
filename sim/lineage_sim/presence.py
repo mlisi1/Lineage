@@ -8,8 +8,9 @@ fully lit. Holidays need no calendar: they are long absences (ADR 0016).
 
 The subsystem is registered first, so it ticks before the others when ticks coincide.
 Every tick it hands the creatures the light of the moment (sight, photosynthesis,
-torpor); it integrates light over each sim-day and, at midnight, hands the plants the
-day's mean light, which they grow with.
+torpor). It integrates light over each sim-day and keeps a running mean of the days over
+about a week; at midnight it hands the plants their growth factor from that mean, so a
+weekend's Long Night slows them little and a long holiday a lot.
 
 God powers: a button (`GodPower`) fires one, at most once per cooldown. The island draws
 which, weighted by config and by what it needs (`needs`): a meteor, rain, seed or an ark.
@@ -19,6 +20,7 @@ subsystems are not saved; this subsystem pushes them again after a restore.
 
 from __future__ import annotations
 
+import math
 from enum import Enum
 
 import numpy as np
@@ -73,8 +75,14 @@ def next_light(cfg: PresenceConfig, light: float, target: float, hours: float) -
 
 
 def plant_light(cfg: PresenceConfig, mean_light: float) -> float:
-    """Plants' growth factor from a day's mean light: full from ``plant_full_light``."""
+    """Plants' growth factor from the recent mean light: full from ``plant_full_light``."""
     return min(mean_light / cfg.plant_full_light, 1.0)
+
+
+def recent_light(cfg: PresenceConfig, recent: float, day_light: float, days: float) -> float:
+    """The running mean of light after ``days`` more at ``day_light`` (it forgets over
+    ``plant_light_days``)."""
+    return recent + (day_light - recent) * (1.0 - math.exp(-days / cfg.plant_light_days))
 
 
 def weights(cfg: PresenceConfig, needs: dict[Power, float]) -> list[float]:
@@ -121,7 +129,7 @@ class Presence:
         self._absent_h = 0.0  # hours since the owner left (0 while present)
         self._light_hours = 0.0  # light × hours since the last midnight
         self._hours = 0.0  # hours since the last midnight
-        self._plant_light = 1.0  # what the plants were last given
+        self._recent_light = 1.0  # running mean of daily light, over about a week
         self._ready_ms = 0  # sim time from which the button works again
         self._ready_told = True  # GodPowerReady already sent for this cooldown
         self._rain_until_ms = 0  # the land is wet until then
@@ -171,7 +179,8 @@ class Presence:
             self._absent_h += hours
         if ctx.t_ms % MS_PER_DAY == 0 and self._hours > 0:
             # Registered first, this runs before the plants' midnight tick.
-            self._plant_light = plant_light(self._cfg, self._light_hours / self._hours)
+            day = self._light_hours / self._hours
+            self._recent_light = recent_light(self._cfg, self._recent_light, day, self._hours / 24)
             self._light_hours = self._hours = 0.0
         self._wet = ctx.t_ms < self._rain_until_ms
         self._push()
@@ -195,7 +204,7 @@ class Presence:
             "absent_h": self._absent_h,
             "light_hours": self._light_hours,
             "hours": self._hours,
-            "plant_light": self._plant_light,
+            "recent_light": self._recent_light,
             "ready_ms": self._ready_ms,
             "ready_told": self._ready_told,
             "rain_until_ms": self._rain_until_ms,
@@ -208,7 +217,7 @@ class Presence:
         self._absent_h = float(tree["absent_h"])
         self._light_hours = float(tree["light_hours"])
         self._hours = float(tree["hours"])
-        self._plant_light = float(tree["plant_light"])
+        self._recent_light = float(tree["recent_light"])
         self._ready_ms = int(tree["ready_ms"])
         self._ready_told = bool(tree["ready_told"])
         self._rain_until_ms = int(tree["rain_until_ms"])
@@ -222,7 +231,7 @@ class Presence:
         saved, so a restore pushes them again)."""
         wet = self._wet
         self._fauna.set_daylight(self._light)
-        self._flora.set_daylight(self._plant_light)
+        self._flora.set_daylight(plant_light(self._cfg, self._recent_light))
         self._flora.set_rain(1.0 + self._cfg.rain_growth_boost if wet else 1.0)
         self._fire.set_wet(wet)
 

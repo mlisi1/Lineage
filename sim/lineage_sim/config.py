@@ -581,6 +581,7 @@ class PresenceConfig:
     moonlight: float
     moonlight_after_hours: float
     plant_full_light: float
+    plant_light_days: float
     god_cooldown_days: float
     god_need_gain: float
     god_weight_meteor: float
@@ -603,7 +604,8 @@ class PresenceConfig:
             if not ok:
                 raise ConfigError(f"[presence] {message}")
 
-        for key in ("dawn_hours", "dusk_hours", "plant_full_light", "meteor_radius_cells",
+        for key in ("dawn_hours", "dusk_hours", "plant_full_light", "plant_light_days",
+                    "meteor_radius_cells",
                     "meteor_depth", "ark_need_creatures"):  # fmt: skip
             check(getattr(self, key) > 0, f"{key} must be positive")
         for key in ("night_light", "moonlight", "plant_full_light", "rain_fertility",

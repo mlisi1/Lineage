@@ -21,7 +21,7 @@ def migrate(tree: Tree) -> Tree:
         "absent_h": 0.0,
         "light_hours": 0.0,
         "hours": 0.0,
-        "plant_light": 1.0,
+        "recent_light": 1.0,
         "ready_ms": 0,
         "ready_told": True,
         "rain_until_ms": 0,
