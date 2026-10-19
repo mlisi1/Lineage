@@ -166,6 +166,7 @@ def test_rare_genes_travel_once_the_sim_has_them(monkeypatch: pytest.MonkeyPatch
         {"kingdom": "plant", "bit": 8, "name": "POISONOUS", "signature": "purple", "look": "y"},
     ]
     rare.signature_table = lambda: table  # type: ignore[attr-defined]
+    rare.render_config = lambda cfg: {"giant_mass_factor": 2.0}  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "lineage_sim.rare", rare)
     fauna = types.SimpleNamespace(
         ids=np.array([7, 9], dtype=np.int64),
@@ -179,6 +180,8 @@ def test_rare_genes_travel_once_the_sim_has_them(monkeypatch: pytest.MonkeyPatch
     assert errors(creatures, SCHEMA) == []
     assert [born["slots"] for born in creatures["born"]] == [1, 0]
     assert creatures["torpid"] == [9]
+    fauna.config = None
+    assert encode.fauna_message(world)["rare_config"] == {"giant_mass_factor": 2.0}  # type: ignore[arg-type]
     message = encode.rare_message(world)  # type: ignore[arg-type]
     assert message is not None
     assert errors(message, SCHEMA) == []

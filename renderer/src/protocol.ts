@@ -108,6 +108,12 @@ export interface FaunaMessage {
   phenotype_config: {
     [k: string]: number | boolean;
   };
+  /**
+   * The [fauna] config values the renderer needs to draw rare genes (M7, R2): lineage_sim.rare.render_config(cfg), keys rare.RENDER_KEYS (now giant_mass_factor). Empty before rare genes exist.
+   */
+  rare_config: {
+    [k: string]: number;
+  };
 }
 /**
  * Where every living creature is (R2). Sent after every fauna tick. A creature's genome comes once, the first time its id is sent; an id missing from `ids` has died.

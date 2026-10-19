@@ -57,8 +57,9 @@ beside it and exchange notes in `/home/elechim/Lineage-coord/` (not in git).
 - **Rare plants** (M7's signatures) are drawn from the stream's `plant_rare`, fire pines
   surviving a fire included; the stream also carries M7's `born[].slots`, `torpid` and
   the `rare` table, read from M7's code once it is merged.
-- **A flake to watch**: twice the first Playwright run after a code change failed in
-  `scene.spec.ts` and every rerun passed; not reproduced. Watch it in CI.
+- **Two worktrees, one test port**: Playwright reuses a server already on its port, so
+  R1's and R2's browser tests run at once tested each other's build (the "flaky" first
+  runs). `PLAYWRIGHT_PORT` sets the port (R1 used 4573, R2 4373; 4173 by default).
 - **Left for others**: the server's stream (S1: `SocketSource` is untried); the
   creatures, species and rare messages are encoded but only R2 will read them.
 

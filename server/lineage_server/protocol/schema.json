@@ -224,7 +224,8 @@
         "type",
         "protocol",
         "genes",
-        "phenotype_config"
+        "phenotype_config",
+        "rare_config"
       ],
       "additionalProperties": false,
       "properties": {
@@ -249,6 +250,13 @@
               "number",
               "boolean"
             ]
+          }
+        },
+        "rare_config": {
+          "description": "The [fauna] config values the renderer needs to draw rare genes (M7, R2): lineage_sim.rare.render_config(cfg), keys rare.RENDER_KEYS (now giant_mass_factor). Empty before rare genes exist.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
           }
         }
       }

@@ -80,14 +80,19 @@ def land_message(world: World) -> Message:
 
 def fauna_message(world: World) -> Message:
     """What bodies are derived from. ``phenotype_config`` holds the keys R2's port reads,
-    once the sim names them (``phenotype.CONFIG_KEYS``)."""
+    once the sim names them (``phenotype.CONFIG_KEYS``); ``rare_config`` those for drawing
+    rare genes (``rare.render_config``)."""
     config = world.fauna.config
     keys: Iterable[str] = getattr(phenotype, "CONFIG_KEYS", ())
+    rare = importlib.import_module("lineage_sim.rare")
+    render_config = getattr(rare, "render_config", None)
     return {
         "type": "fauna",
         "protocol": PROTOCOL,
         "genes": [gene.name for gene in CreatureGene],
         "phenotype_config": {key: getattr(config, key) for key in keys},
+        # What drawing rare genes needs (M7, R2), once the sim names it.
+        "rare_config": {} if render_config is None else dict(render_config(config)),
     }
 
 

@@ -183,7 +183,8 @@ Do not create directories outside this layout without updating this file.
   - on the board: `python3 kiosk_bench.py --dist dist` (procedure in `deploy/README.md`;
     from a board in its box, `deploy/board-setup.md`),
     then `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
-  - `cd renderer && npm test && npx playwright test`
+  - `cd renderer && npm test && npx playwright test` (`PLAYWRIGHT_PORT=…` when another
+    worktree's tests may run at the same time)
   - `cd renderer && npm run typecheck && npm run lint`
 - **Dependencies**: ask before adding any new dependency; record why in the PR/commit.
 - **Commits**: small, one concern each, message `area: imperative summary`
