@@ -1,4 +1,272 @@
-"""Presence/daylight model, god powers and cooldown.
+"""Presence and daylight: the owner's presence is the island's sun. And the god powers.
 
-Skeleton; implemented in M8.
+`PresenceChanged` events (hold logic is upstream) say whether the owner is at the desk.
+Light follows: it rises toward full day when they are present (dawn) and falls toward a
+night level when they leave (dusk). After a long absence it settles on a moonlight floor
+instead, so a holiday is dim, not black. A world that never hears of the owner stays
+fully lit. Holidays need no calendar: they are long absences (ADR 0016).
+
+The subsystem is registered first, so it ticks before the others when ticks coincide.
+Every tick it hands the creatures the light of the moment (sight, photosynthesis,
+torpor). It integrates light over each sim-day and keeps a running mean of the days over
+about a week; at midnight it hands the plants their growth factor from that mean, so a
+weekend's Long Night slows them little and a long holiday a lot.
+
+God powers: a button (`GodPower`) fires one, at most once per cooldown. The island draws
+which, weighted by config and by what it needs (`needs`): a meteor, rain, seed or an ark.
+Their draws come from this subsystem's stream. The light and rain hooks of the other
+subsystems are not saved; this subsystem pushes them again after a restore.
 """
+
+from __future__ import annotations
+
+import math
+from enum import Enum
+
+import numpy as np
+from numpy.random import Generator
+
+from lineage_sim.clock import MS_PER_DAY, Instant
+from lineage_sim.config import PresenceConfig
+from lineage_sim.events import (
+    GodPower,
+    GodPowerReady,
+    GodPowerRefused,
+    GodPowerUsed,
+    InputEvent,
+    OutputEvent,
+    PresenceChanged,
+)
+from lineage_sim.fauna.population import Fauna
+from lineage_sim.flora import Flora, Wildfire
+from lineage_sim.rng import PRESENCE
+from lineage_sim.state.schema import Tree
+from lineage_sim.subsystem import Context
+from lineage_sim.terrain import Terrain
+
+_SECONDS_PER_HOUR = 3600.0
+_MS_PER_HOUR = 3_600_000
+
+
+class Power(Enum):
+    METEOR = "meteor"
+    RAIN = "rain"
+    SEED = "seed"
+    ARK = "ark"
+
+
+POWERS = tuple(Power)
+
+
+def target_light(cfg: PresenceConfig, present: bool, absent_h: float) -> float:
+    """The light the island moves toward: day while the owner is present, night once
+    they left, moonlight once they have been away long enough."""
+    if present:
+        return 1.0
+    return cfg.moonlight if absent_h >= cfg.moonlight_after_hours else cfg.night_light
+
+
+def next_light(cfg: PresenceConfig, light: float, target: float, hours: float) -> float:
+    """Light after ``hours`` of moving toward ``target``: up over ``dawn_hours`` from
+    darkness to full day, down over ``dusk_hours``."""
+    if target > light:
+        return min(target, light + hours / cfg.dawn_hours)
+    return max(target, light - hours / cfg.dusk_hours)
+
+
+def plant_light(cfg: PresenceConfig, mean_light: float) -> float:
+    """Plants' growth factor from the recent mean light: full from ``plant_full_light``."""
+    return min(mean_light / cfg.plant_full_light, 1.0)
+
+
+def recent_light(cfg: PresenceConfig, recent: float, day_light: float, days: float) -> float:
+    """The running mean of light after ``days`` more at ``day_light`` (it forgets over
+    ``plant_light_days``)."""
+    return recent + (day_light - recent) * (1.0 - math.exp(-days / cfg.plant_light_days))
+
+
+def weights(cfg: PresenceConfig, needs: dict[Power, float]) -> list[float]:
+    """Each power's weight in the draw, in ``POWERS`` order: its base weight raised by
+    what the island needs."""
+    base = {
+        Power.METEOR: cfg.god_weight_meteor,
+        Power.RAIN: cfg.god_weight_rain,
+        Power.SEED: cfg.god_weight_seed,
+        Power.ARK: cfg.god_weight_ark,
+    }
+    return [base[p] * (1.0 + cfg.god_need_gain * needs.get(p, 0.0)) for p in POWERS]
+
+
+def choose(rng: Generator, cfg: PresenceConfig, needs: dict[Power, float]) -> Power:
+    """Draw a power (one uniform draw, whatever the weights)."""
+    w = weights(cfg, needs)
+    pick = rng.random() * sum(w)
+    for power, weight in zip(POWERS, w, strict=True):
+        if pick < weight:
+            return power
+        pick -= weight
+    return next(p for p, weight in zip(POWERS, w, strict=True) if weight > 0)
+
+
+class Presence:
+    """The presence subsystem. ``light`` is the light of the moment, in [0, 1]."""
+
+    def __init__(
+        self,
+        cfg: PresenceConfig,
+        terrain: Terrain,
+        flora: Flora,
+        fire: Wildfire,
+        fauna: Fauna,
+    ) -> None:
+        self._cfg = cfg
+        self._terrain = terrain
+        self._flora = flora
+        self._fire = fire
+        self._fauna = fauna
+        self._present = True  # a new world starts lit, and stays lit without events
+        self._light = 1.0
+        self._absent_h = 0.0  # hours since the owner left (0 while present)
+        self._light_hours = 0.0  # light × hours since the last midnight
+        self._hours = 0.0  # hours since the last midnight
+        self._recent_light = 1.0  # running mean of daily light, over about a week
+        self._ready_ms = 0  # sim time from which the button works again
+        self._ready_told = True  # GodPowerReady already sent for this cooldown
+        self._rain_until_ms = 0  # the land is wet until then
+        self._wet = False  # what the plants and fires were last told
+
+    @property
+    def name(self) -> str:
+        return PRESENCE
+
+    @property
+    def present(self) -> bool:
+        return self._present
+
+    @property
+    def light(self) -> float:
+        return self._light
+
+    @property
+    def ready_t_ms(self) -> int:
+        """Sim time from which the button works (the LED is lit before it)."""
+        return self._ready_ms
+
+    def needs(self, instant: Instant) -> dict[Power, float]:
+        """What the island needs, each in [0, 1]: rain against fire and dry weather, seed
+        on bare land, the ark when creatures are few."""
+        cfg, land = self._cfg, self._terrain.land
+        land_cells = int(np.count_nonzero(land))
+        bare = int(np.count_nonzero(land & (self._flora.biomass <= 0)))
+        fire = 1.0 if self._fire.burning.any() else self._fire.dryness(instant)
+        few = 1.0 - min(self._fauna.count / cfg.ark_need_creatures, 1.0)
+        return {
+            Power.RAIN: fire,
+            Power.SEED: bare / land_cells if land_cells else 0.0,
+            Power.ARK: few,
+        }
+
+    def initialize(self, ctx: Context) -> list[OutputEvent]:
+        return []
+
+    def tick(self, ctx: Context) -> list[OutputEvent]:
+        hours = ctx.dt_s / _SECONDS_PER_HOUR
+        target = target_light(self._cfg, self._present, self._absent_h)
+        self._light = next_light(self._cfg, self._light, target, hours)
+        self._light_hours += self._light * hours
+        self._hours += hours
+        if not self._present:
+            self._absent_h += hours
+        if ctx.t_ms % MS_PER_DAY == 0 and self._hours > 0:
+            # Registered first, this runs before the plants' midnight tick.
+            day = self._light_hours / self._hours
+            self._recent_light = recent_light(self._cfg, self._recent_light, day, self._hours / 24)
+            self._light_hours = self._hours = 0.0
+        self._wet = ctx.t_ms < self._rain_until_ms
+        self._push()
+        if not self._ready_told and ctx.t_ms >= self._ready_ms:
+            self._ready_told = True
+            return [GodPowerReady(ctx.t_ms)]
+        return []
+
+    def handle(self, event: InputEvent, ctx: Context) -> list[OutputEvent]:
+        if isinstance(event, PresenceChanged) and event.present != self._present:
+            self._present = event.present
+            self._absent_h = 0.0
+        if isinstance(event, GodPower):
+            return self._god_power(event, ctx)
+        return []
+
+    def get_state(self) -> Tree:
+        return {
+            "present": self._present,
+            "light": self._light,
+            "absent_h": self._absent_h,
+            "light_hours": self._light_hours,
+            "hours": self._hours,
+            "recent_light": self._recent_light,
+            "ready_ms": self._ready_ms,
+            "ready_told": self._ready_told,
+            "rain_until_ms": self._rain_until_ms,
+            "wet": self._wet,
+        }
+
+    def set_state(self, tree: Tree) -> None:
+        self._present = bool(tree["present"])
+        self._light = float(tree["light"])
+        self._absent_h = float(tree["absent_h"])
+        self._light_hours = float(tree["light_hours"])
+        self._hours = float(tree["hours"])
+        self._recent_light = float(tree["recent_light"])
+        self._ready_ms = int(tree["ready_ms"])
+        self._ready_told = bool(tree["ready_told"])
+        self._rain_until_ms = int(tree["rain_until_ms"])
+        self._wet = bool(tree["wet"])
+        self._push()
+
+    # -- internals --
+
+    def _push(self) -> None:
+        """Hand the other subsystems the light and the weather (their hooks are not
+        saved, so a restore pushes them again)."""
+        wet = self._wet
+        self._fauna.set_daylight(self._light)
+        self._flora.set_daylight(plant_light(self._cfg, self._recent_light))
+        self._flora.set_rain(1.0 + self._cfg.rain_growth_boost if wet else 1.0)
+        self._fire.set_wet(wet)
+
+    def _god_power(self, event: GodPower, ctx: Context) -> list[OutputEvent]:
+        cfg, rng, t_ms = self._cfg, ctx.rng, ctx.t_ms
+        if t_ms < self._ready_ms:
+            return [GodPowerRefused(t_ms, self._ready_ms)]
+        power = Power(event.power) if event.power else choose(rng, cfg, self.needs(ctx.instant))
+        self._ready_ms = t_ms + round(cfg.god_cooldown_days * MS_PER_DAY)
+        self._ready_told = False
+        x, y = self._site(rng)
+        outputs: list[OutputEvent] = [GodPowerUsed(t_ms, power.value, x, y)]
+        if power is Power.METEOR:
+            radius = cfg.meteor_radius_cells
+            outputs += self._terrain.strike(x, y, radius, cfg.meteor_depth, t_ms)
+            geo_y, geo_x = np.indices(self._terrain.height.shape)
+            bowl = np.nonzero(np.hypot(geo_x - x, geo_y - y) < radius)
+            self._flora.clear(bowl[0], bowl[1])
+            outputs += self._fauna.strike(x, y, radius * cfg.meteor_blast_factor, t_ms)
+        elif power is Power.RAIN:
+            outputs += self._fire.extinguish(t_ms)
+            room = (1.0 - self._terrain.fertility) * self._terrain.land
+            self._terrain.adjust_fertility((cfg.rain_fertility * room).astype(np.float32))
+            self._rain_until_ms = t_ms + round(cfg.rain_days * MS_PER_DAY)
+            self._wet = self._rain_until_ms > t_ms
+            self._push()
+        elif power is Power.SEED:
+            self._flora.sow(rng, cfg.seed_count, cfg.seed_rare_chance, ctx.instant)
+        else:
+            outputs += self._fauna.arrive(rng, t_ms, cfg.ark_count)
+        return outputs
+
+    def _site(self, rng: Generator) -> tuple[float, float]:
+        """A random land cell (any cell on a drowned world), where the power is aimed."""
+        land = self._terrain.land
+        ys, xs = np.nonzero(land) if land.any() else np.nonzero(np.ones_like(land))
+        k = int(rng.integers(0, ys.size))
+        return float(xs[k]), float(ys[k])

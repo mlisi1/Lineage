@@ -20,7 +20,8 @@ from lineage_sim.config import Config
 from lineage_sim.events import DayStarted, InputEvent, OutputEvent, SeasonStarted
 from lineage_sim.fauna.population import Fauna
 from lineage_sim.flora import Flora, Wildfire
-from lineage_sim.rng import FAUNA, FIRE, FLORA, SPECIES, TERRAIN, Streams
+from lineage_sim.presence import Presence
+from lineage_sim.rng import FAUNA, FIRE, FLORA, PRESENCE, SPECIES, TERRAIN, Streams
 from lineage_sim.species import Species
 from lineage_sim.state import io
 from lineage_sim.state.schema import StateError, WorldState
@@ -37,7 +38,9 @@ def default_subsystems(config: Config) -> list[Subsystem]:
     fire = Wildfire(config.flora, flora, terrain)
     fauna = Fauna(config.fauna, terrain, flora)
     species = Species(config.species, fauna, config.fauna.predator_min_diet)
-    return [terrain, flora, fire, fauna, species]
+    # Presence first: it hands the others the light before they tick.
+    presence = Presence(config.presence, terrain, flora, fire, fauna)
+    return [presence, terrain, flora, fire, fauna, species]
 
 
 class World:
@@ -148,6 +151,13 @@ class World:
         if not isinstance(species, Species):
             raise TypeError("the species subsystem was replaced")
         return species
+
+    @property
+    def presence(self) -> Presence:
+        presence = self.subsystem(PRESENCE)
+        if not isinstance(presence, Presence):
+            raise TypeError("the presence subsystem was replaced")
+        return presence
 
     @property
     def wildfire(self) -> Wildfire:

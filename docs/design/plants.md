@@ -53,7 +53,11 @@ renderer. A tree cell with biomass ≥ 0.55 is closed forest.
 - **Wind exposure** is full on the wave-swept shore and on summits, and breaks tall
   plants. It sorts the forms into belts: forest in sheltered ground, then shrub, grass,
   and lichen at the extremes.
-- **Daylight** scales growth (constant until the presence model of M8).
+- **Daylight** scales growth (M8): the plants follow a running mean of each day's light
+  over about a week (`[presence] plant_light_days`), at full rate from
+  `plant_full_light` (0.25), so an office week keeps their pace, weekends barely slow
+  them and a long holiday in moonlight brings them to about 0.6 (`presence.md`).
+- **Rain** (a god power) multiplies growth by 1.5 for five days.
 - **Snow** lies where the temperature index is under `snow_below_temperature` (0.2),
   deepening to full cover `snow_depth_span` (0.1) below it (`flora.snow_cover`): with the
   lowland winter at 0.35, down to about 0.12 above the sea in midwinter and in summer only
@@ -94,8 +98,10 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
   grazers on one cell share what is there. What is eaten is also worth less to the grazer
   (`[fauna] defence_toxicity`, M5), and grazers see plant form, not defence:
   `Flora.forms()` (cached until the genome changes) and `Flora.defence_at`.
-- `Flora.set_daylight(level)` for presence (M8).
-- `Wildfire.ignite(y, x, t)` for god powers (M8).
+- `Flora.set_daylight(level)` and `Flora.set_rain(factor)` for presence (M8).
+- God powers (M8): `Flora.clear(ys, xs)` (a meteor's bowl), `Flora.sow(rng, count,
+  rare_chance, instant)` (seed), `Wildfire.extinguish(t)` and `Wildfire.set_wet(wet)`
+  (rain: no lightning, slow spread).
 
 ## How it is drawn
 

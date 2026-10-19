@@ -572,6 +572,56 @@ class SpeciesConfig:
 
 
 @dataclass(frozen=True)
+class PresenceConfig:
+    """``[presence]``; units and intent of every key are documented in default.toml."""
+
+    dawn_hours: float
+    dusk_hours: float
+    night_light: float
+    moonlight: float
+    moonlight_after_hours: float
+    plant_full_light: float
+    plant_light_days: float
+    god_cooldown_days: float
+    god_need_gain: float
+    god_weight_meteor: float
+    god_weight_rain: float
+    god_weight_seed: float
+    god_weight_ark: float
+    ark_need_creatures: int
+    meteor_radius_cells: float
+    meteor_depth: float
+    meteor_blast_factor: float
+    rain_days: float
+    rain_growth_boost: float
+    rain_fertility: float
+    seed_count: int
+    seed_rare_chance: float
+    ark_count: int
+
+    def __post_init__(self) -> None:
+        def check(ok: bool, message: str) -> None:
+            if not ok:
+                raise ConfigError(f"[presence] {message}")
+
+        for key in ("dawn_hours", "dusk_hours", "plant_full_light", "plant_light_days",
+                    "meteor_radius_cells",
+                    "meteor_depth", "ark_need_creatures"):  # fmt: skip
+            check(getattr(self, key) > 0, f"{key} must be positive")
+        for key in ("night_light", "moonlight", "plant_full_light", "rain_fertility",
+                    "seed_rare_chance", "meteor_depth"):  # fmt: skip
+            check(0 <= getattr(self, key) <= 1, f"{key} must be within [0, 1]")
+        for key in ("moonlight_after_hours", "god_cooldown_days", "god_need_gain",
+                    "god_weight_meteor", "god_weight_rain", "god_weight_seed", "god_weight_ark",
+                    "rain_days", "rain_growth_boost", "seed_count", "ark_count"):  # fmt: skip
+            check(getattr(self, key) >= 0, f"{key} must not be negative")
+        weights = (self.god_weight_meteor, self.god_weight_rain, self.god_weight_seed,
+                   self.god_weight_ark)  # fmt: skip
+        check(sum(weights) > 0, "at least one god power needs a weight")
+        check(self.meteor_blast_factor >= 1, "meteor_blast_factor must be at least 1")
+
+
+@dataclass(frozen=True)
 class Config:
     config_version: int
     calendar: CalendarConfig
@@ -579,6 +629,7 @@ class Config:
     flora: FloraConfig
     fauna: FaunaConfig
     species: SpeciesConfig
+    presence: PresenceConfig
     # Subsystem name -> tick period in sim seconds.
     schedule: Mapping[str, float]
 
@@ -663,7 +714,16 @@ def parse_config(text: str) -> Config:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"invalid TOML: {exc}") from None
-    unknown = set(raw) - {"meta", "calendar", "schedule", "terrain", "flora", "fauna", "species"}
+    unknown = set(raw) - {
+        "meta",
+        "calendar",
+        "schedule",
+        "terrain",
+        "flora",
+        "fauna",
+        "species",
+        "presence",
+    }
     if unknown:
         raise ConfigError(f"unknown sections: {sorted(unknown)}")
     meta = _section(raw, "meta", frozenset({"config_version"}))
@@ -676,5 +736,6 @@ def parse_config(text: str) -> Config:
         _numeric_section(raw, "flora", FloraConfig),
         _numeric_section(raw, "fauna", FaunaConfig),
         _numeric_section(raw, "species", SpeciesConfig),
+        _numeric_section(raw, "presence", PresenceConfig),
         _schedule(raw),
     )

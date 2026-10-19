@@ -29,9 +29,10 @@ class PresenceChanged(InputEvent):
 
 @dataclass(frozen=True)
 class GodPower(InputEvent):
-    """The covered switch was flipped. Which powers exist and their effects arrive in M8."""
+    """The god-power button was pressed (M8). The island chooses which power fires unless
+    ``power`` names one (``presence.Power`` values: tests, or a future phone app)."""
 
-    power: str
+    power: str = ""
 
 
 @dataclass(frozen=True)
@@ -183,3 +184,25 @@ class SpeciesExtinct(OutputEvent):
     species_id: int
     name: str
     born_t_ms: int
+
+
+@dataclass(frozen=True)
+class GodPowerUsed(OutputEvent):
+    """A god power fired (``presence.Power`` value), aimed at cell (x, y); its effects
+    come as their own events (``CraterFormed``, ``FireEnded``, ``CreaturesArrived``)."""
+
+    power: str
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
+class GodPowerRefused(OutputEvent):
+    """The button was pressed while the powers were cooling down, until ``ready_t_ms``."""
+
+    ready_t_ms: int
+
+
+@dataclass(frozen=True)
+class GodPowerReady(OutputEvent):
+    """The cooldown is over: the button works again (the LED's cue)."""

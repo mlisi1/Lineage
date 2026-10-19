@@ -17,8 +17,9 @@ own history.
   everything changes slowly and never resets except at the end of a world.
 - **The owner's presence is the sun**: a PIR sensor sets daylight. Evenings are dusk,
   weekends are the "Long Night", holidays are dark ages. Seasons follow the real calendar.
-- **One rare intervention**: a covered switch triggers a "god power" (meteor, rain, seed…)
-  with a 7-day cooldown, shown by an LED.
+- **One rare intervention**: a button triggers a "god power" (meteor, rain, seed, ark),
+  chosen by the island at random, weighted by what it needs, with a 7-day cooldown shown
+  by an LED (ADR 0016).
 - **Worlds end**: if life collapses, an apocalypse plays and a new continent is generated.
   Past worlds are archived.
 - **Chronicle and bestiary**: an event detector writes dated history entries; every species
@@ -38,7 +39,8 @@ sync when behaviour changes.
 - Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS, Python 3.11.
 - Waveshare 70H-1024600 7" IPS, 1024×600, HDMI via adapter board + 15 cm FPC; backlight
   enable/PWM pins driven from GPIO.
-- PIR sensor, covered toggle switch, cooldown LED, 18650 UPS module with mains-loss sense.
+- PIR sensor, god-power push button, cooldown LED, power switch, 18650 UPS module with
+  mains-loss sense.
 - The software must also run fully on a normal PC with no hardware attached.
 
 ## 3. Repository layout
@@ -68,7 +70,7 @@ lineage/
 │   │   ├── presence.py       # presence/daylight model, god powers, cooldown
 │   │   ├── chronicle.py      # event detectors → entries; bestiary records
 │   │   ├── apocalypse.py     # end-of-world detection, new continent
-│   │   ├── events.py         # input events (presence, switch, power) and output events
+│   │   ├── events.py         # input events (presence, button, power) and output events
 │   │   └── state/
 │   │       ├── schema.py     # versioned, serialisable state
 │   │       ├── io.py         # save/load (compressed), atomic writes handled by caller
@@ -99,7 +101,7 @@ lineage/
 │   └── lineage_server/       # main.py (sim loop + persistence), ws.py, api.py, notify.py, journal.py,
 │                             #   protocol/ (schema.json: the wire format; encode.py)
 ├── device/                   # Python package `lineage_device` — the ONLY code touching GPIO
-│   └── lineage_device/       # presence.py, switch.py, led.py, backlight.py, power.py, fake.py
+│   └── lineage_device/       # presence.py, button.py, led.py, backlight.py, power.py, fake.py
 ├── app/                      # phone PWA shell, reuses renderer/
 ├── journal/                  # static site templates
 ├── deploy/                   # os notes, systemd units, setup.sh, kiosk, backups, tailscale
@@ -138,7 +140,7 @@ Do not create directories outside this layout without updating this file.
    the typed `config.py`. Magic numbers in sim code are a review blocker.
 6. **Hardware isolation.** Only `lineage_device` touches GPIO. It exposes the same
    interface as `lineage_device.fake`, which maps keyboard keys / a small web panel to
-   presence, switch and power events, so everything runs on a PC.
+   presence, button and power events, so everything runs on a PC.
 7. **One renderer.** The desk kiosk and the phone draw the same scene from the same state
    stream. The wire format is defined once (`server/.../protocol` JSON schema) and the
    TypeScript types are generated from it. If the on-device graphics spike (R0) fails, a
@@ -163,9 +165,12 @@ Do not create directories outside this layout without updating this file.
   - `uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>`
     (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume;
     `--set fauna.learning=false` to change one config key for an ablation;
-    `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5)
+    `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5;
+    `--schedule office` to play the owner's presence: `always`, `office`, `office-august`,
+    `conference`, M8)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
-    (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off)
+    (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
+    M8 takes the office run and `--baseline` once per other schedule)
   - `uv run python -m tools.replay <save.lzma> [--still out.png] [--renderer-fixture DIR]`
     — inspect a save; `--renderer-fixture renderer/public/spike` regenerates the spike's world
   - `uv run python -m tools.stream <save.lzma> --out renderer/public/stream/recording.json
@@ -372,7 +377,12 @@ needs a note in `docs/decisions/`.
   3-week conference — on populations, nocturnal trait frequency, rare-gene frequencies
   (glow, hibernation, photosynthesis).
 - **Accept**: office schedule produces measurable selection on night traits vs
-  always-present; 3-week absence survival `[≥ 80%]` of seeds.
+  always-present; 3-week absence survival `[≥ 80%]` of seeds; August holiday survival
+  `[≥ 80%]` of seeds (added by the owner, 2026-10-19). (As built, ADR 0016: a button, not
+  a covered switch, fires a power the island draws by need; holidays are long absences;
+  plants follow a week's light. M8.2 and M8.3 100 % PASS; M7.2 95 % PASS in office light;
+  M8.1 p = 0.15 FAIL: hibernation takes off in a third of office seeds, glow never pays;
+  deferred to M11 by the owner, 2026-10-19.)
 
 ### M9 — Chronicle and bestiary
 - **Deliver**: event detectors (speciation, extinction, firsts, records, booms/crashes,
@@ -458,7 +468,7 @@ needs a note in `docs/decisions/`.
 - **Tests**: integration with fake device; kill -9 during save leaves a loadable save.
 
 ### S2 — Device layer
-- **Deliver**: PIR with configurable hold, switch with debounce, LED, backlight
+- **Deliver**: PIR with configurable hold, god-power button with debounce, LED, backlight
   sleep/dim, mains-loss detection → save → clean shutdown, `fake.py` parity.
 - **Tests**: unit with mocked GPIO; fake ↔ real interface conformance test.
 

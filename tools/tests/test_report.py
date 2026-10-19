@@ -200,7 +200,31 @@ def test_power_cut_resumes_bit_identical(tmp_path: Path, save_days: int) -> None
     )
 
 
+def test_office_schedule_darkens_weekends_and_resumes_bit_identical(tmp_path: Path) -> None:
+    def run(name: str, power_cut_day: int | None = None) -> Run:
+        return fastforward(
+            0.05, [6], tmp_path / name, power_cut_day=power_cut_day, save_days=4,
+            snapshot_days=0, schedule="office",
+        )  # fmt: skip
+
+    straight = run("straight")
+    assert "schedule office" in straight.manifest.notes
+    days = straight.series[6]["_presence_daily"]
+    assert days.shape == (18, 2)
+    # 2026-01-01 is a Thursday: day 2 is a Saturday, day 5 a Monday.
+    assert days[2, 1] == days[3, 1] == 0.0
+    assert days[2, 0] < 0.1
+    assert days[5, 1] > 6.0
+    assert days[5, 0] > 0.3
+    cut = run("cut", power_cut_day=10)
+    assert straight.manifest.final_state_hashes == cut.manifest.final_state_hashes
+    always = fastforward(0.05, [6], tmp_path / "always", save_days=30, snapshot_days=0)
+    assert (always.series[6]["_presence_daily"][:, 0] == 1.0).all()
+
+
 def test_fastforward_rejects_bad_arguments(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown schedule"):
+        fastforward(0.1, [0], tmp_path / "x", schedule="nightshift")
     with pytest.raises(ValueError, match="power cut day"):
         fastforward(0.1, [0], tmp_path / "x", power_cut_day=1000)
     with pytest.raises(ValueError, match="at least one day"):

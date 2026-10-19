@@ -13,7 +13,8 @@ its own history.
   Rare genes give an extreme bonus at a real cost.
 - **The owner is the sun.** Presence at the desk sets daylight; absences are nights,
   weekends are the Long Night, holidays are dark ages. Seasons follow the real calendar.
-- **One rare intervention.** A covered switch triggers a god power with a 7-day cooldown.
+- **One rare intervention.** A button triggers a god power with a 7-day cooldown; the
+  island draws which, weighted by what it needs (ADR 0016).
 - **History is the product.** A chronicle of dated entries and a bestiary of every species
   that ever lived.
 

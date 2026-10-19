@@ -6,6 +6,7 @@ Usage::
         [--start 2026-01-01] [--config sim/config/default.toml] [--jobs N]
         [--save-days 1] [--sample-days 7] [--snapshot-days 30] [--power-cut-day N]
         [--set fauna.learning=false] [--fork-days 60 --fork-length 28]
+        [--schedule office]
 
 Each seed's world is stepped one sim-day at a time, exactly as the device would advance
 it. Every ``--save-days`` it is saved to ``saves/<seed>.lzma`` (atomic replace); every
@@ -23,6 +24,11 @@ With ``--fork-days N`` the inhabited world is forked every N days: the same stat
 on for ``--fork-length`` days twice, with lifetime learning on and off, and the youths of
 creatures born in the first half of that time are recorded per arm (``_fork``). Forks
 leave the main world untouched.
+
+``--schedule`` plays a synthetic presence schedule (`tools.schedules`: ``always``,
+``office``, ``office-august``, ``conference``): the owner's arrivals and departures reach
+the world as `PresenceChanged` events at their hour of the day, so the island lives in the
+light the gadget will give it (M8). Each day's light is recorded (``_presence_daily``).
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ from lineage_sim.events import (
     LandmassSplit,
     OutputEvent,
     PopulationExtinct,
+    PresenceChanged,
     SpeciesBorn,
     SpeciesExtinct,
     VolcanoErupted,
@@ -71,6 +78,7 @@ from tools.runs import (
     git_commit,
     write_run,
 )
+from tools.schedules import SCHEDULES, day_events, starts_present
 
 DAY_S = 86_400
 DAYS_PER_YEAR = 365.25
@@ -118,6 +126,9 @@ RARE_DAILY_COLUMNS = (
 # from the daily census: the days it was first and last seen alive, its rare genes, and
 # whether it arrived from elsewhere (its true age is then unknown).
 LIVES_COLUMNS = ("first_day", "last_day", "slots", "arrived")
+# Columns of the daily presence table (``_presence_daily``, M8): one row per day, the
+# day's mean light (sampled hourly) and the hours the owner was present.
+PRESENCE_DAILY_COLUMNS = ("light", "present_hours")
 DAY_MS = DAY_S * 1000
 _LOW_GAIN = brain.FOLLOWED.index(Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(Sense.WOODY_X)
@@ -231,10 +242,33 @@ class SeedJob:
     power_cut_day: int | None
     fork_days: int = 0
     fork_length: int = 28
+    schedule: str = "always"
 
 
 def epoch_unix_ms(start: dt.date) -> int:
     return round(dt.datetime(start.year, start.month, start.day, tzinfo=dt.UTC).timestamp() * 1000)
+
+
+def live_day(world: World, schedule: str) -> tuple[list[OutputEvent], list[float]]:
+    """Advance ``world`` one sim-day from midnight, hour by hour, delivering the owner's
+    arrivals and departures of ``schedule`` at their hour. Returns the outputs and a
+    `PRESENCE_DAILY_COLUMNS` row."""
+    hour_ms = DAY_MS // 24
+    start = world.t_ms
+    if start % DAY_MS:
+        raise ValueError("a day is lived from midnight")
+    events = day_events(schedule, world.seed, start // DAY_MS, world.instant.date)
+    outputs: list[OutputEvent] = []
+    light, present_hours, k = 0.0, 0.0, 0
+    for hour in range(1, 25):
+        while k < len(events) and events[k][0] < hour:
+            outputs += world.advance_to(start + round(events[k][0] * hour_ms))
+            outputs += world.apply(PresenceChanged(events[k][1]))
+            k += 1
+        outputs += world.advance_to(start + hour * hour_ms)
+        light += world.presence.light
+        present_hours += float(world.presence.present)
+    return outputs, [light / 24, present_hours]
 
 
 def _quantile(values: np.ndarray, q: float) -> float:
@@ -258,6 +292,7 @@ class Probes:
         # Living creatures by id: (first day seen, rare genes, arrived from elsewhere).
         self._alive: dict[int, tuple[int, int, bool]] = {}
         self.lives: list[list[float]] = []
+        self.presence_daily: list[list[float]] = []
         self.counts |= {"species_splits": 0, "species_arrivals": 0, "species_extinctions": 0}
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
@@ -399,6 +434,9 @@ class Probes:
         series[EXTRA_PREFIX + "lives"] = np.array(self.lives, dtype=np.float64).reshape(
             -1, len(LIVES_COLUMNS)
         )
+        series[EXTRA_PREFIX + "presence_daily"] = np.array(
+            self.presence_daily, dtype=np.float32
+        ).reshape(-1, len(PRESENCE_DAILY_COLUMNS))
         return series
 
     def final_genes(self, world: World) -> np.ndarray:
@@ -425,7 +463,7 @@ class Probes:
         }
 
 
-def fork(config_text: str, world: World, days: int) -> list[list[float]]:
+def fork(config_text: str, world: World, days: int, schedule: str = "always") -> list[list[float]]:
     """Run copies of ``world`` on for ``days`` with lifetime learning on and off. Returns
     a `FORK_COLUMNS` row for every youth of a creature born in the first half of that
     time (so that each had time to grow up)."""
@@ -436,7 +474,7 @@ def fork(config_text: str, world: World, days: int) -> list[list[float]]:
         text = override_config(config_text, f"fauna.learning={'true' if learning else 'false'}")
         arm = World.restore(parse_config(text), snapshot)
         for _ in range(days):
-            for output in arm.step(DAY_S):
+            for output in live_day(arm, schedule)[0]:
                 if not isinstance(output, JuvenileGrown) or output.generation == 0:
                     continue
                 born = output.t_ms / DAY_MS - output.age_h / 24.0
@@ -450,6 +488,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     config: Config = parse_config(job.config_text)
     save_path = job.out_dir / "saves" / f"{job.seed}.lzma"
     world, _ = World.create(config, job.seed, epoch_unix_ms(job.start))
+    if not starts_present(job.schedule):
+        world.apply(PresenceChanged(False))
     probes = Probes()
     samples_per_year = max(1, round(DAYS_PER_YEAR / job.sample_days))
     snapshots: list[np.ndarray] = []
@@ -489,8 +529,9 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     day = 0
     while day < job.days:
         started = time.perf_counter()
-        outputs = world.step(DAY_S)
+        outputs, light_row = live_day(world, job.schedule)
         probes.observe(outputs, time.perf_counter() - started)
+        probes.presence_daily.append(light_row)
         probes.species_daily.append(world.species.alive_count)
         probes.census(world, day)
         day += 1
@@ -503,13 +544,13 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             and day + job.fork_length <= job.days
             and world.fauna.count > 0
         ):
-            forks += fork(job.config_text, world, job.fork_length)
+            forks += fork(job.config_text, world, job.fork_length, job.schedule)
         if day == job.power_cut_day:
             world.step(DAY_S / 2)  # lost: the power fails before the next save
             world = World.restore(config, io.loads(save_path.read_bytes()))
             # Replay the days since the last save; their samples were already recorded.
             for _ in range(day - round(world.t_ms / 1000 / DAY_S)):
-                world.step(DAY_S)
+                live_day(world, job.schedule)
 
     if snapshots:
         path = job.out_dir / "snapshots" / f"{job.seed}.npz"
@@ -545,6 +586,7 @@ def fastforward(
     overrides: tuple[str, ...] = (),
     fork_days: int = 0,
     fork_length: int = 28,
+    schedule: str = "always",
 ) -> Run:
     if years <= 0:
         raise ValueError(f"years must be positive, got {years}")
@@ -555,6 +597,8 @@ def fastforward(
     days = max(1, round(years * DAYS_PER_YEAR))
     if power_cut_day is not None and not 0 < power_cut_day < days:
         raise ValueError(f"power cut day must be within 1..{days - 1}")
+    if schedule not in SCHEDULES:
+        raise ValueError(f"unknown schedule {schedule!r}; known: {', '.join(SCHEDULES)}")
     if fork_days < 0 or fork_length < 2:
         raise ValueError("fork days must not be negative, and a fork must last two days")
     config_text = config_path.read_text(encoding="utf-8")
@@ -565,7 +609,7 @@ def fastforward(
     todo = [
         SeedJob(
             seed, days, config_text, start, out_dir, save_days, sample_days, snapshot_days,
-            power_cut_day, fork_days, fork_length,
+            power_cut_day, fork_days, fork_length, schedule,
         )
         for seed in seeds
     ]  # fmt: skip
@@ -587,7 +631,8 @@ def fastforward(
         notes=f"start {start.isoformat()}; {jobs} job(s)"
         + (f"; power cut after day {power_cut_day}" if power_cut_day else "")
         + "".join(f"; {assignment}" for assignment in overrides)
-        + (f"; forks every {fork_days} days for {fork_length}" if fork_days else ""),
+        + (f"; forks every {fork_days} days for {fork_length}" if fork_days else "")
+        + (f"; schedule {schedule}" if schedule != "always" else ""),
         final_state_hashes=hashes,
     )
     run = Run(manifest, config_text, series)
@@ -630,6 +675,9 @@ def main(argv: list[str] | None = None) -> None:
         "--fork-days", type=int, default=0, help="fork learning on/off every N days (0: never)"
     )
     parser.add_argument("--fork-length", type=int, default=28, help="days each fork runs")
+    parser.add_argument(
+        "--schedule", choices=SCHEDULES, default="always", help="owner's presence (M8)"
+    )
     parser.add_argument("--out", type=Path, required=True, help="output dir, e.g. runs/<id>")
     args = parser.parse_args(argv)
     seeds = list(range(args.seed_base, args.seed_base + args.seeds))
@@ -638,6 +686,7 @@ def main(argv: list[str] | None = None) -> None:
         save_days=args.save_days, sample_days=args.sample_days,
         snapshot_days=args.snapshot_days, jobs=min(args.jobs, len(seeds)),
         overrides=tuple(args.overrides), fork_days=args.fork_days, fork_length=args.fork_length,
+        schedule=args.schedule,
     )  # fmt: skip
     print(
         f"wrote {args.out} ({len(seeds)} seeds × {args.years} sim-years, "

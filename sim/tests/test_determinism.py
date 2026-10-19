@@ -24,8 +24,8 @@ SCHEDULE: list[tuple[float, InputEvent]] = [
 # Golden hashes. Change only with an explanation in the commit message (CLAUDE.md §6).
 # They change with every schema bump because the hashed state includes schema_version
 # (M2: 1 -> 2, M3: 2 -> 3, M4: 3 -> 4, …, M6: 6 -> 7); nothing else in these worlds changed.
-GOLDEN_TOY_SEED_42 = "bfe9c8d5cb4b6fb78e482741b762d9eace3a8c1097f9e703015121058021af48"
-GOLDEN_EMPTY_SEED_42 = "0149d3e1885ec6295868e817ee74d42ad52b5219d446c333b8e6f073d7e45758"
+GOLDEN_TOY_SEED_42 = "8a5a6c53a69d4a3081feae81d0d3d431bca32c170294cd0dc40a6539a92b9cd6"
+GOLDEN_EMPTY_SEED_42 = "583b775e029306ecfc664e79254b714238ac3bafa661830d9c388a3f831277ec"
 
 
 def _run(world: World, days: float = 3) -> World:

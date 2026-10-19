@@ -578,6 +578,17 @@ class Terrain:
         """Erosion hook for flora: cover in [0, 1] per cell, or None for bare ground."""
         self._cover = cover
 
+    def strike(
+        self, x: float, y: float, radius: float, depth: float, t_ms: int
+    ) -> list[OutputEvent]:
+        """A meteor (the god power) digs a crater centred on cell (x, y), as the natural
+        ones do; the coast may split or join landmasses."""
+        self._height, self._fertility = apply_crater(
+            self._cfg, self._geo, self._height, self._fertility, x, y, radius, depth
+        )
+        outputs: list[OutputEvent] = [CraterFormed(t_ms, x, y, radius, depth)]
+        return outputs + self._relabel(t_ms)
+
     # -- subsystem interface --
 
     def initialize(self, ctx: Context) -> list[OutputEvent]:

@@ -206,11 +206,13 @@ afterwards (`rare.body_of`); `Fauna.body` holds the result. What is not a body v
 read by the fauna tick: torpor (`Fauna.torpid`), sunlight, sight in the dark, the kill
 odds of toxic prey, and amphibians' ease in water.
 
-**Darkness** comes with M8. Until then daylight is 1 (`Fauna.set_daylight`, like
-`Flora.set_daylight`): sight is never dimmed, so glow pays only its cost, photosynthesis
-never lacks light, and hibernators sleep through winter only. In the dark every creature
-sees others out to `night_sight` (0.3) of its sense range, scaling up to the full range
-in daylight; smell is unaffected.
+**Darkness** comes from the owner's presence (M8, `docs/design/presence.md`): every ten
+sim-minutes the presence model hands the creatures the light of the moment
+(`Fauna.set_daylight`). In the dark every creature sees others out to `night_sight` (0.3)
+of its sense range, scaling up to the full range in daylight; smell is unaffected. Glow
+sees and is seen at full range, photosynthesis lacks light at night and over weekends,
+and hibernators go torpid whenever the light is below `hibernation_daylight` (0.2): every
+night, while fed. A world that never hears of its owner stays lit, as before M8.
 
 The renderer draws each gene by its signature key (`rare.CREATURE_SIGNATURES`,
 `rare.signature_table()` for the wire protocol); only `GIANT` changes the body's size.

@@ -636,11 +636,64 @@ min_members = 8
 predator_min_members = 5
 split_days = 3.0
 
+[presence]
+# The owner's presence is the island's sun (M8, ADR 0016). PresenceChanged events (the
+# PIR's hold logic is upstream) say whether the owner is at the desk. The light moves
+# toward full day (1) while they are present, over dawn_hours from darkness, and toward
+# night_light once they leave, over dusk_hours (evenings are dusk). After
+# moonlight_after_hours away a moonlight floor holds instead, so a holiday is dim rather
+# than black (a weekend, about 63 h away, stays dark: the Long Night). Light in [0, 1].
+dawn_hours = 0.5
+dusk_hours = 1.5
+night_light = 0.05
+moonlight = 0.15
+moonlight_after_hours = 72.0
+# Plants grow with the recent light: a running mean of each day's mean light that forgets
+# over plant_light_days (sim-days). At plant_full_light or more they grow at their full
+# rate, proportionally less below it. An office week lights about 0.3 of the hours, and
+# its mean dips to about 0.24 after a weekend, so plants keep the growth they were tuned
+# with (M3); a long holiday in moonlight (0.15) brings them down to about 0.6.
+plant_full_light = 0.25
+plant_light_days = 7.0
+# God powers: a button fires one, at most once per god_cooldown_days (sim-days). The
+# island draws which: power p has weight god_weight_p × (1 + god_need_gain × need_p),
+# needs in [0, 1]: rain, a fire burning (1) or the season's dryness; seed, the share of
+# land without plants; ark, how far creatures are below ark_need_creatures; meteor, none.
+god_cooldown_days = 7.0
+god_need_gain = 4.0
+god_weight_meteor = 1.0
+god_weight_rain = 2.0
+god_weight_seed = 2.0
+god_weight_ark = 1.0
+ark_need_creatures = 40
+# Meteor: strikes a random land cell, digging a crater of meteor_radius_cells and
+# meteor_depth (height units; rim and fertility as [terrain] crater_*). Plants in the
+# bowl are destroyed and creatures within meteor_blast_factor × the radius are killed.
+meteor_radius_cells = 8.0
+meteor_depth = 0.15
+meteor_blast_factor = 2.0
+# Rain: puts out every fire; for rain_days (sim-days) the land is wet: no fire starts or
+# spreads beyond the wet rate ([flora] fire_wet_spread) and plants grow
+# × (1 + rain_growth_boost). Soil fertility rises by rain_fertility of its room to 1.
+rain_days = 5.0
+rain_growth_boost = 0.5
+rain_fertility = 0.05
+# Seed: seed_count seeds of random genomes fall on random land cells without plants
+# (they take only where they could grow); each carries one random plant rare gene with
+# probability seed_rare_chance.
+seed_count = 400
+seed_rare_chance = 0.1
+# Ark: a group of ark_count plant eaters lands on a vegetated spot, as founders do.
+ark_count = 12
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
 # depend on how a caller chunks World.step(dt). Keys are subsystem names; filled in as
 # subsystems arrive (creatures in M4).
+# Presence: light follows the owner every 10 sim-minutes, before the creatures that see by
+# it (registered first, it also runs first when ticks coincide).
+presence = 600
 # Terrain: once per sim-day (tectonics, erosion, sea level, landmass count).
 terrain = 86400
 # Flora: growth, dispersal, succession, soil building, once per sim-day.
