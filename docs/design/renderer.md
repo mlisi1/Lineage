@@ -173,9 +173,10 @@ runs, and stops at the edge of its drawing rather than run along it. (The first 
 trees had limbs under half the trunk's thickness leaving a trunk cut off square, and
 drawn thinner still the more they leaned.)
 
-With `snow` (winter only) it lies on the crowns and limbs, on the shoulders of every
-tier of a conifer, on stones and wood. Changing from one season to the next over days
-rather than at once belongs to R1.
+With `snow` it lies on the crowns and limbs, on the shoulders of every tier of a
+conifer, on stones and wood: in the scene on the plants of cells where the simulation
+has snow, in any season (R1). Plants change from one season to the next over about four
+weeks, one after another (R1, "The turn of the year" below).
 
 **Small plants** (`drawSmall`) are placed by what covers each cell, by hashes of the
 cell, so they are where they were on the next visit:
