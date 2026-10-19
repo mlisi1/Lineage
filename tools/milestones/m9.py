@@ -356,9 +356,13 @@ def _bestiary_section(run: Run, run_dir: Path) -> Section:
         f"<p>Seed {seed} (the sample chronicle's), at the end of the run: {len(records)} "
         f"species ever lived, {alive} alive. Each record is built from the species' census "
         f"record and what the chronicle kept about it; {with_facts} of {len(records)} have "
-        "chronicle entries of their own (the others were born and died on days the rate "
-        "limit had filled). Diet and habitat are read from the founding genome, the "
-        "portrait's.</p>",
+        "chronicle entries of their own"
+        + (
+            " (the others were born and died on days the rate limit had filled)"
+            if with_facts < len(records)
+            else ""
+        )
+        + ". Diet and habitat are read from the founding genome, the portrait's.</p>",
         '<table class="bestiary"><thead><tr><th>#</th><th>Name</th><th>Descends from</th>'
         "<th>Appeared</th><th>Lived</th><th>Peak</th><th>Diet</th><th>Habitat</th>"
         "<th>Rare genes carried</th><th>Daughters</th><th>Entries</th></tr></thead><tbody>",

@@ -149,7 +149,7 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
     "first_fire": ("Lightning set the island alight for the first time.",),
     "first_creature_rare": (
         "The first {gene} appeared among the {name}.",
-        "A {gene}, the first of its kind, was born among the {name}.",
+        "Among the {name} was born the island's first {gene}.",
     ),
     "first_plant_rare": ("The first {gene} took root on the island.",),
     "record_population": (
