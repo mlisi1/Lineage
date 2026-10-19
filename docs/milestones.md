@@ -11,7 +11,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M4 | Fauna I: genome, body, energy, reproduction, evolution | done | [reports/M4-fauna-evolution](../reports/M4-fauna-evolution/README.md) |
 | M5 | Fauna II: lifetime learning | **done** 2026-10-18, merged into `main` (`f87f592`): M5.1 diet fit positive in 20/20 seeds PASS, M5.3 308 ms per sim-day PASS, M5.2 reported without a band (shielding, ADR 0009); M4.3 final-year mean 0.66 PASS; slow tests green. Meal learning, diet traditions, fading exploration, toxic plants, plant-form senses, scavenging | [reports/M5-fauna-learning](../reports/M5-fauna-learning/README.md) |
 | M6 | Species, names, phylogeny | **done** 2026-10-18, merged into `main` (`1dd1720`): M6.2 1.08 splits / month PASS; M6.1 79 % of inhabited time with 3–12 species FAIL, deferred to M11 by the owner (ADR 0012). Species are genome clusters (`link_distance` 0.035); predator species split from groups of 5 | [reports/M6-species](../reports/M6-species/README.md) |
-| M7 | Rare genes (creatures and plants) | **done** 2026-10-18 on `m7-rare-genes` (awaiting merge): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
+| M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
 | M8 | Presence, calendar, god powers | not started | — |
 | M9 | Chronicle and bestiary | not started | — |
 | M10 | Apocalypse and worlds | not started | — |
@@ -33,7 +33,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 State at 2026-10-18, end of M7, for the next session (M8).
 
-### M7 closed (on `m7-rare-genes`, not merged yet)
+### M7 closed (merged into `main` at `d2f2d88`, 2026-10-19)
 
 - What M7 left: `sim/lineage_sim/rare.py` (creature table `CreatureRare` in the bits of
   `Fauna.slots`; `rare.adjust` / `rare.body_of` change carriers' body values after
@@ -54,8 +54,7 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Starting M8 (presence, calendar, god powers)
 
-- **Branch**: `git switch main && git switch -c m8-presence` after `m7-rare-genes` is
-  merged; cherry-pick the parked day/night work from `m8-daylight` (`67dfeb6`).
+- **Branch**: `git switch main && git switch -c m8-presence`; cherry-pick the parked day/night work from `m8-daylight` (`67dfeb6`).
 - **Wire daylight**: the presence model must call `Flora.set_daylight` and
   `Fauna.set_daylight` (hooks, not saved). With nights: sight dims to `night_sight`
   (glow pays), photosynthesis loses light (its cost), hibernators go torpid in darkness
