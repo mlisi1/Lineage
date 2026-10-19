@@ -14,14 +14,13 @@ import {
   type BodyOptions,
   type BodyPlan,
   type Kind,
-} from "../../src/spike/body";
+  type Look,
+} from "../../src/creatures/body";
 import { parseFixture, type CreatureSeed } from "../../src/spike/fixture";
 
 /** A plain mid-sized walker; tests change one thing at a time. */
-function seed(change: Partial<CreatureSeed> = {}): CreatureSeed {
+function seed(change: Partial<Look> = {}): Look {
   return {
-    x: 0,
-    y: 0,
     mass: 2,
     limbPairs: 2,
     landSpeed: 3,
@@ -42,6 +41,8 @@ const SHAPES: BodyOptions = { style: "shapes", scale: 1, pixels: 8, pace: 1 };
 const LIT: BodyOptions = { style: "lit", scale: 1, pixels: 8, pace: 1 };
 /** The same body seen from close: 32 art pixels to the cell, at an amble. */
 const CLOSE: BodyOptions = { style: "lit", scale: 1, pixels: 32, pace: 0.35 };
+/** The chosen style (ADR 0013), from close. */
+const COSY: BodyOptions = { style: "cosy", scale: 1, pixels: 32, pace: 0.35 };
 const channels = (rgb: number): [number, number, number] => [
   (rgb >> 16) & 255,
   (rgb >> 8) & 255,
@@ -54,7 +55,7 @@ const discs = (plan: BodyPlan): BodyPlan["parts"] =>
   inLayer(plan, LAYER.body).filter((part) => part.shape === "disc");
 
 /** A genome for every kind of animal. */
-const KINDS: Readonly<Record<Kind, Partial<CreatureSeed>>> = {
+const KINDS: Readonly<Record<Kind, Partial<Look>>> = {
   worm: { limbPairs: 0, speed: 0.2 },
   snake: { limbPairs: 0, speed: 0.8 },
   fish: { limbPairs: 0, aquatic: 0.9, speed: 0.7 },
@@ -152,6 +153,57 @@ describe("the first look: a chain of circles", () => {
     expect(bodyPlan(seed({ aquatic: SWIMS_FROM })).swims).toBe(true);
     const fish = bodyPlan(seed({ aquatic: 1, landSpeed: 0.5, swimSpeed: 4 }));
     expect(fish.pace).toBeGreaterThan(bodyPlan(seed({ aquatic: 0.5, landSpeed: 0.5 })).pace);
+  });
+});
+
+describe("the cosy style (ADR 0013)", () => {
+  const shadows = (plan: BodyPlan): BodyPlan["parts"] => inLayer(plan, LAYER.ground);
+
+  it("is lit's body plan, with one see-through shadow on the ground and nothing else see-through", () => {
+    for (const kind of Object.keys(KINDS) as Kind[]) {
+      const lit = bodyPlan(seed(KINDS[kind]), CLOSE);
+      const cosy = bodyPlan(seed(KINDS[kind]), COSY);
+      expect([cosy.kind, cosy.joints, cosy.length]).toEqual([lit.kind, lit.joints, lit.length]);
+      expect(cosy.legs.map((leg) => leg.joint)).toEqual(lit.legs.map((leg) => leg.joint));
+      expect(shadows(lit)).toHaveLength(0);
+      const [shadow, ...more] = shadows(cosy);
+      expect(more).toHaveLength(0);
+      expect(shadow?.alpha).toBeGreaterThan(0);
+      expect(shadow?.alpha).toBeLessThan(1);
+      expect(cosy.parts.filter((part) => (part.alpha ?? 1) < 1)).toEqual([shadow]);
+      // Under everything, a little away from the light (down and to the right).
+      expect(cosy.parts[0]).toBe(shadow);
+      expect(shadow?.lift).toBeLessThan(0);
+      // What it costs: the shadow, and a glint in each eye where lit's eyes are too small for one.
+      const glints = (plan: BodyPlan): number =>
+        inLayer(plan, LAYER.face).filter((part) => part.colour === 0xffffff).length;
+      expect(glints(cosy)).toBeGreaterThanOrEqual(glints(lit));
+      expect(spriteCount(cosy)).toBe(spriteCount(lit) + 1 + glints(cosy) - glints(lit));
+      expect(spriteCount(cosy)).toBeLessThanOrEqual(spriteCount(lit) + 3);
+    }
+  });
+
+  it("outlines each animal in its own dark colour, where lit uses one for all", () => {
+    const outline = (hue: number, options: BodyOptions): number =>
+      bodyPlan(seed({ hue }), options).outline;
+    expect(outline(0.1, CLOSE)).toBe(outline(0.6, CLOSE));
+    expect(outline(0.1, COSY)).not.toBe(outline(0.6, COSY));
+    for (const hue of [0, 0.25, 0.5, 0.75]) {
+      // Dark: no channel above a third of full.
+      for (const channel of channels(outline(hue, COSY))) expect(channel).toBeLessThan(86);
+      const plan = bodyPlan(seed({ hue }), COSY);
+      for (const part of inLayer(plan, LAYER.outline)) expect(part.colour).toBe(plan.outline);
+    }
+  });
+
+  it("is more saturated than lit, and has larger eyes", () => {
+    const spread = (rgb: number): number => Math.max(...channels(rgb)) - Math.min(...channels(rgb));
+    const lit = bodyPlan(seed({ hue: 0.3 }), CLOSE);
+    const cosy = bodyPlan(seed({ hue: 0.3 }), COSY);
+    expect(spread(cosy.colour)).toBeGreaterThan(spread(lit.colour));
+    const eye = (plan: BodyPlan): number =>
+      Math.max(...inLayer(plan, LAYER.face).map((part) => part.along));
+    expect(eye(cosy)).toBeGreaterThan(eye(lit));
   });
 });
 
@@ -329,7 +381,7 @@ describe("body plans", () => {
   });
 
   it("draw bars, bands, stripes and a shell's fade so that they read as what they are", () => {
-    const marks = (body: Partial<CreatureSeed>, k: number, options = SHAPES): BodyPlan["parts"] =>
+    const marks = (body: Partial<Look>, k: number, options = SHAPES): BodyPlan["parts"] =>
       inLayer(
         bodyPlan(seed({ ...body, mass: 12, pattern: (k + 0.5) / 12, jaw: 0 }), options),
         LAYER.mark,
@@ -577,7 +629,7 @@ describe("body plans", () => {
   });
 
   it("turn legs into fins as the aquatic gene rises", () => {
-    const legs = (aquatic: number, body: Partial<CreatureSeed> = KINDS.beast): BodyPlan["legs"] =>
+    const legs = (aquatic: number, body: Partial<Look> = KINDS.beast): BodyPlan["legs"] =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), CLOSE).legs;
     // On land: legs, with feet of the legs' own colour.
     expect(legs(0.2).every((leg) => leg.fin === 0 && leg.sole === leg.colour)).toBe(true);
@@ -597,7 +649,7 @@ describe("body plans", () => {
     expect(flippers.legs[0]?.thickness).toBeGreaterThan(1.4 * (walking.legs[0]?.thickness ?? 0));
     expect(spriteCount(flippers)).toBe(flippers.parts.length + 2 * flippers.legs.length);
     // An animal with legs grows no fins at the shoulders beside them; one without does.
-    const wedges = (body: Partial<CreatureSeed>, aquatic: number): number =>
+    const wedges = (body: Partial<Look>, aquatic: number): number =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
         (part) => part.shape === "wedge" && part.layer === LAYER.under && part.side !== 0,
       ).length;
@@ -609,11 +661,11 @@ describe("body plans", () => {
     expect(six.map((leg) => leg.fin)).toEqual([0, 0, 0, 0, 1, 1]);
     const eight = legs(0.45, KINDS.crab);
     expect(eight.filter((leg) => leg.fin > 0)).toHaveLength(2);
-    const shortened = (body: Partial<CreatureSeed>): number =>
+    const shortened = (body: Partial<Look>): number =>
       (legs(0.9, body).at(-1)?.length ?? 0) / (legs(0.2, body).at(-1)?.length ?? 1);
     expect(shortened(KINDS.beetle)).toBeLessThan(0.8 * shortened(KINDS.tortoise));
     // A fin at the end of the tail only where there is a tail: not under a shell.
-    const flukes = (body: Partial<CreatureSeed>, aquatic: number): number =>
+    const flukes = (body: Partial<Look>, aquatic: number): number =>
       bodyPlan(seed({ ...body, aquatic, jaw: 0 }), SHAPES).parts.filter(
         (part) => part.shape === "wedge" && part.side === 0 && part.forward < 0 && part.turn === 0,
       ).length;

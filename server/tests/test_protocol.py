@@ -182,7 +182,8 @@ def test_rare_genes_travel_once_the_sim_has_them(monkeypatch: pytest.MonkeyPatch
     assert errors(creatures, SCHEMA) == []
     assert [born["slots"] for born in creatures["born"]] == [1, 0]
     assert creatures["torpid"] == [9]
-    fauna.config = None
+    # The phenotype's keys are read from the real config (R2 named them: CONFIG_KEYS).
+    fauna.config = parse_config(CONFIG.read_text(encoding="utf-8")).fauna
     assert encode.fauna_message(world)["rare_config"] == {"giant_mass_factor": 2.0}  # type: ignore[arg-type]
     message = encode.rare_message(world)  # type: ignore[arg-type]
     assert message is not None

@@ -8,7 +8,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from lineage_sim import rare
 from lineage_sim.fauna.genome import Gene
+from lineage_sim.fauna.phenotype import phenotype_config
 from lineage_sim.flora import Cover
 from PIL import Image
 
@@ -16,7 +18,7 @@ from tools import replay
 from tools.runs import REPO_ROOT
 from tools.viz import pixelmap
 
-SAVE = Path("sim/tests/fixtures/saves/v4.lzma")
+SAVE = Path("sim/tests/fixtures/saves/v7.lzma")
 SPIKE_FIXTURE = REPO_ROOT / "renderer" / "public" / "spike"
 
 
@@ -71,22 +73,25 @@ def test_renderer_fixture_describes_the_world(world: replay.World) -> None:
     assert rows.shape == (world.fauna.count, len(replay.CREATURE_FIELDS))
     x, y = rows[:, 0], rows[:, 1]
     assert ((x >= 0) & (x < 256) & (y >= 0) & (y < 150)).all()
-    assert (rows[:, replay.CREATURE_FIELDS.index("mass")] > 0).all()
 
-    # The genes that show come with every creature, each in [0, 1].
-    assert replay.CREATURE_FIELDS[:6] == (
-        "x",
-        "y",
-        "mass",
-        "limb_pairs",
-        "land_speed",
-        "swim_speed",
-    )
-    shown = rows[:, len(("x", "y", *replay.BODY_FIELDS)) :]
-    assert shown.shape[1] == len(replay.SHOWN_GENES)
-    assert ((shown >= 0) & (shown <= 1)).all()
-    hue = rows[:, replay.CREATURE_FIELDS.index("hue")]
-    assert np.allclose(hue, world.fauna.genes[:, Gene.HUE], atol=1e-3)
+    # Every creature comes with its whole genome, to the bit: the renderer derives the
+    # body from it with the same keys of the config as the sim.
+    names = (*(gene.name.lower() for gene in Gene), "species", "slots", "torpid")
+    assert ("x", "y", *names) == replay.CREATURE_FIELDS
+    field = replay.CREATURE_FIELDS.index
+    genomes = rows[:, 2 : 2 + len(Gene)].astype(np.float32)
+    assert np.array_equal(genomes, world.fauna.genes)
+    # Each with its species as the sim has it now: several in a world of 520 days.
+    species = rows[:, field("species")].astype(np.int64)
+    assert np.array_equal(species, world.species.labels_now())
+    assert len(set(species.tolist()) - {0}) >= 3
+    # Its rare genes and whether it lies torpid, as the sim has them.
+    assert np.array_equal(rows[:, field("slots")].astype(np.uint16), world.fauna.slots)
+    assert np.array_equal(rows[:, field("torpid")].astype(np.bool_), world.fauna.torpid)
+    assert document["phenotype_config"] == phenotype_config(world.fauna.config)
+    assert document["rare_config"] == rare.render_config(world.fauna.config)
+    signatures = {row["bit"]: row["signature"] for row in document["rare_signatures"]}
+    assert signatures == {int(g): s.key for g, s in rare.CREATURE_SIGNATURES.items()}
 
     for name, ramp in document["palette"].items():
         assert name == "DORMANT" or name in Cover.__members__
@@ -109,21 +114,21 @@ def test_renderer_fixture_describes_the_world(world: replay.World) -> None:
 
 
 def test_casts_show_the_range_of_bodies(world: replay.World) -> None:
-    cfg = world.fauna.config
-    specimens, *sweeps = replay.casts(cfg)
+    specimens, *others = replay.casts()
+    sweeps = [cast for cast in others if cast["name"].startswith("sweep-")]
     field = replay.CREATURE_FIELDS.index
 
     reference = json.loads(replay.SPECIMENS.read_text(encoding="utf-8"))["specimens"]
     assert specimens["name"] == "specimens"
     assert specimens["members"] == [specimen["name"] for specimen in reference]
     assert len(specimens["creatures"]) == 15
-    # The bodies are the ones the phenotype fixture promises the renderer.
+    # The genomes are the ones the phenotype fixture checks the renderer's port against.
     for row, specimen in zip(specimens["creatures"], reference, strict=True):
         assert len(row) == len(replay.CREATURE_FIELDS)
         assert row[field("x")] == row[field("y")] == 0.0  # the renderer places them
-        for name in replay.BODY_FIELDS:
-            assert row[field(name)] == pytest.approx(specimen["phenotype"][name], abs=1e-3)
-        assert row[field("hue")] == pytest.approx(specimen["genome"][Gene.HUE], abs=1e-3)
+        assert row[2 : 2 + len(Gene)] == pytest.approx(specimen["genome"], abs=1e-7)
+        # A specimen belongs to no species, carries no rare gene and is awake.
+        assert row[-3:] == [0, 0, 0]
 
     assert [sweep["name"] for sweep in sweeps] == [
         f"sweep-{gene.name.lower()}" for gene in replay.SWEEP_GENES
@@ -133,20 +138,30 @@ def test_casts_show_the_range_of_bodies(world: replay.World) -> None:
     for sweep, gene in zip(sweeps, replay.SWEEP_GENES, strict=True):
         assert sweep["members"] == ["0", "0.25", "0.5", "0.75", "1"]
         rows = np.array(sweep["creatures"])
-        # Only what the swept gene drives changes from one step to the next.
-        for other in replay.SHOWN_GENES:
-            column = rows[:, field(other.name.lower())]
-            if other is gene:
-                assert column.tolist() == list(replay.SWEEP_STEPS)
+        # Only the swept gene changes from one step to the next.
+        for other in [*(g.name.lower() for g in Gene), "species", "slots", "torpid"]:
+            column = rows[:, field(other)]
+            if other == gene.name.lower():
+                assert column.tolist() == pytest.approx(list(replay.SWEEP_STEPS))
             else:
                 assert np.ptp(column) == 0.0
-    by_name = {sweep["name"]: np.array(sweep["creatures"]) for sweep in sweeps}
-    assert by_name["sweep-size"][:, field("mass")].tolist() == pytest.approx(
-        [cfg.mass_min * (cfg.mass_max / cfg.mass_min) ** step for step in replay.SWEEP_STEPS],
-        abs=1e-3,
-    )
-    assert by_name["sweep-limbs"][:, field("limb_pairs")].tolist() == [0, 1, 2, 3, 4]
-    assert np.ptp(by_name["sweep-hue"][:, field("mass")]) == 0.0
+
+
+def test_the_rare_cast_carries_each_gene_alone() -> None:
+    *_, carriers = replay.casts()
+    assert carriers["name"] == "rare"
+    keys = [signature.key for signature in rare.CREATURE_SIGNATURES.values()]
+    assert carriers["members"] == [*keys, "coat, torpid"]
+    field = replay.CREATURE_FIELDS.index
+    rows = carriers["creatures"]
+    bits = [row[field("slots")] for row in rows]
+    assert bits == [
+        *(int(gene) for gene in rare.CREATURE_GENES),
+        int(rare.CreatureRare.HIBERNATION),
+    ]
+    assert [row[field("torpid")] for row in rows] == [0] * len(keys) + [1]
+    # The same plain animal under every one of them.
+    assert len({tuple(row[2 : 2 + len(Gene)]) for row in rows}) == 1
 
 
 def test_committed_spike_fixture_is_what_the_tool_writes(

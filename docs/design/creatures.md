@@ -41,8 +41,10 @@ learning rate, exploration, and social copying.
 Bigger and better-equipped always burns more. How each gene shows on the body (a plan
 per kind of animal, picked by leg pairs, water, armour and speed) is in `renderer.md`.
 The renderer draws bodies from the same
-values; `sim/tests/fixtures/phenotypes.json` holds 15 specimen genomes with their
-expected values for the cross-language check in R2.
+values: `renderer/src/creatures/phenotype.ts` is a port, held to the sim by the 15
+specimen genomes of `sim/tests/fixtures/phenotypes.json` with their expected values and
+the config they were computed with (R2). The keys the function reads are `CONFIG_KEYS`;
+a test fails if it reads any other, since the renderer would not have it.
 
 ## Brain
 

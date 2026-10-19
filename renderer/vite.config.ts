@@ -24,14 +24,20 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       // index.html is the scene (R1+); spike.html is the R0 benchmark; look.html shows
-      // how the spike draws everything; land.html the ground and plants in each look (R1).
+      // how the spike draws everything; land.html the ground and plants in each look (R1);
+      // creatures.html how animals are drawn (R2).
       input: {
         index: page("index.html"),
         spike: page("spike.html"),
         look: page("look.html"),
+        creatures: page("creatures.html"),
         land: page("land.html"),
       },
     },
+  },
+  server: {
+    // The creature sheet reads the sim's reference phenotypes.
+    fs: { allow: [".", "../sim/tests/fixtures"] },
   },
   test: {
     include: ["tests/**/*.test.ts"],

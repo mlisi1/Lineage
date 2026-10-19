@@ -20,7 +20,7 @@ from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
-from lineage_sim.fauna.phenotype import Phenotype, phenotype
+from lineage_sim.fauna.phenotype import CONFIG_KEYS, Phenotype, phenotype, phenotype_config
 from lineage_sim.flora import Gene as FloraGene
 from lineage_sim.state import io
 from lineage_sim.world import World
@@ -178,6 +178,8 @@ def test_specimen_phenotypes_match_the_reference(config: Config) -> None:
     """The frozen specimens the renderer's port of the phenotype is checked against (R2)."""
     reference = json.loads(SPECIMENS.read_text(encoding="utf-8"))
     assert reference["genes"] == [gene.name for gene in Gene]
+    # The renderer computes them from this block: it must be today's default config.
+    assert reference["config"] == phenotype_config(config.fauna)
     assert len(reference["specimens"]) == 15
     for specimen in reference["specimens"]:
         body = _body(config, tuple(specimen["genome"]))
@@ -186,6 +188,26 @@ def test_specimen_phenotypes_match_the_reference(config: Config) -> None:
                 specimen["name"],
                 name,
             )
+
+
+class _Reads:
+    """A config that notes every key read from it."""
+
+    def __init__(self, cfg: object) -> None:
+        self.cfg = cfg
+        self.read: set[str] = set()
+
+    def __getattr__(self, key: str) -> object:
+        self.read.add(key)
+        return getattr(self.cfg, key)
+
+
+def test_the_phenotype_reads_only_the_keys_it_ships(config: Config) -> None:
+    """CONFIG_KEYS is all the renderer gets: a key read but not shipped would differ there."""
+    reads = _Reads(config.fauna)
+    phenotype(reads, _genes(GRAZER))  # pyright: ignore[reportArgumentType]
+    assert reads.read == set(CONFIG_KEYS)
+    assert len(CONFIG_KEYS) == len(set(CONFIG_KEYS))
 
 
 # --- Brain ------------------------------------------------------------------------------

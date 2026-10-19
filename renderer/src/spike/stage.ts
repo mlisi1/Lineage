@@ -5,17 +5,19 @@
  */
 import { Application, Container, Sprite } from "pixi.js";
 import type { Atlas } from "./atlas";
-import type { BodyOptions } from "./body";
+import type { BodyOptions } from "../creatures/body";
 import type { CellRect } from "./camera";
-import type { Point } from "./chain";
-import { CreatureLayer } from "./creatures";
+import type { Point } from "../creatures/chain";
+import { CreatureLayer, type Life } from "./creatures";
 import type { CreatureSeed, WorldFixture } from "./fixture";
-import type { Passable } from "./habitat";
+import { seaIn, type Passable } from "./habitat";
+import type { SeaAt, WaterLook } from "../creatures/water";
+import { WATER_LOOK } from "./proposal";
 import { PIXEL_ART, groundSprite, loadWorldLayers } from "./layers";
 import { lightTint, type Light } from "./light";
 import type { Pixels } from "./pixelart";
-import type { PlantLayer } from "./plants";
-import { mulberry32 } from "./rng";
+import type { PlantLayer } from "../plants/plants";
+import { mulberry32 } from "../rng";
 
 export interface Picture {
   /** Size the picture is drawn at, in art pixels. */
@@ -44,6 +46,8 @@ export interface Picture {
 export class Stage {
   readonly atlas: Atlas;
   readonly passable: Passable;
+  /** The water at a place, which swimmers are seen through. */
+  readonly sea: SeaAt;
   private readonly world = new Container({ isRenderGroup: true });
   private readonly grounds = new Map<string, Sprite>();
   private readonly plantLayers = new Map<string, PlantLayer>();
@@ -53,14 +57,17 @@ export class Stage {
   private readonly tint: Sprite;
   private readonly flat: Sprite;
   private readonly casts: CreatureLayer[] = [];
+  private readonly listeners: ((dtS: number) => void)[] = [];
 
   private constructor(
     private readonly app: Application,
     atlas: Atlas,
     passable: Passable,
+    sea: SeaAt,
   ) {
     this.atlas = atlas;
     this.passable = passable;
+    this.sea = sea;
     this.tint = new Sprite({ texture: atlas.white, blendMode: "multiply" });
     this.flat = new Sprite(atlas.white);
     for (const cover of [this.tint, this.flat]) {
@@ -87,7 +94,7 @@ export class Stage {
     const app = new Application();
     await app.init({ ...PIXEL_ART, width, height });
     const layers = await loadWorldLayers(fixture, folder);
-    const stage = new Stage(app, layers.atlas, layers.passable);
+    const stage = new Stage(app, layers.atlas, layers.passable, seaIn(fixture));
     stage.addSprite("terrain.png", layers.ground);
     stage.addSprite("map.png", layers.map);
     stage.addPlants("icons", layers.plants);
@@ -111,8 +118,24 @@ export class Stage {
   }
 
   /** Put creatures on the stage, each where its seed says. Seen only in pictures that cast them. */
-  cast(seeds: readonly CreatureSeed[], seed: number, body?: BodyOptions): CreatureLayer {
-    const layer = new CreatureLayer(this.atlas, seeds, this.passable, mulberry32(seed), body);
+  cast(
+    seeds: readonly CreatureSeed[],
+    seed: number,
+    body?: BodyOptions,
+    life: Life = "wander",
+    sea: SeaAt = this.sea,
+    water: WaterLook = WATER_LOOK,
+  ): CreatureLayer {
+    const layer = new CreatureLayer(
+      this.atlas,
+      seeds,
+      this.passable,
+      mulberry32(seed),
+      body,
+      life,
+      sea,
+      water,
+    );
     layer.setCount(seeds.length);
     layer.show("hidden");
     this.casts.push(layer);
@@ -120,8 +143,14 @@ export class Stage {
     return layer;
   }
 
+  /** Called with every tick before the creatures move: a stand-in for the sim's ticks. */
+  onTick(listener: (dtS: number) => void): void {
+    this.listeners.push(listener);
+  }
+
   /** Move every creature on by `dtS` seconds. */
   tick(dtS: number): void {
+    for (const listener of this.listeners) listener(dtS);
     for (const layer of this.casts) layer.update(dtS);
   }
 

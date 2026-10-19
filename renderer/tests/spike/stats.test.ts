@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mulberry32 } from "../../src/spike/rng";
+import { mulberry32 } from "../../src/rng";
 import { median, percentile, summariseFrames } from "../../src/spike/stats";
 
 describe("mulberry32", () => {

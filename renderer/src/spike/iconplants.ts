@@ -1,13 +1,8 @@
-/**
- * The plant layer moved to `src/plants/plants.ts` (R1); kept so that the spike's imports
- * keep working. The spike's first look (a drawing in every cell) stays here.
- */
+/** The spike's first look at plants: a drawing in every vegetated cell (R0's spec scenes). */
 import type { Atlas } from "./atlas";
 import type { WorldFixture } from "./fixture";
 import { SPRITE_WIDTH, lookKey } from "./pixelart";
 import { PlantLayer } from "../plants/plants";
-
-export * from "../plants/plants";
 
 /** A drawing in the middle of every vegetated cell, from the hand-drawn atlas. */
 export function iconPlants(fixture: WorldFixture, atlas: Atlas): PlantLayer {

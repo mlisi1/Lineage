@@ -203,10 +203,13 @@ the middle view, 93 for the local one).
 A creature is seen from above: a head that moves and a chain of joints that follows it
 at fixed distances, which bends the body by itself. Legs are placed by two-bone inverse
 kinematics: a foot stays planted until the body has left it behind. A body is a list of
-parts riding the joints (`body.ts`): discs, wedges and bars, each with a size, a place
+parts riding the joints (`src/creatures/body.ts`): discs, wedges and bars, each with a size, a place
 and a colour, all tinted sprites of one atlas, so a body costs no geometry, only
-transforms. The derived values (mass, leg pairs, speeds) come from `fauna/phenotype.py`
-through the fixture; R2 ports that function and replaces these drawings.
+transforms. The derived values (mass, leg pairs, speeds) come from
+`src/creatures/phenotype.ts`, a port of `fauna/phenotype.py` that a test holds to the
+sim's own values for the fifteen specimens of `sim/tests/fixtures/phenotypes.json`. The
+world sends genomes and the config keys the phenotype reads (`CONFIG_KEYS`), never
+derived values, so a retuned sim is drawn as it runs.
 
 The style is **body plans, outlined and lit**: a plan per kind of animal, so that the
 silhouette says what it is, and a dark outline one art pixel wide around the whole
@@ -270,6 +273,58 @@ and more is shaded as a mass is, on its own: its far edge in shade, and a sunlit
 if it is round (no more than 2.2 times as long as wide: a patch would cut a band in
 two). Stripes and fades are drawn flat, in their one colour.
 
+**Under water** (`src/creatures/water.ts`). An animal that lives in the water (aquatic
+≥ 0.6) must look as if it were in the water, not walking on it. The stage knows the water
+at every place (`seaIn` in `habitat.ts`): the colour of the sea's depth bands, as the
+ground paints them, blended between the bands' middles, and the depth as a share of the
+deepest band's middle, in 12 steps; a swimmer is recoloured only when its water changes
+step. How it is seen through the water is **murk** (`WATER_LOOK` in `proposal.ts`, ADR
+0013), chosen from three looks the creature sheet shows side by side:
+
+- **hue** (the first try): each colour turns toward the water's hue at its own lightness (45 %
+  in the shallows to 75 % in the deep), then into a haze of the water (10 % to 45 %);
+- **murk** (chosen): its own hues, darkened (15 % to 45 %), then some of the water's colour (15 % to
+  50 %), as if the water showed through it;
+- **glass**: its own hues, a little darkened (10 % to 30 %), and the whole body see-through
+  as one (80 % opaque to 45 %, an `AlphaFilter` on the animal), so that the sea's own bands
+  and waves show through it; each swimmer in sight is then drawn on its own every frame.
+
+In every look a glint keeps more of itself, the shadow on the bottom fades with depth, and
+the dot on the map keeps its own colour. A swimmer keeps its head 0.012 below the sea's
+surface (a walker 0.004 above it), so that the body trailing behind it is in the water and
+not lying on the beach. (Mixing every colour toward one blue, the first try, turned reds
+purple and flattened every body alike.)
+
+**Rare genes** (M7, `src/creatures/rare.ts`). The sim sends each creature's rare-gene
+slots (bits) and, once, the signature each bit is drawn by (`rare.CREATURE_SIGNATURES`);
+the renderer draws by signature, never by bit, and leaves out signatures it does not know.
+A **giant** is drawn at the mass the sim gives it, the phenotype's mass times
+`giant_mass_factor` (`rare.render_config`, beside `phenotype_config`); the other seven are
+overlays on the body plan (`body.ts`), outlined and lit with it: **venom**, fangs in acid
+green and a dark tip at the end of the body; **warning**, bold bands across the back,
+black on a light body and yellow on a dark one, whatever the pattern gene; **elder**,
+colours at 55 % of the saturation and pale flecks; **gills**, three frills either side
+behind the head; **coat**, an outline 3.5 times as wide and 60 % of the way to the body's
+colour, a soft fur; **leaves**, the hue turned 85 % of the way to leaf green and leaves
+along the back; **glow**, pale spots in pairs along the back, which the night will light
+(R4, M8). A **torpid** animal (a hibernator in winter or long darkness, `Fauna.torpid`)
+lies curled up (`curl` in `chain.ts`: its chain round 0.85 of a circle from the head), does
+not move, and breathes three times slower. The creature sheet shows every gene, and none,
+on the sim's plain carrier and on four specimens.
+
+**Between sim ticks** (`src/creatures/motion.ts`). The simulation moves a creature a
+fraction of a cell every ten minutes, which watched in real time is stillness. A layer
+whose creatures are `anchored` keeps each near the place the sim last gave it (its
+anchor, `CreatureLayer.anchor`) and gives it life of its own there: a new anchor is
+walked to (at up to twice its pace when more than three leashes behind; put there at
+once when more than 12 cells away, a new arrival or a cut), and in between it pauses
+1½–5 s looking about (its head turns up to 0.7 rad either side), then strolls, at a
+little over half its pace, to a place within its leash (0.4 cells and 0.6 of its body
+length) that its body can stand on. Its chest breathes: the masses at its widest joint
+widen by up to 8 %, a breath taking 2.4 s at mass 1, slower with the fourth root of mass.
+Where it is drawn is the renderer's; where it is, is the sim's. The benchmark has no sim
+behind it and keeps the spike's free wandering (`wander`).
+
 **By distance.** On the map a creature is a dot: its colour, edged dark, a little bigger
 for the heavy. In the middle view it is its body, small, hurrying. In the local view the
 same body gets what there is now room for: a glint in each eye, legs with an edge and
@@ -287,7 +342,26 @@ by half in the middle view, to a dot a cell wide on the map. Seen from close eno
 that mass 1 is some thirty pixels long, the same bodies are portraits, as a bestiary
 will want them: the look sheet draws the markings that way. Kinds change at thresholds,
 so two animals of one species either side of one will look like different kinds; whether
-that needs softening is for R2.
+that needed softening was for R2, and is done: **one body plan per species**
+(`src/creatures/species.ts`). Each species (M6; the fixture's `species` column, the
+protocol's optional `species`) is drawn as the kind of its average member, and within that
+plan each animal still shows its own genes. An animal takes its species' kind only where
+it lives where its species does (in the water or on land), so that a fish is never drawn
+on the shore; an animal of no species yet (0) is drawn as its own genes make it. In the
+fixture's world (v7, day 520) 10 of the 186 members of species 1 would be hoppers on their
+own genes (the leg gene rounding to one pair) and are drawn as beasts. A layer works the
+plans out from its creatures; when the census changes them, the creatures are drawn again
+with the new plans (R3, with the state stream).
+
+**Creatures are drawn in `cosy`** ([ADR 0013](../decisions/0013-cosy-creature-style.md)),
+after Stardew Valley's animals with the camera kept straight above: the plans and layers
+above, more saturated; the outline in each animal's own colour taken nearly to black and
+toward plum; shade toward violet and wider, light toward gold; eyes a size larger with a
+glint from 2 pixels; and one soft see-through oval on the ground under the animal, down
+and right of it. The tones it shares with the ground and plants are in
+`src/palette.ts`. The creature sheet (`creatures.html`, `npm run creatures` →
+`reports/R2-creature-sheet/`) draws the same animals walking the same paths in `lit`
+(R0's) and `cosy` side by side, and checks the phenotype port against the sim.
 
 ## The look sheet
 
@@ -376,7 +450,7 @@ it: 50 animated creatures, a terrain bitmap, plant sprites and a full-screen tin
 ≥ 30 fps median in Chromium kiosk on the Orange Pi. If not, an ADR picks a native
 renderer that consumes the same protocol.
 
-`renderer/spike.html` draws a real world (the save fixture `sim/tests/fixtures/saves/v4.lzma`,
+`renderer/spike.html` draws a real world (the save fixture `sim/tests/fixtures/saves/v7.lzma`,
 exported by `tools/replay.py` into `renderer/public/spike/`) and benchmarks itself: it
 runs each scenario for a fixed time, counts frames, and reports the median frame rate,
 the 1 % low, the script time per frame and the graphics driver the browser gave it.
@@ -653,10 +727,12 @@ autumn recording and two on the winter recording's snow line, taken with `still`
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
-  (`lineage-spike-fixture/3`): the heights, cover and biomass of a save's world, the
-  maps' rules for colouring them, its creatures, and casts for the look sheet (the
-  specimens and the gene sweeps). R1's scene draws from the protocol instead; the spike
-  and the look sheets still read the fixture.
+  (`lineage-spike-fixture/5`): the heights, cover and biomass of a save's world, the
+  maps' rules for colouring them, its creatures (where each is, its genome to the bit,
+  its species, its rare-gene slots and whether it lies torpid), the config keys of the
+  phenotype and of the rare genes, the rare genes' signatures, and casts for the look
+  sheets (the specimens, the gene sweeps, the rare genes). R1's scene draws from the
+  protocol instead; the spike and the look sheets still read the fixture.
 - **Creature bodies and motion.** Bodies are discs, wedges and bars; the wandering is
   cosmetic and seeded, not the simulation's. Walkers keep to land and swimmers to water
   only because the spike says so.
@@ -686,11 +762,7 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   seasons in play change (entering or leaving a turn, eight times a year; about 1 s).
   Both could go to the worker if R5 shows a stutter on the board.
 - **The server's stream** has not been tried: there is no server until S1.
-- **Creature motion between sim ticks.** The simulation moves a creature a few cells per
-  hour and ticks every ten minutes. Watched in real time that is stillness, most of all
-  in the local view, so the renderer needs cosmetic life of its own (idling, breathing,
-  small wandering around the true position) without contradicting the simulation.
-  Belongs to R2/R3.
-- **Kinds at their thresholds**: see Creatures.
+- **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
+  what remains is R3's: which animal the camera follows, and when it cuts.
 - **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the
   turn and the snow forward.

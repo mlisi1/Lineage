@@ -4,14 +4,31 @@
  * Everything is a sprite of the atlas (tinted discs, wedges and stretched squares), so a
  * creature costs no geometry rebuild, only transforms.
  */
-import { Container, Sprite, type Texture } from "pixi.js";
+import { AlphaFilter, Container, Sprite, type Texture } from "pixi.js";
 import { DISC_SIZE, type Atlas } from "./atlas";
-import { FIRST_LOOK, bodyPlan, type BodyOptions, type BodyPlan, type LegPlan } from "./body";
+import {
+  FIRST_LOOK,
+  LAYER,
+  bodyPlan,
+  type BodyOptions,
+  type BodyPlan,
+  type LegPlan,
+} from "../creatures/body";
 import type { CellRect } from "./camera";
-import { followChain, solveKnee, type Point } from "./chain";
+import { curl, followChain, solveKnee, type Point } from "../creatures/chain";
+import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
+import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
+import {
+  opacityUnderWater,
+  seaKey,
+  shadowUnderWater,
+  underWater,
+  type SeaAt,
+  type WaterLook,
+} from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
-import type { Random } from "./rng";
+import type { Random } from "../rng";
 
 /** Wandering: how fast the turn rate drifts and settles (per second). */
 const TURN_JITTER = 6;
@@ -28,8 +45,6 @@ const SETTLE_REACH = 48;
 const MARKER_CELLS = 1;
 const MARKER_EDGE_CELLS = 0.5;
 const MARKER_EDGE = 0x1b1b1b;
-/** The dark edge of a leg: the colour of the outline round the body. */
-const EDGE = 0x1f1a17;
 /** Toward the light: up and to the left. */
 const LIGHT = Math.SQRT1_2;
 /**
@@ -52,6 +67,19 @@ const WEB_WIDE = 1.2;
 /** How a layer's creatures are shown: as bodies, as dots on the map, or not at all. */
 export type Showing = "bodies" | "markers" | "hidden";
 
+/**
+ * How they move: `wander` roams freely (the benchmark, which has no sim behind it);
+ * `anchored` keeps each near the place the sim gives it (`anchor`), with life of its own
+ * between sim ticks (`motion.ts`).
+ */
+export type Life = "wander" | "anchored";
+/** A glint in an eye: it keeps more of itself under water. */
+const GLINT = 0xffffff;
+/** A torpid animal breathes this many times slower. */
+const TORPID_BREATH = 3;
+/** At a full breath the chest is this much wider. */
+const BREATH_WIDENS = 0.08;
+
 interface Leg {
   plan: LegPlan;
   foot: Point;
@@ -65,6 +93,8 @@ interface Leg {
   sole: Sprite | null;
   /** The foot is webbed: a paddle set across the way the leg points. */
   webbed: boolean;
+  /** Its foot has been put down once; until then it is put where it rests, not swung there. */
+  planted: boolean;
 }
 
 interface Creature {
@@ -84,6 +114,21 @@ interface Creature {
   legs: Leg[];
   /** Within the view of the last update, so worth drawing. */
   inView: boolean;
+  /** With anchored life: where the sim has it and what it is doing there. */
+  motion: Motion | null;
+  /** Its mass, which sets how slowly it breathes. */
+  mass: number;
+  /** Lying torpid: curled up, still, breathing slowly. */
+  torpid: boolean;
+  /** Every sprite of the body with its colour and opacity out of water. */
+  paints: { sprite: Sprite; colour: number; alpha: number }[];
+  /** The water it was last coloured for (`seaKey`), -1 for none. */
+  seaKey: number;
+  /** Glass: what draws the body see-through, once it needs one. */
+  glass?: AlphaFilter;
+  /** The joint at its widest, which breathes; and how far into a breath it started. */
+  chest: number;
+  breathOffset: number;
 }
 
 export class CreatureLayer {
@@ -99,6 +144,8 @@ export class CreatureLayer {
   private readonly dirX = new Float32Array(16);
   private readonly dirY = new Float32Array(16);
   private readonly angle = new Float32Array(16);
+  /** Seconds since the layer began: the clock breaths keep. */
+  private clock = 0;
 
   constructor(
     private readonly atlas: Atlas,
@@ -106,7 +153,45 @@ export class CreatureLayer {
     private readonly passable: Passable,
     private readonly random: Random,
     private readonly body: BodyOptions = FIRST_LOOK,
-  ) {}
+    private readonly life: Life = "wander",
+    /** The water at a place: swimmers are coloured as seen through it. */
+    private readonly sea: SeaAt | null = null,
+    /** How they are seen through it. */
+    private readonly water: WaterLook = "hue",
+  ) {
+    this.plans = speciesPlans(seeds);
+  }
+
+  /** What each species among the seeds is drawn as (one plan per species). */
+  private readonly plans: ReadonlyMap<number, SpeciesPlan>;
+
+  /**
+   * Where the sim now has creature `index`, in cells. An anchored creature walks there
+   * (or is put there, if too far to walk); a wandering one ignores it.
+   */
+  anchor(index: number, x: number, y: number): void {
+    const creature = this.creatures[index];
+    const motion = creature?.motion;
+    const head = creature?.joints[0];
+    if (creature === undefined || motion === undefined || motion === null || head === undefined) {
+      return;
+    }
+    const { plan } = creature;
+    const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
+    if (reanchor(motion, walker, x, y)) {
+      // Put there: the body comes along in a line behind the head.
+      creature.joints.forEach((joint, i) => {
+        joint.x = x - Math.cos(creature.heading) * plan.spacing * i;
+        joint.y = y - Math.sin(creature.heading) * plan.spacing * i;
+      });
+    }
+  }
+
+  /** Where the sim has creature `index` (anchored), or where its head is (wandering). */
+  anchorOf(index: number): Point | null {
+    const creature = this.creatures[index];
+    return creature?.motion?.anchor ?? creature?.joints[0] ?? null;
+  }
 
   /** Number of sprites the active creatures are made of. */
   get spriteCount(): number {
@@ -179,10 +264,16 @@ export class CreatureLayer {
    * they are shown as dots: the others walk on as a head and a chain.
    */
   update(dtS: number, view?: CellRect, posed = true): void {
+    this.clock += dtS;
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
-      const head = this.wander(creature, dtS);
+      // A torpid animal lies where it is; the others move.
+      const head = creature.torpid
+        ? (creature.joints[0] ?? { x: 0, y: 0 })
+        : creature.motion === null
+          ? this.wander(creature, dtS)
+          : this.live(creature, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -191,7 +282,10 @@ export class CreatureLayer {
           head.x <= view.x1 + reach &&
           head.y >= view.y0 - reach &&
           head.y <= view.y1 + reach);
-      if (inView && posed) this.pose(creature, dtS);
+      if (inView && posed) {
+        this.pose(creature, dtS);
+        if (creature.plan.swims) this.wet(creature, head);
+      }
       if (creature.inView !== inView) {
         creature.inView = inView;
         this.reveal(creature, index);
@@ -228,7 +322,7 @@ export class CreatureLayer {
     const seed = this.seeds[index % this.seeds.length];
     if (seed === undefined) throw new Error("the fixture has no creatures");
     const random = this.random;
-    const plan = bodyPlan(seed, this.body);
+    const plan = bodyPlan(seed, this.body, kindFor(seed, this.plans));
     // Past the fixture's creatures, reuse them a few cells away.
     const clone = index >= this.seeds.length;
     const { x, y } = this.settle(
@@ -241,6 +335,7 @@ export class CreatureLayer {
       x: x - Math.cos(heading) * plan.spacing * i,
       y: y - Math.sin(heading) * plan.spacing * i,
     }));
+    if (seed.torpid) curl(joints, plan.spacing, heading);
 
     const container = new Container();
     this.container.addChild(container);
@@ -271,10 +366,12 @@ export class CreatureLayer {
       return container.addChild(sprite);
     };
     const edges = plan.legs.map((leg): Sprite[] => {
+      // The dark edge of a leg is the colour of the outline round the body.
+      const edge = plan.outline;
       if (leg.edge === 0) return [];
-      if (leg.fin === 1) return [blade(EDGE, leg.length, leg.thickness, leg.edge)];
-      const bones = [bar(EDGE), bar(EDGE)];
-      return leg.foot > 0 ? [...bones, round(EDGE, leg.foot + leg.edge, leg.fin > 0)] : bones;
+      if (leg.fin === 1) return [blade(edge, leg.length, leg.thickness, leg.edge)];
+      const bones = [bar(edge), bar(edge)];
+      return leg.foot > 0 ? [...bones, round(edge, leg.foot + leg.edge, leg.fin > 0)] : bones;
     });
     const legs = plan.legs.map((leg, index): Leg => {
       const flipper = leg.fin === 1;
@@ -287,6 +384,7 @@ export class CreatureLayer {
         edges: edges[index] ?? [],
         sole: !flipper && leg.foot > 0 ? round(leg.sole, leg.foot, leg.fin > 0) : null,
         webbed: leg.fin > 0,
+        planted: false,
       };
     });
     const textures: Record<string, [Texture, number]> = {
@@ -298,6 +396,7 @@ export class CreatureLayer {
       const [texture, texels] = textures[part.shape] ?? [this.atlas.disc, DISC_SIZE];
       const sprite = new Sprite({ texture, anchor: 0.5 });
       sprite.tint = part.colour;
+      sprite.alpha = part.alpha ?? 1;
       sprite.scale.set(part.along / texels, part.across / texels);
       return container.addChild(sprite);
     });
@@ -319,6 +418,15 @@ export class CreatureLayer {
 
     return {
       plan,
+      motion: this.life === "anchored" ? newMotion({ x, y }, heading) : null,
+      chest: plan.radii.indexOf(Math.max(...plan.radii)),
+      breathOffset: random(),
+      mass: seed.mass,
+      torpid: seed.torpid,
+      paints: container.children
+        .filter((child): child is Sprite => child instanceof Sprite)
+        .map((sprite) => ({ sprite, colour: sprite.tint, alpha: sprite.alpha })),
+      seaKey: -1,
       pen: seed.pen,
       container,
       marker,
@@ -331,6 +439,49 @@ export class CreatureLayer {
       legs,
       inView: true,
     };
+  }
+
+  /** Colour a swimmer as seen through the water at its head, when that water changes. */
+  private wet(creature: Creature, head: Point): void {
+    const sea = this.sea?.(head.x, head.y) ?? null;
+    const key = seaKey(sea);
+    if (key === creature.seaKey) return;
+    creature.seaKey = key;
+    for (const { sprite, colour, alpha } of creature.paints) {
+      if (sea === null) {
+        sprite.tint = colour;
+        sprite.alpha = alpha;
+      } else if (alpha < 1) {
+        // The one see-through part is its shadow on the bottom.
+        sprite.alpha = shadowUnderWater(alpha, sea);
+      } else {
+        sprite.tint = underWater(colour, sea, colour === GLINT, this.water);
+      }
+    }
+    // Glass: the body is see-through as one, so that its parts do not show through each other.
+    const opacity = sea === null ? 1 : opacityUnderWater(sea, this.water);
+    if (opacity < 1) {
+      creature.glass ??= new AlphaFilter();
+      creature.glass.alpha = opacity;
+      creature.container.filters = [creature.glass];
+    } else {
+      creature.container.filters = [];
+    }
+  }
+
+  /** Anchored: live near where the sim has it, and pull the chain after the head. */
+  private live(creature: Creature, dtS: number): Point {
+    const { plan, joints, motion } = creature;
+    const head = joints[0] ?? { x: 0, y: 0 };
+    if (motion === null) return head;
+    const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
+    const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
+    const stride = drive(motion, walker, dtS, this.random, free);
+    creature.heading = walker.heading;
+    creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
+    followChain(joints, plan.spacing);
+    creature.marker.position.set(head.x, head.y);
+    return head;
   }
 
   /** Walk the head on and pull the chain after it. Returns the head. */
@@ -394,6 +545,13 @@ export class CreatureLayer {
         joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT,
       );
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
+      // The chest breathes: its masses (not what lies on them) widen and narrow.
+      if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
+        const clock = creature.torpid ? this.clock / TORPID_BREATH : this.clock;
+        const full = breath(clock, creature.mass, creature.breathOffset);
+        const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
+        sprite.scale.y = (part.across / texels) * (1 + BREATH_WIDENS * full);
+      }
     }
     for (const leg of creature.legs) this.walk(creature, leg, dtS);
   }
@@ -430,6 +588,13 @@ export class CreatureLayer {
     if (Math.hypot(leg.target.x - restX, leg.target.y - restY) > length * 0.8) {
       leg.target.x = restX + forwardX * length * 0.5;
       leg.target.y = restY + forwardY * length * 0.5;
+    }
+    if (!leg.planted) {
+      leg.target.x = restX;
+      leg.target.y = restY;
+      leg.foot.x = restX;
+      leg.foot.y = restY;
+      leg.planted = true;
     }
     const swing = Math.min(1, dtS * STEP_RATE);
     leg.foot.x += (leg.target.x - leg.foot.x) * swing;

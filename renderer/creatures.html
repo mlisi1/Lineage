@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lineage creature sheet</title>
+    <style>
+      :root {
+        --page: #10192e;
+        --panel: #14213d;
+        --text: #e6edf2;
+        --muted: #9fb3c8;
+        --rule: #2c3f66;
+        --accent: #8ecbe6;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font:
+          15px/1.55 system-ui,
+          sans-serif;
+      }
+      main {
+        width: max-content;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 24px 16px 72px;
+        box-sizing: border-box;
+      }
+      main > * {
+        max-width: 1024px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 1.6rem;
+      }
+      h2 {
+        margin: 44px 0 8px;
+        font-size: 1.2rem;
+      }
+      h3 {
+        margin: 24px 0 6px;
+        font-size: 1rem;
+      }
+      p,
+      li {
+        max-width: 76ch;
+      }
+      .sub,
+      figcaption,
+      .note {
+        color: var(--muted);
+      }
+      .sub {
+        margin: 0 0 16px;
+      }
+      .note {
+        font-size: 0.9rem;
+      }
+      code {
+        color: var(--accent);
+      }
+      #failure {
+        color: #ff8f8f;
+        font-weight: 600;
+      }
+      canvas,
+      img {
+        display: block;
+        image-rendering: pixelated;
+      }
+      figure {
+        margin: 14px 0;
+      }
+      figure.screen {
+        overflow-x: auto;
+      }
+      figcaption {
+        max-width: 76ch;
+        padding-top: 6px;
+        font-size: 0.88rem;
+      }
+      .pick {
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--page);
+        font-size: 0.75rem;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+      .pick.new {
+        background: #f2d24b;
+      }
+      .strip {
+        margin: 10px 0;
+      }
+      .wrap {
+        overflow-x: auto;
+      }
+      table.cost {
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.92rem;
+      }
+      table.cost th,
+      table.cost td {
+        padding: 6px 12px 6px 0;
+        border-bottom: 1px solid var(--rule);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.cost th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      .lights {
+        display: grid;
+        grid-template-columns: repeat(2, max-content);
+        gap: 0 8px;
+      }
+      .tiles,
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      figure.tile {
+        margin: 0;
+      }
+      figure.tile figcaption {
+        max-width: 224px;
+        padding-top: 3px;
+        line-height: 1.3;
+      }
+      figure.tile b {
+        display: block;
+        color: var(--text);
+      }
+      .steps figure.tile figcaption,
+      #patterns-beast figcaption,
+      #patterns-beetle figcaption {
+        max-width: 168px;
+      }
+      .strip {
+        overflow-x: auto;
+      }
+      .strip canvas,
+      .strip img {
+        margin: 6px 0;
+      }
+      .sweep {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        padding: 10px 0;
+        border-top: 1px solid var(--rule);
+      }
+      .gene {
+        flex: 0 0 104px;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .gene b {
+        display: block;
+        color: var(--text);
+        font-size: 1rem;
+      }
+      .rare-row {
+        display: grid;
+        grid-template-columns: 112px repeat(5, 168px);
+        gap: 6px;
+        align-items: center;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin: 4px 0;
+      }
+      .water-head,
+      .water-row {
+        display: grid;
+        grid-template-columns: 112px repeat(4, 168px);
+        gap: 6px;
+        align-items: center;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .water-row {
+        margin: 4px 0;
+      }
+      .pair {
+        display: flex;
+        gap: 6px;
+      }
+      .specimen {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: flex-start;
+        padding: 8px 0;
+        border-top: 1px solid var(--rule);
+      }
+      #local-meadow,
+      #local-shore,
+      #mid {
+        display: grid;
+        gap: 4px;
+      }
+      table.sprites {
+        border-collapse: collapse;
+        background: var(--panel);
+      }
+      table.sprites th {
+        padding: 6px 10px;
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-align: left;
+      }
+      table.sprites td {
+        padding: 6px 8px;
+        vertical-align: bottom;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lineage creature sheet <span class="pick new">R2, in progress</span></h1>
+      <p class="sub">
+        How the renderer draws animals, and what there is to choose. World:
+        <span id="world">…</span>. Renderer build <code id="build">…</code>.
+      </p>
+      <p id="failure" hidden></p>
+      <p class="note" data-live>
+        This page is live: the creatures walk. <code>npm run creatures</code> writes a copy to
+        <code>reports/R2-creature-sheet/</code>.
+      </p>
+      <p class="note" data-still hidden>
+        A copy to read anywhere, generated by <code>npm run creatures</code> in
+        <code>renderer/</code>; do not edit by hand. Pictures with animals in them are short loops.
+        The live page is <code>/creatures.html</code> under <code>npm run dev</code>.
+      </p>
+
+      <h2>1. The phenotype, ported <span class="pick">done</span></h2>
+      <p>
+        The renderer no longer receives an animal's body: it receives the genome and the sim's
+        config, and works the body out with a port of
+        <code>fauna/phenotype.py</code> (<code>src/creatures/phenotype.ts</code>). For each of the
+        fifteen reference genomes the sim wrote down every value it derives (nineteen of them); the
+        port is held to all of them by a test. Below, what it gives for each, and the largest
+        difference from the sim over all nineteen values, relative. Largest anywhere:
+        <b id="phenotype-worst">…</b>
+        (the sim counts in 32-bit numbers, the port in 64-bit, so the last digits differ).
+      </p>
+      <div id="phenotype"></div>
+
+      <h2>2. Lit or cosy <span class="pick">chosen: cosy</span></h2>
+      <p>
+        Cosy was chosen on 2026-10-18 (ADR 0013) and is what every view now draws; lit stays here
+        for comparison. <b>Lit</b> is the style settled in R0: a near-black outline, the far side of
+        every mass in a cool shade, a lit back. <b>Cosy</b> is the proposal after Stardew Valley's
+        animals, keeping the camera straight above: the same body plans, in richer colours; the
+        outline is each animal's own colour taken nearly to black and toward plum instead of one
+        grey-black; shade turns violet and light turns gold; eyes a size larger, with a glint from
+        smaller sizes; and a soft shadow on the ground under each animal, away from the light. An
+        animal that lives in the water is seen through it: its colours go toward the sea's blue and
+        its outline toward deep water, so that it does not seem to walk on the sea. Each pair of
+        pictures has the same animals walking the same paths.
+      </p>
+      <h3>The local view, full size (what the 7″ screen shows)</h3>
+      <div id="local-meadow"></div>
+      <div id="local-shore"></div>
+      <h3>Under water <span class="pick">chosen: murk</span></h3>
+      <p>
+        An animal that lives in the water must look as if it were in it, not walking on it. The
+        water where it swims decides how much: light in the shallows, dark blue in the deep. Three
+        ways to show it, each in a table (every swimming specimen and an eel in four colours: out of
+        the water, then in the shallows, at middle depth and in the deep, on that water's colour)
+        and in a stretch of sea from the shore to the deep below.
+      </p>
+      <ul>
+        <li>
+          <b>Hue</b> (the first try): every colour turns toward the water's hue at its own
+          lightness, then into a haze of the water that thickens with depth. Some bodies look tinted
+          rather than under water.
+        </li>
+        <li>
+          <b>Murk</b> (chosen, ADR 0013, and what every view draws): the animal keeps its own hues,
+          darkened (15 % in the shallows to 45 % in the deep), then takes some of the water's colour
+          (15 % to 50 %), as if the water showed through it. No cost.
+        </li>
+        <li>
+          <b>Glass</b>: its own hues, a little darkened (10 % to 30 %), and the whole body drawn
+          see-through (80 % opaque in the shallows to 45 % in the deep), so that the sea itself, its
+          bands and waves, shows through it. Each swimmer in sight is then drawn on its own and laid
+          on the scene, which costs a little every frame: R5 would measure it.
+        </li>
+      </ul>
+      <h4>Hue</h4>
+      <div id="underwater-hue" class="water"></div>
+      <h4>Murk</h4>
+      <div id="underwater-murk" class="water"></div>
+      <h4>Glass</h4>
+      <div id="underwater-glass" class="water"></div>
+      <p>
+        From the shore out to the deep, full size, hue then murk then glass: the swimmers roam it,
+        each seen through the water where it is (in twelve steps of depth).
+      </p>
+      <div id="underwater-scene"></div>
+      <h3>Between sim ticks</h3>
+      <p>
+        The sim moves an animal every ten minutes, a fraction of a cell at a time; watched in real
+        time that is stillness. Here each animal keeps to the place the sim last gave it and lives
+        there: it walks to a new place when one comes (hurrying if far behind), and between times
+        pauses, looks about, strolls a little within a leash of its place (0.4 cells and 0.6 of its
+        length), and breathes, slower the heavier it is. Where it is drawn is the renderer's own;
+        where it is, is the sim's. In this picture a stand-in for the sim moves every place on every
+        3 seconds instead of every ten minutes, so that the loop shows a few moves.
+      </p>
+      <div id="ticks"></div>
+      <h3>One body plan per species <span class="pick new">new</span></h3>
+      <p>
+        The kind an animal is drawn as changes at thresholds of its genes (two leg pairs a beast,
+        one a hopper), so two animals of one species either side of a threshold looked like
+        different kinds. Now each species is drawn as the kind of its average member (the species
+        come from M6); within that plan each animal still shows its own genes: size, build, colour,
+        markings. An animal takes its species' kind only where it lives where its species does, so
+        that a fish is never drawn walking on the shore.
+      </p>
+      <p>
+        In this world: <span id="species-census">…</span>. <b id="species-strays">…</b> animals
+        would be another kind on their own genes; below, each by its own genes (left) and as its
+        species (right).
+      </p>
+      <div id="species" class="tiles"></div>
+      <h3>Rare genes <span class="pick new">new</span></h3>
+      <p>
+        The eight rare creature genes of M7, each drawn by the signature the sim gives it (never by
+        its bit), on the sim's plain carrier (a plain animal carrying that gene alone) and on four
+        specimens; the first row carries none. <b>venom</b>: fangs in acid green and a dark tip at
+        the end of the body. <b>warning</b>: bold bands across the back, black on a light body and
+        yellow on a dark one, whatever its pattern gene. <b>giant</b>: drawn at the mass the sim
+        gives it, twice its genes'. <b>elder</b>: greyer, with pale flecks. <b>gills</b>: three
+        frills either side behind the head. <b>coat</b>: a soft, wide outline, and in the last row
+        curled up, as a hibernator lies torpid. <b>leaves</b>: turned toward leaf green, with leaves
+        along the back. <b>glow</b>: pale spots along the back, which the night will light (R4, M8).
+        In this world <b id="rare-world">…</b> animal carries the giant gene.
+      </p>
+      <div id="rare"></div>
+      <h3>The middle view, full size</h3>
+      <div id="mid"></div>
+      <h3>The fifteen specimens</h3>
+      <p>
+        Each on its own patch of ground at the local view's size, lit then cosy; next to them the
+        same animal as a portrait, from nearly three times as close.
+      </p>
+      <div id="specimens"></div>
+      <h3>Markings</h3>
+      <p>The twelve markings on a beast's back, lit then cosy, as portraits.</p>
+      <div id="patterns" class="tiles"></div>
+
+      <h2>3. One gene at a time</h2>
+      <p>
+        The same plain animal with one gene at 0, 0.25, 0.5, 0.75 and 1, in the chosen style; under
+        each, the kind its genes make it.
+      </p>
+      <div id="sweeps"></div>
+
+      <h2>Still to come in R2</h2>
+      <ul>
+        <li>
+          Life between sim ticks: the sim moves an animal every ten minutes; the renderer will give
+          it idling, breathing and small wandering around its true place.
+        </li>
+        <li>
+          One body plan per species (once M6 gives species), so that two animals of one species
+          either side of a threshold do not look like different kinds.
+        </li>
+        <li>
+          Snapshot tests of the fifteen specimens, and the frame time with every animal alive.
+        </li>
+        <li>Rare-gene overlays: a hook now, the drawings with M7.</li>
+      </ul>
+    </main>
+    <script type="module" src="/src/spike/creaturesheet.ts"></script>
+  </body>
+</html>

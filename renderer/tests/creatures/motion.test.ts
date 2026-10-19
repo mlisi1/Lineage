@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CLOSE_ZOOM, chunkVisible, viewAt } from "../../src/spike/camera";
-import { followChain, solveKnee, type Point } from "../../src/spike/chain";
+import { curl, followChain, solveKnee, type Point } from "../../src/creatures/chain";
 
 const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -108,5 +108,27 @@ describe("chunkVisible", () => {
     expect(chunkVisible(view, 80, 64, 16, 2)).toBe(false); // to the left
     expect(chunkVisible(view, 82, 64, 16, 2)).toBe(true); // within the margin
     expect(chunkVisible(view, 112, 96, 16, 2)).toBe(false); // below
+  });
+});
+
+describe("curling up", () => {
+  it("keeps the head and the spacing, and coils the body into a ring", () => {
+    const joints = Array.from({ length: 8 }, (_, i) => ({ x: 10 - i * 0.2, y: 5 }));
+    curl(joints, 0.2, 0);
+    expect(joints[0]).toEqual({ x: 10, y: 5 });
+    for (let i = 1; i < joints.length; i++) {
+      const a = joints[i - 1];
+      const b = joints[i];
+      expect(Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0))).toBeCloseTo(0.2);
+    }
+    // The tail ends near the head, not 1.4 cells behind it.
+    const tail = joints[joints.length - 1];
+    expect(Math.hypot((tail?.x ?? 0) - 10, (tail?.y ?? 0) - 5)).toBeLessThan(0.6);
+  });
+
+  it("does nothing to a body of one joint", () => {
+    const joints = [{ x: 1, y: 2 }];
+    curl(joints, 0.3, 1);
+    expect(joints).toEqual([{ x: 1, y: 2 }]);
   });
 });
