@@ -177,8 +177,8 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "Hard times: the island's creatures fell from {before} to {value} in {days} days.",
     ),
     "migration": (
-        "The {name} crossed to new land across the water.",
-        "{members} {name} reached another island.",
+        "The {name} crossed the water and settled new land.",
+        "{members} {name} now live on another island.",
     ),
     "split": (
         "The sea cut the island in {parts}: there are now {landmasses} landmasses.",
@@ -380,7 +380,7 @@ class Chronicle:
         # Members of each species (column k; column 0: all creatures) on each of the
         # last swing_days days, a ring indexed by tick; -1 before the species existed.
         self._ring = np.full((cfg.swing_days, 1), -1, dtype=np.int32)
-        # Yesterday's cell (flat index) and species of every living creature on land.
+        # Yesterday's cell (flat index) and species of every creature in a settled group.
         self._prev_cells = np.zeros(0, dtype=np.int64)
         self._prev_species = np.zeros(0, dtype=np.int64)
         # The entries, column by column.
@@ -898,25 +898,38 @@ class Chronicle:
         where = flat[cells]
         return cells, np.where(big[where], where, 0), labels
 
+    def _settled(self, labels: Ids) -> tuple[Ids, Ids, Ids, NDArray[np.bool_]]:
+        """Each living creature's cell, landmass (0: sea or a small islet) and species,
+        and which stand in a settled group: at least ``migration_min_members`` of their
+        species on their landmass. Pairs are coded species × (largest label + 1) + mass."""
+        cells, masses, species = self._cells_and_masses(labels)
+        base = int(self._land.landmass_labels.max()) + 1
+        pair = np.where((masses > 0) & (species > 0), species * base + masses, 0)
+        _, inverse, counts = np.unique(pair, return_inverse=True, return_counts=True)
+        settled = (pair > 0) & (counts[inverse] >= self._cfg.migration_min_members)
+        return cells, masses, species, settled
+
     def _migrations(
         self, ctx: Context, records: list[SpeciesRecord], labels: Ids
     ) -> list[OutputEvent]:
-        """A species standing on a large landmass where none of it stood yesterday."""
+        """A species settling a large landmass (``migration_min_members`` of it there)
+        that it had not settled yesterday. Creatures cross straits one by one, so a
+        species settles over days; yesterday's settled groups are followed by their
+        cells, so a landmass that splits or merges is no news."""
         cfg = self._cfg
-        cells, masses, species = self._cells_and_masses(labels)
-        base = int(self._land.landmass_labels.max()) + 1  # pairs coded species * base + mass
+        cells, masses, species, settled = self._settled(labels)
+        base = int(self._land.landmass_labels.max()) + 1
         flat = self._land.landmass_labels.reshape(-1).astype(np.int64)
         before = set((self._prev_species * base + flat[self._prev_cells]).tolist())
-        known = set(self._prev_species.tolist())
-        on = (masses > 0) & (species > 0)
-        self._prev_cells, self._prev_species = cells[on], species[on]
-        pairs, counts = np.unique(species[on] * base + masses[on], return_counts=True)
+        known = set(self._prev_species.tolist())  # settled somewhere yesterday
+        self._prev_cells, self._prev_species = cells[settled], species[settled]
+        pairs, counts = np.unique(species[settled] * base + masses[settled], return_counts=True)
         out: list[OutputEvent] = []
         for pair, count in zip(pairs.tolist(), counts.tolist(), strict=True):
             s, mass = divmod(int(pair), base)
-            if count < cfg.migration_min_members or pair in before or s not in known:
+            if pair in before or s not in known:
                 continue
-            here = on & (species == s) & (masses == mass)
+            here = settled & (species == s) & (masses == mass)
             x, y = self._animals.positions[here].mean(axis=0).tolist()
             fields: dict[str, object] = {"name": records[s - 1].name, "members": int(count)}
             out += self._write(ctx, Kind.MIGRATION, cfg.importance_migration, "migration",
@@ -981,9 +994,8 @@ class Chronicle:
             self._best[k(Record.SPECIES_AGE)] = float(ages.max())
             self._holder[k(Record.SPECIES_AGE)] = int(ages.argmax()) + 1
         self._announced[:] = self._best
-        cells, masses, species = self._cells_and_masses(labels)
-        on = (masses > 0) & (species > 0)
-        self._prev_cells, self._prev_species = cells[on], species[on]
+        cells, _, species, settled = self._settled(labels)
+        self._prev_cells, self._prev_species = cells[settled], species[settled]
 
     def _true_firsts(self, records: list[SpeciesRecord]) -> list[str]:
         """The firsts that already happened, as far as the world shows."""

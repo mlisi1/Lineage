@@ -318,6 +318,17 @@ def test_too_few_wanderers_are_no_migration(island: Island) -> None:
     assert entries(island.days(2), Kind.MIGRATION) == []
 
 
+def test_crossing_one_by_one_settles_once(island: Island) -> None:
+    ids = island.herd.add(10, origin=1, x=5.0)
+    island.days(2)
+    told: list[ChronicleEntry] = []
+    for k in range(5):  # one more crosses each day
+        island.herd.move(ids[: k + 1], 30.0)
+        told += entries(island.days(1), Kind.MIGRATION)
+    assert len(told) == 1
+    assert told[0].x == pytest.approx(30.0)
+
+
 # --- Events from the other subsystems -------------------------------------------------
 
 

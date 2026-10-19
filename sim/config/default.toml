@@ -745,9 +745,10 @@ swing_days = 30
 boom_factor = 2.0
 crash_factor = 2.0
 swing_min_members = 20
-# Migration: at least migration_min_members creatures of a species stand on a landmass
-# ([terrain] landmass_min_cells or larger) where none of it stood the day before; at
-# most once per species per migration_gap_days (sim-days).
+# Migration: a species settles a landmass ([terrain] landmass_min_cells or larger): at
+# least migration_min_members of it stand there, where it had not settled the day before
+# (creatures cross straits one by one, so this is a group grown over days); at most once
+# per species per migration_gap_days (sim-days).
 migration_min_members = 3
 migration_gap_days = 60.0
 # A species is a swimmer (first swimmers; bestiary habitat) when its mean swimming gene
