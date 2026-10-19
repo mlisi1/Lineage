@@ -46,6 +46,11 @@ State at 2026-10-18, end of M7, for the next session (M8).
 - M7.2 (85 %) is deferred to M8: photosynthesis sweeps herds in constant daylight; read
   without it, 95 % PASS. Longevity was given slower breeding after it swept a herd.
 - Rare genes stay rare (≈ 0.1 % of creatures; most die out with their first carriers).
+- Tests: scenarios per gene (`sim/tests/test_rare.py`, plant genes in test_flora.py);
+  slow `sim/tests/test_rare_statistical.py` guards M7.1 and M7.2 without photosynthesis
+  (17 min at 4 workers). Fast suite 517 passed; slow suite 7 passed (2026-10-19).
+- For the renderer: `rare.RENDER_KEYS` / `rare.render_config` (giant_mass_factor), sent
+  beside the phenotype config (R2's request).
 
 ### Starting M8 (presence, calendar, god powers)
 
