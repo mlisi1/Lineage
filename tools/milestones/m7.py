@@ -161,11 +161,18 @@ def per_gene(run: Run) -> dict[str, dict[str, np.ndarray]]:
     return {k: {n: np.round(np.array(v), 3) for n, v in d.items()} for k, d in out.items()}
 
 
-def fixation_free(run: Run) -> np.ndarray:
-    """Per seed: True if no gene stayed above the fixation share for too long."""
+def fixation_free(run: Run, keys: list[str] | None = None) -> np.ndarray:
+    """Per seed: True if no gene (of ``keys``, default all) stayed above the fixation share
+    for too long."""
     genes = per_gene(run)
-    worst = np.max(np.stack([genes[key]["fixation_days"] for key in GENE_KEYS]), axis=0)
+    chosen = GENE_KEYS if keys is None else keys
+    worst = np.max(np.stack([genes[key]["fixation_days"] for key in chosen]), axis=0)
     return worst <= FIXATION_DAYS
+
+
+# Photosynthesis pays its cost only at night, which M8 brings: M7.2 is also read without it
+# (owner's decision, 2026-10-18; ADR 0015).
+WITHOUT_NIGHT_GENES = [key for key in GENE_KEYS if key != "photosynthesis"]
 
 
 def lifespans(run: Run) -> dict[str, np.ndarray]:
@@ -208,6 +215,9 @@ def metrics(run: Run) -> dict[str, float]:
             sum(value < APPEAR_TARGET for value in appeared.values())
         ),
         "fixation.share_of_seeds_without_long_fixation": float(fixation_free(run).mean()),
+        "fixation.share_of_seeds_without_long_fixation.excluding_photosynthesis": float(
+            fixation_free(run, WITHOUT_NIGHT_GENES).mean()
+        ),
     }
     for key in GENE_KEYS:
         g = genes[key]
@@ -418,7 +428,9 @@ def _interpretation_section(run: Run) -> Section:
                 + "."
             )
             + f" {m['fixation.share_of_seeds_without_long_fixation']:.0%} of seeds are free of "
-            "long fixation (M7.2).",
+            "long fixation (M7.2); leaving out photosynthesis, which meets no night before "
+            f"M8, {m['fixation.share_of_seeds_without_long_fixation.excluding_photosynthesis']:.0%}"
+            " (the reading deferred to M8, ADR 0015).",
         ),
         (
             "Persistence.",

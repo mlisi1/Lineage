@@ -177,6 +177,8 @@ class FloraConfig:
     optimum_warm: float
     optimum_cold: float
     temperature_tolerance: float
+    snow_below_temperature: float
+    snow_depth_span: float
     growth_rate_max_per_year: float
     growth_rate_min_share: float
     stature_slowdown: float
@@ -311,6 +313,7 @@ class FloraConfig:
             check(getattr(self, key) <= 1.0, f"{key} must be within [0, 1]")
         positive = (
             "temperature_tolerance",
+            "snow_depth_span",
             "growth_rate_max_per_year",
             "need_sharpness",
             "establishment_sharpness",

@@ -2,8 +2,9 @@
 
 One renderer draws the scene for the desk screen and for the phone (CLAUDE.md §4.7):
 TypeScript and PixiJS in a browser, which on the device is Chromium in kiosk mode at
-1024×600. Only the R0 spike exists so far (`renderer/src/spike/`). It is throwaway in its
-details and deliberate in its structure: R1–R4 build the real scene on what it settles.
+1024×600. The R0 spike (`renderer/src/spike/`) settled the approach; R1 draws the land
+and its plants from the state stream (`renderer/src/`, see "The land from the state
+stream" below); R2–R4 add creatures, the camera and the atmosphere.
 
 ## Pixel art
 
@@ -15,6 +16,8 @@ hard edges, no smoothing.
   nearest-neighbour textures, positions rounded to whole art pixels.
 - **One palette.** Land and plant colours come from `tools/viz/pixelmap.py`, the same
   ramps the report maps use, so a forest is the same green in a report and on the desk.
+  Since ADR 0014 it is the cosy palette, after Stardew Valley; the renderer reads a copy
+  written by that module (`renderer/src/terrain/palette.json`).
 - **World units are cells.** The world layer is positioned and scaled in cells of the
   simulation grid (256×150); the camera is one transform on it.
 
@@ -87,9 +90,10 @@ each plant darkened the crowns behind it and every other shadow it crossed.
 grows are the season's (`seasons.ts`), the turf blooms in spring and less in summer,
 broadleaves drop gold and flame on a russet floor in autumn, and in winter low growth is
 painted dried whatever its biomass, which is what the simulation's own winter does to it
-by dieback. With `snow`, winter lays snow on the land in patches cells across with a
-dithered edge, thinner under trees. The simulation has no snow on low ground: it is the
-renderer's own and still to be decided.
+by dieback. Snow lies on the land in patches cells across with a dithered edge,
+thinner under trees, where the simulation's snow is (R1, ADR 0014: by season and
+height, so the hills in autumn and the lowland only in a hard winter); the spike's `snow`
+option, winter under snow everywhere, is what the look sheet still shows.
 
 The map and the middle view are each one picture of the whole world (512×300 and
 2048×1200), repainted when the plants change, once a sim-day. The local view would be
@@ -169,9 +173,10 @@ runs, and stops at the edge of its drawing rather than run along it. (The first 
 trees had limbs under half the trunk's thickness leaving a trunk cut off square, and
 drawn thinner still the more they leaned.)
 
-With `snow` (winter only) it lies on the crowns and limbs, on the shoulders of every
-tier of a conifer, on stones and wood. Changing from one season to the next over days
-rather than at once belongs to R1.
+With `snow` it lies on the crowns and limbs, on the shoulders of every tier of a
+conifer, on stones and wood: in the scene on the plants of cells where the simulation
+has snow, in any season (R1). Plants change from one season to the next over about four
+weeks, one after another (R1, "The turn of the year" below).
 
 **Small plants** (`drawSmall`) are placed by what covers each cell, by hashes of the
 cell, so they are where they were on the next visit:
@@ -384,8 +389,8 @@ by pixel: most of what was mended after the second sight of the local view (a tr
 beside its crown, tusks without an outline, a crab trailing a joint) cannot be seen at
 the size the sheet shows them and was plain at that one.
 
-Still to be chosen there: whether winter has snow, and whatever the first sight of the
-seasons and the stages asks to change.
+Snow was settled since (ADR 0014: the simulation's); the R1 land sheet shows the
+look chosen for the land and its plants.
 
 ## What it costs: an estimate for the board
 
@@ -557,14 +562,177 @@ Trial runs on a development PC, headless, with WebGL drawn in software:
 So R0 comes down to one thing a PC cannot answer: whether Chromium on the device's OS
 image draws WebGL with the GPU.
 
+## The land from the state stream (R1)
+
+The scene (`renderer/index.html`, `src/main.ts`) draws the land and its plants from the
+state stream in one of the three views. Creatures (R2) and the camera's choices (R3)
+come on top. Page parameters:
+
+| Parameter | What |
+|---|---|
+| `view=map\|middle\|local`, `x=…&y=…` | the view, and where it looks (cells) |
+| `recording=winter` | play the winter recording instead of the August–September one |
+| `every=1000` | wall milliseconds between the recording's messages; 0: all at once, the last day |
+| `source=ws://…` | the server's stream instead of a recording (S1; not tried yet: there is no server) |
+| `still` | the sea does not move: for pictures that must not change |
+| `painter=inline` | paint the ground on the page's thread, to compare with the worker |
+
+For tests and measurements the page offers `window.__sceneSettled()` (the view shows the
+latest day, fully painted), `window.__receive(message)` and `window.__textures()` (live
+textures on the GPU).
+
+**The stream.** One JSON message per frame, defined once in
+`server/lineage_server/protocol/schema.json`; the TypeScript types (`src/protocol.ts`)
+are generated from it by `npm run protocol` and a test fails when they are stale; the
+server builds the messages with `lineage_server.protocol.encode`. Messages:
+
+| Message | When | What |
+|---|---|---|
+| `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
+| `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
+| `fauna` | on connect | creature gene names, the phenotype's config keys, and the config drawing rare genes needs (`rare_config`: GIANT's mass factor) (R2, M7) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
+| `species` | on connect, when one is born or dies out | id, name, parent (M6) |
+| `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
+
+The palette is not sent: the renderer has the report maps' own. `tools/stream.py`
+records the stream from a save, and `src/stream.ts` decodes it. Two recordings are
+committed in `renderer/public/stream/`, both from the v4 fixture:
+
+- `recording.json`: 56 days from 3 August, a land every 28, ending on 28 September in
+  the middle of the autumn turn;
+- `winter.json`: 165 days on unrecorded, then 15 January to 5 February 2028, a land every
+  10; snow lies on about 10 600 of the 38 400 cells (checking it is what the tool writes
+  takes 186 sim-days, so that test is nightly).
+
+**Painting off the frame.** Grounds are painted in a Web Worker (`terrain/painter.ts`,
+`paint.worker.ts`) so that the page keeps drawing frames: the map's and the middle view's
+whole world once a sim-day, the local view's pieces as the camera comes near them. The
+page keeps its own queue and hands the worker one request at a time, nearest piece
+first; a whole-world painting asked for again before it started is dropped, and so are
+the pieces of an older land. A ring of pieces four cells beyond the view is painted ahead
+of the camera. Where there is no worker the same code runs on the page's thread.
+
+**A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
+plants out again for the day and repaints the grounds of the views that have been
+shown; the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
+growth, a fire's scar or the turn of the season comes over the land gently. The
+drawings a plant layer is made of depend only on the view, the look, the seasons in play
+and the snow, not on the land: they are drawn once and shared by the layers that want
+the same ones, and destroyed with the last of them.
+
+Measured on the development PC with the page's processor throttled 21 times (the board's
+speed, as in the estimate below; the GPU is not throttled), a new day arriving while the
+view is shown:
+
+| | Laying out the plants | Longest gap between frames |
+|---|---|---|
+| middle view, ground painted on the page's thread | not measured | 19.5 s |
+| middle view, painted in the worker, drawings drawn again each day | 181 ms | 0.50 s |
+| middle view, worker, drawings shared | 7 ms | 0.32 s |
+| local view, worker, drawings drawn again each day | 1 030 ms | 1.38 s |
+| local view, worker, drawings shared | 24 ms | 0.22 s |
+
+What is left once a day is the middle view's shadows for the whole island and the
+upload of the new picture; still to be measured on the board.
+
+**Nothing is kept from one day to the next.** `tests/e2e/leak.spec.ts` gives the local
+view fifteen new days (pieces repainted, plant layers rebuilt, fades) and checks that as
+many textures are alive on the GPU after them as after the first: 107 every day, over
+forty days when first run. (PixiJS leaves a freed texture's slot empty in its list rather
+than taking it out; counting the slots made a first count look like a leak of 52 a day.)
+
+**The cosy look** (ADR 0014, `src/looks.ts`, `plants/cosyart.ts`): the colours are the
+palette's; shade leans toward violet and light toward gold, as on the creatures
+(`src/palette.ts`); every plant is outlined on its outside, wood in its own outline, so a
+bare branch carrying snow keeps its edge on snow. Broadleaves are clouds of a few large
+scalloped puffs lit as balls on stout trunks with roots; conifers a few bold tiers with
+large teeth; bushes domes of puffs; grass tufts of broad blades. The R0 look (bundles,
+the earlier palette) is kept as `R0` for the record.
+
+In winter a cosy broadleaf keeps the size of its crown, as Stardew's bare trees do: the
+trunk goes on up as a leader, limbs leave it one above another, the lowest nearly level
+and the higher more upright, each thinner and each with a branch from its middle, all
+outlined; fine twigs fill toward the rim a pixel across and not outlined, so the crown
+stays open (the first cosy winters, every twig outlined or every limb from one fork,
+closed into a tangle or a hand). A broadleaf with much `EVERGREEN` (from 77 of 255, below
+the conifers' 128) keeps its leaves through winter, in a colder green. A bush still
+standing in winter is one the simulation did not let die back, so it keeps its leaves,
+darker and colder; one with little `EVERGREEN` (under 100) is a fan of fine twigs instead.
+Where the land carries no genes (the R0 fixture) broadleaves go bare and bushes keep
+their leaves. Winter grass is short stubble, not a tuft laid flat.
+
+**The sea moves** (`terrain/sea.ts`), at almost no cost per frame. Where the surf moves
+the painter leaves it on three layers of its own instead of on the ground: a dashed line
+of lighter water far out, one nearer, and the foam at the shore. A crest comes in every
+3.6 s: the far line shows, then the nearer, then the foam flares and slowly fades
+(three opacities a frame). Glints, short white strokes, grow on the open water, drift a
+little and go, forty slots to a view, each on its own clock and somewhere new each time
+(a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
+it at its first moment, which the snapshots use. The land sheet films it. `seaAt(land)`
+gives the sea's colour and depth at a place, from the same bands, for creatures under
+water to take its colour (R2).
+
+**The turn of the year** (`plants/turning.ts`): around each change of season places turn
+one after another over about four weeks, in fronts across the land; the hills first into
+autumn and winter and last into spring; each plant on its own day near its place's, and
+the more `EVERGREEN` it has the later into autumn and winter. The ground takes the
+season of each place, dithered at the front; a plant layer draws each plant in the
+season of its own turn.
+
+**Snow** lies where the simulation says (`flora.snow_cover`: the temperature index by
+season and height under `snow_below_temperature`), in any season: in patches on the
+ground, thinner under trees and where it lies thin, and on the plants of cells under
+enough of it.
+
+**The plant genes** where the stream carries them: `HEIGHT` picks a tree's or bush's
+build (broad and low, as the scale has it, or slender and tall); `EVERGREEN` how late it
+turns and what it does in winter (above); the rare genes as below. The other six genes
+show nothing yet. The R0 fixture has no genes, so the
+spike and the land sheet's stills choose builds by chance.
+
+**Rare plants** (M7's signatures, `plants/rareart.ts`), from the stream's `plant_rare`
+mask and the gene names in `rare_genes`, as accents on a plant's usual drawing; each
+carrier always stands (whatever the wood's or the scrub's share of standing plants), and
+a plant with several rare genes carries each look:
+
+| Gene | Look |
+|---|---|
+| FIRE_PINE | the wood a warm red-brown (the same drawing, coloured otherwise); after a fire it stands on the burnt ground, trunk charred, crown kept |
+| NITROGEN_FIXER | small three-lobed leaves round the foot, pale flowers on some |
+| MANGROVE | arched stilt roots; the only plants standing in shallow water (the simulation classes a mangrove in the sea by its form, a bush or a tree, so it is drawn as one) |
+| POISONOUS | clusters of three violet berries on the leaves (not on grass) |
+| FRUITING | three or four bright orange fruits on a woody plant; a seed head on grass |
+| EMERGENT | a tree drawn half as tall again (1.45) |
+
+Berries, fruit, clover and stilts are overlays the size of the drawing they lie on, with
+its foot, scaled to its size (a pixel in the middle view). Nothing small (ferns, herbs,
+flowers) grows on a cell below the sea, mangrove or not. The drawings are made only for
+the looks some plant of the land has. A fire pine after a fire needs no scorch in the
+stream: the simulation marks a scorched cell burnt, and a fire leaves biomass only on a
+fire pine, so a burnt cell with biomass and the gene is one (drawn as a conifer if its
+`EVERGREEN` makes it one, from 128, else a broadleaf).
+
+**The land sheet** (`renderer/land.html`, `npm run land` →
+[`reports/R1-land-sheet/`](../../reports/R1-land-sheet/README.md)) opens with films of the
+scene itself (`sheets/films.ts`: the real `Landscape` fed from the recordings, on a clock
+of its own, saved as animated PNGs): the sea from close and from the middle view, summer
+into autumn day by day, and deep winter with the simulation's snow. Then stills from the
+R0 fixture: the ground and the plants in the three views, every kind of ground and
+plant, the turn of the year around three changes of season, and the four seasons.
+
+**Snapshots** (`tests/e2e/scene.spec.ts`): seven fixed states of the scene, five from the
+autumn recording and two on the winter recording's snow line, taken with `still`.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
-  (`lineage-spike-fixture/4`): the heights, cover and biomass of a save's world, the
-  maps' rules for colouring them, its creatures (where each is, and its genome to the
-  bit), the config keys of the phenotype, and casts for the look sheet (the
-  specimens and the gene sweeps). R1 replaces it with the protocol generated from the
-  server's schema; nothing else should depend on the fixture's shape.
+  (`lineage-spike-fixture/5`): the heights, cover and biomass of a save's world, the
+  maps' rules for colouring them, its creatures (where each is, its genome to the bit,
+  its species, its rare-gene slots and whether it lies torpid), the config keys of the
+  phenotype and of the rare genes, the rare genes' signatures, and casts for the look
+  sheets (the specimens, the gene sweeps, the rare genes). R1's scene draws from the
+  protocol instead; the spike and the look sheets still read the fixture.
 - **Creature bodies and motion.** Bodies are discs, wedges and bars; the wandering is
   cosmetic and seeded, not the simulation's. Walkers keep to land and swimmers to water
   only because the spike says so.
@@ -577,17 +745,24 @@ image draws WebGL with the GPU.
 
 ## Open
 
-- **Snow.** Drawn, as an option; the simulation has none on low ground. If kept, when
-  it lies is the renderer's to decide (the coldest weeks, a holiday's dark age).
-- **Turning from one season to the next.** A layer is drawn in one season; the turn
-  over days or weeks (trees colouring one after another, snow coming and going) is R1.
-- **Plant genes in the drawing.** The three builds, which broadleaf flowers or turns
-  gold, and the kinds of flower are the renderer's own variety. The 8-gene plant genome
-  could choose them (R1): `HEIGHT` the build, `EVERGREEN` how late a tree turns.
+- **Snow**: settled in R1 (ADR 0014): it lies where the simulation's temperature says.
+- **Turning from one season to the next**: done in R1, over about four weeks.
+- **Plant genes in the drawing**: `HEIGHT` picks the build, `EVERGREEN` how late a
+  tree turns and how it spends the winter, and the rare genes have their looks (R1, from
+  M7's signatures). Which broadleaf flowers or turns gold, and the kinds of flower, are
+  still the renderer's own variety.
 - **Moving between the views.** The painted pixels shimmer at zooms in between, so the
   camera would cut or cross-fade from one view to the next rather than glide.
-- **Painting ground off the frame**: see the cost above.
+- **Painting ground off the frame**: done in R1 (a worker); its effect on the local
+  view's pauses is to be measured on the board in R5 (the owner moved every device
+  benchmark there, once R1–R4 are in), and so is the GPU memory the middle view's surf
+  takes (three more pictures of the whole world, about 30 MB).
+- **Still on the page's thread**: the middle view's shadows for the whole island, once
+  a day (0.3 s at the board's estimated speed), and drawing the plants again when the
+  seasons in play change (entering or leaving a turn, eight times a year; about 1 s).
+  Both could go to the worker if R5 shows a stutter on the board.
+- **The server's stream** has not been tried: there is no server until S1.
 - **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
   what remains is R3's: which animal the camera follows, and when it cuts.
-- **Seasons**: the standing plants have one drawing each; bare, flowering and snowed-on
-  ones belong to R1.
+- **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the
+  turn and the snow forward.

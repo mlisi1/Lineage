@@ -184,6 +184,13 @@ temperature_lapse_per_height = 1.3
 optimum_warm = 0.92
 optimum_cold = 0.35
 temperature_tolerance = 0.22
+# Snow lies where the temperature index is below this (index units), deepening to full
+# cover this far below it. Derived each moment from the season and the height, not
+# stored; only the renderer reads it so far (R1, ADR 0014). With the lowland winter
+# at 0.35, it reaches down to about 0.12 above the sea in midwinter and in summer
+# stays on peaks above 0.58.
+snow_below_temperature = 0.2
+snow_depth_span = 0.1
 
 # --- Growth ---
 # Logistic growth rate of the fastest plant in ideal conditions, and the share of it a
