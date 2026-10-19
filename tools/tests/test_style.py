@@ -34,3 +34,12 @@ def test_categorical_folds_into_other_instead_of_cycling() -> None:
     assert style.species_colour(n + 5) == style.OTHER
     with pytest.raises(ValueError, match="non-negative"):
         style.categorical(-1)
+
+
+def test_renderer_palette_is_the_report_maps_palette() -> None:
+    """The renderer draws in the report maps' colours: its copy is generated, and current."""
+    from tools.runs import REPO_ROOT
+    from tools.viz import pixelmap
+
+    written = (REPO_ROOT / pixelmap.RENDERER_PALETTE).read_text(encoding="utf-8")
+    assert written == pixelmap.renderer_palette_json(), "run `uv run python -m tools.viz.pixelmap`"

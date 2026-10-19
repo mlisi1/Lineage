@@ -1,7 +1,7 @@
 # 0007 — Three views of the world, and the look chosen for them
 
 - **Status**: accepted; amended three times the same day, after each sight of the local
-  view (see the end). Open: whether winter has snow
+  view (see the end). Snow, left open here, was settled by ADR 0014 (the simulation's)
 - **Date**: 2026-10-11
 
 ## Context

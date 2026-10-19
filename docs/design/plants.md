@@ -54,6 +54,11 @@ renderer. A tree cell with biomass ≥ 0.55 is closed forest.
   plants. It sorts the forms into belts: forest in sheltered ground, then shrub, grass,
   and lichen at the extremes.
 - **Daylight** scales growth (constant until the presence model of M8).
+- **Snow** lies where the temperature index is under `snow_below_temperature` (0.2),
+  deepening to full cover `snow_depth_span` (0.1) below it (`flora.snow_cover`): with the
+  lowland winter at 0.35, down to about 0.12 above the sea in midwinter and in summer only
+  on peaks above 0.58. It is derived each moment from the season and the height, not
+  stored, and nothing in the simulation reads it yet: the renderer draws it (R1, ADR 0014).
 
 ## What happens each day
 
@@ -96,9 +101,20 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 
 The renderer shows a cell's plant by its form, its biomass and the season: four stages
 of growth by biomass (a sprout under 0.17, young to 0.5, grown to 0.85, old above) and
-the four seasons, with broadleaves bare in winter and low growth dried, which is how
-winter dieback looks. See `renderer.md`, Plants. The plant genome does not reach the
-renderer yet.
+the four seasons, with low growth dried in winter, which is how winter dieback looks.
+The state stream (R1) carries two genes of each cell's plant and its rare genes:
+
+- `HEIGHT` picks a tree's or bush's build: broad and low, as the scale has it, or
+  slender and tall.
+- `EVERGREEN` sets how late it turns in autumn and goes bare, and what it does in winter:
+  a broadleaf from 77/255 (below the conifers' 128) keeps its leaves, in a colder green;
+  a bush still standing in winter (one not died back) keeps its leaves unless it has
+  under 100/255, when it is bare twigs.
+- The rare genes show as accents (M7's signatures: red bark, clover at the foot, stilt
+  roots in shallow water, violet berries, fruit, a taller crown).
+- The other six genes do not show.
+
+See `renderer.md`, "The land from the state stream".
 
 ## Measured behaviour (M3 report, 20 seeds × 5 sim-years from bare rock)
 

@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 4173;
+// Each worktree can run its own: two on one machine must not share (and reuse) a server.
+const port = Number(process.env["PLAYWRIGHT_PORT"] ?? 4173);
 
 export default defineConfig({
   testDir: "tests/e2e",
