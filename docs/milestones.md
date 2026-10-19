@@ -65,7 +65,9 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   and results: ADR 0017.
 - Report run `m9-office` (office schedule) at `3097936`, 22 min at 10 jobs. Tests: fast
   suite 621 passed; slow `tools/tests/test_m9_statistical.py` passed (18 min 42 s at 8
-  workers). Golden hashes changed (schema version and the chronicle's state, explained
+  workers). Added after the merge: a scenario test for every record, and a slow test
+  that checks every seed's 3-year history for spam (daily cap, repeated sentences,
+  swings and migrations within their gaps); both slow tests passed (12 min 45 s). Golden hashes changed (schema version and the chronicle's state, explained
   in the commits); a world without the chronicle is bit-identical to one with it.
 - Schema v9 is released: `v9.lzma` is frozen. Branch `m9-chronicle` deleted; nothing
   pushed.
