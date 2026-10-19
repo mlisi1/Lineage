@@ -1,6 +1,7 @@
 """M9 report: notable entries per month, event-type shares, the sample chronicle."""
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,7 @@ from tools.runs import DEFAULT_CONFIG, TIME_KEY, Manifest, Run, config_hash, rea
 SEEDS = list(range(4))
 YEARS = 1.0
 DAYS_PER_MONTH = DAYS_PER_YEAR / 12
+FIXTURE = Path(__file__).resolve().parents[2] / "sim" / "tests" / "fixtures" / "saves" / "v9.lzma"
 
 
 def _chronicle(seed: int) -> tuple[np.ndarray, np.ndarray]:
@@ -76,10 +78,17 @@ def test_representative_seed(tmp_path: Path) -> None:
 
 
 def test_report_builds(tmp_path: Path) -> None:
-    out = build_report("M9", _run(tmp_path), out_root=tmp_path / "reports")
+    run_dir = _run(tmp_path)
+    (run_dir / "saves").mkdir()
+    for seed in SEEDS:  # an inhabited world with a chronicle stands in for each seed's
+        shutil.copy(FIXTURE, run_dir / "saves" / f"{seed}.lzma")
+    out = build_report("M9", run_dir, out_root=tmp_path / "reports")
     metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     status = {row["id"]: row["status"] for row in metrics["acceptance"]}
     assert status == {"M9.1": "PASS", "M9.2": "FAIL"}  # speciation holds 31.9 %
     page = (out / "report.html").read_text(encoding="utf-8")
     assert "A sample chronicle" in page
     assert "entry 0" in page
+    assert "Bestiary" in page
+    assert "draws its portrait from" in page
+    assert "the longest-lived" in page

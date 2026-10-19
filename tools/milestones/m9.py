@@ -24,12 +24,16 @@ import html
 from pathlib import Path
 
 import numpy as np
-from lineage_sim.chronicle import KINDS, Kind
+from lineage_sim.chronicle import KINDS, BestiaryRecord, Kind, span
 from lineage_sim.config import ConfigError, parse_config
+from lineage_sim.fauna.genome import Gene
+from lineage_sim.rare import CREATURE_GENES
+from lineage_sim.state import io
+from lineage_sim.world import World
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
-from tools.fastforward import CHRONICLE_COLUMNS, DAYS_PER_YEAR, EXTRA_PREFIX
+from tools.fastforward import CHRONICLE_COLUMNS, DAY_MS, DAYS_PER_YEAR, EXTRA_PREFIX
 from tools.milestones import m8
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import TIME_KEY, Run
@@ -319,8 +323,84 @@ def _firsts_section(run: Run) -> Section:
     )
 
 
+def bestiary(run: Run, run_dir: Path, seed: int) -> tuple[list[BestiaryRecord], int]:
+    """The bestiary of ``seed``'s world at the end of the run (its last save), and the
+    sim time of that save."""
+    config = parse_config(run.config_text)
+    state = io.loads((run_dir / "saves" / f"{seed}.lzma").read_bytes())
+    world = World.restore(config, state)
+    return world.chronicle.bestiary(), world.t_ms
+
+
+def _rare_names(record: BestiaryRecord) -> str:
+    names = [(g.name or "").lower().replace("_", " ") for g in CREATURE_GENES if record.rare & g]
+    return ", ".join(names) or "—"
+
+
+def _bestiary_section(run: Run, run_dir: Path) -> Section:
+    seed = representative_seed(run)
+    path = run_dir / "saves" / f"{seed}.lzma"
+    if not path.exists():
+        return Section("Bestiary", f"<p>No save of seed {seed} in the run: no bestiary.</p>")
+    records, now_ms = bestiary(run, run_dir, seed)
+    if not records:
+        return Section("Bestiary", f"<p>No species lived in seed {seed}.</p>")
+    start = m8.start_of(run)
+
+    def date(t_ms: int) -> str:
+        return (start + dt.timedelta(days=int(t_ms // DAY_MS))).isoformat()
+
+    alive = sum(r.species.alive for r in records)
+    with_facts = sum(bool(r.facts) for r in records)
+    rows = [
+        f"<p>Seed {seed} (the sample chronicle's), at the end of the run: {len(records)} "
+        f"species ever lived, {alive} alive. Each record is built from the species' census "
+        f"record and what the chronicle kept about it; {with_facts} of {len(records)} have "
+        "chronicle entries of their own (the others were born and died on days the rate "
+        "limit had filled). Diet and habitat are read from the founding genome, the "
+        "portrait's.</p>",
+        '<table class="bestiary"><thead><tr><th>#</th><th>Name</th><th>Descends from</th>'
+        "<th>Appeared</th><th>Lived</th><th>Peak</th><th>Diet</th><th>Habitat</th>"
+        "<th>Rare genes carried</th><th>Daughters</th><th>Entries</th></tr></thead><tbody>",
+    ]
+    for r in records:
+        sp = r.species
+        end = "alive" if sp.alive else f"to {date(sp.extinct_t_ms)}"
+        lineage = " ← ".join(r.ancestry) if r.ancestry else "arrived"
+        rows.append(
+            f"<tr><td>{sp.id}</td><td>{html.escape(sp.name)}</td><td>{html.escape(lineage)}"
+            f"</td><td>{date(sp.born_t_ms)}</td><td>{span(sp.lived_days(now_ms))} ({end})</td>"
+            f"<td>{sp.peak} ({date(r.peak_t_ms)})</td><td>{r.diet}</td><td>{r.habitat}</td>"
+            f"<td>{_rare_names(r)}</td><td>{len(r.daughters)}</td><td>{len(r.facts)}</td></tr>"
+        )
+    rows.append("</tbody></table>")
+    oldest = max(records, key=lambda r: (r.species.lived_days(now_ms), -r.species.id))
+    rows.append(
+        f"<h3>{html.escape(oldest.species.name)}, the longest-lived</h3><ul>"
+        + "".join(f"<li>{html.escape(f)}</li>" for f in oldest.facts)
+        + "</ul>"
+    )
+    genomes = np.stack([r.species.founding for r in records])
+    fig, ax = plt.subplots(figsize=(7.0, max(2.4, 0.12 * len(records) + 1.2)))
+    image = ax.imshow(genomes, aspect="auto", cmap="viridis", vmin=0, vmax=1,
+                      interpolation="nearest")  # fmt: skip
+    ax.set_xticks(range(len(Gene)), [g.name.lower() for g in Gene], rotation=60, ha="right")
+    ax.set_ylabel("species (order of appearance)")
+    ax.set_title("Founding genomes: the bestiary's portraits")
+    ax.grid(visible=False)
+    fig.colorbar(image, ax=ax, label="gene value")
+    fig.tight_layout()
+    rows.append(
+        _svg(
+            "Each species' mean genome when it appeared, row by row in order of appearance: "
+            "what the renderer draws its portrait from.",
+            fig,
+        )
+    )
+    return Section("Bestiary", "\n".join(rows))
+
+
 def sections(run: Run, run_dir: Path) -> list[Section]:
-    del run_dir  # M9 draws no maps
     style.apply_style()
     values = metrics(run)
     return [
@@ -329,4 +409,5 @@ def sections(run: Run, run_dir: Path) -> list[Section]:
         _importance_section(run),
         _firsts_section(run),
         _sample_section(run),
+        _bestiary_section(run, run_dir),
     ]
