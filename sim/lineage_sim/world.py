@@ -8,6 +8,9 @@ times ``p, 2p, 3p, …``; UTC midnights emit ``DayStarted`` (and ``SeasonStarted
 season changes). Within one ``step`` everything due is processed in time order, ties
 broken by calendar first, then subsystem registration order. Because tick times are
 absolute, any way of chunking the same total time gives a bit-identical world.
+
+Observers (the chronicle) see each batch of outputs right after it is produced, at the
+same sim time, and add their own.
 """
 
 from __future__ import annotations
@@ -16,19 +19,20 @@ import math
 from collections.abc import Sequence
 
 from lineage_sim import clock
+from lineage_sim.chronicle import Chronicle
 from lineage_sim.config import Config
 from lineage_sim.events import DayStarted, InputEvent, OutputEvent, SeasonStarted
 from lineage_sim.fauna.population import Fauna
 from lineage_sim.flora import Flora, Wildfire
 from lineage_sim.presence import Presence
-from lineage_sim.rng import FAUNA, FIRE, FLORA, PRESENCE, SPECIES, TERRAIN, Streams
+from lineage_sim.rng import CHRONICLE, FAUNA, FIRE, FLORA, PRESENCE, SPECIES, TERRAIN, Streams
 from lineage_sim.species import Species
 from lineage_sim.state import io
 from lineage_sim.state.schema import StateError, WorldState
-from lineage_sim.subsystem import Context, Subsystem
+from lineage_sim.subsystem import Context, Observer, Subsystem
 from lineage_sim.terrain import Terrain
 
-__all__ = ["Context", "Subsystem", "World", "default_subsystems"]
+__all__ = ["Context", "Observer", "Subsystem", "World", "default_subsystems"]
 
 
 def default_subsystems(config: Config) -> list[Subsystem]:
@@ -40,7 +44,19 @@ def default_subsystems(config: Config) -> list[Subsystem]:
     species = Species(config.species, fauna, config.fauna.predator_min_diet)
     # Presence first: it hands the others the light before they tick.
     presence = Presence(config.presence, terrain, flora, fire, fauna)
-    return [presence, terrain, flora, fire, fauna, species]
+    # The chronicle last: it reads the others after they ticked.
+    chronicle = Chronicle(
+        config.chronicle,
+        terrain,
+        flora,
+        fauna,
+        species,
+        presence,
+        landmass_min_cells=config.terrain.landmass_min_cells,
+        herbivore_max_diet=config.fauna.herbivore_max_diet,
+        predator_min_diet=config.fauna.predator_min_diet,
+    )
+    return [presence, terrain, flora, fire, fauna, species, chronicle]
 
 
 class World:
@@ -56,6 +72,7 @@ class World:
         self._streams = Streams(state.seed)
         self._streams.set_state(state.rng)
         self._subsystems = list(subsystems)
+        self._observers = [s for s in self._subsystems if isinstance(s, Observer)]
         self._periods_ms = [config.period_ms(name) for name in names]
         self._next_tick_ms = [(self._t_ms // p + 1) * p for p in self._periods_ms]
         self._next_midnight_ms = clock.next_midnight_t_ms(self._epoch_unix_ms, self._t_ms)
@@ -74,7 +91,7 @@ class World:
         outputs: list[OutputEvent] = []
         for subsystem in world._subsystems:
             outputs += subsystem.initialize(world._context(subsystem, 0.0))
-        return world, outputs
+        return world, outputs + world._observe(outputs)
 
     @classmethod
     def restore(
@@ -191,13 +208,14 @@ class World:
                 break
             self._t_ms = due_ms
             if index < 0:
-                outputs += self._start_day()
+                due = self._start_day()
             else:
                 subsystem = self._subsystems[index]
                 period_ms = self._periods_ms[index]
                 self._next_tick_ms[index] += period_ms
                 ctx = self._context(subsystem, period_ms / clock.MS_PER_SECOND)
-                outputs += subsystem.tick(ctx)
+                due = subsystem.tick(ctx)
+            outputs += due + self._observe(due)
         self._t_ms = t_ms
         return outputs
 
@@ -206,7 +224,7 @@ class World:
         outputs: list[OutputEvent] = []
         for subsystem in self._subsystems:
             outputs += subsystem.handle(event, self._context(subsystem, 0.0))
-        return outputs
+        return outputs + self._observe(outputs)
 
     def snapshot(self) -> WorldState:
         return WorldState(
@@ -219,6 +237,22 @@ class World:
 
     def state_hash(self) -> str:
         return io.state_hash(self.snapshot())
+
+    @property
+    def chronicle(self) -> Chronicle:
+        chronicle = self.subsystem(CHRONICLE)
+        if not isinstance(chronicle, Chronicle):
+            raise TypeError("the chronicle subsystem was replaced")
+        return chronicle
+
+    def _observe(self, outputs: list[OutputEvent]) -> list[OutputEvent]:
+        """What the observers make of ``outputs`` (nothing to see: no call)."""
+        if not outputs:
+            return []
+        seen: list[OutputEvent] = []
+        for observer in self._observers:
+            seen += observer.observe(outputs, self._context(observer, 0.0))
+        return seen
 
     def _context(self, subsystem: Subsystem, dt_s: float) -> Context:
         return Context(self._t_ms, dt_s, self.instant, self._streams.get(subsystem.name))

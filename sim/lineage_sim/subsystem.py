@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from numpy.random import Generator
 
@@ -40,3 +41,15 @@ class Subsystem(Protocol):
     def get_state(self) -> Tree: ...
 
     def set_state(self, tree: Tree) -> None: ...
+
+
+@runtime_checkable
+class Observer(Protocol):
+    """A subsystem that also sees what the others report (the chronicle, M9).
+
+    The World hands it every batch of outputs as they are produced (a tick, a midnight,
+    an input event, the initialisation), at the same sim time; what it returns is added
+    to the outputs but not shown to observers again.
+    """
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]: ...

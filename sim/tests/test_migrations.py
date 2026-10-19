@@ -94,8 +94,9 @@ def test_v3_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(3))
     assert state.seed == 42
     assert state.t_ms == 200 * 86_400_000
-    # No fauna in v3; loading migrates to the current version, which adds presence (v8).
-    assert sorted(state.subsystems) == ["fire", "flora", "presence", "terrain"]
+    # No fauna in v3; loading migrates to the current version, which adds presence (v8)
+    # and the chronicle (v9).
+    assert sorted(state.subsystems) == ["chronicle", "fire", "flora", "presence", "terrain"]
     world = World.restore(config, state)
     shares = world.flora.cover_shares()
     assert sum(shares.values()) == pytest.approx(1.0)
@@ -113,9 +114,9 @@ def test_v4_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(4))
     assert state.seed == 42
     assert state.t_ms == 520 * 86_400_000
-    # Loading migrates to the current version, which adds the species and presence.
+    # Loading migrates to the current version, which adds species, presence, chronicle.
     assert sorted(state.subsystems) == [
-        "fauna", "fire", "flora", "presence", "species", "terrain",
+        "chronicle", "fauna", "fire", "flora", "presence", "species", "terrain",
     ]  # fmt: skip
     world = World.restore(config, state)
     fauna = world.fauna
@@ -228,3 +229,31 @@ def test_v8_fixture_values(config: Config) -> None:
     assert world.presence.ready_t_ms > world.t_ms
     assert world.fauna.daylight == config.presence.night_light
     assert world.wildfire.dryness(world.instant) == 0.0
+
+
+def test_v8_world_gains_an_unprimed_chronicle(config: Config) -> None:
+    state = io.loads(_fixture(8))  # v8 → v9 adds the chronicle
+    chronicle = state.subsystems["chronicle"]
+    assert chronicle["primed"] is False
+    assert chronicle["birth"] == "2026-03-01"
+    assert chronicle["entry_text"] == []
+    world = World.restore(config, state)
+    assert len(world.chronicle) == 0
+    world.step(86_400.0)  # it takes stock in silence, then writes as things happen
+    assert all(e.kind not in ("first_life", "first") for e in world.chronicle.entries())
+
+
+def test_v9_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(9))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    world = World.restore(config, state)
+    entries = world.chronicle.entries()
+    kinds = [e.kind for e in entries]
+    assert kinds[0] != "first_life" or entries[0].importance == 5
+    assert "first_life" in kinds
+    assert "dark_age" in kinds
+    assert "dawn" in kinds
+    assert "god_power" in kinds  # the ark on day 515
+    assert [e.number for e in entries] == list(range(1, len(entries) + 1))
+    assert len(world.chronicle.bestiary()) == world.species.count
