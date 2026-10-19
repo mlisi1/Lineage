@@ -1,0 +1,282 @@
+"""Presence (M8): the owner's presence is the sun, and the god-power button."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+from typing import TypeVar
+
+import numpy as np
+import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from lineage_sim.clock import MS_PER_DAY
+from lineage_sim.config import Config, ConfigError, parse_config
+from lineage_sim.events import (
+    CraterFormed,
+    CreaturesArrived,
+    FireEnded,
+    GodPower,
+    GodPowerReady,
+    GodPowerRefused,
+    GodPowerUsed,
+    OutputEvent,
+    PresenceChanged,
+)
+from lineage_sim.presence import POWERS, Power, choose, next_light, plant_light, target_light
+from lineage_sim.presence import weights as power_weights
+from lineage_sim.state import io
+from lineage_sim.world import World, default_subsystems
+from numpy.random import PCG64, Generator
+
+DAY_S = 86_400
+HOUR_S = 3600
+EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
+_DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "default.toml"
+_PRESENCE = parse_config(_DEFAULT_CONFIG.read_text(encoding="utf-8")).presence
+# A 520-day world with plants and about 200 creatures, its owner just gone home (v8).
+FIXTURE = Path(__file__).parent / "fixtures" / "saves" / "v8.lzma"
+
+
+def _world(config: Config) -> World:
+    return World.restore(config, io.loads(FIXTURE.read_bytes()))
+
+
+_T = TypeVar("_T", bound=OutputEvent)
+
+
+def _of(outputs: list[OutputEvent], kind: type[_T]) -> list[_T]:
+    return [o for o in outputs if isinstance(o, kind)]
+
+
+# --- light ----------------------------------------------------------------------------
+
+
+def test_light_targets(config: Config) -> None:
+    cfg = config.presence
+    assert target_light(cfg, True, 0.0) == 1.0
+    assert target_light(cfg, False, 1.0) == cfg.night_light
+    assert target_light(cfg, False, cfg.moonlight_after_hours) == cfg.moonlight
+    assert cfg.night_light < cfg.moonlight < 1.0
+
+
+def test_dawn_and_dusk_ramps(config: Config) -> None:
+    cfg = config.presence
+    half_dusk = next_light(cfg, 1.0, 0.0, cfg.dusk_hours / 2)
+    assert half_dusk == pytest.approx(0.5)
+    assert next_light(cfg, 1.0, cfg.night_light, 10 * cfg.dusk_hours) == cfg.night_light
+    assert next_light(cfg, 0.0, 1.0, cfg.dawn_hours) == 1.0
+    assert next_light(cfg, 0.4, 0.4, 5.0) == 0.4
+
+
+def test_plants_grow_fully_from_an_office_day(config: Config) -> None:
+    cfg = config.presence
+    assert plant_light(cfg, cfg.plant_full_light) == 1.0
+    assert plant_light(cfg, 1.0) == 1.0
+    assert plant_light(cfg, cfg.plant_full_light / 2) == pytest.approx(0.5)
+
+
+def test_a_world_without_events_stays_lit(config: Config) -> None:
+    world, _ = World.create(config, 3, EPOCH_UNIX_MS)
+    world.step(3 * DAY_S)
+    assert world.presence.light == 1.0
+    assert world.fauna.daylight == 1.0
+
+
+def test_leaving_brings_dusk_then_night_then_moonlight(config: Config) -> None:
+    cfg = config.presence
+    world = _world(config)
+    assert not world.presence.present
+    world.apply(PresenceChanged(True))
+    world.step(cfg.dawn_hours * HOUR_S + 600)
+    assert world.presence.light == 1.0
+    assert world.fauna.daylight == 1.0
+    world.apply(PresenceChanged(False))
+    world.step(HOUR_S)
+    assert cfg.night_light < world.fauna.daylight < 1.0  # dusk
+    world.step(cfg.dusk_hours * HOUR_S)
+    assert world.fauna.daylight == cfg.night_light  # night
+    world.step(cfg.moonlight_after_hours * HOUR_S)
+    assert world.fauna.daylight == cfg.moonlight  # a holiday: moonlight
+
+
+def test_plants_get_the_days_mean_light(config: Config) -> None:
+    world = _world(config)  # absent since 18:00 of the last day, now midnight
+    world.step(2 * DAY_S)  # two whole days in the dark
+    assert world.flora.daylight == pytest.approx(
+        plant_light(config.presence, config.presence.night_light)
+    )
+
+
+@settings(max_examples=40, deadline=None)
+@given(st.lists(st.tuples(st.booleans(), st.floats(0.0, 200.0)), max_size=12))
+def test_light_stays_in_range(changes: list[tuple[bool, float]]) -> None:
+    cfg = _PRESENCE
+    light, present, absent = 1.0, True, 0.0
+    for now_present, hours in changes:
+        if now_present != present:
+            present, absent = now_present, 0.0
+        for _ in range(int(hours * 6)):
+            light = next_light(cfg, light, target_light(cfg, present, absent), 1 / 6)
+            absent = 0.0 if present else absent + 1 / 6
+            assert 0.0 <= light <= 1.0
+
+
+# --- god powers -----------------------------------------------------------------------
+
+
+def test_needs_raise_a_powers_weight(config: Config) -> None:
+    cfg = config.presence
+    calm = power_weights(cfg, {})
+    assert calm == [cfg.god_weight_meteor, cfg.god_weight_rain, cfg.god_weight_seed,
+                    cfg.god_weight_ark]  # fmt: skip
+    empty = power_weights(cfg, {Power.ARK: 1.0})
+    assert empty[POWERS.index(Power.ARK)] == cfg.god_weight_ark * (1 + cfg.god_need_gain)
+    rng = Generator(PCG64(5))
+    drawn = [choose(rng, cfg, {Power.ARK: 1.0}) for _ in range(2000)]
+    share = drawn.count(Power.ARK) / len(drawn)
+    expected = empty[POWERS.index(Power.ARK)] / sum(empty)
+    assert share == pytest.approx(expected, abs=0.04)
+    assert set(drawn) == set(POWERS)  # random, never certain
+
+
+def test_a_power_without_weight_never_fires(config: Config) -> None:
+    cfg = replace(config.presence, god_weight_meteor=0.0)
+    rng = Generator(PCG64(6))
+    assert Power.METEOR not in {choose(rng, cfg, {}) for _ in range(500)}
+
+
+def test_the_button_cools_down_for_a_week(config: Config) -> None:
+    world = _world(config)  # rain was used the day before the save
+    cooldown_ms = round(config.presence.god_cooldown_days * MS_PER_DAY)
+    refused = _of(world.apply(GodPower()), GodPowerRefused)
+    assert len(refused) == 1
+    assert refused[0].ready_t_ms == world.presence.ready_t_ms > world.t_ms
+    outputs = world.advance_to(world.presence.ready_t_ms + DAY_S * 1000)
+    assert len(_of(outputs, GodPowerReady)) == 1
+    used = _of(world.apply(GodPower()), GodPowerUsed)
+    assert len(used) == 1
+    assert world.presence.ready_t_ms == world.t_ms + cooldown_ms
+    assert _of(world.apply(GodPower()), GodPowerRefused)
+
+
+def _ready_world(config: Config) -> World:
+    world = _world(config)
+    world.advance_to(world.presence.ready_t_ms)
+    return world
+
+
+def test_meteor_digs_a_crater_and_kills_in_the_blast(config: Config) -> None:
+    world = _ready_world(config)
+    cfg = config.presence
+    before = world.fauna.count
+    outputs = world.apply(GodPower(Power.METEOR.value))
+    (used,) = _of(outputs, GodPowerUsed)
+    (crater,) = _of(outputs, CraterFormed)
+    assert (crater.x, crater.y) == (used.x, used.y)
+    assert crater.radius_cells == cfg.meteor_radius_cells
+    yy, xx = np.indices(world.flora.biomass.shape)
+    bowl = np.hypot(xx - used.x, yy - used.y) < cfg.meteor_radius_cells
+    assert not world.flora.biomass[bowl].any()
+    reach = cfg.meteor_radius_cells * cfg.meteor_blast_factor
+    offset = world.fauna.positions - np.array([used.x, used.y], dtype=np.float32)
+    assert (np.hypot(offset[:, 0], offset[:, 1]) > reach).all()
+    assert world.fauna.count <= before
+
+
+def test_meteor_kills_the_creatures_it_hits(config: Config) -> None:
+    world = _ready_world(config)
+    fauna = world.fauna
+    x, y = (float(v) for v in fauna.positions[0])
+    before = fauna.count
+    fauna.strike(x, y, 3.0, world.t_ms)
+    assert fauna.count < before
+    assert fauna.tally.killed > 0
+
+
+def test_rain_puts_out_fires_and_wets_the_land(config: Config) -> None:
+    world = _ready_world(config)
+    fire = world.wildfire
+    ys, xs = np.nonzero(world.flora.biomass >= config.flora.fire_min_fuel)
+    fire.ignite(int(ys[0]), int(xs[0]), world.t_ms)
+    assert fire.burning.any()
+    fertility = world.terrain.fertility.copy()
+    outputs = world.apply(GodPower(Power.RAIN.value))
+    assert _of(outputs, FireEnded)
+    assert not fire.burning.any()
+    land = world.terrain.land
+    assert (world.terrain.fertility[land] >= fertility[land]).all()
+    assert world.terrain.fertility[land].mean() > fertility[land].mean()
+    assert fire.dryness(world.instant) == 0.0
+    world.step(config.presence.rain_days * DAY_S + HOUR_S)
+    assert not world.snapshot().subsystems["presence"]["wet"]
+
+
+def test_rain_makes_plants_grow_faster(config: Config) -> None:
+    dry = _ready_world(config)
+    wet = _ready_world(config)
+    wet.apply(GodPower(Power.RAIN.value))
+    dry.step(DAY_S)
+    wet.step(DAY_S)
+    assert wet.flora.biomass.sum() > dry.flora.biomass.sum()
+
+
+def test_seed_sows_bare_land(config: Config) -> None:
+    world = _ready_world(config)
+    land = world.terrain.land
+    bare = land & (world.flora.biomass <= 0)
+    assert bare.any()
+    world.apply(GodPower(Power.SEED.value))
+    assert np.count_nonzero(land & (world.flora.biomass <= 0)) < np.count_nonzero(bare)
+
+
+def test_the_ark_brings_plant_eaters(config: Config) -> None:
+    world = _ready_world(config)
+    before = world.fauna.count
+    outputs = world.apply(GodPower(Power.ARK.value))
+    (arrived,) = _of(outputs, CreaturesArrived)
+    assert arrived.founders
+    assert world.fauna.count == before + arrived.count > before
+
+
+def test_the_island_asks_for_the_ark_when_empty(config: Config) -> None:
+    world = _ready_world(config)
+    cfg = config.presence
+    full = world.presence.needs(world.instant)
+    assert full[Power.ARK] == max(0.0, 1 - world.fauna.count / cfg.ark_need_creatures)
+    x, y = (float(v) for v in world.fauna.positions.mean(axis=0))
+    world.fauna.strike(x, y, 1e6, world.t_ms)
+    assert world.fauna.count == 0
+    assert world.presence.needs(world.instant)[Power.ARK] == 1.0
+
+
+def test_a_power_is_drawn_from_the_presence_stream(config: Config) -> None:
+    a, b = _ready_world(config), _ready_world(config)
+    assert a.apply(GodPower()) == b.apply(GodPower())
+    assert a.snapshot().rng["terrain"] == b.snapshot().rng["terrain"]
+
+
+def test_restore_mid_rain_continues_identically(config: Config) -> None:
+    world = _ready_world(config)
+    world.apply(GodPower(Power.RAIN.value))
+    world.step(HOUR_S * 30 + 123)
+    copy = World.restore(config, io.loads(io.dumps(world.snapshot())))
+    for w in (world, copy):
+        w.apply(PresenceChanged(True))
+        w.step(HOUR_S * 5)
+        w.advance_to(w.presence.ready_t_ms)
+        w.apply(GodPower())
+        w.step(DAY_S)
+    assert world.state_hash() == copy.state_hash()
+
+
+def test_presence_is_registered_first(config: Config) -> None:
+    assert default_subsystems(config)[0].name == "presence"
+
+
+def test_presence_config_is_checked(config: Config) -> None:
+    with pytest.raises(ConfigError, match="moonlight"):
+        replace(config.presence, moonlight=1.5)
+    with pytest.raises(ConfigError, match="weight"):
+        replace(config.presence, god_weight_meteor=0.0, god_weight_rain=0.0,
+                god_weight_seed=0.0, god_weight_ark=0.0)  # fmt: skip

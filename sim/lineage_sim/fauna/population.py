@@ -839,6 +839,31 @@ class Fauna:
         self._leftover = np.zeros(self.count, dtype=np.float32)
         self._apart = None
 
+    # -- god powers (M8) --
+
+    def strike(self, x: float, y: float, radius: float, t_ms: int) -> list[OutputEvent]:
+        """A meteor's blast kills every creature within ``radius`` cells of (x, y); it
+        leaves nothing to scavenge."""
+        if self.count == 0:
+            return []
+        offset = self._positions - np.array([x, y], dtype=np.float32)
+        hit = np.hypot(offset[:, 0], offset[:, 1]) <= np.float32(radius)
+        if not hit.any():
+            return []
+        dead = np.where(hit, np.int8(Death.KILLED), np.int8(-1)).astype(np.int8)
+        self._leftover = np.zeros(self.count, dtype=np.float32)
+        self._bury(dead, t_ms)
+        outputs, self._grown = self._grown, []
+        if self.count == 0:
+            self.tally.extinctions += 1
+            self._arrival_at_h = -1.0
+            outputs.append(PopulationExtinct(t_ms))
+        return outputs
+
+    def arrive(self, rng: Generator, t_ms: int, count: int) -> list[OutputEvent]:
+        """The ark: ``count`` plant eaters land on a vegetated spot, as founders do."""
+        return self._arrive(rng, t_ms, count, founders=True)
+
     # -- arrivals --
 
     def _await_founders(self, rng: Generator, now_h: float, t_ms: int) -> list[OutputEvent]:

@@ -310,8 +310,10 @@ class Flora:
         self._form_masks: tuple[Mask, Mask] | None = None
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
-        # Daylight in [0, 1], set by the presence model (M8); scales growth.
+        # Daylight in [0, 1] and rain's growth factor (>= 1), set by the presence model
+        # (M8); both scale growth.
         self._daylight = 1.0
+        self._rain = 1.0
 
     @property
     def name(self) -> str:
@@ -384,9 +386,17 @@ class Flora:
         elevation = (self._terrain.height - _F(self._terrain.sea_level)).astype(_F)
         return snow_cover(self._cfg, warmth(instant), elevation)
 
+    @property
+    def daylight(self) -> float:
+        return self._daylight
+
     def set_daylight(self, level: float) -> None:
         """Hook for the presence model: daylight in [0, 1] scales growth."""
         self._daylight = min(max(level, 0.0), 1.0)
+
+    def set_rain(self, factor: float) -> None:
+        """Hook for the rain god power: growth × ``factor`` (1 when dry)."""
+        self._rain = max(factor, 0.0)
 
     # -- hooks for other subsystems --
 
@@ -465,6 +475,30 @@ class Flora:
         self._terrain.adjust_fertility(relative * self._terrain.fertility)
         self._clear_dead()
 
+    def clear(self, ys: Index, xs: Index) -> None:
+        """Plants on cells (ys, xs) are destroyed outright (a meteor's bowl)."""
+        self._biomass[ys, xs] = 0.0
+        self._clear_dead()
+
+    def sow(self, rng: Generator, count: int, rare_chance: float, instant: Instant) -> int:
+        """The seed god power: ``count`` seeds of random genomes fall on random bare land
+        cells, each carrying one random rare gene with probability ``rare_chance``. They
+        take as seed rain does. Returns how many took."""
+        terrain = self._terrain
+        ys, xs = np.nonzero(terrain.land & (self._biomass <= 0))
+        if count <= 0 or ys.size == 0:
+            return 0
+        pick = rng.integers(0, ys.size, size=count)
+        genome = rng.integers(0, 256, size=(GENE_COUNT, count), dtype=np.uint8)
+        genes = np.array([int(gene) for gene in RARE_GENES], dtype=np.uint8)
+        carries = rng.random(count) < rare_chance
+        rare = np.where(carries, genes[rng.integers(0, genes.size, size=count)], 0)
+        elevation = terrain.height - _F(terrain.sea_level)
+        temp = temperature(self._cfg, warmth(instant), elevation)
+        return self._establish(
+            rng, ys[pick], xs[pick], genome, rare.astype(np.uint8), temp, elevation, mutate=False
+        )
+
     # -- subsystem interface --
 
     def initialize(self, ctx: Context) -> list[OutputEvent]:
@@ -486,7 +520,7 @@ class Flora:
         # 2. Growth, mortality, winter dieback.
         biomass = self._biomass
         fit = suitability(cfg, genes, self._rare, temp, terrain.fertility)
-        gain = growth_rate(cfg, genes, self._rare) * fit * _F(self._daylight)
+        gain = growth_rate(cfg, genes, self._rare) * fit * _F(self._daylight * self._rain)
         above_reserve = np.maximum(biomass - _F(cfg.winter_reserve_biomass), _F(0.0))
         change = (
             gain * biomass * (_F(1.0) - biomass)
@@ -616,8 +650,9 @@ class Flora:
         elevation: Grid,
         *,
         mutate: bool = True,
-    ) -> None:
-        """Seeds with ``genome``/``rare`` (one column per seed) land on cells (ys, xs)."""
+    ) -> int:
+        """Seeds with ``genome``/``rare`` (one column per seed) land on cells (ys, xs).
+        Returns how many took."""
         cfg, terrain = self._cfg, self._terrain
         genes = genome.astype(_F) / _F(_GENE_MAX)
         site_temp, site_fertility = temp[ys, xs], terrain.fertility[ys, xs]
@@ -655,7 +690,7 @@ class Flora:
         success = habitable & (rng.random(ys.size, dtype=_F) < chance)
         count = int(np.count_nonzero(success))
         if count == 0:
-            return
+            return 0
         ys, xs, genome, rare = ys[success], xs[success], genome[:, success], rare[success]
         if mutate:
             step = rng.normal(0.0, cfg.mutation_sigma * _GENE_MAX, size=genome.shape)
@@ -672,6 +707,7 @@ class Flora:
         self._form_masks = None
         self._rare[ys, xs] = rare
         self._biomass[ys, xs] = np.maximum(kept, _F(cfg.seedling_biomass))
+        return count
 
 
 # --- Wildfire subsystem -----------------------------------------------------------------
@@ -690,6 +726,8 @@ class Wildfire:
         self._active = False
         self._burnt_cells = 0
         self._started_ms = 0
+        # Wet after rain (M8, set by the presence model): no lightning, slow spread.
+        self._wet = False
         self._flammability = np.zeros(len(Cover), dtype=_F)
         for cover, value in (
             (Cover.LICHEN, cfg.flammability_lichen),
@@ -709,10 +747,24 @@ class Wildfire:
         return self._burning > 0
 
     def dryness(self, instant: Instant) -> float:
-        """0 in the cool season, 1 at the height of a warm summer."""
+        """0 in the cool season or while wet, 1 at the height of a warm summer."""
         cfg = self._cfg
+        if self._wet:
+            return 0.0
         lowland = lowland_temperature(cfg, warmth(instant))
         return min(max((lowland - cfg.fire_dry_temperature) / cfg.fire_dry_span, 0.0), 1.0)
+
+    def set_wet(self, wet: bool) -> None:
+        """Hook for the rain god power: wet land does not dry out until it is unset."""
+        self._wet = wet
+
+    def extinguish(self, t_ms: int) -> list[OutputEvent]:
+        """Rain puts out every fire; the cells already burnt stay burnt."""
+        if not self._active:
+            return []
+        self._burning[:] = 0.0
+        self._active = False
+        return [FireEnded(t_ms, self._burnt_cells, (t_ms - self._started_ms) / 3_600_000.0)]
 
     def ignite(self, y: int, x: int, t_ms: int) -> list[OutputEvent]:
         """Try to set cell (y, x) alight; nothing happens without fuel."""

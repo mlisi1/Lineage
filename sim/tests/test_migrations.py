@@ -94,7 +94,8 @@ def test_v3_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(3))
     assert state.seed == 42
     assert state.t_ms == 200 * 86_400_000
-    assert sorted(state.subsystems) == ["fire", "flora", "terrain"]  # no fauna in v3
+    # No fauna in v3; loading migrates to the current version, which adds presence (v8).
+    assert sorted(state.subsystems) == ["fire", "flora", "presence", "terrain"]
     world = World.restore(config, state)
     shares = world.flora.cover_shares()
     assert sum(shares.values()) == pytest.approx(1.0)
@@ -112,8 +113,10 @@ def test_v4_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(4))
     assert state.seed == 42
     assert state.t_ms == 520 * 86_400_000
-    # Loading migrates to the current version, which adds the species.
-    assert sorted(state.subsystems) == ["fauna", "fire", "flora", "species", "terrain"]
+    # Loading migrates to the current version, which adds the species and presence.
+    assert sorted(state.subsystems) == [
+        "fauna", "fire", "flora", "presence", "species", "terrain",
+    ]  # fmt: skip
     world = World.restore(config, state)
     fauna = world.fauna
     assert fauna.count > 50
@@ -201,3 +204,27 @@ def test_v7_fixture_values(config: Config) -> None:
     labels = species.species_of(world.fauna.ids)
     assert (labels > 0).all()  # saved at midnight, right after the census
     assert species.record(1).parent == 0
+
+
+def test_v7_world_wakes_up_lit_with_the_button_ready(config: Config) -> None:
+    state = io.loads(_fixture(7))  # v7 → v8 adds presence
+    presence = state.subsystems["presence"]
+    assert presence["present"] is True
+    assert presence["light"] == 1.0
+    assert presence["wet"] is False
+    world = World.restore(config, state)
+    assert world.presence.ready_t_ms <= world.t_ms
+    assert world.fauna.daylight == 1.0
+
+
+def test_v8_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(8))
+    assert state.seed == 42
+    assert state.t_ms == 520 * 86_400_000
+    presence = state.subsystems["presence"]
+    assert presence["present"] is False  # gone home at 18:00
+    assert presence["wet"] is True  # rain used at noon
+    world = World.restore(config, state)
+    assert world.presence.ready_t_ms > world.t_ms
+    assert world.fauna.daylight == config.presence.night_light
+    assert world.wildfire.dryness(world.instant) == 0.0

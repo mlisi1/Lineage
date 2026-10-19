@@ -29,9 +29,9 @@ from numpy.random import PCG64, Generator
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "141a619fed99190cad661506db6352b31eb30b5e36061a401b0853a142720e54"
+GOLDEN_FAUNA_SEED_42 = "0c60ce41b2846a3b7b43f299f46a4c637600526595887f5aa708914dd3577f1f"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "f84e8f5178821441662eb088df05888f57a2e84b2eb8e36f65744ccd8a3c90ca"
+GOLDEN_AFTER_THREE_DAYS = "e59347137aa57bd21d4e9d4b506d6f15a9de99d77f8a4d1eee2830c5bb35f660"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
 GOLDEN_BARE_ROCK_520_DAYS = "73fa2df52e10cfd84a8f03be1ded9e3626fc111831f7bb1727cea77ec05f3454"

@@ -9,6 +9,7 @@ def test_default_config(config: Config) -> None:
     assert config.calendar.spring_start == MonthDay(3, 20)
     assert config.calendar.winter_start == MonthDay(12, 21)
     assert dict(config.schedule) == {
+        "presence": 600.0,
         "terrain": 86_400.0,
         "flora": 86_400.0,
         "fire": 3600.0,
@@ -24,7 +25,7 @@ def test_schedule_periods(default_config_text: str) -> None:
     assert config.period_ms("chronicle") == 900_000
     assert config.period_ms("apocalypse") == 250
     with pytest.raises(ConfigError, match="no \\[schedule\\] period"):
-        config.period_ms("presence")
+        config.period_ms("weather")
 
 
 def test_schedule_is_read_only(config: Config) -> None:
