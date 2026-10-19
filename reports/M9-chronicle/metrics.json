@@ -1,7 +1,7 @@
 {
   "milestone": "M9",
   "run_id": "m9-office",
-  "git_commit": "cf5a408be12c-dirty",
+  "git_commit": "309793697c6d",
   "config_hash": "c5b0c72dfd95a08c",
   "seeds": [
     0,
@@ -26,7 +26,7 @@
     19
   ],
   "sim_years": 3.0,
-  "wall_time_s": 1094.767,
+  "wall_time_s": 1311.61,
   "acceptance": [
     {
       "id": "M9.1",
