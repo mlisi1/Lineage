@@ -84,6 +84,18 @@ def test_giant_is_twice_the_mass_and_matures_later(config: Config) -> None:
     )
 
 
+def test_the_renderer_draws_a_giant_from_render_config(config: Config) -> None:
+    """A renderer that knows the phenotype and `render_config` draws a giant at the mass
+    the simulation gives it."""
+    cfg = replace(config.fauna, giant_mass_factor=3.0)
+    sent = rare.render_config(cfg)
+    assert set(sent) == set(rare.RENDER_KEYS)
+    plain = phenotype(cfg, _genes(GRAZER))
+    giant = rare.body_of(cfg, _genes(GRAZER), _slots(CreatureRare.GIANT))
+    drawn = float(plain.mass[0]) * sent["giant_mass_factor"]
+    assert float(giant.mass[0]) == pytest.approx(drawn, rel=1e-6)
+
+
 def test_longevity_doubles_life_and_halves_broods(config: Config) -> None:
     many = _with(GRAZER, Gene.BROOD, 1.0)
     plain, elder = _body(config, many), _body(config, many, CreatureRare.LONGEVITY)

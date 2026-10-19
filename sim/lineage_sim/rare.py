@@ -148,6 +148,17 @@ def rare_costs(cfg: FaunaConfig) -> tuple[tuple[CreatureRare, float], ...]:
     )
 
 
+# The `[fauna]` keys the renderer needs to draw rare genes: only GIANT changes the body it
+# draws, whose mass is the phenotype's mass × giant_mass_factor. Sent beside the
+# phenotype's own config keys (R2).
+RENDER_KEYS: tuple[str, ...] = ("giant_mass_factor",)
+
+
+def render_config(cfg: FaunaConfig) -> dict[str, float]:
+    """The values of `RENDER_KEYS` in ``cfg``, for the renderer."""
+    return {key: float(getattr(cfg, key)) for key in RENDER_KEYS}
+
+
 def body_of(cfg: FaunaConfig, genes: Genes, slots: Slots) -> Phenotype:
     """Phenotype of genes and rare genes together."""
     return adjust(cfg, genes, slots, phenotype(cfg, genes))
