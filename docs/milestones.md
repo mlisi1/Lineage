@@ -35,24 +35,89 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 ### Starting M10 (apocalypse and worlds)
 
 - **Branch**: `git switch main && git switch -c m10-worlds`. Spec: CLAUDE.md §8 M10 and
-  `docs/design/concept.md` "World lifecycle" (open there: the collapse criteria, and how
-  many archives the device keeps; ask the owner).
-- **What exists**: `sim/lineage_sim/apocalypse.py` is a skeleton; the `APOCALYPSE` random
-  stream is reserved in `rng.py`. `PopulationExtinct` is returned when the last creature
-  dies, and the chronicle writes it as `last_creature` (importance 5). The world's whole
-  history is in its save (ADR 0017): an archive can be the final state, or a slimmer
-  record built from it (`Chronicle.entries()`, `bestiary()`, `Species.records()`, the
-  final terrain and cover). A new world needs a new seed drawn deterministically (from
-  the apocalypse stream) and the world number in the state: schema v10.
-- **Collapse is rare so far**: total extinction in 0–5 % of seeds over 3 years (M8
-  schedules), and strangers and the ark bring creatures back. Decide with the owner
-  whether an empty island waits for strangers or ends; the M10 scenario test forces a
-  collapse.
-- **Archives and migrations**: archives must load after future schema bumps
-  ("migrations cover archives"), so they should pass through the same migrations.
-- **Machine**: other simulations share this PC (load reached 38 on 2026-10-19); pass
-  `--jobs 8`–`10`.
-- Next free ADR: 0018 (check `/home/elechim/Lineage-coord/README.md`).
+  `docs/design/concept.md` "World lifecycle". Read "Working on a milestone here" below
+  first.
+- **Ask the owner before coding** (`concept.md` lists both as open):
+  1. *What ends a world.* Today a collapse never sticks: when the last creature dies
+     (`PopulationExtinct`), `Fauna.tick` waits for spring or summer and lands 40 new
+     founders once plants cover half the land (`_await_founders`, `[fauna]`
+     `founder_*`, `arrival_delay_days`); strangers also land about 6 times a year
+     (`immigrant_groups_per_year`) and the ark god power brings 12. Total extinction is
+     rare anyway: 0–5 % of seeds over 3 years (M8 report, all schedules). So the owner
+     must say what "life collapses" means: no creatures for N days, too few species for
+     N months, the land drowned, the island emptied of plants, or something else; and
+     whether re-founding should then stop. Propose a criterion with numbers from a run.
+  2. *How many archived worlds the device keeps* (SD card; S1 owns the files).
+- **What exists**: `sim/lineage_sim/apocalypse.py` is a 4-line skeleton; the
+  `APOCALYPSE` stream name is reserved in `rng.py` (no `[schedule]` key, no config
+  section yet). `World` has no world number; `WorldState` holds `seed`, `epoch_unix_ms`,
+  `t_ms`, `rng`, `subsystems` (`state/schema.py`, `SCHEMA_VERSION = 9`).
+- **What the chronicle gives an archive** (ADR 0017): the world's whole history is in
+  its save. `world.chronicle.entries()` (numbered `ChronicleEntry`), `bestiary()` (one
+  `BestiaryRecord` per species, founding genome = portrait), `world.species.records()`
+  (phylogeny), `terrain.height`, `flora.cover()` for the final map. The chronicle writes
+  `last_creature` (importance 5); an end-of-world entry would be a new `Kind` with its
+  own `importance_*` key, and `first_life` is once per world (the chronicle's state is
+  per world, so a new world needs a fresh chronicle).
+- **Design questions to settle in the plan** (CLAUDE.md §4.1: the sim is pure, outputs
+  are returned): how the World starts over (a new seed drawn from the `APOCALYPSE`
+  stream, the epoch moved to the end instant, a world number carried over); what the
+  archive is (the final `WorldState`, or a slimmer tree) and how it leaves the sim (an
+  output event such as `WorldEnded(archive=…)`, or a method the server calls); "migrations
+  cover archives": an archive saved at v10 must load after v11, so it should go through
+  the same `state/migrations` chain; schema v10 for the world number and apocalypse state.
+- **Report**: M10 is not statistical in §8 (accept: archives load and render, a new world
+  starts within budget), but a forced-collapse run and a benchmark of starting a new
+  world belong in the tests; "render" means `tools/replay.py --still` draws an archive.
+- Next free ADR: 0018 (claim it in `/home/elechim/Lineage-coord/README.md`).
+
+### Working on a milestone here (lessons so far)
+
+**Adding a subsystem or persisted state** (the chronicle, M9, did all of this):
+
+1. The class in `sim/lineage_sim/`, following the `Subsystem` protocol (`subsystem.py`):
+   `name` (= its stream and `[schedule]` key), `initialize`, `tick`, `handle`,
+   `get_state`, `set_state`. To see other subsystems' outputs, also implement `observe`
+   (`Observer`); the World calls it after each batch. Read other subsystems through
+   narrow `Protocol`s (see `chronicle.py`, `species.py`) so tests can use doubles.
+2. Register it in `world.default_subsystems` (order is tick order at equal times) and
+   add a typed property on `World` if callers need it.
+3. Config: a frozen dataclass in `config.py` with checks in `__post_init__`, its section
+   name in `parse_config`'s known sections, the section in `sim/config/default.toml`
+   with units and intent for every key, and the `[schedule]` period.
+4. Schema: bump `SCHEMA_VERSION` in `state/schema.py`, add `migrations/vN_to_vN+1.py`
+   (raw trees, never current classes; an empty world, no `terrain`, only bumps the
+   version) and register it in `migrations/__init__.py`; generate `vN+1.lzma` with a
+   short script and record its recipe in `sim/tests/fixtures/saves/README.md`; add
+   `test_vN+1_fixture_values` and an upgrade test in `test_migrations.py`. A fixture is
+   frozen from the merge on; before that it may be regenerated.
+5. Tests that list subsystems or the schedule must change with it: `test_config.py`
+   (`test_default_config` schedule dict), `test_flora.py`
+   (`test_streams_are_per_subsystem`), `test_migrations.py` (subsystem lists of v3/v4).
+   Golden hashes all change with a schema bump (the version is hashed): update them in
+   `test_determinism.py`, `test_flora.py`, `test_fauna.py`, `test_terrain.py` and say why
+   in the commit message. Prove the new part does not disturb the others (M9:
+   `test_the_chronicle_only_watches`).
+
+**Reports**: `tools/milestones/mN.py` (`CRITERIA`, `SERIES_LABELS`, `metrics(run)`,
+`sections(run, run_dir)`), registered in `tools/report.py` (`MODULES`, `CRITERIA`,
+`SERIES_LABELS`). New per-seed data goes into fast-forward's series as `_`-prefixed
+extras (`tools/fastforward.py`, column tuples beside the others). Tests:
+`tools/tests/test_mN_report.py` with a synthetic run (see `test_m9_report.py`), and a
+slow `test_mN_statistical.py` for the criteria on 20 seeds. Run statistical milestones
+under `--schedule office` (ADR 0016).
+
+**Pitfalls met** (more under "Working notes" at the end):
+- Commit before a fast-forward run: the manifest stamps the commit, `-dirty` if
+  anything outside `reports/` is modified, even a fixture being regenerated.
+- Timings on this PC at `--jobs 10` / 8 workers: a 20-seed × 3-year office run 15–22 min,
+  the full fast suite 5–9 min, the slow M9 tests 13–19 min.
+- Never wait on a process with `pgrep -f`/`pkill -f` and a pattern that also appears in
+  the waiting command itself: it matches its own shell (and `pkill` kills it). Wait on
+  an output file instead (fast-forward writes `manifest.json` last).
+- Scripts in the session scratchpad (`/tmp/…`) are lost on reboot; fixture recipes live
+  in the fixtures README.
+- ruff rejects `# fmt: skip` inside an expression (RUF028); use it only on statements.
 
 ### M9 closed (merged into `main` at `1a1513c`, 2026-10-19)
 
@@ -69,8 +134,8 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   that checks every seed's 3-year history for spam (daily cap, repeated sentences,
   swings and migrations within their gaps); both slow tests passed (12 min 45 s). Golden hashes changed (schema version and the chronicle's state, explained
   in the commits); a world without the chronicle is bit-identical to one with it.
-- Schema v9 is released: `v9.lzma` is frozen. Branch `m9-chronicle` deleted; nothing
-  pushed.
+- Schema v9 is released: `v9.lzma` is frozen. Branch `m9-chronicle` deleted; `main`
+  pushed to `origin` (at `11fde65`).
 - For R3: captions from `ChronicleEntry` (`kind`, `importance`, `text`, `species`, `x`,
   `y`, -1 when no place); the wire schema does not carry entries yet.
 - For S4: push `importance >= config.chronicle.major_importance` (about 0.7 a month).
@@ -219,14 +284,10 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Parallel work (other agents)
 
-R1 and R2 are merged (2026-10-19). Agents coordinate through
-`/home/elechim/Lineage-coord` (status files and inboxes). R1's protocol already carries
-the rare-gene table, `born[].slots`, `torpid` and the plant rare mask; R1 has M7's
-descriptions of the plant looks. R2 has M7's notes on the creature overlays (only GIANT
-changes body size). On merge: M7 changed one line of `tools/replay.py`
-(`write_renderer_fixture` draws genes-only bodies); R2's replay supersedes it.
-ADR numbers: 0013 R2, 0014 R1, 0015 M7; the next free is 0016 (check the board).
-R2's `tools/replay.py` (fixture format 5) is the one in `main`.
+No other agent is active (2026-10-19): R1, R2, M6–M9 are merged and closed. Agents
+coordinate through `/home/elechim/Lineage-coord` (README with the worktree table and
+claimed ADR numbers, a status file and an inbox per agent); a new milestone adds its row
+and claims its ADR there. ADRs so far: 0001–0017; the next free is 0018.
 
 ### Working notes
 
@@ -243,6 +304,10 @@ R2's `tools/replay.py` (fixture format 5) is the one in `main`.
   machines agree. Hashes computed by scripts outside pytest match on this machine (no
   AVX-512), but check with pytest.
 - **Local runs** (gitignored; deletable):
+  - `runs/m9-office` is the M9 report's run (at `3097936`); its saves feed the report's
+    bestiary section, so keep it to rebuild the report;
+  - `runs/m8-office`, `m8-always`, `m8-office-august`, `m8-conference` are the M8
+    report's runs (`m8-preview-office` a preview);
   - `runs/m7-rare2` is the M7 report's run (`runs/m7-rare` before the longevity fix,
     `runs/m7-preview` and `runs/m7-loss005` are previews);
   - `runs/m6-species-pred` is the M6 report's run (`runs/m6-preview`, `m6-species`,

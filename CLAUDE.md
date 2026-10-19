@@ -504,8 +504,10 @@ and S1–S7 after M8.
 
 ## 9. How to work on a milestone (for Claude)
 
-1. Read the milestone in §8 and the related `docs/design/` page. If the spec is ambiguous,
-   ask before coding; propose the interpretation.
+1. Read the milestone in §8, the related `docs/design/` page, and in
+   `docs/milestones.md` the milestone's "Starting" brief and "Working on a milestone
+   here" (adding a subsystem or schema version, report wiring, pitfalls). If the spec is
+   ambiguous, ask before coding; propose the interpretation.
 2. Write a short plan in the PR/commit description: files touched, new config keys, schema
    changes (and the migration), tests to add.
 3. Implement in small commits. Tests come with the code, not after.

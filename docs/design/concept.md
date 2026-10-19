@@ -63,6 +63,12 @@ A world starts from a seed as a new continent. If life collapses, an apocalypse 
 world is archived (chronicle, bestiary, phylogeny, final map) and a new continent is
 generated with a new seed. Worlds are numbered.
 
+As of M9 a world never ends: when the last creature dies, new founders land once plants
+cover the island again (in spring or summer), strangers arrive a few times a year and
+the ark god power brings more. What counts as a collapse, and whether re-founding stops
+then, is M10's first decision. Everything an archive needs is in the world's save: its
+chronicle and bestiary (ADR 0017), its species records, its terrain and plant cover.
+
 ## Outputs
 
 - One continuous scene on the 7" desk screen: documentary camera and captions. The

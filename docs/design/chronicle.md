@@ -61,6 +61,10 @@ the rare genes any member ever carried, when it was most numerous, and the chron
 entries about it. Bestiaries are archived with their world (M10). The M9 report shows
 one seed's bestiary and its founding genomes.
 
+The chronicle is per world: its firsts, records and anniversaries count from the world's
+creation, so a new world (M10) starts with a fresh chronicle and the old one goes to the
+archive with its world.
+
 ## Outputs
 
 Entries are `ChronicleEntry` output events (numbered from 1) and `Chronicle.entries()`.
