@@ -41,11 +41,10 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   (sample chronicle, entries per month, types, importance, bestiary), the slow
   `tools/tests/test_m9_statistical.py`. Design: `docs/design/chronicle.md`; decisions
   and results: ADR 0017.
-- Report run `m9-office` (office schedule) is stamped `cf5a408-dirty`: files outside the
-  sim changed while it ran; the sim code was that of `08fa6a9`. A clean rerun takes about
-  18 min at 10 jobs.
-- Before merging: run the fast suite and the slow M9 test; regenerate `v9.lzma` with the
-  final code (it predates a template fix; unreleased, so allowed).
+- Report run `m9-office` (office schedule) at `3097936`, 22 min at 10 jobs. Tests: fast
+  suite 621 passed; slow `tools/tests/test_m9_statistical.py` passed (18 min 42 s at 8
+  workers). Golden hashes changed (schema version and the chronicle's state, explained
+  in the commits); a world without the chronicle is bit-identical to one with it.
 - For R3: captions from `ChronicleEntry` (`kind`, `importance`, `text`, `species`, `x`,
   `y`, -1 when no place); the wire schema does not carry entries yet.
 - For S4: push `importance >= config.chronicle.major_importance` (about 0.7 a month).
