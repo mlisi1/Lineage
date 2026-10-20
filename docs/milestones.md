@@ -20,7 +20,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
-| R4 | Atmosphere | not started | — |
+| R4 | Atmosphere | **built** 2026-10-20 on `r4-atmosphere` (worktree `../Lineage-r4`), not merged: waiting for the owner. Moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season; an additive glow pass (glow-gene animals, fires, lava); rain, smoke and flames, volcano ash and lava, quake shake, meteor streak and flash, seed and ark light; the three-minute apocalypse on the map; waves on the map's coasts. `sky` and `events` messages on the wire; office and world's-end recordings (ADR 0021). Device measurements belong to R5 | — |
 | R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
@@ -31,6 +31,30 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### R4 built (on `r4-atmosphere`, 2026-10-20; not merged)
+
+- **What it left**: `renderer/src/atmosphere/` (`light.ts`, `apocalypse.ts`,
+  `particles.ts`, `sprites.ts`, `demo.ts`, `atmosphere.ts`), wired in `src/main.ts`;
+  `Herd.glowing` and `CreatureLayer.spine`; the map painted with surf (`landscape.ts`,
+  `terrain/ground.ts`); `sky` and `events` messages (`schema.json`, `encode.sky_message`,
+  `events_message`, `entries_message`); `Presence.raining` (read-only, no schema bump);
+  `tools/stream.py --sky-every --schedule --press-days --famine-day`; the recordings
+  `office.json` and `end.json`. Design: `docs/design/renderer.md` "The atmosphere";
+  decisions: ADR 0021.
+- **To look at** (`cd renderer && npm run dev`): `/?recording=office` (dusks and nights,
+  rain), `/?recording=end` (a day, then the end of the world and the next),
+  `/?view=middle&x=120&y=60&recording=autumn&every=0&show=night,fire` (any of day, dusk,
+  dawn, night, moon, rain, fire, volcano, quake, meteor, seed, ark, end).
+- **Tests at the build**: renderer 281 unit, 43 Playwright; Python protocol and stream
+  tests added.
+- **For S1**: send `sky` at every presence tick; `chronicle` and `events` from each step's
+  outputs, a world's last lines before its `world_ended`, then the next world as on
+  connect (as `tools/stream.py` does).
+- **For R5**: measure the atmosphere on the board (one multiplied sprite, up to a few
+  hundred additive halos in a big fire, 180 raindrops; a world-sized texture repainted
+  10 times a second during an apocalypse). Keep `Director.toMap` (the apocalypse uses it);
+  of the R3 demo clicks remove the pointer handler and `Director.nextSubject` only.
 
 ### Starting R4 (atmosphere)
 
@@ -74,7 +98,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   local view a click picks another animal and a double click the map. **Demo only** (the
   owner, 2026-10-20): the final build does not have it; R5 takes it out (the pointer
   handler in `src/main.ts`, `Director.nextSubject` and `toMap` with their tests), leaving
-  a click or tap as the view button.
+  a click or tap as the view button. (R4: the apocalypse uses `toMap`; it stays.)
 - **Shared files it changed**: `schema.json` / `encode.py` (additive), `tools/stream.py`,
   `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no schema bump: M11
   (on `m11-tuning`) merges main with conflicts in the docs only.

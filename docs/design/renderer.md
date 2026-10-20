@@ -800,6 +800,59 @@ and the scroll's painting, the font, and the roster; in the page
 (`tests/e2e/camera.spec.ts`) the button's cycle and a snapshot of the scroll. Its cost on
 the board is R5's to measure.
 
+## The atmosphere (R4)
+
+The light, what glows, the weather of events and the end of a world
+([ADR 0021](../decisions/0021-atmosphere.md)), in `src/atmosphere/`, from two messages on
+the wire: `sky` (the light of the moment, whether the owner is at the desk, rain, the
+cells on fire; at every presence tick) and `events` (fires, volcanoes, quakes, craters,
+god powers, a world's end and the next one's beginning).
+
+| Layer | Where | What |
+|---|---|---|
+| `ground` | in the world (cells), over the animals | the risen sea of a world's end, smoke, ash clouds, dust |
+| `weather` | screen art pixels | rain, falling ash |
+| `tint` | one sprite, multiplied over all of the above | the light |
+| `lights` | cells, added over the tint | glow-gene animals, fires, lava, sparks, beams |
+| `flash` | the screen | a meteor's strike, lightning |
+
+- **The light** (`light.ts`): moonlit blue at night (the owner: dark but readable), rose
+  at dusk (owner away), lilac at dawn (owner back), day graded by the season (warm
+  summer, cool winter; each season's second half turns toward the next), greyed by rain.
+  The sim's 10-minute steps are eased: each is reached over the wall time since the one
+  before (`LightEase`), so a dusk fades instead of stepping, at any playback speed.
+- **Glow**: halos in five steps (a 48-texel disc, at most three times that across so its
+  steps stay a few art pixels wide), added over the tint so they show in the dark. An
+  animal with the glow gene shines at every other joint of its back as strongly as it is
+  dark (`Herd.glowing`). A fire is a wide glow, then for each burning cell a small
+  flicker off its middle and flames licking up; up close (local view) more of them.
+- **Weather**: smoke, ash, dust, flames and rain are slots each going round a cycle of
+  its own; where a slot is depends only on its number and the time (as the sea's glints),
+  so a moment looks the same on every run and a `?still` picture is fixed. Rain while the
+  rain power's rain falls (sets in over 3 s); smoke over fires; a volcano's lava glow,
+  lava running down its sides and a dark ash column (12 sim-hours, at least 30 wall
+  seconds); a quake's shake and dust (4 s); a meteor's streak from high up, flash, glow
+  and dust where it digs its crater; a beam and golden or pale motes for the seed and ark
+  powers (8 s); lightning's flash and sparks where a fire starts.
+- **The end of a world** (`apocalypse.ts`), three minutes on the map, whatever the view
+  was: omen (20 s, the sky reddens, ash), fire (40 s, lava vents, quakes), flood (60 s, the
+  sea rises over the land one pixel to the cell, peaks last), dark (20 s), rise (40 s, the
+  light comes back, the sea falls from the new continent). The view button waits. What the
+  stream sends of the next world is held: its land and animals until the dark, its news
+  until the rise; the chronicle's own lines tell the end and the beginning.
+- **Waves on the map**: the map is painted with the three surf bands as the closer views
+  are, and the sea brings them in (the owner, from the R3 demo).
+- **On demand**: `?show=night,fire,meteor…` makes up the light and events on the land in
+  sight (`demo.ts`); with `?still` they move only by `window.__advance(seconds)`. The
+  recordings `?recording=office` (two weeks of office hours: dusks, nights, the Long
+  Night, the rain power twice) and `?recording=end` (the herd starves on day 2 and the sim
+  ends the world) play the real thing.
+
+**Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
+the particles and the shows; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
+every light and event, a glowing animal at night and by day, and a real world's end
+holding the camera and the button. Its cost on the board is R5's to measure.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
@@ -822,6 +875,7 @@ the board is R5's to measure.
 ## Open
 
 - **Snow**: settled in R1 (ADR 0014): it lies where the simulation's temperature says.
+  It is not seen falling (R4).
 - **Turning from one season to the next**: done in R1, over about four weeks.
 - **Plant genes in the drawing**: `HEIGHT` picks the build, `EVERGREEN` how late a
   tree turns and how it spends the winter, and the rare genes have their looks (R1, from

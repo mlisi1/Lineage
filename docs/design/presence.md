@@ -25,6 +25,7 @@ Who reads the light:
 |---|---|---|
 | Creatures (`Fauna.set_daylight`) | the light of the moment | sight dims to `night_sight` of the range (glow keeps full range); photosynthesis feeds on it; hibernators go torpid below `hibernation_daylight` |
 | Plants (`Flora.set_daylight`) | growth factor `min(1, recent / plant_full_light)` | `recent` is a running mean of each day's mean light over `plant_light_days` (7): an office week (about 0.3, dipping to 0.24 after a weekend) grows plants as before M8; a long holiday in moonlight slows them to about 0.6 |
+| The screen (R4, the `sky` message) | the light of the moment, presence, rain (`Presence.raining`) | moonlit blue at night, rose at dusk, lilac at dawn, eased between ticks; glowing animals shine in the dark (ADR 0021) |
 
 These hooks are not saved; the presence state is (schema v8), and the subsystem pushes
 them again after a restore.
