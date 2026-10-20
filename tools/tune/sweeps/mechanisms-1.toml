@@ -1,0 +1,33 @@
+# M11 second sweep (ADR 0019): every mechanism in (algae and wading, reach, cover,
+# nutrients), the predator levers paired with cover (cover starved hunters further:
+# M4.3 0.56), and the founding and plant levers of the first sweep. Tuning seeds 0–19
+# under the office schedule; held-out seeds 20–39 are never swept. 40 Latin-hypercube
+# points besides the defaults.
+[sweep]
+name = "mechanisms-1"
+seeds = 20
+seed_base = 0
+years = 3
+schedule = "office"
+samples = 40
+sampler = "lhs"
+rng_seed = 21
+
+[levers]
+# Predators.
+"fauna.meat_energy" = { low = 1200, high = 2800, integer = true }
+"fauna.predator_cap" = { low = 12, high = 36, integer = true }
+"fauna.immigrant_groups_per_year" = { low = 3.0, high = 12.0 }
+"fauna.immigrant_hunter_share" = { low = 0.3, high = 0.8 }
+# The new mechanisms.
+"fauna.cover_protection" = { low = 0.2, high = 0.8 }
+"fauna.browse_floor" = { low = 0.15, high = 0.6 }
+"flora.algae_meal_share" = { low = 0.5, high = 1.2 }
+"fauna.dung_fertility" = { low = 0.0, high = 0.1 }
+# Plants against grazers.
+"fauna.defence_toxicity" = { low = 0.25, high = 1.0 }
+# Founding (M6.1's empty months).
+"fauna.founder_min_plant_cover" = { low = 0.25, high = 0.6 }
+"fauna.founder_count" = { low = 30, high = 80, integer = true }
+# Genetic spread (M6's species count follows it).
+"fauna.mutation_sigma_body" = { low = 0.015, high = 0.04 }
