@@ -477,7 +477,13 @@ class Fauna:
         )
         self._apart = None
         burnt = creature.upkeep(
-            cfg, self._genes, body, travelled, in_water, hours, rare.waterproof(self._slots)
+            cfg,
+            self._genes,
+            body,
+            travelled,
+            in_water,
+            hours,
+            rare.waterproof(self._slots) | self._wading(rows, columns),
         )
         torpor = np.float32(cfg.hibernation_burn_share)
         burnt = np.where(torpid, burnt * torpor, burnt).astype(np.float32)
@@ -546,6 +552,12 @@ class Fauna:
         creature.stamp(self._scent, rows[who], columns[who], -got, cfg.carrion_scent_cells)
         self._energy[who] += got * value
         self._meal[who] += got * value
+
+    def _wading(self, rows: NDArray[np.intp], columns: NDArray[np.intp]) -> NDArray[np.bool_]:
+        """Creatures standing in water shallow enough to wade (M11): they do not struggle."""
+        terrain = self._terrain
+        depth = np.float32(terrain.sea_level) - terrain.height[rows, columns]
+        return depth < np.float32(self._cfg.wading_depth)
 
     def _hunt(self, rng: Generator, hours: float) -> NDArray[np.int8]:
         """Hunters attack the nearest prey in reach. Returns each creature's cause of

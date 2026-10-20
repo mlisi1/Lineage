@@ -110,7 +110,8 @@ networks, predator–prey coexistence): ADR 0009, "References".
 ## Life
 
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
-  in water. A creature with no energy left dies (starved, or drowned if in water).
+  in water, except in the shallows, where anyone can wade (M11, `wading_depth` 0.03, the
+  algae's shelf). A creature with no energy left dies (starved, or drowned if in water).
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
   regrows; defended plants refuse part of each bite, and what is eaten is worth less:
   energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.

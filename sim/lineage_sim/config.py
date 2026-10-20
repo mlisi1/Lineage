@@ -391,6 +391,7 @@ class FaunaConfig:
     capacity_per_mass: float
     founder_energy_share: float
     water_stress: float
+    wading_depth: float
     graze_rate: float
     graze_jaw_floor: float
     reach_at_unit_mass: float

@@ -443,6 +443,10 @@ capacity_per_mass = 220.0
 founder_energy_share = 0.9
 # Energy burnt per hour per unit mass by a creature in water, at swimming gene 0.
 water_stress = 2.5
+# Wading (M11): no creature struggles in water no deeper than wading_depth (height units
+# below sea level; the algae's shelf, [flora] algae_max_depth): land animals can graze
+# the shallows, slowly, and swimming pays as the next step out to sea. 0 turns it off.
+wading_depth = 0.03
 
 # --- Eating ---
 # Plant biomass (in full cells) grazed per hour = graze_rate × mass^metabolic_exponent ×
