@@ -424,7 +424,10 @@ needs a note in `docs/decisions/`.
 - **Report**: full dashboard — all prior metrics at 3 sim-years, genetic distance from
   ancestors, sensitivity of key metrics to the top tunables.
 - **Accept**: every M2–M10 criterion passes simultaneously; mean genetic distance still
-  rising at year 3 (no stagnation).
+  rising at year 3 (no stagnation). (In progress, ADR 0019: the owner added criteria on
+  diversity and balance, D1–D3, bands set after five new mechanisms: food at sea and
+  wading, reach by height, cover for prey, nutrients back to the soil, seeds carried by
+  grazers; M2.5 retired and the whole-world step budget raised to 600 ms.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

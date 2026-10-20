@@ -268,7 +268,11 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 - The mean diet gene of the founders' descendants stays near 0.1 or below: herbivores
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.
-- Creatures graze every plant form alike (same bite rate); forms differ only through the
-  plants' genes (defence).
+- Until M11 creatures grazed every plant form alike; since M11 tall plants are partly out
+  of reach of small bodies ("Reach"), and small prey hides in them ("Cover").
 - Food at sea came with M11 (algae, above); before it, swimmers had to feed on land and
-  the `AQUATIC` gene never found a niche (M11, D1).
+  the `AQUATIC` gene never found a niche. Algae alone did not change that (D1 for
+  swimming at 1 seed in 20 with or without them), hence wading on the shelf (ADR 0019).
+- M11 open: seeds carried by the grazers that eat fruit (schema v13, after R4); whether
+  the founders' descendants ever become omnivores or hunters now that cover, reach and
+  carrion shape the niches (D1 for diet rose to 0.45–0.60 of seeds with them).

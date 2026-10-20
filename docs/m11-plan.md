@@ -9,7 +9,9 @@ it as M6–M10 land; each milestone should add its own findings below.
 ## 1. Goal: what "engaging" means, in numbers
 
 Passing the criteria is necessary, not enough. The gadget sits on a desk for years; it
-must keep producing stories. M11 should tune for these, measured on held-out seeds:
+must keep producing stories. M11 should tune for these, measured on held-out seeds. The
+owner accepted the targets on 2026-10-20 (ADR 0019), with worlds ending rarely, about
+once a decade, and added three criteria on diversity and balance (D1–D3, §7):
 
 | Quality | Measure (per seed, 3 and 10 sim-years) | Target to agree with the owner |
 |---|---|---|
@@ -113,6 +115,9 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 
 ## 5. Order of work in M11
 
+(As planned at M5. What actually happened is in §7: steps 1 and 2 are done, step 3 was
+interrupted to add mechanisms first, with the owner.)
+
 1. Held-out validation of the M10 state (seeds 20–39), office schedule.
 2. Build `tools/tune/`: sweep runner, multi-criteria score, sensitivity report.
 3. Sweep the predator and plant levers first (they move everything), then learning, then
@@ -209,3 +214,29 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
   founding bottleneck of §3 again). Criteria computed over a whole run (M4.1 extinct
   seed-years, M6.1 inhabited time) must treat a new world as a new start; check
   `worlds_ended` in each run before reading them.
+
+## 7. M11 so far (2026-10-20; details and numbers in ADR 0019)
+
+- **Held-out check of the M10 defaults** (seeds 20–39): the same two criteria fail as on
+  0–19 (M6.1, and M3.5 in 3-year runs), so M2–M10 did not overfit their seeds.
+- **`tools/tune/`** scores a run on every criterion at once, sweeps levers and ranks
+  their effects. The first sweep (`fauna-1`) was stopped after 15 points.
+- **Looking at the island as an evolving world**, the owner asked for diversity (every
+  gene should find conditions where it thrives) and for a balance of hunters and
+  grazers. Measured then: swimming never had a niche, rare plant genes never
+  established, predators were 1–2 % of creatures. New criteria: **D1** every gene has a
+  niche, **D2** rare genes can thrive, **D3** hunters a real share and present. Bands are
+  set after the mechanisms.
+- **Five mechanisms** were approved and built one at a time with on/off runs: food at
+  sea (algae, schema v11) and wading on the shelf; reach by height; cover for prey;
+  nutrients from dung and carcasses; seeds carried by grazers (schema v13, after R4).
+  Reach raised body size and the niches of size and limbs; cover widened the diet,
+  armour and speed niches but starved hunters further (M4.3 fails at 0.53–0.56); nutrients
+  made every seed's forest close in 3 years (M3.5 passes).
+- **Step budget** raised to 600 ms per sim-day on the PC; M2.5 retired.
+- **Sweep `mechanisms-1`** (12 levers, 41 points) paused at 23 points: M6.1 still fails
+  everywhere and follows the body mutation size; larger mutations hurt succession, so a
+  follow-up sweep around that trade-off is likely.
+- **R4 changes the sim too** (weather, fire only in storms, burnt deaths, barren land
+  after eruptions; schema v12): re-check the tuned config once R4 is on `main`.
+

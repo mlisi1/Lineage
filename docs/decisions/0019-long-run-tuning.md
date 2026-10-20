@@ -152,12 +152,28 @@ one-on-one encounters in tall forest, hunters kill 26 small prey with cover agai
 without; in low grass, cover changes nothing. A refuge is the classic stabiliser of
 predator–prey cycles (Křivan 2013, ADR 0009). `cover_protection` 0 turns it off.
 
+**Measured** (`m11-cover-on` against `m11-reach-on`): the niches widened (D1 for diet
+0.45 → 0.60 of seeds, armour 0.35 → 0.50, speed 0.35 → 0.55, size 0.55 → 0.60) and the
+median size gene rose to 0.40, but hunters, already scarce, lost kills: predators fell
+from 2.9 % to 1.5 % of creatures and **M4.3 fails** (0.61 → 0.56). Cover has to be tuned
+with the predator levers (the second sweep pairs them).
+
 ### Mechanism 5: nutrients (no schema change)
 
 A land cell gains `dung_fertility` (0.05) fertility per unit of plant biomass eaten there
 and `carrion_fertility` (0.2) per unit of carrion that rots there. Herds keep their
 pastures fertile; a kill leaves a rich patch. The saved state is the terrain's
 fertility, as before.
+
+**Measured** (`m11-nutrients-on` against `m11-cover-on`): **M3.5 passes** for the first
+time in 3-year office runs (seeds without closed forest 2 → 0); M3.2 21.3 months. M4.3
+0.53 and M6.1 0.80 still fail.
+
+**Reading single runs.** The per-gene D1 shares moved by 0.15–0.25 between runs that
+differ by one mechanism (swimming 0.15 → 0.00 with nutrients), which is about the
+binomial noise of a share over 20 seeds (± 0.11). One 20-seed run cannot resolve a
+change below about 0.2 in a share; the sweeps judge levers by trends over many points,
+and the D1–D3 bands need more seeds.
 
 ### Third round with the owner (2026-10-20)
 
@@ -185,9 +201,32 @@ where it goes. That is per-creature saved state, so a schema bump: v13, after R4
 (weather, burnt deaths) reaches `main`. Until then fruiting plants keep their stand-in,
 far seeds as if wind-borne.
 
+### Sweep `mechanisms-1` (paused)
+
+Every mechanism in (with wading), 12 levers, 41 Latin-hypercube points, seeds 0–19,
+office, 3 years (`tools/tune/sweeps/mechanisms-1.toml`, at `145efe5`). Paused by the
+owner at 23 points (2026-10-20 23:05), to resume. So far no point passes every M
+criterion: M6.1 fails in all 23 (best 0.82, the defaults), M3.5 in 16, M4.3 in 9, M6.2
+in 7. Rank correlations over the first 19 sampled points (|ρ| < 0.46 is noise): M6.1
+follows `mutation_sigma_body` (+0.83), as M6 found (more genetic spread, more
+clusters), but larger mutations also leave seeds without succession (+0.59), where
+waiting for more plant cover before founders land helps (−0.57); M4.3 follows the
+stranger groups a year (+0.62) and meat energy (+0.44), and falls with a larger
+predator cap (−0.55, not yet understood).
+
+### R4's changes to the simulation
+
+R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
+v11: a weather subsystem (fires start only in storms; `[flora]
+fire_strikes_per_storm_hour` replaces `fire_ignitions_per_year`), fire burns animals
+(death cause `BURNT`), and volcanoes and craters leave barren land for `barren_days`.
+These move what M11 tunes (plant cover, succession, food, mortality, the chronicle), so
+the tuned config is re-checked with a short sweep after R4 reaches `main`, together with
+mechanism 4.
+
 ## Decision
 
-(Pending the mechanisms and the sweeps.)
+(Pending the sweeps.)
 
 ## Consequences
 
