@@ -118,6 +118,12 @@ networks, predator–prey coexistence): ADR 0009, "References".
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Food at sea** (M11): algae grow on the shallow sea (`plants.md`). A creature eats
+  them wherever it swims and no plant stands, like a plant meal worth
+  `[flora] algae_meal_share` of one. It smells them in proportion to its ease in water:
+  its `AQUATIC` gene, or fully if it carries `AMPHIBIOUS`. The food it senses is land
+  plants + ease × algae, so a land animal is not lured out to sea. Algae are no plant
+  form: meals of them teach nothing about low or woody growth.
 - **Carrion**: the dead leave remains on land, in units of meat mass: what a hunter could
   not eat of its kill, and `carcass_share` of the body of those that starved or died of
   age (the drowned are lost). Remains rot (`carrion_decay_hours`). Creatures that digest
@@ -244,4 +250,5 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.
 - Creatures graze every plant form alike (same bite rate); forms differ only through the
   plants' genes (defence).
-- No aquatic food: swimmers must feed on land.
+- Food at sea came with M11 (algae, above); before it, swimmers had to feed on land and
+  the `AQUATIC` gene never found a niche (M11, D1).

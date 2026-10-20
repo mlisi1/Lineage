@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "a9401eebad536b3ab6723884fa96179ae1e2375da4818b05fa4a6cead65d9ef6"
+GOLDEN_FLORA_SEED_42 = "1b6c440109ec84466abc5b84bfdcb1af0b6ad8492301a3f1f8051227e322f53f"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -502,6 +502,77 @@ def test_grazing_respects_defence_and_shares_what_is_there(config: Config) -> No
     after = float(site.flora.biomass.sum(dtype=np.float64))
     assert before - after == pytest.approx(float(eaten.sum()), rel=1e-4)
     assert float(site.flora.biomass.min()) >= 0.0
+
+
+# --- Algae (M11) ------------------------------------------------------------------------
+
+
+def _coast() -> Grid:
+    """Land in the west, a shallow shelf in the middle, deep sea in the east."""
+    height = _plain()
+    height[:, 20:] = SEA - 0.01
+    height[:, 40:] = SEA - 0.2
+    return height
+
+
+def test_algae_grow_on_the_shallow_sea_only(config: Config) -> None:
+    site = Site(config, _coast(), 0.5)
+    site.grow(60, start=dt.date(2026, 6, 1))
+    algae = site.flora.algae
+    assert float(algae[:, :20].max()) == 0.0  # land
+    assert float(algae[:, 40:].max()) == 0.0  # too deep
+    assert float(algae[:, 20:40].min()) > 0.8 * site.cfg.algae_capacity  # the shelf fills
+    assert float(algae.max()) <= site.cfg.algae_capacity
+
+
+def test_algae_grow_slower_in_winter_and_in_the_dark(config: Config) -> None:
+    def grown(when: dt.date, light: float) -> float:
+        site = Site(config, _coast(), 0.5)
+        site.flora.set_daylight(light)
+        site.grow(5, start=when)
+        return float(site.flora.algae[:, 20:40].mean())
+
+    seed = config.flora.algae_seed
+    summer = grown(dt.date(2026, 7, 1), 1.0) - seed
+    assert summer > 0.0
+    assert grown(dt.date(2026, 1, 15), 1.0) - seed < 0.5 * summer
+    assert grown(dt.date(2026, 7, 1), 0.0) == pytest.approx(seed)
+
+
+def test_algae_give_way_to_plants_and_can_be_turned_off(config: Config) -> None:
+    site = Site(config, _coast(), 0.5)
+    mangrove = np.zeros((ROWS, COLUMNS), dtype=np.bool_)
+    mangrove[:, 25:30] = True
+    site.plant(mangrove, SHRUB, 0.8, rare=Rare.MANGROVE)
+    site.grow(10, start=dt.date(2026, 6, 1))
+    assert float(site.flora.algae[mangrove].max()) == 0.0  # a plant stands there
+    assert float(np.median(site.flora.algae[:, 32:40])) > config.flora.algae_seed
+    off = Site(config, _coast(), 0.5, flora=replace(site.cfg, algae_capacity=0.0))
+    off.grow(10, start=dt.date(2026, 6, 1))
+    assert float(off.flora.algae.max()) == 0.0
+
+
+def test_grazers_eat_algae_where_no_plant_stands(config: Config) -> None:
+    site = Site(config, _coast(), 0.5)
+    site.plant(_all() & (_coast() > SEA), GRASS, 0.5)
+    site.grow(40, start=dt.date(2026, 6, 1))
+    before = float(site.flora.algae[5, 30])
+    ys, xs = np.array([5, 5]), np.array([30, 5])  # one at sea, one on the grass
+    demand = np.array([0.05, 0.05], dtype=np.float32)
+    on_algae = site.flora.on_algae(ys, xs)
+    assert on_algae.tolist() == [True, False]
+    grass_before = float(site.flora.biomass[5, 5])
+    eaten = site.flora.graze(ys, xs, demand)
+    assert float(eaten[0]) == pytest.approx(0.05, rel=1e-4)
+    assert float(site.flora.algae[5, 30]) == pytest.approx(before - 0.05, rel=1e-4)
+    assert float(site.flora.biomass[5, 5]) < grass_before  # the grass was eaten, not algae
+    factor = site.flora.meal_factor(ys, xs)
+    assert float(factor[0]) == pytest.approx(site.cfg.algae_meal_share)
+    assert float(factor[1]) == pytest.approx(1.0)
+    # Nobody eats below the reserve.
+    site.flora.graze(np.array([5]), np.array([30]), np.array([10.0], dtype=np.float32))
+    assert float(site.flora.algae[5, 30]) == pytest.approx(site.cfg.grazing_reserve_biomass)
+    assert float(site.flora.grazeable_algae()[5, 30]) == pytest.approx(0.0, abs=1e-6)
 
 
 # --- Rare genes (M7) --------------------------------------------------------------------

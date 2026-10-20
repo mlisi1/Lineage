@@ -72,17 +72,24 @@ def smell_food(
     here: Values,
     reach: Values,
     points: SmellPoints | None = None,
+    sea: NDArray[np.float32] | None = None,
+    ease: Values | None = None,
 ) -> tuple[Values, Values]:
     """Direction in which there is more food than underfoot, out to the sense range.
 
     Nearer food pulls harder; the result is 0 on uniform ground. ``points`` are
-    `smell_points` of the same positions and reach, if already computed.
+    `smell_points` of the same positions and reach, if already computed. With ``sea``
+    (food in the water) each creature smells it weighted by its ``ease`` in water, so
+    the food it smells is ``food + ease × sea`` (``here`` must be read the same way).
     """
     if points is None:
         points = smell_points(positions, reach, (food.shape[0], food.shape[1]))
     pull = np.zeros_like(positions)
     for ring, direction, rows, columns in points:
-        better = np.maximum(food[rows, columns] - here, 0.0) / np.float32(ring)
+        there = food[rows, columns]
+        if sea is not None and ease is not None:
+            there = there + ease * sea[rows, columns]
+        better = np.maximum(there - here, 0.0) / np.float32(ring)
         pull += direction * better[:, None]
     # A direction with a strength in [0, 1): comparable to the other directional senses.
     strength = np.hypot(pull[:, 0], pull[:, 1])
@@ -145,6 +152,8 @@ def sense(
     offsets: NDArray[np.float32],
     distance: NDArray[np.float32],
     sight: NDArray[np.float32] | None = None,
+    sea: NDArray[np.float32] | None = None,
+    ease: Values | None = None,
 ) -> Senses:
     """Everything the brains perceive this tick. ``offsets`` and ``distance`` come from
     `separations` of the same positions; ``ready`` marks creatures able to breed now
@@ -152,15 +161,20 @@ def sense(
     look for prey). ``low`` and ``woody`` are ``biomass`` split by plant form: a
     creature sees which plants grow where, not how well they feed it. ``sight`` [i, j]
     is how far i sees j in the dark (`rare.sight`); None in daylight, when each sees out
-    to its sense range. Smell is not affected by the dark."""
+    to its sense range. Smell is not affected by the dark. ``sea`` is food in the water
+    (algae, M11), smelled and seen underfoot in proportion to each creature's ``ease``
+    in water; None when there is none."""
     n = positions.shape[0]
     senses = np.zeros((n, SENSE_COUNT), dtype=np.float32)
     rows, columns = cells_of(positions, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.ENERGY] = energy / body.capacity
-    senses[:, Sense.FOOD_HERE] = biomass[rows, columns]
+    here: Values = biomass[rows, columns]
+    if sea is not None and ease is not None:
+        here = (here + ease * sea[rows, columns]).astype(np.float32)
+    senses[:, Sense.FOOD_HERE] = here
     points = smell_points(positions, body.sense_range, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.FOOD_X], senses[:, Sense.FOOD_Y] = smell_food(
-        biomass, positions, biomass[rows, columns], body.sense_range, points
+        biomass, positions, here, body.sense_range, points, sea, ease
     )
     for field, sense_x, sense_y in ((low, Sense.LOW_X, Sense.LOW_Y),
                                     (woody, Sense.WOODY_X, Sense.WOODY_Y),
