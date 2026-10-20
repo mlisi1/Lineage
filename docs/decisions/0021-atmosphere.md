@@ -209,6 +209,75 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
   there for `barren_days` (120). The flora gains a `barren` grid in schema v12 (still
   unreleased, so its migration and fixture were amended rather than bumped).
 
+## Round 4: the owner's comments on the third report (2026-10-20)
+
+- **Night and day over about a minute.** Only the report changed: its day film is a
+  sim-day in 60 s (1440 sim-seconds a wall second). On the desk the light follows the
+  owner in real time.
+- **Glow.** On the map, a light only just round the animal's square (8 art pixels). In
+  the middle and local views, a ring of light round each glowing joint whose heart is
+  clear (`sprites.ring`), so that the animal shows through it; up close it is wider. All
+  of it breathes, between 45 % and full over 3.5 s.
+- **Rain that is in the world.** The drops are sized to the view: a 2-pixel streak on
+  the map, 3 in the middle view, 6 up close, falling 80, 120 and 170 art pixels a second.
+  They fall in three layers (far, middle and near: smaller, slower and fainter to bigger,
+  faster and brighter), each a slanted pixel line (`streakTexture`) leaning with the
+  wind: 0.35 pixels across for each pixel down in rain, 0.45 with thunder, 0.8 in a
+  thunderstorm, 0.2 in the rain power's soaking rain. In a thunderstorm gusts swing the
+  wind, and every layer with it. Cloud greys the light while it rains (`RAIN_GREY`, and
+  more in a storm), so that there are no sunny colours under rain.
+- **Fire.** Up close, two large flames to a burning cell (11 × 17 pixels in six frames,
+  drawn at two screen pixels to the art pixel), each with its own halo and embers.
+  - **Plants carry the fire.** The sim's fire already spreads only through fuel (biomass
+    times each form's flammability). The made-up fire of `?show=fire` and the burnt wood of
+    `?show=burnt` now spread the same way (`fireReach`): from cell to neighbouring cell
+    only where plants carry it, the most flammable fuel first.
+  - **A heavier burn that tracks the fire.** The scorch is painted cell by cell, not
+    blurred: charcoal, darker the more recent the fire, with drifts of pale ash, its edge
+    wandering by half a cell so that it is not a grid.
+- **The volcano.** Its lava flows: eight looped frames (four a second) of crust plates
+  drifting across the pool and down the rivers, a brighter pulse riding the current, and
+  the pool's heat swelling and ebbing. The cone's lowest ledge has no outline: it goes
+  down into a skirt of dark ash and grey scree, 35 % of its radius, thinning into the
+  ground in clumps.
+- **The crater**, which looked like a perfect circular hole and drew its far wall cut off
+  by a straight edge. It is redrawn from references on how simple impact craters look
+  from above (below): a bowl with a raised rim, which is part thrown-out earth and part
+  uplifted rock, sharp at the crest and tapering outward; a rumpled ejecta blanket that
+  thins outward; rays, which an oblique impact throws downrange and not uprange; walls
+  that slump. `marks.ts` builds a height field: a scalloped rim, a little long along the
+  meteor's path; a bowl with a flat, rumpled floor and a slumped lobe; ejecta falling off
+  as the cube of the distance, lumpy. It is lit from the upper left with the rim's
+  shadow cast into the bowl. So the near wall is in shadow (cool, never black) and the
+  far wall is lit. The fresh ejecta is paler than the ground, thins into clods and
+  carries boulders, and its rays go downrange. The rim stands where the sim dug; the
+  ejecta reach twice as far, beyond the sim's barren ring.
+- **The ark.** Its light is as wide as the place the newcomers land on in every view (2×
+  in the middle view, 4× up close). Each newcomer comes into being: the herd asks the
+  atmosphere, for each animal new to the scene, whether the ark's light is on that place
+  (within 8 cells and 12 s). If it is, a thread of light comes down onto the animal and
+  flares, sparks rise, and the body fades in over 2.5 s in four steps
+  (`CreatureLayer.arrive`).
+- **The seed's plants growing.** The atmosphere diffs the land before the seed power
+  against the land that comes with it (a stream sends it just before the event) or next.
+  On each cell it sowed, sprouts break the soil with a glint of gold and grow leaf by leaf
+  over 3 s, staggered by up to 2.5 s: five to a cell up close, one in the middle view, a
+  green fleck on the map. They stay until the cell's plants are big enough to be drawn,
+  or 20 sim-days. The demo now sows seedlings as the sim does (biomass 0.04, too small to
+  draw).
+- **Tides.** The painter also paints the swash, three layers of water running further up
+  the beach (shallow sea over the sand, foam at its edge), one step of `surf` pixels each
+  and one pixel on the map. Every surf and swash layer is cut into tiles 16 art pixels
+  across, each on its own clock: a smooth noise of where it is on the island
+  (`tidePhase`, turning over 14 cells), the same in every view. So waves run along a
+  coast, and no two coasts break together. A wave runs up in 30 % of 5.4 s and drains in
+  the rest. How far it runs is set by a tide that turns over 48 s. The cross-fade of a
+  new painting still works, on a container per band, while the tiles carry the tide.
+- **The ark and the seed only on land.** The seed sows only bare land cells. The ark's
+  newcomers, scattered round its spot, could land in the sea; they are now set on the
+  spot itself when they do (sim fix, with a test that fails without it). The owner was
+  asked whether checks of this kind across the sim deserve a milestone of their own.
+
 ## Results
 
 On the PC, renderer tests went from 255 to 281 unit tests: the light's colours,
@@ -247,5 +316,19 @@ R5 does that.
 - PixiJS v8 documentation, `blendMode` (`multiply`, `add`), <https://pixijs.com/>:
   the tint is one sprite multiplied over the scene, and the lights are added over it, so
   there is no filter pass and no render texture.
+- Simple impact craters, for the crater of round 4: NASA, *Impact craters* (lunar
+  feature guide; rays as bright streaks, signs of youth),
+  <https://www.nasa.gov/sites/default/files/atoms/files/impact-craters.pdf>; Arizona
+  State University, Mars Education, *Simple craters* (bowl-shaped, low raised rims, a
+  rumpled ejecta blanket), <https://marsed.mars.asu.edu/mep/craters/simple-craters>;
+  NASA JPL, *How to make a crater* (an oblique impact throws no rays uprange),
+  <https://www.jpl.nasa.gov/videos/how-to-make-a-crater>; World Machine, *Craters*
+  tutorial (the rim sharp at its edge, tapering into the land),
+  <https://www.world-machine.com/tutorials/craters/craters.html>; the Cratermaker
+  documentation, *Create a shaded topographic representation of a crater* (a crater
+  drawn as a shaded height field),
+  <https://cratermaker.readthedocs.io/en/latest/auto_examples/04-topography/4.1-plot_shaded_crater.html>;
+  EGU 2014 abstracts on simple crater rims (the rim's height is ejecta and structural
+  uplift in about equal parts), <https://meetingorganizer.copernicus.org/EGU2014/EGU2014-2240.pdf>.
 - ADR 0016 (light and god powers), ADR 0018 (the world's end and the next), ADR 0020 (the
   camera and the dip).

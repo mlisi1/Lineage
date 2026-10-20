@@ -685,7 +685,13 @@ of lighter water far out, one nearer, and the foam at the shore. A crest comes i
 (three opacities a frame). Glints, short white strokes, grow on the open water, drift a
 little and go, forty slots to a view, each on its own clock and somewhere new each time
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
-it at its first moment, which the snapshots use. The land sheet films it. `seaAt(land)`
+it at its first moment, which the snapshots use. The land sheet films it. **Tides**
+(R4): the painter also leaves the swash, three layers of water running further up the
+beach (the shallowest sea over the sand, foam at its edge; one pixel on the map). Every
+surf and swash layer is cut into tiles 16 art pixels across, each on its own clock, a
+smooth noise of where it is on the island (`tidePhase`), so a wave runs along a coast and
+no two coasts break together. A wave runs up the beach in 30 % of 5.4 s and drains in the
+rest, as far as a tide turning over 48 s lets it. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -823,8 +829,10 @@ god powers, a world's end and the next one's beginning).
   before (`LightEase`), so a dusk fades instead of stepping, at any playback speed.
 - **Glow**: halos in five steps (a 48-texel disc, at most three times that across so its
   steps stay a few art pixels wide), added over the tint so they show in the dark. An
-  animal with the glow gene shines at every other joint of its back as strongly as it is
-  dark (`Herd.glowing`). A fire is a wide glow, then for each burning cell a small
+  animal with the glow gene shines as strongly as it is dark (`Herd.glowing`): on the map
+  a small light just round its square; closer, a ring of light with a clear heart round
+  every other joint of its back, so the animal shows through it, wider up close. It
+  breathes, between 45 % and full over 3.5 s. A fire is a wide glow, then for each burning cell a small
   flicker off its middle and flames licking up; up close (local view) more of them.
 - **Weather**: smoke, ash, dust, flames and rain are slots each going round a cycle of
   its own; where a slot is depends only on its number and the time (as the sea's glints),
@@ -867,6 +875,25 @@ god powers, a world's end and the next one's beginning).
 - The seed power drops motes over the bare land in sight; the ark's light falls where its
   newcomers land.
 - Algae are olive fronds on the shallows, and glow shows on the map's dots.
+
+**Round 4** (the owner's comments on the films, ADR 0021):
+
+- Rain is sized to the view (a 2-pixel streak on the map to 6 up close), falls in three
+  parallax layers, and leans with the wind (more with thunder, most in a thunderstorm,
+  whose gusts swing every layer). Cloud greys the light while it rains.
+- Up close, two large six-frame flames to a burning cell, each with its own halo and
+  embers. The made-up fire and burnt wood of `?show=` spread as the sim's fire does,
+  from cell to neighbouring cell through fuel (`fireReach`). The scorch is painted cell
+  by cell, charcoal with drifts of ash and a wandering edge.
+- The lava flows in eight looped frames; the cone stands in a skirt of ash and scree.
+- The crater is drawn from a lit height field, after simple impact craters: a scalloped
+  raised rim, the near wall in shadow, the far wall lit, a slumped floor, pale ejecta
+  with boulders thinning into clods, rays downrange.
+- The ark's light is scaled to the view, and each newcomer comes into being under a
+  thread of light, fading in over 2.5 s (`CreatureLayer.arrive`).
+- The seed's sprouts grow leaf by leaf on each cell the seed sowed (the land before and
+  after the power, diffed), until the plants show.
+- Tides (above, under the sea).
 
 **Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
 the particles and the shows (and the land they change), lightning, flames and marks; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
