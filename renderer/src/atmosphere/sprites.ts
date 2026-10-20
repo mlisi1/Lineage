@@ -12,6 +12,7 @@
  *   mouth   a volcano's mouth: a dark rim round a pool of lava
  */
 import { CanvasSource, Rectangle, Texture } from "pixi.js";
+import { cellHash } from "../terrain/pixels";
 
 /** Texels across the halo and the puff. */
 export const HALO_SIZE = 48;
@@ -42,36 +43,77 @@ const MOUTH_RIM = 0x2a1e1c;
 const MOUTH_LAVA = [0xd2401c, 0xff8a2a, 0xffd25a] as const;
 
 /** The larger flame of the local view: size in texels, frames, and colours from its rim in. */
-export const BIG_FLAME_WIDTH = 11;
-export const BIG_FLAME_HEIGHT = 17;
+export const BIG_FLAME_WIDTH = 15;
+export const BIG_FLAME_HEIGHT = 24;
 export const BIG_FLAME_FRAMES = 6;
-const BIG_FLAME = [0x9c2416, 0xd8401c, 0xf47a28, 0xffb83e, 0xffe7a0] as const;
+const BIG_FLAME = [0x8c1c14, 0xc8361a, 0xee6a22, 0xffa632, 0xffd65c, 0xfff6d0] as const;
 
 /**
- * Which of the big flame's colours (index into its five) texel (x, y) of `frame` is, or
- * -1: a broad foot rising into two or three tongues that lick up and sway as the frames
- * go by, outlined in deep red, white-gold at its heart.
+ * Which of the big flame's colours (index into its six) texel (x, y) of `frame` is, or -1,
+ * after how pixel-art fire is drawn: a steady, broad base on its fuel; a body that narrows
+ * upward and sways more the higher it is; tongues licking up in turn across its top; and
+ * on each loop one tongue pinching off and rising as a lick of flame that shrinks away.
+ * Deep red at the rim (never brown, which reads as smoke), through orange and yellow to a
+ * white-gold heart low in the body.
  */
 export function bigFlameTexel(frame: number, x: number, y: number): number {
-  const fromFoot = BIG_FLAME_HEIGHT - 1 - y;
-  const centre = (BIG_FLAME_WIDTH - 1) / 2;
+  const W = BIG_FLAME_WIDTH;
+  const H = BIG_FLAME_HEIGHT;
+  const fromFoot = H - 1 - y;
+  const t = fromFoot / H;
   const phase = (2 * Math.PI * frame) / BIG_FLAME_FRAMES;
-  const off = (x - centre) / (BIG_FLAME_WIDTH / 2);
-  // The body: tallest in the middle; tongues rise and fall in turn across it.
-  const body = (1 - off * off) * (BIG_FLAME_HEIGHT * 0.62);
+  // The base stays put; higher up the flame sways.
+  const centre = (W - 1) / 2 + Math.sin(phase + t * 2.5) * 1.6 * t * t;
+  const off = (x - centre) / (W / 2);
+  // The body: wide and rounded at its foot, narrowing to the tongues.
+  const half = Math.min(1, 0.6 + t * 5) * Math.pow(Math.max(1 - t, 0), 0.65);
   const tongues =
-    Math.max(0, Math.cos(off * 5.2 + phase)) * BIG_FLAME_HEIGHT * 0.3 +
-    Math.max(0, Math.cos(off * 3.1 - phase * 0.7 + 1)) * BIG_FLAME_HEIGHT * 0.18;
-  const height = body + tongues * (1 - Math.abs(off) * 0.6);
-  if (Math.abs(off) > 1 || fromFoot > height) return -1;
-  const inside = height - fromFoot;
-  const edge = (1 - Math.abs(off)) * BIG_FLAME_WIDTH * 0.5;
-  const depth = Math.min(inside, edge);
-  if (depth < 0.9) return 0;
-  if (depth < 1.8) return 1;
-  if (depth < 2.8 || fromFoot > body * 0.85) return 2;
-  if (depth < 3.6 || fromFoot > body * 0.5) return 3;
-  return 4;
+    0.5 +
+    0.16 * Math.max(0, Math.cos(off * 6 + phase)) +
+    0.12 * Math.max(0, Math.cos(off * 3.4 - phase * 1.3 + 1.2));
+  const height = H * tongues * (1 - 0.55 * off * off);
+  const inBody = Math.abs(off) <= half && fromFoot <= height;
+  // The lick that pinched off: rising from the top of the body and shrinking.
+  const k = frame / BIG_FLAME_FRAMES;
+  const lickY = H * (0.62 + 0.32 * k);
+  const lickX = (W - 1) / 2 + Math.sin(phase * 0.5 + 1) * 1.5;
+  const lickR = 2.2 * (1 - k * 0.8);
+  const lick = Math.hypot((x - lickX) / lickR, (fromFoot - lickY) / (lickR * 1.5));
+  if (!inBody) {
+    if (lick > 1) return -1;
+    return lick > 0.6 || k > 0.5 ? 1 : 2;
+  }
+  const inside = Math.min(height - fromFoot, (half - Math.abs(off)) * (W / 2));
+  if (inside < 0.9) return 0;
+  if (inside < 1.9) return 1;
+  if (inside < 3 || t > 0.55) return 2;
+  if (inside < 4 || t > 0.38) return 3;
+  return t > 0.22 || inside < 5 ? 4 : 5;
+}
+
+/** The embers under a burning cell: size in texels, frames. */
+export const EMBER_WIDTH = 16;
+export const EMBER_HEIGHT = 10;
+export const EMBER_FRAMES = 3;
+const EMBER = [0x3a1612, 0x7a2214, 0xc8401a, 0xff8a2a, 0xffd060] as const;
+
+/**
+ * Which of the embers' colours texel (x, y) of `frame` is, or -1: a ragged oval bed of
+ * charcoal and glowing coals that the flames stand in, so that they rise out of the ground;
+ * the coals brighten and dim from frame to frame.
+ */
+export function emberTexel(frame: number, x: number, y: number): number {
+  const dx = (x + 0.5 - EMBER_WIDTH / 2) / (EMBER_WIDTH / 2);
+  const dy = (y + 0.5 - EMBER_HEIGHT / 2) / (EMBER_HEIGHT / 2);
+  const d = Math.hypot(dx, dy) + 0.25 * (cellHash(x, y, 361) - 0.5);
+  if (d > 1) return -1;
+  // The rim is scattered charcoal; inside, coals glowing in turn.
+  if (d > 0.8) return cellHash(x, y, 362) < 0.55 ? 0 : -1;
+  const heat = cellHash(x, y, 363 + frame) * (1.2 - d);
+  if (heat > 0.75) return 4;
+  if (heat > 0.5) return 3;
+  if (heat > 0.3) return 2;
+  return heat > 0.15 ? 1 : 0;
 }
 
 export interface Sprites {
@@ -223,10 +265,12 @@ export function atmosphereSprites(): Sprites {
   }
   const fleckX = puffX + PUFF_SIZE;
   put(fleckX, 0, 1);
-  // The beam: three steps across, and fading toward its top.
+  // The beam: three steps across, fading toward its top, and toward its foot in steps, so
+  // that it meets the ground in a pool of light instead of a hard edge.
   const beamX = fleckX + 1;
   for (let y = 0; y < BEAM_HEIGHT; y++) {
-    const fade = y < BEAM_HEIGHT / 4 ? 0.5 : 1;
+    const toFoot = (BEAM_HEIGHT - 1 - y) / BEAM_HEIGHT;
+    const fade = y < BEAM_HEIGHT / 4 ? 0.5 : toFoot < 0.06 ? 0.3 : toFoot < 0.14 ? 0.6 : 1;
     for (let x = 0; x < BEAM_WIDTH; x++) {
       const across = Math.abs(x + 0.5 - BEAM_WIDTH / 2) / (BEAM_WIDTH / 2);
       const alpha = across < 0.3 ? 0.9 : across < 0.65 ? 0.45 : 0.18;
@@ -337,4 +381,37 @@ export function sproutTextures(): Texture[] {
     (_, frame) => new Texture({ source, frame: new Rectangle(frame * 8, 0, 7, height) }),
   );
   return sprouts;
+}
+
+let embers: Texture[] | null = null;
+
+/** The embers' frames (made on first use). */
+export function emberTextures(): Texture[] {
+  if (embers !== null) return embers;
+  const width = EMBER_FRAMES * (EMBER_WIDTH + 1);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = EMBER_HEIGHT;
+  const context = canvas.getContext("2d");
+  if (context === null) throw new Error("no 2D canvas for embers");
+  for (let frame = 0; frame < EMBER_FRAMES; frame++) {
+    for (let y = 0; y < EMBER_HEIGHT; y++) {
+      for (let x = 0; x < EMBER_WIDTH; x++) {
+        const colour = EMBER[emberTexel(frame, x, y)];
+        if (colour === undefined) continue;
+        context.fillStyle = `#${colour.toString(16).padStart(6, "0")}`;
+        context.fillRect(frame * (EMBER_WIDTH + 1) + x, y, 1, 1);
+      }
+    }
+  }
+  const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
+  embers = Array.from(
+    { length: EMBER_FRAMES },
+    (_, frame) =>
+      new Texture({
+        source,
+        frame: new Rectangle(frame * (EMBER_WIDTH + 1), 0, EMBER_WIDTH, EMBER_HEIGHT),
+      }),
+  );
+  return embers;
 }

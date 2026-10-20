@@ -12,7 +12,20 @@ import {
   lavaPixel,
   type MarkPixel,
 } from "../../src/atmosphere/marks";
-import { flameTexel, FLAME_FRAMES, FLAME_HEIGHT, FLAME_WIDTH } from "../../src/atmosphere/sprites";
+import {
+  BIG_FLAME_FRAMES,
+  BIG_FLAME_HEIGHT,
+  BIG_FLAME_WIDTH,
+  EMBER_FRAMES,
+  EMBER_HEIGHT,
+  EMBER_WIDTH,
+  bigFlameTexel,
+  emberTexel,
+  flameTexel,
+  FLAME_FRAMES,
+  FLAME_HEIGHT,
+  FLAME_WIDTH,
+} from "../../src/atmosphere/sprites";
 
 describe("lightning", () => {
   it("falls more often and brighter in a thunderstorm than in thunder, the strike brightest", () => {
@@ -29,6 +42,25 @@ describe("lightning", () => {
     expect(BOLTS.storm.flash).toBeGreaterThan(BOLTS.thunder.flash);
     expect(BOLTS.strike.flash).toBeGreaterThan(BOLTS.storm.flash);
     expect(BOLTS.strike.width).toBeGreaterThan(BOLTS.storm.width);
+  });
+
+  it("falls at irregular times: short gaps and long lulls", () => {
+    const starts: number[] = [];
+    let last = -1;
+    for (let t = 0; t < 1200; t += 0.05) {
+      const bolt = boltAt("thunder", t);
+      if (bolt !== null && bolt.n !== last) {
+        starts.push(t);
+        last = bolt.n;
+      }
+    }
+    const gaps = starts.slice(1).map((t, i) => t - (starts[i] ?? 0));
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const spread = Math.sqrt(gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length);
+    // A clock would give gaps all alike; these vary about as much as they last.
+    expect(spread / mean).toBeGreaterThan(0.6);
+    expect(Math.min(...gaps)).toBeLessThan(mean / 3);
+    expect(Math.max(...gaps)).toBeGreaterThan(mean * 2.5);
   });
 
   it("is the same at the same moment", () => {
@@ -160,5 +192,37 @@ describe("the flame and the marks", () => {
       return r;
     });
     expect(Math.max(...reaches) - Math.min(...reaches)).toBeGreaterThan(0.03);
+  });
+});
+
+describe("the close fire", () => {
+  it("keeps its base on its fuel while its top licks and sways", () => {
+    const row = (frame: number, y: number): string =>
+      Array.from({ length: BIG_FLAME_WIDTH }, (_, x) => bigFlameTexel(frame, x, y)).join();
+    const foot = BIG_FLAME_HEIGHT - 1;
+    const top = Math.floor(BIG_FLAME_HEIGHT * 0.3);
+    const feet = new Set<string>();
+    const tops = new Set<string>();
+    for (let frame = 0; frame < BIG_FLAME_FRAMES; frame++) {
+      feet.add(row(frame, foot));
+      tops.add(row(frame, top));
+    }
+    expect(feet.size).toBe(1);
+    expect(tops.size).toBeGreaterThan(2);
+    // Deep red at its rim, white-gold at its heart.
+    const middle = Math.floor(BIG_FLAME_WIDTH / 2);
+    expect(bigFlameTexel(0, middle, foot - 2)).toBe(5);
+    expect(bigFlameTexel(0, 0, foot)).toBeLessThanOrEqual(0);
+  });
+
+  it("stands in a bed of embers that glow in turn", () => {
+    const bed = (frame: number): number[] =>
+      Array.from({ length: EMBER_WIDTH * EMBER_HEIGHT }, (_, i) =>
+        emberTexel(frame, i % EMBER_WIDTH, Math.floor(i / EMBER_WIDTH)),
+      );
+    expect(bed(0)).not.toEqual(bed(1));
+    expect(EMBER_FRAMES).toBeGreaterThan(1);
+    expect(emberTexel(0, 0, 0)).toBe(-1); // its corners are the ground's
+    expect(bed(0).filter((tone) => tone >= 3).length).toBeGreaterThan(5);
   });
 });

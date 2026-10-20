@@ -120,6 +120,66 @@ export class SpritePool {
   }
 }
 
+/** The plants' rows of the view shown, where things that stand are sorted among them. */
+export interface Rows {
+  /** One container per row, top row first, drawn over that row's plants. */
+  guests: readonly Container[];
+  rowsPerCell: number;
+}
+
+/**
+ * Sprites placed afresh each frame among the plants (R4): each goes into the row of the
+ * plants it stands with (by its foot), so that what stands in front covers it and it covers
+ * what stands behind. Without rows (the map) they go into `fallback`.
+ */
+export class RowPool {
+  private readonly sprites: Sprite[] = [];
+  private used = 0;
+
+  constructor(
+    private readonly fallback: Container,
+    private readonly blendMode: "normal" | "add" = "normal",
+  ) {}
+
+  begin(): void {
+    this.used = 0;
+  }
+
+  /** The next sprite, shown, with `texture`, in the row of a foot at `footY` cells. */
+  next(texture: Texture, rows: Rows | null, footY: number): Sprite {
+    let sprite = this.sprites[this.used];
+    if (sprite === undefined) {
+      sprite = new Sprite(texture);
+      sprite.blendMode = this.blendMode;
+      this.sprites.push(sprite);
+    }
+    const host =
+      rows === null
+        ? this.fallback
+        : (rows.guests[
+            Math.min(Math.max(Math.floor(footY * rows.rowsPerCell), 0), rows.guests.length - 1)
+          ] ?? this.fallback);
+    // Last in its row, every frame: what is asked for later is drawn over what came before
+    // (a cone, then its lava; a tree's foot fire, then the flames in its crown).
+    host.addChild(sprite);
+    if (sprite.texture !== texture) sprite.texture = texture;
+    sprite.visible = true;
+    this.used += 1;
+    return sprite;
+  }
+
+  end(): void {
+    for (let i = this.used; i < this.sprites.length; i++) {
+      const sprite = this.sprites[i];
+      if (sprite !== undefined) sprite.visible = false;
+    }
+  }
+
+  get shown(): number {
+    return this.used;
+  }
+}
+
 /**
  * Put `sprite` centred on (x, y) in cells, `size` art pixels across (or `width` × `height`),
  * on whole art pixels.

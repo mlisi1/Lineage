@@ -103,6 +103,11 @@ export class Landscape {
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly built: Built = { map: null, middle: null, local: null };
+  /**
+   * What lies on the ground (R4: a crater, a cone's scree, a fire's embers): under the
+   * plants of the view shown, over its ground and sea, so that what stands is drawn over it.
+   */
+  readonly floor = new Container();
   private readonly layers: Record<ViewName, Container> = {
     map: new Container(),
     middle: new Container(),
@@ -192,11 +197,36 @@ export class Landscape {
     this.cells = cells;
     for (const view of VIEWS) this.layers[view].visible = view === name;
     if (this.land !== null && this.built[name] === null) this.build(name);
+    this.placeFloor();
+  }
+
+  /** Put the floor in the view shown, just under its plants (on top of the map's ground). */
+  private placeFloor(): void {
+    const layer = this.layers[this.view];
+    const standing =
+      this.view === "middle"
+        ? this.built.middle?.plants.container
+        : this.view === "local"
+          ? this.built.local?.plants.container
+          : undefined;
+    if (standing === undefined || standing.parent !== layer) {
+      if (
+        this.floor.parent !== layer ||
+        layer.getChildIndex(this.floor) !== layer.children.length - 1
+      ) {
+        layer.addChild(this.floor);
+      }
+      return;
+    }
+    const under = layer.getChildIndex(standing);
+    if (this.floor.parent === layer && layer.getChildIndex(this.floor) === under - 1) return;
+    layer.addChildAt(this.floor, layer.getChildIndex(standing));
   }
 
   /** Lay out what is stale, move the fades on, and ask for the ground the view needs. */
   update(dtS: number): void {
     if (this.stale && this.landMessage !== null) this.layOut();
+    this.placeFloor();
     const { built, cells } = this;
     built.map?.tick(dtS);
     if (!this.still) this.seaTime += dtS;

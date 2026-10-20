@@ -42,12 +42,22 @@ import {
 } from "./light";
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
 import { CRATER_RIM, LAVA_FRAMES, coneSummit, markTexture } from "./marks";
-import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
+import {
+  RowPool,
+  SpritePool,
+  dropAt,
+  placeCentred,
+  puffAt,
+  type Fall,
+  type Plume,
+  type Rows,
+} from "./particles";
 import {
   HALO_SIZE,
   RINGS,
   SPROUT_FRAMES,
   atmosphereSprites,
+  emberTextures,
   sproutTextures,
   streakTexture,
   type Sprites,
@@ -64,7 +74,8 @@ const ARK_LIGHT = 0xd8f0ff;
 const SMOKE = 0x8a8290;
 const ASH = 0x3c3438;
 const DUST = 0xb8a088;
-const RAIN = 0xe4f0ff;
+/** Rain, far to near: a pale, cool blue that shows on grass, sand and water alike. */
+const RAIN_TONES = [0xa4c2e2, 0xbcd6f2, 0xdcebfc] as const;
 const RIPPLE = 0xe8f4ff;
 const BOLT = 0xf4f8ff;
 const BOLT_GLOW = 0xb8d0ff;
@@ -73,24 +84,41 @@ const RAIN_STRENGTH: Readonly<Record<RainKind, number>> = {
   none: 0,
   rain: 0.7,
   thunder: 0.8,
-  storm: 1,
+  storm: 1.5,
   soaking: 0.6,
+  cloud: 0,
 };
+/**
+ * How overcast the sky is under each weather (0–1): it greys the light and lays a veil of
+ * cloud-grey over the land, which takes the colour out of it as a blocked sun does.
+ */
+const OVERCAST: Readonly<Record<RainKind, number>> = {
+  none: 0,
+  cloud: 0.5,
+  soaking: 0.75,
+  rain: 0.8,
+  thunder: 0.9,
+  storm: 1,
+};
+/** The veil at full overcast: its colour and opacity. */
+const VEIL = 0x9aa2ac;
+const VEIL_ALPHA = 0.3;
 /** How much the rain leans with the wind: pixels across for each pixel down. */
 const RAIN_LEAN: Readonly<Record<RainKind, number>> = {
   none: 0,
   rain: 0.35,
   thunder: 0.45,
-  storm: 0.8,
+  storm: 1,
   soaking: 0.2,
+  cloud: 0,
 };
 /** Rain as the view is close: how long a drop is (art pixels), how fast it falls (art pixels a second), how many, how bright. */
 const RAIN_SCALE: Readonly<
   Record<ViewName, { length: number; speed: number; count: number; alpha: number }>
 > = {
-  map: { length: 2, speed: 80, count: 1.6, alpha: 0.4 },
-  middle: { length: 3, speed: 120, count: 1.3, alpha: 0.5 },
-  local: { length: 6, speed: 170, count: 1, alpha: 0.7 },
+  map: { length: 4, speed: 170, count: 1.6, alpha: 0.9 },
+  middle: { length: 5, speed: 210, count: 1.3, alpha: 0.9 },
+  local: { length: 6, speed: 230, count: 1, alpha: 0.85 },
 };
 /** The layers of rain, far to near: share of the drops, and how fast, long and bright against the view's. */
 const RAIN_LAYERS = [
@@ -98,10 +126,24 @@ const RAIN_LAYERS = [
   { share: 0.35, speed: 1, length: 1, alpha: 0.85 },
   { share: 0.2, speed: 1.45, length: 1.45, alpha: 1 },
 ] as const;
-/** Glow: seconds a pulse takes, the least of it, and the glow round an animal's square on the map (art pixels). */
+/**
+ * How hard a spell of rain falls, as a share of its kind's strength: each spell draws its
+ * own (from when it began), and within it the rain comes and goes over `RAIN_SWELL_S`.
+ */
+const RAIN_POWER: readonly [number, number] = [0.45, 1.35];
+const RAIN_SWELL_S = 18;
+/** Glow: seconds a pulse takes, and the glow round an animal's square on the map (art pixels). */
 const GLOW_PULSE_S = 3.5;
-const GLOW_LOW = 0.45;
 const GLOW_MAP_PX = 8;
+/**
+ * The glow's opacity at the bottom and top of its pulse in each view, at full dark. Closer
+ * in its rings overlap along the back, so they are fainter: the animal must show through.
+ */
+const GLOW_RANGE: Readonly<Record<ViewName, readonly [number, number]>> = {
+  map: [0.3, 0.7],
+  middle: [0.12, 0.3],
+  local: [0.06, 0.16],
+};
 /** A thunderstorm darkens the sky this much more than rain (multiplied in as it builds). */
 const STORM_GREY: Rgb = [0.6, 0.64, 0.78];
 /** Ripples on the water a frame at full rain, in the middle and local views, and how long one lasts (s). */
@@ -193,6 +235,8 @@ export interface View {
   glowing: readonly Spot[];
   /** Art pixels of screen beyond the world's first cell in sight (the canvas's margin). */
   margin?: number;
+  /** The plants' rows of the view, to sort what stands among them; none on the map. */
+  rows?: Rows | null;
 }
 
 type Kind =
@@ -238,6 +282,8 @@ export class Atmosphere {
   readonly ground = new Container();
   readonly weather = new Container();
   readonly tint: Sprite;
+  /** Cloud-grey laid over the land, under the tint, as the sky is overcast. */
+  readonly veil: Sprite;
   readonly lights = new Container();
   readonly flash: Sprite;
   /** Over everything, on the screen: lightning, and the flash. */
@@ -245,10 +291,14 @@ export class Atmosphere {
 
   private readonly sprites: Sprites = atmosphereSprites();
   private readonly groundPool = new SpritePool("normal");
+  /** What lies on the ground, under the plants (`Landscape.floor`). */
+  readonly floor = new Container();
+  private readonly floorPool = new SpritePool("normal");
+  /** What stands among the plants: flames, a cone and its lava, sprouts. */
+  private readonly standPool: RowPool;
   private readonly weatherPool = new SpritePool("normal");
   private readonly lightPool = new SpritePool("add");
   /** Flames and a volcano's mouth: drawn as they are, over the tint (they make their own light). */
-  private readonly flamePool = new SpritePool("normal");
   private readonly ripplePool = new SpritePool("normal");
   private readonly boltPool = new SpritePool("add");
   private readonly flood: Sprite;
@@ -262,12 +312,18 @@ export class Atmosphere {
   private rainKind: RainKind = "none";
   private rain = 0;
   private storm = 0;
+  private overcast = 0;
+  /** The land of a meteor's crater, held until it strikes (scene seconds). */
+  private heldLand: Message | null = null;
+  private landHeldUntilS = -Infinity;
+  /** This spell's own strength (`RAIN_POWER`), drawn as it begins. */
+  private rainPower = 1;
   private burning: readonly number[] = [];
   private season: Season = "summer";
   private progress = 0.5;
   private simMs = 0;
   /** The seed power, waiting for the land it sows (scene seconds it came). */
-  private sowing: { since: number } | null = null;
+  private sowing: { since: number; seen?: Land } | null = null;
   /** The land drawn now, the one before it, and when (scene seconds) it changed. */
   private landNow: Land | null = null;
   private landBefore: Land | null = null;
@@ -284,17 +340,22 @@ export class Atmosphere {
   private shown: Rgb = [1, 1, 1];
 
   constructor(
-    deliver: (message: Message) => void,
+    private readonly deliver: (message: Message) => void,
     private readonly options: AtmosphereOptions,
   ) {
     this.tint = new Sprite({ texture: Texture.WHITE, blendMode: "multiply" });
+    this.veil = new Sprite(Texture.WHITE);
+    this.veil.tint = VEIL;
+    this.veil.alpha = 0;
     this.flash = new Sprite(Texture.WHITE);
     this.flash.alpha = 0;
     this.flood = new Sprite(Texture.EMPTY);
     this.flood.visible = false;
     this.ground.addChild(this.flood, this.ripplePool.container, this.groundPool.container);
+    this.floor.addChild(this.floorPool.container);
+    this.standPool = new RowPool(this.ground);
     this.weather.addChild(this.weatherPool.container);
-    this.lights.addChild(this.lightPool.container, this.flamePool.container);
+    this.lights.addChild(this.lightPool.container);
     this.sky.addChild(this.boltPool.container, this.flash);
     this.sequence = new Sequence(deliver);
   }
@@ -307,7 +368,25 @@ export class Atmosphere {
     const was = this.sequence.active;
     const held = this.sequence.take(message);
     if (!was && this.sequence.active) this.options.onEnd?.();
-    return held;
+    if (held) return true;
+    // A meteor's crater: the land that comes with it (just after its news) waits until the
+    // meteor has struck, so that the bowl does not show before it.
+    if (message.type === "events" && message.events.some((event) => event.kind === "crater")) {
+      this.landHeldUntilS = this.timeS + METEOR_FALL_S;
+    }
+    if (message.type === "land" && this.timeS < this.landHeldUntilS) {
+      this.heldLand = message;
+      return true;
+    }
+    return false;
+  }
+
+  /** Hand on the land held for a meteor once it has struck. */
+  private releaseLand(): void {
+    if (this.heldLand === null || this.timeS < this.landHeldUntilS) return;
+    const land = this.heldLand;
+    this.heldLand = null;
+    this.deliver(land);
   }
 
   /** Whether a world is ending on the screen (the camera stays on the map). */
@@ -325,6 +404,11 @@ export class Atmosphere {
       this.simMs = message.t_ms;
       this.ease.step(message.light);
       this.present = message.present;
+      if (message.rain !== this.rainKind && message.rain !== "none") {
+        const [weakest, strongest] = RAIN_POWER;
+        const hour = Math.floor(message.t_ms / 3_600_000);
+        this.rainPower = weakest + (strongest - weakest) * cellHash(hour, 0, 431);
+      }
       this.rainKind = message.rain;
       this.burning = message.burning;
     } else if (message.type === "events") this.takeEvents(message);
@@ -335,6 +419,7 @@ export class Atmosphere {
     this.ease.set(this.ease.target);
     this.rain = RAIN_STRENGTH[this.rainKind];
     this.storm = this.rainKind === "storm" ? 1 : 0;
+    this.overcast = OVERCAST[this.rainKind];
   }
 
   private takeEvents(message: EventsMessage): void {
@@ -407,12 +492,20 @@ export class Atmosphere {
   /** Move everything on by `dtS` wall seconds and draw it for `view`; the shake to apply (art pixels). */
   update(dtS: number, view: View): { x: number; y: number } {
     this.timeS += dtS;
+    this.releaseLand();
     this.ease.tick(dtS);
     this.flashLeft = Math.max(this.flashLeft - dtS, 0);
     const ease = (now: number, target: number): number =>
       now + Math.sign(target - now) * Math.min(Math.abs(target - now), dtS / RAIN_EASE_S);
-    this.rain = ease(this.rain, RAIN_STRENGTH[this.rainKind]);
+    // The spell's strength, swelling and easing within it (a storm stays heavy).
+    const swell = 0.5 + 0.5 * Math.sin((2 * Math.PI * this.timeS) / RAIN_SWELL_S);
+    const power =
+      this.rainKind === "storm"
+        ? Math.max(this.rainPower, 1) * (0.85 + 0.3 * swell)
+        : this.rainPower * (0.7 + 0.6 * swell);
+    this.rain = ease(this.rain, RAIN_STRENGTH[this.rainKind] * power);
     this.storm = ease(this.storm, this.rainKind === "storm" ? 1 : 0);
+    this.overcast = ease(this.overcast, OVERCAST[this.rainKind]);
     const wasEnding = this.sequence.active;
     this.sequence.update(dtS);
     const moment = this.sequence.active ? this.sequence.moment : null;
@@ -427,9 +520,10 @@ export class Atmosphere {
 
     this.paintTint(view, moment);
     this.groundPool.begin();
+    this.floorPool.begin();
+    this.standPool.begin();
     this.weatherPool.begin();
     this.lightPool.begin();
-    this.flamePool.begin();
     this.ripplePool.begin();
     this.boltPool.begin();
     let shake = 0;
@@ -444,9 +538,10 @@ export class Atmosphere {
     if (moment !== null) shake = Math.max(shake, this.drawEnd(moment, view, dtS));
     else this.flood.visible = false;
     this.groundPool.end();
+    this.floorPool.end();
+    this.standPool.end();
     this.weatherPool.end();
     this.lightPool.end();
-    this.flamePool.end();
     this.ripplePool.end();
     this.boltPool.end();
 
@@ -466,10 +561,18 @@ export class Atmosphere {
 
   private paintTint(view: View, moment: Moment | null): void {
     let colour = skyTint(this.ease.value, this.present, this.season, this.progress);
-    // Clouds over the sun: any rain greys the day, thunder more.
-    const cloud = Math.min(this.rain / 0.7, 1) * (this.rainKind === "thunder" ? 1.15 : 1);
-    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, Math.min(cloud, 1.15)));
+    // Clouds over the sun: the light greys and dims, and a veil of cloud-grey takes the
+    // colour out of the land; a storm darker still.
+    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, this.overcast));
     colour = multiplyRgb(colour, mixRgb([1, 1, 1], STORM_GREY, this.storm));
+    // The veil is cloud lit by the day: grey by day, dark at night, none in the end of a world.
+    const lit = Math.max(...colour);
+    this.veil.alpha = moment === null ? VEIL_ALPHA * this.overcast * lit : 0;
+    // The rain is drawn over the tint, so that it shows on any ground: as bright as the
+    // light it falls in.
+    this.weather.alpha = 0.3 + 0.7 * Math.min(lit / 0.8, 1);
+    this.veil.width = view.width;
+    this.veil.height = view.height;
     if (moment !== null) {
       // Red whatever the hour: the end of a world is lit by its fires, not by the owner.
       colour = mixRgb(colour, BLOOD_RED, moment.red);
@@ -506,7 +609,8 @@ export class Atmosphere {
     if (dark <= 0.02) return;
     // A slow pulse, a breath every few seconds.
     const pulse = 0.5 + 0.5 * Math.sin((2 * Math.PI * this.timeS) / GLOW_PULSE_S);
-    const strength = dark * (GLOW_LOW + (1 - GLOW_LOW) * pulse);
+    const [low, high] = GLOW_RANGE[view.view];
+    const strength = dark * (low + (high - low) * pulse);
     const map = view.view === "map";
     for (const spot of view.glowing) {
       // On the map a soft light just round the animal's square; closer, a ring of light
@@ -517,7 +621,7 @@ export class Atmosphere {
       const sprite = this.lightPool.next(map ? this.sprites.halo : this.sprites.ring);
       placeCentred(sprite, spot.x, spot.y, view.tile, Math.min(size, 3 * HALO_SIZE));
       sprite.tint = GLOW_SPOT;
-      sprite.alpha = Math.min((map ? 0.7 : 0.6) * strength, 1);
+      sprite.alpha = Math.min(strength, 1);
     }
   }
 
@@ -575,30 +679,58 @@ export class Atmosphere {
         this.puffs(flames, 1, FIRE[(flame + 1) % FIRE.length] ?? SPARK, tile, true);
         return;
       }
-      // Closer, flames: one to a cell in the middle view; up close two larger,
-      // more detailed ones, each with its own glow and embers rising from it. Each on its
-      // own frame of the flicker; whole multiples of size only, for hard pixel edges.
+      // Closer: a bed of glowing embers on the ground (under the plants), and flames
+      // standing among the plants, sorted with them: one to a cell in the middle view, two
+      // larger ones up close, each with its own glow and embers rising from it. A burning
+      // tree or bush burns in its crown too. Whole multiples of size, for hard pixel edges.
       const close = tile >= 32;
+      const embers = emberTextures();
+      const ember = embers[(Math.floor(this.timeS * 4) + index) % embers.length];
+      if (ember !== undefined) {
+        const bed = this.floorPool.next(ember);
+        // A cell across up close (two screen pixels to its texel), half that in the middle view.
+        placeCentred(
+          bed,
+          x,
+          y + 0.15,
+          tile,
+          close ? ember.width * 2 : ember.width / 2,
+          close ? ember.height * 2 : ember.height / 2,
+        );
+        bed.tint = 0xffffff;
+        bed.alpha = 0.95;
+      }
       const count = close ? 2 : 1;
       const frames = close ? this.sprites.bigFlames : this.sprites.flames;
       const scale = close ? 2 : 1;
-      for (let k = 0; k < count; k++) {
-        const ox = count === 1 ? 0 : (cellHash(index, k, 346) - 0.5) * 0.8;
-        const oy = count === 1 ? 0 : (cellHash(index, k, 347) - 0.5) * 0.6;
+      const height = (land.plantHeight?.[index] ?? 0) / 255;
+      const form = land.coverClasses[land.cover[index] ?? 0] ?? "";
+      const woody = form === "BROADLEAF" || form === "CONIFER" || form === "SHRUB";
+      const crown = woody ? (form === "SHRUB" ? 0.35 : 0.5 + 0.6 * height) : 0;
+      for (let k = 0; k < count + (crown > 0 ? 1 : 0); k++) {
+        const inCrown = k === count;
+        const ox = count === 1 && !inCrown ? 0 : (cellHash(index, k, 346) - 0.5) * 0.7;
+        const oy = count === 1 && !inCrown ? 0 : (cellHash(index, k, 347) - 0.5) * 0.5;
         const rate = 7 + 4 * cellHash(index, k, 349);
         const frame = (Math.floor(this.timeS * rate) + k + index) % frames.length;
-        const sprite = this.flamePool.next(frames[frame] ?? this.sprites.fleck);
-        const w = sprite.texture.width * scale;
-        const h = sprite.texture.height * scale;
-        // Its foot on the place, rising from it.
-        placeCentred(sprite, fx + ox, fy + oy - h / 2 / tile, tile, w, h);
+        const footY = fy + (inCrown ? 0.05 : oy);
+        const sprite = this.standPool.next(
+          frames[frame] ?? this.sprites.fleck,
+          view.rows ?? null,
+          footY,
+        );
+        const size = inCrown && close ? scale / 2 : scale;
+        const w = sprite.texture.width * size;
+        const h = sprite.texture.height * size;
+        // Its foot on the place (or in the crown), rising from it.
+        placeCentred(sprite, fx + ox, footY - (inCrown ? crown : 0) - h / 2 / tile, tile, w, h);
         sprite.tint = 0xffffff;
         sprite.alpha = 1;
         if (close) {
           const glow = FIRE[(frame + k) % FIRE.length] ?? FIRE[0];
           this.halo(
             fx + ox,
-            fy + oy - h / 3 / tile,
+            footY - (inCrown ? crown : 0) - h / 3 / tile,
             w * 1.8,
             glow,
             0.45 * strength * this.flicker(index + k),
@@ -607,7 +739,7 @@ export class Atmosphere {
           this.puffs(
             {
               x: fx + ox,
-              y: fy + oy - (h * 0.6) / tile,
+              y: footY - (inCrown ? crown : 0) - (h * 0.6) / tile,
               spread: 0.08,
               rise: 22,
               drift: 4,
@@ -675,8 +807,15 @@ export class Atmosphere {
       case "cone":
       case "crater": {
         // A crater's rim stands where the sim dug, its thrown earth beyond.
-        const across = radius * 2 * tile * (effect.kind === "crater" ? 1 / CRATER_RIM : 1);
-        this.mark(this.groundPool, effect.kind, x, y, across, tile, 1);
+        const floor = (texture: Texture): Sprite => this.floorPool.next(texture);
+        if (effect.kind === "crater") {
+          this.mark(floor, "crater", x, y, (radius * 2 * tile) / CRATER_RIM, tile, 1);
+          return 0;
+        }
+        // A cone's scree lies on the ground; the cone stands among the plants, in the row of
+        // its middle (no plant grows on it: the land round it is bare).
+        this.mark(floor, "scree", x, y, radius * 2 * tile, tile, 1);
+        this.mark(this.stand(view, y), "cone", x, y, radius * 2 * tile, tile, 1);
         return 0;
       }
       case "volcano": {
@@ -694,7 +833,7 @@ export class Atmosphere {
         // Its lava: the pool in the mouth and the rivers down the cone, drawn over it
         // untinted (it makes its own light), cooling to crust as the eruption ends.
         const frame = Math.floor(this.timeS * LAVA_FPS) % LAVA_FRAMES;
-        this.mark(this.flamePool, "lava", x, y, radius * 2 * tile, tile, fading, frame);
+        this.mark(this.stand(view, y), "lava", x, y, radius * 2 * tile, tile, fading, frame);
         // A column of ash, dark, rising high and spreading with the wind.
         this.puffs(
           {
@@ -818,6 +957,11 @@ export class Atmosphere {
         beam.tint = colour;
         beam.alpha = 0.9 * life;
         this.halo(x, y, 28 * grow, colour, 0.8 * life, tile);
+        // Its light pooled on the ground round its foot, flattened as the ground is seen.
+        const pool = this.lightPool.next(this.sprites.halo);
+        placeCentred(pool, x, y, tile, 40 * grow, 16 * grow);
+        pool.tint = colour;
+        pool.alpha = 0.55 * life;
         // Motes falling onto the place.
         this.puffs(
           {
@@ -857,6 +1001,10 @@ export class Atmosphere {
         );
         thread.tint = ARK_LIGHT;
         thread.alpha = 0.8 * (1 - phase);
+        const spot = this.lightPool.next(this.sprites.halo);
+        placeCentred(spot, x, y, tile, 10 * grow, 4 * grow);
+        spot.tint = ARK_LIGHT;
+        spot.alpha = 0.6 * (1 - phase);
         this.halo(x, y, 10 * grow * (0.6 + phase), ARK_LIGHT, 0.7 * (1 - phase), tile);
         this.puffs(
           {
@@ -929,10 +1077,12 @@ export class Atmosphere {
     // that fall at different speeds (the near ones faster, longer, brighter), all leaning
     // with the wind, which gusts in a thunderstorm.
     const scale = RAIN_SCALE[view.view];
-    const gust = this.storm * 0.25 * Math.sin(this.timeS * 0.7);
+    // A storm's gusts swing the wind back and forth, and every layer follows them.
+    const gust =
+      this.storm * (0.35 * Math.sin(this.timeS * 0.7) + 0.15 * Math.sin(this.timeS * 1.9));
     const lean = RAIN_LEAN[this.rainKind] + gust;
     for (const [layer, depth] of RAIN_LAYERS.entries()) {
-      const speed = scale.speed * depth.speed * (1 + 0.4 * this.storm);
+      const speed = scale.speed * depth.speed * (1 + 0.6 * this.storm);
       const fall: Fall = { speed, slant: speed * lean, salt: 7 + layer };
       const length = Math.max(Math.round(scale.length * depth.length * (1 + 0.3 * this.storm)), 1);
       const texture = streakTexture(length, lean);
@@ -946,7 +1096,7 @@ export class Atmosphere {
           Math.round(at.y) - texture.height + 1,
         );
         sprite.scale.set(1, 1);
-        sprite.tint = RAIN;
+        sprite.tint = RAIN_TONES[layer] ?? RAIN_TONES[1];
         sprite.alpha = scale.alpha * depth.alpha;
       }
     }
@@ -1039,15 +1189,22 @@ export class Atmosphere {
       return;
     }
     // The sown land comes with the power (a stream sends it just before) or after it.
+    // Sown: bare before, growing after. A land that changed for another reason (a fire's,
+    // coming with the power) sows nothing, and the next one is waited for.
     const before = this.landBefore;
-    if (this.landChangedS < sowing.since || before === null) return;
-    this.sowing = null;
+    if (this.landChangedS < sowing.since || before === null || sowing.seen === land) return;
+    sowing.seen = land;
     if (before.width !== land.width || before.height !== land.height) return;
+    const sown: { cell: number; at: number }[] = [];
     for (let cell = 0; cell < land.biomass.length; cell++) {
-      if ((before.biomass[cell] ?? 255) >= SOWN_BARE || (land.biomass[cell] ?? 0) <= 0) continue;
+      const was = before.biomass[cell] ?? 255;
+      if (was >= SOWN_BARE || (land.biomass[cell] ?? 0) <= was) continue;
       if ((land.heights[cell] ?? 0) <= land.seaLevel) continue;
-      this.sown.push({ cell, at: this.timeS + SPROUT_STAGGER_S * cellHash(cell, 0, 517) });
+      sown.push({ cell, at: this.timeS + SPROUT_STAGGER_S * cellHash(cell, 0, 517) });
     }
+    if (sown.length === 0) return;
+    this.sowing = null;
+    this.sown = sown;
     this.sownUntilMs = this.simMs + SPROUT_DAYS * MS_PER_DAY;
   }
 
@@ -1071,7 +1228,7 @@ export class Atmosphere {
       const age = this.timeS - at;
       if (age < 0) continue;
       if (each === 0) {
-        const fleck = this.groundPool.next(this.sprites.fleck);
+        const fleck = this.floorPool.next(this.sprites.fleck);
         placeCentred(fleck, cx + 0.5, cy + 0.5, tile, 1);
         fleck.tint = 0x7cc04a;
         fleck.alpha = Math.min(age / SPROUT_GROW_S, 1);
@@ -1088,7 +1245,7 @@ export class Atmosphere {
         if (texture === undefined) continue;
         const x = cx + 0.15 + 0.7 * cellHash(cell, k, 518);
         const y = cy + 0.2 + 0.7 * cellHash(cell, k, 519);
-        const sprite = this.groundPool.next(texture);
+        const sprite = this.standPool.next(texture, view.rows ?? null, y);
         // Its foot on the spot.
         placeCentred(
           sprite,
@@ -1139,8 +1296,8 @@ export class Atmosphere {
 
   /** A mark (`marks.ts`) whose foot is `across` art pixels wide, its foot's middle on (x, y). */
   private mark(
-    pool: SpritePool,
-    kind: "cone" | "lava" | "crater",
+    place: (texture: Texture) => Sprite,
+    kind: "cone" | "scree" | "lava" | "crater",
     x: number,
     y: number,
     across: number,
@@ -1152,12 +1309,17 @@ export class Atmosphere {
     // Up close its art pixels are two screen pixels, as the plants' are.
     const pixel = tile >= 32 ? 2 : 1;
     const mark = markTexture(kind, across / pixel, frame);
-    const sprite = pool.next(mark.texture);
+    const sprite = place(mark.texture);
     sprite.anchor.set(mark.cx / mark.texture.width, mark.cy / mark.texture.height);
     sprite.position.set(Math.round(x * tile) / tile, Math.round(y * tile) / tile);
     sprite.scale.set(pixel / tile);
     sprite.tint = 0xffffff;
     sprite.alpha = alpha;
+  }
+
+  /** A placer of sprites standing among the plants with their foot at `footY` cells. */
+  private stand(view: View, footY: number): (texture: Texture) => Sprite {
+    return (texture) => this.standPool.next(texture, view.rows ?? null, footY);
   }
 
   /** An animal died in the fire at (x, y) cells: a puff of ash rises there. */
@@ -1329,7 +1491,7 @@ export class Atmosphere {
       lights: this.lightPool.shown,
       ground: this.groundPool.shown,
       weather: this.weatherPool.shown,
-      flames: this.flamePool.shown,
+      flames: this.standPool.shown,
       ripples: this.ripplePool.shown,
       bolts: this.boltPool.shown,
     };

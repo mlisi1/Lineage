@@ -190,3 +190,36 @@ test("the seed's sprouts come up on the land it sowed", async ({ page }) => {
   expect(await page.evaluate(() => window.__atmosphere?.().sown ?? 0)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
+
+test("a meteor's crater shows in the land only once the meteor has struck", async ({ page }) => {
+  const errors = await open(page, "view=middle&x=120&y=60&show=day");
+  const before = await page.evaluate(() => window.__landAt?.(120.5, 60.5)?.height ?? -1);
+  expect(before).toBeGreaterThan(0);
+  // The stream's order: the crater's news, then the land it changed (here, all sea floor).
+  await page.evaluate(async () => {
+    const recording = (await (await fetch("/stream/recording.json")).json()) as {
+      messages: { type: string; heights?: { data: string } }[];
+    };
+    const land = recording.messages.find((m) => m.type === "land");
+    if (land?.heights === undefined) throw new Error("no land");
+    const flat = {
+      ...land,
+      t_ms: 1,
+      heights: { ...land.heights, data: btoa("\0".repeat(atob(land.heights.data).length)) },
+    };
+    window.__receive?.({
+      type: "events",
+      protocol: 1,
+      t_ms: 1,
+      events: [{ kind: "crater", t_ms: 1, x: 120, y: 60, radius_cells: 3 }],
+    } as never);
+    window.__receive?.(flat as never);
+  });
+  await advance(page, 0.5);
+  expect(await page.evaluate(() => window.__landAt?.(120.5, 60.5)?.height)).toBe(before);
+  await advance(page, 1);
+  await page.waitForFunction(() => (window.__landAt?.(120.5, 60.5)?.height ?? 1) === 0, null, {
+    timeout: 10_000,
+  });
+  expect(errors).toEqual([]);
+});

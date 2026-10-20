@@ -7,7 +7,9 @@
  *             thick and forked, where the fire begins
  *
  * When thunder and storm bolts fall is a function of the time alone, as the sea's glints
- * are; where a bolt runs is a hash of its number. A bolt is a path of whole art pixels on
+ * are, and irregular: time is cut into short windows, a bolt falls in a window by chance,
+ * more often in some stretches of the storm than others (lulls and bursts, a bolt
+ * sometimes right after another); where a bolt runs is a hash of its number. A bolt is a path of whole art pixels on
  * the screen, from above the top edge down to where it strikes, jagged in small steps.
  */
 import { cellHash } from "../terrain/pixels";
@@ -29,15 +31,31 @@ export const BOLTS: Readonly<
 const JAG = 3;
 const STEP = 4;
 
+/** Windows to a bolt's mean spacing (`every`), and the seconds over which a storm's activity turns. */
+const WINDOWS = 4;
+const ACTIVITY_S = 25;
+
+/** How active the storm is at `timeS`, 0.3–1.7 (mean about 1): lulls and bursts. */
+function activity(timeS: number, salt: number): number {
+  const at = timeS / ACTIVITY_S;
+  const i = Math.floor(at);
+  const f = at - i;
+  const a = cellHash(i, salt, 409);
+  const b = cellHash(i + 1, salt, 409);
+  return 0.3 + 1.4 * (a + (b - a) * f * f * (3 - 2 * f));
+}
+
 /** The bolt of window `n` of `kind` showing at `timeS`, if one does: its number, and how far through its showing (0–1). */
 export function boltAt(
   kind: "thunder" | "storm",
   timeS: number,
 ): { n: number; phase: number } | null {
-  const { every, share, lasts } = BOLTS[kind];
+  const { every: mean, share, lasts } = BOLTS[kind];
+  const every = mean / WINDOWS;
   const n = Math.floor(timeS / every);
-  if (cellHash(n, kind === "storm" ? 2 : 1, 401) >= share) return null;
-  const start = n * every + cellHash(n, 3, 402) * (every - lasts);
+  const salt = kind === "storm" ? 2 : 1;
+  if (cellHash(n, salt, 401) >= (share / WINDOWS) * activity(n * every, salt)) return null;
+  const start = n * every + cellHash(n, 3, 402) * Math.max(every - lasts, 0);
   const into = timeS - start;
   if (into < 0 || into >= lasts) return null;
   return { n, phase: into / lasts };

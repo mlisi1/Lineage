@@ -220,7 +220,14 @@ async function start(): Promise<void> {
     },
   });
   world.addChild(atmosphere.ground);
-  app.stage.addChild(atmosphere.weather, atmosphere.tint, atmosphere.lights, atmosphere.sky);
+  landscape.floor.addChild(atmosphere.floor);
+  app.stage.addChild(
+    atmosphere.veil,
+    atmosphere.tint,
+    atmosphere.weather,
+    atmosphere.lights,
+    atmosphere.sky,
+  );
   // An animal that dies in a burning cell leaves a puff of ash.
   herd.onGone = (x, y) => {
     const land = landscape.current;
@@ -414,6 +421,7 @@ async function start(): Promise<void> {
       land,
       glowing: herd.glowing(cells),
       margin: MARGIN,
+      rows: landscape.hosts,
     });
     advance = 0;
     world.scale.set(tile);

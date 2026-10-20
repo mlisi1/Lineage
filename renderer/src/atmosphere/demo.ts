@@ -6,12 +6,14 @@
  *
  *   day, dusk, dawn, night, moon        the light ([presence]: night 0.05, moonlight 0.15)
  *   rain, thunder, storm, soaking       what falls (the island's own rain; the rain power's)
+ *   cloud                               an overcast sky, nothing falling
  *   fire                                a thunderstorm's lightning sets the plants alight
  *                                       (the fire goes where they carry it, `fireReach`)
  *   burnt                               where such a fire went: charred trees, scorch
  *   volcano, quake, meteor              the terrain's events; a volcano raises its cone and
  *                                       a meteor digs its bowl in the land sent with them
- *   seed, ark                           the powers: seed motes, then sprouts on the bare
+ *   seed, ark                           the powers (`burnt,seed` sows the burnt ground)
+ *                                       : seed motes, then sprouts on the bare
  *                                       land in sight; the ark's light and its newcomers
  *   end                                 a world's end (no next world: the same land rises)
  *
@@ -26,7 +28,7 @@ import type {
   Message,
   SkyMessage,
 } from "../protocol";
-import { gridNumbers } from "../stream";
+import { gridNumbers, landOf } from "../stream";
 import type { Land } from "../terrain/land";
 import { cellHash } from "../terrain/pixels";
 
@@ -40,6 +42,7 @@ export const SHOWS = [
   "thunder",
   "storm",
   "soaking",
+  "cloud",
   "fire",
   "burnt",
   "volcano",
@@ -59,7 +62,7 @@ const LIGHTS: Readonly<Record<string, { light: number; present: boolean }>> = {
   night: { light: 0.05, present: false },
   moon: { light: 0.15, present: false },
 };
-const RAINS = ["rain", "thunder", "storm", "soaking"] as const;
+const RAINS = ["rain", "thunder", "storm", "soaking", "cloud"] as const;
 
 /** Cells set on fire, and burnt in a burnt wood; cells across the bare land sown. */
 const FIRE_CELLS = 24;
@@ -345,8 +348,13 @@ export function demoMessages(
     out.push({ afterS, message: { ...message, t_ms: tMs } });
   };
   if (fire) events.push({ kind: "fire_started", ...near });
+  // What later shows build on: the land as a fire left it, if one did.
+  let after = landMessage;
+  let afterLand = land;
   if (shows.includes("burnt") && landMessage !== null) {
-    sendLand(withBurnt(landMessage, at.x, at.y, land));
+    after = withBurnt(landMessage, at.x, at.y, land);
+    afterLand = landOf(after, null);
+    sendLand(after);
   }
   if (shows.includes("volcano")) {
     events.push({ kind: "volcano", ...near, radius_cells: VOLCANO_RADIUS });
@@ -361,10 +369,11 @@ export function demoMessages(
   }
   if (shows.includes("seed")) {
     events.push({ kind: "god_power", ...near, power: "seed" });
-    // The seeds take on bare land: the bare land nearest what is in sight.
-    const sown = landNear(land, at.x, at.y, true);
-    if (landMessage !== null) {
-      sendLand(withSprouts(landMessage, sown.x, sown.y, land), SOWN_AFTER_S);
+    // The seeds take on bare land: the bare land nearest what is in sight (with `burnt`,
+    // the ground the fire has just bared).
+    const sown = landNear(afterLand, at.x, at.y, true);
+    if (after !== null) {
+      sendLand(withSprouts(after, sown.x, sown.y, afterLand), SOWN_AFTER_S);
     }
   }
   if (shows.includes("ark")) {

@@ -184,9 +184,9 @@ function boulder(x: number, y: number, salt: number): number | null {
 }
 
 /** The cone's pixel at (x, y), lava left out (it is its own layer). */
-export function conePixel(shape: ConeShape, x: number, y: number): MarkPixel {
+export function conePixel(shape: ConeShape, x: number, y: number, scree = true): MarkPixel {
   const at = ledgeAt(shape, x, y);
-  if (at === null) return screePixel(shape, x, y);
+  if (at === null) return scree ? screePixel(shape, x, y) : null;
   const { kind, ledge, dx, dy, d, inside } = at;
   if (kind === "face") {
     // A cliff: strata in vertical streaks, darker toward its foot, cracked here and there.
@@ -252,9 +252,14 @@ export function lavaPixel(shape: ConeShape, x: number, y: number, frame = 0): Ma
     if (at.dy < 0 && pit > 0.45) return null;
     // A pool of lava with plates of crust floating on it, hottest in the middle.
     // Small plates of crust, ragged, drifting on it.
-    const drift = wrap(x + shift);
-    const plate = cellHash(Math.floor(drift / 2), Math.floor((y + (drift >> 2)) / 2), 615);
-    if (plate < 0.16 && cellHash(drift, y, 622) < 0.8) return [LAVA_CRUST, 255];
+    // Crust welling up in the middle and drifting outward to the rim, all round.
+    const r = Math.hypot(at.dx, at.dy);
+    const sector = Math.floor(
+      ((Math.atan2(at.dy, at.dx) / (2 * Math.PI) + 1) % 1) * (6 + Math.floor(r)),
+    );
+    const ring = wrap(Math.round(r * 2) - shift);
+    const plate = cellHash(sector, Math.floor(ring / 3), 615);
+    if (plate < 0.2 && cellHash(sector, ring, 622) < 0.8) return [LAVA_CRUST, 255];
     // Its heat swells and ebbs.
     const swell = 0.08 * Math.sin((2 * Math.PI * frame) / LAVA_FRAMES);
     const hot = pit < 0.35 + swell ? 0 : pit < 0.6 + swell ? 1 : 2;
@@ -448,7 +453,7 @@ function paint(
  * square, so its foot is low in the texture.
  */
 export function markTexture(
-  kind: "cone" | "lava" | "crater",
+  kind: "cone" | "scree" | "lava" | "crater",
   size: number,
   frame = 0,
 ): { texture: Texture; cx: number; cy: number } {
@@ -467,7 +472,13 @@ export function markTexture(
     const shape = coneShape(across);
     mark = {
       texture: paint(shape.width, shape.height, (x, y) =>
-        kind === "cone" ? conePixel(shape, x, y) : lavaPixel(shape, x, y, frame),
+        kind === "cone"
+          ? conePixel(shape, x, y, false)
+          : kind === "scree"
+            ? ledgeAt(shape, x, y) === null
+              ? screePixel(shape, x, y)
+              : null
+            : lavaPixel(shape, x, y, frame),
       ),
       cx: shape.cx,
       cy: shape.cy,

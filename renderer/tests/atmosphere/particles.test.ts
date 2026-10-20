@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dropAt, puffAt, type Plume } from "../../src/atmosphere/particles";
+import { Container, Texture } from "pixi.js";
+import { RowPool, dropAt, puffAt, type Plume } from "../../src/atmosphere/particles";
 import { HALO_SIZE, HALO_STEPS, haloAlpha } from "../../src/atmosphere/sprites";
 
 const plume: Plume = {
@@ -66,5 +67,28 @@ describe("the halo", () => {
     const steps = new Set<number>();
     for (let x = 0; x < HALO_SIZE; x++) steps.add(haloAlpha(x, HALO_SIZE / 2));
     expect(steps.size).toBeLessThanOrEqual(HALO_STEPS.length + 1);
+  });
+});
+
+describe("what stands among the plants", () => {
+  it("goes into the row of its foot, later ones drawn over earlier, the rest hidden", () => {
+    const fallback = new Container();
+    const guests = Array.from({ length: 8 }, () => new Container());
+    const rows = { guests, rowsPerCell: 2 };
+    const pool = new RowPool(fallback);
+    pool.begin();
+    const a = pool.next(Texture.WHITE, rows, 1.2); // row 2
+    const b = pool.next(Texture.WHITE, rows, 1.4); // row 2, after a
+    const c = pool.next(Texture.WHITE, rows, 99); // the last row
+    pool.end();
+    expect(a.parent).toBe(guests[2]);
+    expect(guests[2]?.children.indexOf(b)).toBeGreaterThan(guests[2]?.children.indexOf(a) ?? 9);
+    expect(c.parent).toBe(guests[7]);
+    // On the map, no rows: the fallback; a sprite not asked for again is hidden.
+    pool.begin();
+    const d = pool.next(Texture.WHITE, null, 1.2);
+    pool.end();
+    expect(d.parent).toBe(fallback);
+    expect(b.visible).toBe(false);
   });
 });
