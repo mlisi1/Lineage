@@ -25,7 +25,7 @@
 import { Container, Sprite, Texture } from "pixi.js";
 import { GLOW_SPOT } from "../creatures/body";
 import type { ViewName } from "../landscape";
-import type { EventsMessage, Message, Season } from "../protocol";
+import type { EventsMessage, Message, Season, SkyMessage } from "../protocol";
 import { mulberry32, type Random } from "../rng";
 import type { CellRect, Land } from "../terrain/land";
 import { cellHash } from "../terrain/pixels";
@@ -40,8 +40,10 @@ import {
   skyTint,
   type Rgb,
 } from "./light";
+import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
+import { coneSummit, markTexture } from "./marks";
 import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
-import { HALO_SIZE, atmosphereSprites, type Sprites } from "./sprites";
+import { FLAME_FRAMES, HALO_SIZE, RINGS, atmosphereSprites, type Sprites } from "./sprites";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
 const LAVA = [0xff5a1e, 0xff8a2a, 0xffc04a] as const;
@@ -54,6 +56,29 @@ const SMOKE = 0x8a8290;
 const ASH = 0x3c3438;
 const DUST = 0xb8a088;
 const RAIN = 0xe4f0ff;
+const RIPPLE = 0xe8f4ff;
+const BOLT = 0xf4f8ff;
+const BOLT_GLOW = 0xb8d0ff;
+/** How hard each rain falls (share of `RAINDROPS`), and how it leans (art pixels a second across). */
+const RAIN_STRENGTH: Readonly<Record<RainKind, number>> = {
+  none: 0,
+  rain: 0.7,
+  thunder: 0.8,
+  storm: 1,
+  soaking: 0.6,
+};
+const RAIN_SLANT: Readonly<Record<RainKind, number>> = {
+  none: 0,
+  rain: -30,
+  thunder: -40,
+  storm: -90,
+  soaking: -15,
+};
+/** A thunderstorm darkens the sky this much more than rain (multiplied in as it builds). */
+const STORM_GREY: Rgb = [0.6, 0.64, 0.78];
+/** Ripples on the water a frame at full rain, in the middle and local views, and how long one lasts (s). */
+const RIPPLES = 40;
+const RIPPLE_S = 0.6;
 /** The sky at the end of a world. */
 const BLOOD_RED: Rgb = [1.0, 0.42, 0.3];
 
@@ -62,6 +87,16 @@ const QUAKE_S = 4;
 const METEOR_FALL_S = 1.2;
 const METEOR_S = 7;
 const BEAM_S = 8;
+/**
+ * A volcano's cone and a meteor's crater stay drawn this many sim-days after (the land
+ * keeps them; its shading barely shows them), and at least this many wall seconds.
+ */
+const MARK_DAYS = 30;
+const MARK_WALL_S = 90;
+const MS_PER_DAY = 86_400_000;
+/** Seconds a burnt animal's ash rises; motes of the seed power over the bare land in sight. */
+const ASH_S = 3;
+const SEED_MOTES = 120;
 const SPARKS_S = 2;
 const VOLCANO_HOURS = 12;
 const VOLCANO_WALL_S = 30;
@@ -77,8 +112,6 @@ const RAINDROPS = 180;
 const ASHFALL = 90;
 /** Seconds for rain to set in or stop. */
 const RAIN_EASE_S = 3;
-/** Glows of lava running down a volcano's sides. */
-const LAVA_FLOWS = 7;
 /** Lava vents of the end of a world. */
 const VENTS = 40;
 /** Seconds between repaints of the risen sea (it moves slowly). */
@@ -104,9 +137,14 @@ export interface View {
   land: Land | null;
   /** Glowing animals in sight. */
   glowing: readonly Spot[];
+  /** Art pixels of screen beyond the world's first cell in sight (the canvas's margin). */
+  margin?: number;
 }
 
-type Kind = "volcano" | "quake" | "meteor" | "seed" | "ark" | "sparks";
+type Kind =
+  "volcano" | "quake" | "meteor" | "seed" | "ark" | "sparks" | "strike" | "ash" | "cone" | "crater";
+/** What falls from the sky (the `sky` message's `rain`). */
+export type RainKind = SkyMessage["rain"];
 
 interface Effect {
   kind: Kind;
@@ -121,6 +159,8 @@ interface Effect {
   salt: number;
   /** Whether a meteor has struck yet (its flash goes off once). */
   struck: boolean;
+  /** Wall seconds before it shows (a crater waits for its meteor). */
+  delayS?: number;
 }
 
 export interface AtmosphereOptions {
@@ -136,11 +176,17 @@ export class Atmosphere {
   readonly tint: Sprite;
   readonly lights = new Container();
   readonly flash: Sprite;
+  /** Over everything, on the screen: lightning, and the flash. */
+  readonly sky = new Container();
 
   private readonly sprites: Sprites = atmosphereSprites();
   private readonly groundPool = new SpritePool("normal");
   private readonly weatherPool = new SpritePool("normal");
   private readonly lightPool = new SpritePool("add");
+  /** Flames and a volcano's mouth: drawn as they are, over the tint (they make their own light). */
+  private readonly flamePool = new SpritePool("normal");
+  private readonly ripplePool = new SpritePool("normal");
+  private readonly boltPool = new SpritePool("add");
   private readonly flood: Sprite;
   private floodCanvas: HTMLCanvasElement | null = null;
   private floodTexture: Texture | null = null;
@@ -149,8 +195,9 @@ export class Atmosphere {
 
   private readonly ease = new LightEase(1);
   private present = true;
-  private raining = false;
+  private rainKind: RainKind = "none";
   private rain = 0;
+  private storm = 0;
   private burning: readonly number[] = [];
   private season: Season = "summer";
   private progress = 0.5;
@@ -172,9 +219,10 @@ export class Atmosphere {
     this.flash.alpha = 0;
     this.flood = new Sprite(Texture.EMPTY);
     this.flood.visible = false;
-    this.ground.addChild(this.flood, this.groundPool.container);
+    this.ground.addChild(this.flood, this.ripplePool.container, this.groundPool.container);
     this.weather.addChild(this.weatherPool.container);
-    this.lights.addChild(this.lightPool.container);
+    this.lights.addChild(this.lightPool.container, this.flamePool.container);
+    this.sky.addChild(this.boltPool.container, this.flash);
     this.sequence = new Sequence(deliver);
   }
 
@@ -204,7 +252,7 @@ export class Atmosphere {
       this.simMs = message.t_ms;
       this.ease.step(message.light);
       this.present = message.present;
-      this.raining = message.raining;
+      this.rainKind = message.rain;
       this.burning = message.burning;
     } else if (message.type === "events") this.takeEvents(message);
   }
@@ -212,7 +260,8 @@ export class Atmosphere {
   /** Show the sky's light at once (a picture that must not wait for the ease). */
   settleLight(): void {
     this.ease.set(this.ease.target);
-    this.rain = this.raining ? 1 : 0;
+    this.rain = RAIN_STRENGTH[this.rainKind];
+    this.storm = this.rainKind === "storm" ? 1 : 0;
   }
 
   private takeEvents(message: EventsMessage): void {
@@ -220,7 +269,7 @@ export class Atmosphere {
       const x = event.x ?? 0;
       const y = event.y ?? 0;
       const radius = event.radius_cells ?? 2;
-      const add = (kind: Kind, wallS: number, untilMs = -1): void => {
+      const add = (kind: Kind, wallS: number, untilMs = -1, delayS = 0): void => {
         this.effects.push({
           kind,
           x,
@@ -231,26 +280,41 @@ export class Atmosphere {
           untilMs,
           salt: ++this.salts,
           struck: false,
+          delayS,
         });
       };
       switch (event.kind) {
         case "volcano":
+          add("cone", MARK_WALL_S, event.t_ms + MARK_DAYS * MS_PER_DAY);
           add("volcano", VOLCANO_WALL_S, event.t_ms + VOLCANO_HOURS * MS_PER_HOUR);
           break;
         case "earthquake":
           add("quake", QUAKE_S);
           break;
         case "crater":
-          // A meteor's god power digs it: its fall is drawn here, where it lands.
+          // A meteor's god power digs it: its fall is drawn here, where it lands, and the
+          // bowl it leaves once it has struck.
+          add("crater", MARK_WALL_S, event.t_ms + MARK_DAYS * MS_PER_DAY, METEOR_FALL_S);
           add("meteor", METEOR_S);
           break;
         case "god_power":
           if (event.power === "seed") add("seed", BEAM_S);
           else if (event.power === "ark") add("ark", BEAM_S);
           break;
+        case "creatures_arrived": {
+          // The ark's newcomers land here: its light goes where they are.
+          const ark = [...this.effects]
+            .reverse()
+            .find((effect) => effect.kind === "ark" && effect.age === 0);
+          if (ark !== undefined) {
+            ark.x = x;
+            ark.y = y;
+          }
+          break;
+        }
         case "fire_started":
-          // Lightning: a flash, and sparks where it struck.
-          this.flashLeft = Math.max(this.flashLeft, FLASH_S / 2);
+          // The thunderstorm's lightning: the biggest bolt, where the fire begins.
+          add("strike", BOLTS.strike.lasts + SPARKS_S);
           add("sparks", SPARKS_S);
           break;
         case "world_ended":
@@ -268,9 +332,10 @@ export class Atmosphere {
     this.timeS += dtS;
     this.ease.tick(dtS);
     this.flashLeft = Math.max(this.flashLeft - dtS, 0);
-    const target = this.raining ? 1 : 0;
-    this.rain +=
-      Math.sign(target - this.rain) * Math.min(Math.abs(target - this.rain), dtS / RAIN_EASE_S);
+    const ease = (now: number, target: number): number =>
+      now + Math.sign(target - now) * Math.min(Math.abs(target - now), dtS / RAIN_EASE_S);
+    this.rain = ease(this.rain, RAIN_STRENGTH[this.rainKind]);
+    this.storm = ease(this.storm, this.rainKind === "storm" ? 1 : 0);
     const wasEnding = this.sequence.active;
     this.sequence.update(dtS);
     const moment = this.sequence.active ? this.sequence.moment : null;
@@ -287,21 +352,28 @@ export class Atmosphere {
     this.groundPool.begin();
     this.weatherPool.begin();
     this.lightPool.begin();
+    this.flamePool.begin();
+    this.ripplePool.begin();
+    this.boltPool.begin();
     let shake = 0;
     const dark = this.darkness(moment);
     this.drawGlow(view, dark);
     this.drawFires(view, dark);
     for (const effect of this.effects) shake = Math.max(shake, this.drawEffect(effect, view));
     this.drawRain(view);
+    const lightning = this.drawLightning(view);
     if (moment !== null) shake = Math.max(shake, this.drawEnd(moment, view, dtS));
     else this.flood.visible = false;
     this.groundPool.end();
     this.weatherPool.end();
     this.lightPool.end();
+    this.flamePool.end();
+    this.ripplePool.end();
+    this.boltPool.end();
 
     this.flash.width = view.width;
     this.flash.height = view.height;
-    this.flash.alpha = Math.min(this.flashLeft / FLASH_S, 1) * 0.8;
+    this.flash.alpha = Math.max(Math.min(this.flashLeft / FLASH_S, 1) * 0.8, lightning);
     if (shake <= 0 || dtS <= 0) return { x: 0, y: 0 };
     const jolt = (): number => Math.round((this.options.random() * 2 - 1) * shake);
     return { x: jolt(), y: jolt() };
@@ -315,7 +387,8 @@ export class Atmosphere {
 
   private paintTint(view: View, moment: Moment | null): void {
     let colour = skyTint(this.ease.value, this.present, this.season, this.progress);
-    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, this.rain));
+    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, Math.min(this.rain / 0.7, 1)));
+    colour = multiplyRgb(colour, mixRgb([1, 1, 1], STORM_GREY, this.storm));
     if (moment !== null) {
       // Red whatever the hour: the end of a world is lit by its fires, not by the owner.
       colour = mixRgb(colour, BLOOD_RED, moment.red);
@@ -406,8 +479,31 @@ export class Atmosphere {
         alpha: strength,
         salt: index,
       };
-      const tongues = tile >= 32 ? 8 : tile >= 8 ? 3 : 1;
-      this.puffs(flames, tongues, FIRE[(flame + 1) % FIRE.length] ?? SPARK, tile, true);
+      if (tile < 8) {
+        // On the map a burning cell is a flicker of light and a spark or two.
+        this.puffs(flames, 1, FIRE[(flame + 1) % FIRE.length] ?? SPARK, tile, true);
+        return;
+      }
+      // Closer, flames: one to a cell in the middle view, three (twice as large) up close,
+      // each on its own frame of the flicker; embers rise between them.
+      const count = tile >= 32 ? 3 : 1;
+      // Some flames taller than others.
+      // Whole multiples only, so that the flames keep hard pixel edges.
+      const scale = tile >= 32 ? (cellHash(index, 9, 348) < 0.3 ? 3 : 2) : 1;
+      for (let k = 0; k < count; k++) {
+        const ox = count === 1 ? 0 : (cellHash(index, k, 346) - 0.5) * 0.8;
+        const oy = count === 1 ? 0 : (cellHash(index, k, 347) - 0.5) * 0.6;
+        const rate = 7 + 4 * cellHash(index, k, 349);
+        const frame = (Math.floor(this.timeS * rate) + k + index) % FLAME_FRAMES;
+        const sprite = this.flamePool.next(this.sprites.flames[frame] ?? this.sprites.fleck);
+        const w = sprite.texture.width * scale;
+        const h = sprite.texture.height * scale;
+        // Its foot on the place, rising from it.
+        placeCentred(sprite, fx + ox, fy + oy - h / 2 / tile, tile, w, h);
+        sprite.tint = 0xffffff;
+        sprite.alpha = 1;
+      }
+      this.puffs(flames, tile >= 32 ? 5 : 2, SPARK, tile, true);
     });
     // Smoke from some of them, grey and drifting with the wind.
     const smokes = Math.min(MOST_SMOKES, inSight.length);
@@ -453,8 +549,17 @@ export class Atmosphere {
   private drawEffect(effect: Effect, view: View): number {
     const { tile } = view;
     const { x, y, radius, age, salt } = effect;
+    if (age < (effect.delayS ?? 0)) return 0;
     switch (effect.kind) {
+      case "cone":
+      case "crater": {
+        const across = radius * 2 * tile * (effect.kind === "crater" ? 1.2 : 1);
+        this.mark(this.groundPool, effect.kind, x, y, across, tile, 1);
+        return 0;
+      }
       case "volcano": {
+        // The eruption comes out of the summit, which stands above the cone's foot.
+        const summit = coneSummit(radius * 2 * tile) / tile;
         const fading =
           effect.untilMs >= 0 && this.simMs >= effect.untilMs
             ? Math.max(1 - (effect.age - effect.wallS), 0)
@@ -463,28 +568,15 @@ export class Atmosphere {
         const colour =
           LAVA[Math.floor(cellHash(salt, Math.floor(this.timeS * 4), 343) * LAVA.length)] ??
           LAVA[0];
-        this.halo(x, y, size, colour, fading * this.flicker(salt), tile);
-        // Lava running down its sides: glows strung out from the cone.
-        for (let k = 0; k < LAVA_FLOWS; k++) {
-          const angle = 2 * Math.PI * cellHash(salt, k, 346);
-          const reach = radius * (0.3 + 0.6 * cellHash(salt, k, 347));
-          const glow = LAVA[k % LAVA.length] ?? LAVA[0];
-          const lx = x + reach * Math.cos(angle);
-          const ly = y + reach * Math.sin(angle);
-          this.halo(
-            lx,
-            ly,
-            Math.max(tile * 1.2, 5),
-            glow,
-            0.8 * fading * this.flicker(salt + k),
-            tile,
-          );
-        }
+        this.halo(x, y - summit, size, colour, fading * this.flicker(salt), tile);
+        // Its lava: the pool in the mouth and the rivers down the cone, drawn over it
+        // untinted (it makes its own light), cooling to crust as the eruption ends.
+        this.mark(this.flamePool, "lava", x, y, radius * 2 * tile, tile, fading);
         // A column of ash, dark, rising high and spreading with the wind.
         this.puffs(
           {
             x,
-            y,
+            y: y - summit,
             spread: radius * 0.2,
             rise: 14,
             drift: 5,
@@ -501,7 +593,7 @@ export class Atmosphere {
         this.puffs(
           {
             x,
-            y,
+            y: y - summit,
             spread: radius * 0.15,
             rise: 22,
             drift: 2,
@@ -590,12 +682,16 @@ export class Atmosphere {
       case "ark": {
         const life = Math.min(age / 1, 1) * Math.max(Math.min((BEAM_S - age) / 2, 1), 0);
         const colour = effect.kind === "seed" ? SEED_GOLD : ARK_LIGHT;
-        if (effect.kind === "ark") {
-          const beam = this.lightPool.next(this.sprites.beam);
-          placeCentred(beam, x, y - 40 / tile, tile, 16, 88);
-          beam.tint = colour;
-          beam.alpha = 0.9 * life;
+        if (effect.kind === "seed") {
+          // The seed power sows the bare land of the whole island (the sim aims it nowhere):
+          // golden motes drift down onto the bare cells in sight.
+          this.drawSeedMotes(view, life, salt);
+          return 0;
         }
+        const beam = this.lightPool.next(this.sprites.beam);
+        placeCentred(beam, x, y - 40 / tile, tile, 16, 88);
+        beam.tint = colour;
+        beam.alpha = 0.9 * life;
         this.halo(x, y, 28, colour, 0.8 * life, tile);
         // Motes falling onto the place.
         this.puffs(
@@ -618,6 +714,28 @@ export class Atmosphere {
         );
         return 0;
       }
+      case "strike":
+        return 0; // drawn with the lightning
+      case "ash":
+        // An animal caught in the fire: a grey puff rising where it fell.
+        this.puffs(
+          {
+            x,
+            y,
+            spread: 0.2,
+            rise: 5,
+            drift: 1,
+            life: 1.6,
+            from: 2,
+            to: 7,
+            alpha: Math.max(1 - age / ASH_S, 0),
+            salt,
+          },
+          5,
+          SMOKE,
+          tile,
+        );
+        return 0;
       case "sparks":
         this.puffs(
           {
@@ -642,17 +760,159 @@ export class Atmosphere {
   }
 
   private drawRain(view: View): void {
-    if (this.rain <= 0) return;
-    const fall: Fall = { speed: 160, slant: -40, salt: 7 };
+    if (this.rain <= 0.01) return;
+    const slant = RAIN_SLANT[this.rainKind] * Math.max(this.storm, 0.4);
+    const fall: Fall = { speed: 160 + 80 * this.storm, slant, salt: 7 };
     const drops = Math.round(RAINDROPS * this.rain);
+    const length = 6 + Math.round(4 * this.storm);
     for (let slot = 0; slot < drops; slot++) {
       const at = dropAt(fall, slot, this.timeS, view.width, view.height);
       const sprite = this.weatherPool.next(this.sprites.fleck);
       sprite.position.set(Math.round(at.x), Math.round(at.y));
-      sprite.scale.set(1, 6);
+      sprite.scale.set(1, length);
       sprite.tint = RAIN;
       sprite.alpha = 0.7;
     }
+    // Where it falls: rings spreading on the water, and splashes on the land.
+    const land = view.land;
+    if (land === null || view.view === "map") return;
+    const { cells, tile } = view;
+    const count = Math.round(RIPPLES * this.rain * (view.view === "local" ? 1 : 2));
+    for (let slot = 0; slot < count; slot++) {
+      const every = RIPPLE_S * (1 + cellHash(slot, 0, 409));
+      const shifted = this.timeS + every * cellHash(slot, 1, 409);
+      const showing = Math.floor(shifted / every);
+      const phase = (shifted - showing * every) / every;
+      const x = cells.x0 + (cells.x1 - cells.x0) * cellHash(slot, showing, 410);
+      const y = cells.y0 + (cells.y1 - cells.y0) * cellHash(slot, showing, 411);
+      const cell = Math.floor(y) * land.width + Math.floor(x);
+      const wet = (land.heights[cell] ?? 1) <= land.seaLevel;
+      if (wet) {
+        const ring =
+          this.sprites.rings[Math.min(Math.floor(phase * RINGS.length), RINGS.length - 1)];
+        if (ring === undefined) continue;
+        const sprite = this.ripplePool.next(ring);
+        const size = ring.width * (tile >= 32 ? 2 : 1);
+        placeCentred(sprite, x, y, tile, size, size * 0.6);
+        sprite.tint = RIPPLE;
+        sprite.alpha = 0.7 * (1 - phase);
+      } else if (phase < 0.3) {
+        const sprite = this.ripplePool.next(this.sprites.fleck);
+        placeCentred(sprite, x, y, tile, 2, 1);
+        sprite.tint = RIPPLE;
+        sprite.alpha = 0.6;
+      }
+    }
+  }
+
+  /** Thunder and storm bolts on the screen, and the fire's strike; the flash they make (0–1). */
+  private drawLightning(view: View): number {
+    let flash = 0;
+    const margin = view.margin ?? 0;
+    const draw = (paths: [number, number][][], width: number, alpha: number): void => {
+      for (const [index, path] of paths.entries()) {
+        const thick = index === 0 ? width : Math.max(width - 1, 1);
+        for (const [px, py] of path) {
+          if (py < 0 || py >= view.height || px < 0 || px >= view.width) continue;
+          const sprite = this.boltPool.next(this.sprites.fleck);
+          sprite.position.set(px - Math.floor(thick / 2), py);
+          sprite.scale.set(thick, 1);
+          sprite.tint = index === 0 ? BOLT : BOLT_GLOW;
+          sprite.alpha = alpha;
+        }
+      }
+    };
+    for (const kind of ["thunder", "storm"] as const) {
+      if (this.rainKind !== kind) continue;
+      const bolt = boltAt(kind, this.timeS);
+      if (bolt === null) continue;
+      const { width, flash: bright, forks } = BOLTS[kind];
+      // It shows, goes dark and shows again once, as a bolt flickers.
+      const on = bolt.phase < 0.35 || (bolt.phase > 0.55 && bolt.phase < 0.8);
+      if (!on) continue;
+      const at = strikePoint(bolt.n, view.width, view.height);
+      draw(boltPath(bolt.n, at.x, at.y, forks), width, 1);
+      flash = Math.max(flash, bright * (1 - bolt.phase));
+    }
+    for (const effect of this.effects) {
+      if (effect.kind !== "strike" || effect.age >= BOLTS.strike.lasts) continue;
+      const phase = effect.age / BOLTS.strike.lasts;
+      const x = Math.round((effect.x - view.cells.x0) * view.tile) + margin;
+      const y = Math.round((effect.y - view.cells.y0) * view.tile) + margin;
+      if (phase < 0.45 || (phase > 0.6 && phase < 0.85)) {
+        draw(boltPath(effect.salt, x, y, BOLTS.strike.forks), BOLTS.strike.width, 1);
+      }
+      flash = Math.max(flash, BOLTS.strike.flash * (1 - phase));
+    }
+    return flash;
+  }
+
+  /** The seed power's motes falling on the bare land in sight. */
+  private drawSeedMotes(view: View, life: number, salt: number): void {
+    const land = view.land;
+    if (land === null || life <= 0) return;
+    const { cells, tile } = view;
+    for (let slot = 0; slot < SEED_MOTES; slot++) {
+      const every = 2 + cellHash(slot, salt, 412);
+      const shifted = this.timeS + every * cellHash(slot, salt, 413);
+      const showing = Math.floor(shifted / every);
+      const phase = (shifted - showing * every) / every;
+      const x = cells.x0 + (cells.x1 - cells.x0) * cellHash(slot, showing, 414);
+      const y = cells.y0 + (cells.y1 - cells.y0) * cellHash(slot, showing, 415);
+      const cell = Math.floor(y) * land.width + Math.floor(x);
+      const bare = (land.heights[cell] ?? 0) > land.seaLevel && (land.biomass[cell] ?? 255) < 10;
+      if (!bare) continue;
+      // Down from above onto the place, a glint where it lands.
+      const fall = (1 - Math.min(phase / 0.8, 1)) * 24;
+      const sprite = this.lightPool.next(this.sprites.fleck);
+      // Two art pixels across (three up close), so that it is seen in every view.
+      placeCentred(sprite, x, y - fall / tile, tile, tile >= 32 ? 3 : 2);
+      sprite.tint = SEED_GOLD;
+      sprite.alpha = life * (phase > 0.8 ? (1 - phase) * 5 : 1);
+      if (phase > 0.8) this.halo(x, y, 6, SEED_GOLD, 0.6 * life * (1 - phase) * 5, tile);
+    }
+  }
+
+  /** A mark (`marks.ts`) whose foot is `across` art pixels wide, its foot's middle on (x, y). */
+  private mark(
+    pool: SpritePool,
+    kind: "cone" | "lava" | "crater",
+    x: number,
+    y: number,
+    across: number,
+    tile: number,
+    alpha: number,
+  ): void {
+    if (alpha <= 0.01) return;
+    // Up close its art pixels are two screen pixels, as the plants' are.
+    const pixel = tile >= 32 ? 2 : 1;
+    const mark = markTexture(kind, across / pixel);
+    const sprite = pool.next(mark.texture);
+    sprite.anchor.set(mark.cx / mark.texture.width, mark.cy / mark.texture.height);
+    sprite.position.set(Math.round(x * tile) / tile, Math.round(y * tile) / tile);
+    sprite.scale.set(pixel / tile);
+    sprite.tint = 0xffffff;
+    sprite.alpha = alpha;
+  }
+
+  /** An animal died in the fire at (x, y) cells: a puff of ash rises there. */
+  burnt(x: number, y: number): void {
+    this.effects.push({
+      kind: "ash",
+      x,
+      y,
+      radius: 0,
+      age: 0,
+      wallS: ASH_S,
+      untilMs: -1,
+      salt: ++this.salts,
+      struck: false,
+    });
+  }
+
+  /** Whether cell (x, y) is burning now. */
+  isBurning(index: number): boolean {
+    return this.burning.includes(index);
   }
 
   /** The end of a world, at `moment`; how much it shakes the picture (art pixels). */
@@ -747,7 +1007,7 @@ export class Atmosphere {
   get state(): {
     light: number;
     tint: number;
-    raining: boolean;
+    rain: RainKind;
     burning: number;
     effects: string[];
     act: string | null;
@@ -755,7 +1015,7 @@ export class Atmosphere {
     return {
       light: this.ease.value,
       tint: packRgb(this.shown),
-      raining: this.rain > 0,
+      rain: this.rainKind,
       burning: this.burning.length,
       effects: this.effects.map((effect) => effect.kind),
       act: this.sequence.active ? this.sequence.moment.act : null,
@@ -763,11 +1023,21 @@ export class Atmosphere {
   }
 
   /** Sprites drawn last frame: lights, ground, weather (tests). */
-  get counts(): { lights: number; ground: number; weather: number } {
+  get counts(): {
+    lights: number;
+    ground: number;
+    weather: number;
+    flames: number;
+    ripples: number;
+    bolts: number;
+  } {
     return {
       lights: this.lightPool.shown,
       ground: this.groundPool.shown,
       weather: this.weatherPool.shown,
+      flames: this.flamePool.shown,
+      ripples: this.ripplePool.shown,
+      bolts: this.boltPool.shown,
     };
   }
 }

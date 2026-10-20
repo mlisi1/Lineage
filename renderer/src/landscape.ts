@@ -135,6 +135,16 @@ export class Landscape {
     return this.land === null ? null : { width: this.land.width, height: this.land.height };
   }
 
+  /** Whether ground is being painted now. */
+  get painting(): boolean {
+    return this.painter.busy > 0;
+  }
+
+  /** The land as the stream last sent it (R4's demos change it and send it again). */
+  get lastMessage(): LandMessage | null {
+    return this.landMessage;
+  }
+
   /** The current land, once one has come. */
   get current(): Land | null {
     return this.land;

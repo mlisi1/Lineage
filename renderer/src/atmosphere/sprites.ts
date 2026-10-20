@@ -6,6 +6,10 @@
  *   puff    a round puff with a lighter crown (smoke, ash clouds, dust)
  *   fleck   one pixel (falling ash, sparks, rain)
  *   beam    a column of light in steps, brightest down its middle (seed, ark)
+ *   flames  four frames of a flame, red outside to white at its heart, its tip swaying
+ *           (fires, in the middle and local views; R4)
+ *   rings   a ripple three sizes, a ring of one pixel (rain on water)
+ *   mouth   a volcano's mouth: a dark rim round a pool of lava
  */
 import { CanvasSource, Rectangle, Texture } from "pixi.js";
 
@@ -24,11 +28,47 @@ export const HALO_STEPS: readonly (readonly [number, number])[] = [
   [0.18, 1],
 ];
 
+/** The flame's size in texels, and its frames. */
+export const FLAME_WIDTH = 7;
+export const FLAME_HEIGHT = 11;
+export const FLAME_FRAMES = 4;
+/** The flame's colours from the outside in (0xRRGGBB): its rim, body, inside and heart. */
+const FLAME = [0xc8361c, 0xf2762a, 0xffbe44, 0xfff2c8] as const;
+/** The ripples' sizes (texels across), and the mouth's. */
+export const RINGS = [3, 5, 7] as const;
+export const MOUTH_WIDTH = 12;
+export const MOUTH_HEIGHT = 8;
+const MOUTH_RIM = 0x2a1e1c;
+const MOUTH_LAVA = [0xd2401c, 0xff8a2a, 0xffd25a] as const;
+
 export interface Sprites {
   halo: Texture;
   puff: Texture;
   fleck: Texture;
   beam: Texture;
+  flames: Texture[];
+  rings: Texture[];
+  mouth: Texture;
+}
+
+/** Which of the flame's colours (index into its four) texel (x, y) of `frame` is, or -1. */
+export function flameTexel(frame: number, x: number, y: number): number {
+  // Broad at its foot, tapering to a point that sways with the frame; a tongue licks off
+  // one side on every other frame.
+  const sway = [0, 1, 0, -1][frame % 4] ?? 0;
+  const fromFoot = FLAME_HEIGHT - 1 - y;
+  const t = fromFoot / (FLAME_HEIGHT - 1);
+  const centre = (FLAME_WIDTH - 1) / 2 + sway * t ** 1.5 * 1.6;
+  let half = 3.4 * (1 - t) ** 0.85 * Math.min(1, 0.6 + t * 3);
+  const tongue = frame % 2 === 0 ? 1 : -1;
+  if (t > 0.45 && t < 0.75 && Math.sign(x - centre) === tongue) half += 0.9;
+  const d = Math.abs(x - centre);
+  if (d > half + 0.25) return -1;
+  const inner = half - d;
+  if (inner < 0.75) return 0;
+  if (inner < 1.6 || t > 0.7) return 1;
+  if (inner < 2.4 || t > 0.45) return 2;
+  return 3;
 }
 
 /** Opacity of the halo at texel (x, y): the step it falls in, or 0 outside. */
@@ -45,7 +85,10 @@ let made: Sprites | null = null;
 /** The textures (made on first use; they live as long as the page). */
 export function atmosphereSprites(): Sprites {
   if (made !== null) return made;
-  const width = HALO_SIZE + PUFF_SIZE + 1 + BEAM_WIDTH + 3;
+  const flamesX = HALO_SIZE + PUFF_SIZE + 1 + BEAM_WIDTH + 1;
+  const ringsX = flamesX + FLAME_FRAMES * (FLAME_WIDTH + 1);
+  const mouthX = ringsX + RINGS.reduce((sum, size) => sum + size + 1, 0);
+  const width = mouthX + MOUTH_WIDTH + 1;
   const height = Math.max(HALO_SIZE, BEAM_HEIGHT);
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -60,6 +103,42 @@ export function atmosphereSprites(): Sprites {
     image.data[at + 2] = value;
     image.data[at + 3] = Math.round(alpha * 255);
   };
+  const paint = (x: number, y: number, colour: number): void => {
+    const at = (y * width + x) * 4;
+    image.data[at] = colour >> 16;
+    image.data[at + 1] = (colour >> 8) & 255;
+    image.data[at + 2] = colour & 255;
+    image.data[at + 3] = 255;
+  };
+  for (let frame = 0; frame < FLAME_FRAMES; frame++) {
+    for (let y = 0; y < FLAME_HEIGHT; y++) {
+      for (let x = 0; x < FLAME_WIDTH; x++) {
+        const tone = flameTexel(frame, x, y);
+        if (tone >= 0) paint(flamesX + frame * (FLAME_WIDTH + 1) + x, y, FLAME[tone] ?? 0);
+      }
+    }
+  }
+  let ringAt = ringsX;
+  for (const size of RINGS) {
+    const r = (size - 1) / 2;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const d = Math.hypot(x - r, y - r);
+        if (Math.abs(d - r) < 0.6) put(ringAt + x, y, 1);
+      }
+    }
+    ringAt += size + 1;
+  }
+  for (let y = 0; y < MOUTH_HEIGHT; y++) {
+    for (let x = 0; x < MOUTH_WIDTH; x++) {
+      const dx = (x + 0.5 - MOUTH_WIDTH / 2) / (MOUTH_WIDTH / 2);
+      const dy = (y + 0.5 - MOUTH_HEIGHT / 2) / (MOUTH_HEIGHT / 2);
+      const d = Math.hypot(dx, dy);
+      if (d > 1) continue;
+      const lava = d < 0.35 ? 2 : d < 0.55 ? 1 : 0;
+      paint(mouthX + x, y, d > 0.75 ? MOUTH_RIM : (MOUTH_LAVA[lava] ?? 0));
+    }
+  }
   for (let y = 0; y < HALO_SIZE; y++) {
     for (let x = 0; x < HALO_SIZE; x++) put(x, y, haloAlpha(x, y));
   }
@@ -94,6 +173,13 @@ export function atmosphereSprites(): Sprites {
     puff: frame(puffX, PUFF_SIZE, PUFF_SIZE),
     fleck: frame(fleckX, 1, 1),
     beam: frame(beamX, BEAM_WIDTH, BEAM_HEIGHT),
+    flames: Array.from({ length: FLAME_FRAMES }, (_, k) =>
+      frame(flamesX + k * (FLAME_WIDTH + 1), FLAME_WIDTH, FLAME_HEIGHT),
+    ),
+    rings: RINGS.map((size, k) =>
+      frame(ringsX + RINGS.slice(0, k).reduce((sum, s) => sum + s + 1, 0), size, size),
+    ),
+    mouth: frame(mouthX, MOUTH_WIDTH, MOUTH_HEIGHT),
   };
   return made;
 }

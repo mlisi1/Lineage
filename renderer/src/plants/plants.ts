@@ -424,6 +424,17 @@ function habitOf(form: string, evergreen: number | undefined): WinterHabit | nul
   if (form === "BROADLEAF" && evergreen >= LEAFY_FROM) return "leafy";
   return null;
 }
+/**
+ * A tree burnt where it stood (R4): its bare skeleton in charcoal, on burnt ground where
+ * the fire was recent (`Land.scorch` from this, 0–255) and a tree grew (`HEIGHT` from
+ * this: the simulation's trees, form_shrub_max_height 0.6). As the scorch fades it goes.
+ */
+const CHARRED_RAMP: Ramp = ["#1f1919", "#33292a", "#4d3f3b"];
+const CHARRED_WOOD = "#1a1414";
+const CHARRED_EMBER = "#7a4a32";
+const CHARRED_FROM_SCORCH = 60;
+const CHARRED_TREE_HEIGHT = 153;
+
 /** Snow (0–255) on a cell from which the plants on it carry some. */
 const PLANT_SNOW_FROM = 96;
 
@@ -519,6 +530,18 @@ export function standingArts(
           ...standingColours(land.palette, form, variant, season, look),
         });
       }
+    }
+  }
+  // Trees burnt where they stood: bare and charred in every season (R4).
+  for (const growth of GROWTHS) {
+    for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+      arts.push({
+        key: `${standingKey("BROADLEAF", growth, variant)}/charred`,
+        art: drawStanding("BROADLEAF", growth, variant, detail, "winter", false, look.shapes),
+        ramp: CHARRED_RAMP,
+        accent: CHARRED_EMBER,
+        wood: CHARRED_WOOD,
+      });
     }
   }
   // In winter the habits their kind mostly does without (`habitOf`): a bush with little
@@ -973,6 +996,24 @@ export function standingPlants(
       const cell = y * land.width + x;
       const biomass = land.biomass[cell] ?? 0;
       const looks = looksAt(x, y);
+      const scorch = land.scorch?.[cell] ?? 0;
+      const stood = (land.plantHeight?.[cell] ?? 0) >= CHARRED_TREE_HEIGHT;
+      if (
+        look === null &&
+        land.cover[cell] === burntClass &&
+        !looks.includes("bark") &&
+        scorch >= CHARRED_FROM_SCORCH &&
+        stood &&
+        cellHash(x, y, 16) < PLANT_SCALE.treeDensity
+      ) {
+        // A tree the fire killed where it stood: its charred skeleton, until the scorch fades.
+        const [dx, dy] = plantOffset(x, y);
+        const key = `${standingKey("BROADLEAF", "grown", buildOf(x, y))}/charred`;
+        return [
+          ...out,
+          ...placed(named(plantSeason(x, y), x, y, key), dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+        ];
+      }
       if (look === null && land.cover[cell] === burntClass && looks.includes("bark")) {
         // A fire pine (rare, M7) lives through a fire, which leaves nothing else: a tree on
         // the burnt ground, its trunk charred and its crown kept; a conifer if it is

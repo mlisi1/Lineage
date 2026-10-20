@@ -67,4 +67,8 @@ export interface Land extends LandPalette {
   rareGenes?: readonly string[];
   /** Depth of lying snow per cell, 0–255, as the simulation has it (absent in the R0 fixture). */
   snow?: Uint8Array;
+  /** How recently each cell burnt, 0–255 (R4: 255 just burnt, fading over the sim's scorch_days). */
+  scorch?: Uint8Array;
+  /** Algae on the shallow sea per cell, as biomass × 255 (M11: at most about 100). */
+  algae?: Uint8Array;
 }

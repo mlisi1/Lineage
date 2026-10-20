@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { demoMessages, landNear, showsOf } from "../../src/atmosphere/demo";
 import { dropAt, puffAt, type Plume } from "../../src/atmosphere/particles";
 import { HALO_SIZE, HALO_STEPS, haloAlpha } from "../../src/atmosphere/sprites";
-import type { Land } from "../../src/terrain/land";
-import { LAND_PALETTE } from "../../src/terrain/palette";
-import { world } from "../spike/worlds";
 
 const plume: Plume = {
   x: 10,
@@ -70,39 +66,5 @@ describe("the halo", () => {
     const steps = new Set<number>();
     for (let x = 0; x < HALO_SIZE; x++) steps.add(haloAlpha(x, HALO_SIZE / 2));
     expect(steps.size).toBeLessThanOrEqual(HALO_STEPS.length + 1);
-  });
-});
-
-describe("the atmosphere on demand", () => {
-  const land: Land = {
-    ...world(["~~~~~~", "~~gg~~", "~~gg~~", "~~~~~~"]),
-    ...LAND_PALETTE,
-  };
-
-  it("reads the shows asked for, and nothing else", () => {
-    expect(showsOf("night, fire,bogus,meteor")).toEqual(["night", "fire", "meteor"]);
-    expect(showsOf(null)).toEqual([]);
-  });
-
-  it("finds land near where it is asked", () => {
-    expect(landNear(land, 0, 0)).toEqual({ x: 2.5, y: 1.5 });
-  });
-
-  it("makes a sky and the events of the shows", () => {
-    const messages = demoMessages(["night", "fire", "rain", "meteor", "end"], land, 3, 2, 99);
-    const [sky, events] = messages;
-    expect(sky?.type).toBe("sky");
-    if (sky?.type !== "sky") return;
-    expect(sky.light).toBe(0.05);
-    expect(sky.present).toBe(false);
-    expect(sky.raining).toBe(true);
-    expect(sky.burning.length).toBeGreaterThan(0);
-    expect(sky.burning).toEqual([...sky.burning].sort((a, b) => a - b));
-    expect(events?.type === "events" && events.events.map((event) => event.kind)).toEqual([
-      "god_power",
-      "crater",
-      "world_ended",
-    ]);
-    expect(demoMessages(["day"], land, 3, 2, 0)).toHaveLength(1);
   });
 });

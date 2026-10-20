@@ -28,6 +28,11 @@
  *   ?quiet                     no captions of the stream's entries (pictures of the land;
  *                              those handed to `__receive` are still shown)
  *   ?painter=inline            paint the ground on the page's thread, not in a worker
+ *   ?film                      R4's films: the scene stands still until `__frame(seconds)`
+ *                              moves it on by that much and draws it (a recording plays on
+ *                              the same clock), so that a film has exactly its frame rate
+ *   ?file=report/fire.json     R4: any recording under `stream/` (the report's, written
+ *                              by `npm run atmosphere`), played as the creatures' one
  *   ?recording=office          R4: two weeks of the owner's office hours (dusks, nights,
  *                              the Long Night) with the rain god power twice
  *   ?recording=end             R4: a day, then the world ends (the herd starved) and the
@@ -44,13 +49,13 @@
  */
 import { Application, Container, WebGLRenderer } from "pixi.js";
 import { Atmosphere } from "./atmosphere/atmosphere";
-import { demoMessages, showsOf } from "./atmosphere/demo";
+import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, type Point } from "./camera";
 import { Captions } from "./captions";
 import { Director, TIMINGS, type Scene, type Shot } from "./director";
 import { Herd } from "./herd";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
-import type { Message } from "./protocol";
+import type { CreaturesMessage, Message } from "./protocol";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./spike/atlas";
@@ -99,6 +104,15 @@ declare global {
     __captions?: () => { phase: string; text: string | null; waiting: number };
     /** What the atmosphere shows (tests). */
     __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
+    /** The land drawn at cell (x, y): height, cover class, biomass and scorch (tests). */
+    __landAt?: (
+      x: number,
+      y: number,
+    ) => { height: number; cover: string; biomass: number; scorch: number } | null;
+    /** With `?film`: move the whole scene on by this many seconds and draw it. */
+    __frame?: (seconds: number) => void;
+    /** Whether the ground is still being painted (films wait for it between frames). */
+    __painting?: () => boolean;
     /** Move the atmosphere on by this many seconds (tests; with `?still` the only way it moves). */
     __advance?: (seconds: number) => void;
   }
@@ -178,8 +192,10 @@ async function start(): Promise<void> {
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
   let lastMs = 0;
+  let lastCreatures: CreaturesMessage | null = null;
   const deliver = (message: Message): void => {
     if (message.type === "clock") date = message.date;
+    if (message.type === "creatures") lastCreatures = message;
     if ("t_ms" in message) lastMs = message.t_ms;
     if (message.type === "chronicle") captions.take(message, date);
     landscape.receive(message);
@@ -204,23 +220,36 @@ async function start(): Promise<void> {
     },
   });
   world.addChild(atmosphere.ground);
-  app.stage.addChild(atmosphere.weather, atmosphere.tint, atmosphere.lights, atmosphere.flash);
+  app.stage.addChild(atmosphere.weather, atmosphere.tint, atmosphere.lights, atmosphere.sky);
+  // An animal that dies in a burning cell leaves a puff of ash.
+  herd.onGone = (x, y) => {
+    const land = landscape.current;
+    if (land === null) return;
+    if (atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x))) atmosphere.burnt(x, y);
+  };
   const receive = (message: Message): void => {
     if (!atmosphere.hold(message)) deliver(message);
   };
   const shows = showsOf(params.get("show"));
 
   const socket = params.get("source");
-  const name = params.get("recording") ?? "life";
-  const recording = RECORDINGS[name] ?? RECORDINGS["life"] ?? "";
+  // `?file=` plays any recording under `stream/` (the report's, R4), as a creatures' one.
+  const file = params.get("file");
+  const name = file === null ? (params.get("recording") ?? "life") : "life";
+  const recording =
+    file !== null && /^[\w/-]+\.json$/.test(file)
+      ? `stream/${file}`
+      : (RECORDINGS[name] ?? RECORDINGS["life"] ?? "");
   const every = params.get("every");
   const speed = Number(
     params.get("speed") ?? (every === null && LIVING.includes(name) ? LIFE_SPEED : 0),
   );
+  const film = params.get("film") !== null;
   const source: Source =
     socket !== null
       ? new SocketSource(socket)
       : await Recording.load(recording, Number(every ?? 1000), speed);
+  if (film && source instanceof Recording) source.playManually();
   source.listen((message) => {
     if (quiet && message.type === "chronicle") return;
     // Shown on demand, the light is the one asked for, not the recording's.
@@ -287,6 +316,17 @@ async function start(): Promise<void> {
   window.__camera = () => ({ ...shot, ...director.state, view: shot.view });
   let advance = 0;
   window.__atmosphere = () => ({ ...atmosphere.state, ...atmosphere.counts });
+  window.__landAt = (x, y) => {
+    const land = landscape.current;
+    if (land === null) return null;
+    const cell = Math.floor(y) * land.width + Math.floor(x);
+    return {
+      height: land.heights[cell] ?? 0,
+      cover: land.coverClasses[land.cover[cell] ?? 0] ?? "",
+      biomass: land.biomass[cell] ?? 0,
+      scorch: land.scorch?.[cell] ?? 0,
+    };
+  };
   window.__advance = (seconds) => {
     advance += seconds;
   };
@@ -315,14 +355,17 @@ async function start(): Promise<void> {
   // The view first, so that the first land is laid out for it alone.
   landscape.show(shot.view, { x0: 0, y0: 0, x1: 0, y1: 0 });
   let shown = shows.length === 0;
-  app.ticker.add((ticker) => {
+  // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
+  let later: Timed[] = [];
+  /** Move the scene on by `deltaMS` and lay it out for drawing. */
+  const step = (deltaMS: number): void => {
     const size = landscape.size;
     if (size === null) {
       // Nothing drawn until the first land: let it be laid out.
       landscape.update(0);
       return;
     }
-    const dtS = ticker.deltaMS / 1000;
+    const dtS = deltaMS / 1000;
     if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
@@ -348,11 +391,19 @@ async function start(): Promise<void> {
     if (!shown && land !== null) {
       shown = true;
       const centre = shot.view === "map" ? { x: land.width / 2, y: land.height / 2 } : shot.centre;
-      for (const message of demoMessages(shows, land, centre.x, centre.y, lastMs)) receive(message);
-      atmosphere.settleLight();
+      const world = { land, landMessage: landscape.lastMessage, creatures: lastCreatures };
+      later = demoMessages(shows, world, centre.x, centre.y, lastMs);
+    }
+    const stepS = (still ? 0 : dtS) + advance;
+    if (later.length > 0) {
+      for (const timed of later) timed.afterS -= stepS;
+      const due = later.filter((timed) => timed.afterS <= 0);
+      later = later.filter((timed) => !due.includes(timed));
+      for (const { message } of due) receive(message);
+      if (due.some(({ message }) => message.type === "sky")) atmosphere.settleLight();
     }
     if (still) atmosphere.settleLight();
-    const shake = atmosphere.update((still ? 0 : dtS) + advance, {
+    const shake = atmosphere.update(stepS, {
       view: shot.view,
       cells,
       tile,
@@ -360,6 +411,7 @@ async function start(): Promise<void> {
       height: HEIGHT + 2 * MARGIN,
       land,
       glowing: herd.glowing(cells),
+      margin: MARGIN,
     });
     advance = 0;
     world.scale.set(tile);
@@ -376,7 +428,21 @@ async function start(): Promise<void> {
     canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     dim.style.opacity = String(shot.dim);
     captions.update(dtS);
-  });
+  };
+  if (film) {
+    // Still until a film moves it, on its own clock: the recording plays on the same one.
+    app.ticker.stop();
+    let clockMs = 0;
+    window.__frame = (seconds) => {
+      clockMs += seconds * 1000;
+      if (source instanceof Recording) source.pump(clockMs);
+      step(seconds * 1000);
+      app.render();
+    };
+  } else {
+    app.ticker.add((ticker) => step(ticker.deltaMS));
+  }
+  window.__painting = () => landscape.painting;
 }
 
 void start();

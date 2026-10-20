@@ -170,6 +170,26 @@ const SHADOW_RIM = 0.18;
 /** Share of the pixels of bare ground that are a grain darker or lighter. */
 const GRIT = 0.012;
 const WAVES = 0.006;
+/**
+ * Algae on the shallow sea (M11): biomass at which they are thickest (the sim's
+ * algae_capacity), the share of the water they cover then, the clumps' size (pixels), and
+ * their two olive tones, mixed into the water's colour this much.
+ */
+const ALGAE_FULL = 0.4;
+const ALGAE_COVER = 0.7;
+const ALGAE_CLUMP = 3;
+const ALGAE: readonly number[] = [0x4f7a3a, 0x86a24a];
+const ALGAE_MIX = 0.7;
+/**
+ * Burnt ground (R4): charcoal mixed in (more where the fire was recent), patches of this
+ * many pixels, how far they reach at full scorch, and a share of pixels that are pale ash.
+ */
+const CHARRED = 0x2e2626;
+const CHAR_MIX = 0.55;
+const CHAR_PATCH = 4;
+const CHAR_REACH = 1.15;
+const CHAR_ASH = 0.06;
+const CHAR_ASH_COLOUR = 0x9a918a;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
 /** The moving surf: share of the foam band's pixels that are foam, and of a line's dashes. */
@@ -447,6 +467,24 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
             (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
           );
         };
+  // The sim's other grids, read between cells as the snow is (R4: burnt ground; M11: algae).
+  const between4 = (cells: Uint8Array | undefined): ((u: number, v: number) => number) | null =>
+    cells === undefined
+      ? null
+      : (u, v) => {
+          const x0 = Math.floor(u);
+          const y0 = Math.floor(v);
+          const fx = u - x0;
+          const fy = v - y0;
+          const at = (x: number, y: number): number =>
+            (cells[clampY(y) * width + clampX(x)] ?? 0) / 255;
+          return (
+            (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+            (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
+          );
+        };
+  const scorchAt = between4(world.scorch);
+  const algaeAt = between4(world.algae);
   // The season of the pixel being painted.
   let now = seasonalOf(options.season ?? "summer");
   const dries = FORMS.map((form) => world.dormantClasses.includes(form));
@@ -753,6 +791,15 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
           grain && cellHash(Math.floor(worldX / dash), worldY, 7) < WAVES
             ? mix(base, foam, 0.35)
             : base;
+        // Algae (M11): clumps of olive fronds on the shallows, as thick as they grow.
+        const algae = algaeAt === null ? 0 : algaeAt(u, v) / ALGAE_FULL;
+        if (algae > 0.02) {
+          const clump = valueNoise(worldX / ALGAE_CLUMP, worldY / ALGAE_CLUMP, 51);
+          if (clump + 0.15 * dither < Math.min(algae, 1) * ALGAE_COVER) {
+            const tone = cellHash(worldX, worldY, 52) < 0.3 ? 1 : 0;
+            colours[at] = mix(base, ALGAE[tone] ?? 0, ALGAE_MIX);
+          }
+        }
         continue;
       }
       isLand[at] = 1;
@@ -927,6 +974,28 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
           shaded[at] = 1;
           colours[at] = mix(colours[at] ?? 0, tones.shadow, tones.shadowMix);
         }
+      }
+    }
+  }
+
+  // Burnt ground (R4): charred in patches as hot as the fire was recent, with flecks of
+  // ash; it greens again as the scorch fades.
+  if (scorchAt !== null) {
+    for (let py = 0; py < tall; py++) {
+      for (let px = 0; px < wide; px++) {
+        const at = py * wide + px;
+        if (isLand[at] !== 1) continue;
+        const worldX = originX + px;
+        const worldY = originY + py;
+        const scorch = scorchAt((worldX + 0.5) / tile - 0.5, (worldY + 0.5) / tile - 0.5);
+        if (scorch <= 0.01) continue;
+        const patch = valueNoise(worldX / CHAR_PATCH, worldY / CHAR_PATCH, 53);
+        const bayer = (BAYER[(worldY & 3) * 4 + (worldX & 3)] ?? 0.5) * 2 - 1;
+        if (patch + 0.12 * bayer > scorch * CHAR_REACH) continue;
+        const ash = cellHash(worldX, worldY, 54) < CHAR_ASH;
+        colours[at] = ash
+          ? CHAR_ASH_COLOUR
+          : mix(colours[at] ?? 0, CHARRED, CHAR_MIX * scorch + 0.25);
       }
     }
   }

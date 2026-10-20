@@ -118,6 +118,8 @@ export class Herd {
   private glowBits = 0;
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
+  /** Told where each animal that dies was last (R4: the fire's dead leave a puff of ash). */
+  onGone: ((x: number, y: number) => void) | null = null;
   private land: Land | null = null;
   private sea: SeaAt | null = null;
   private passable: Passable | null = null;
@@ -206,6 +208,10 @@ export class Herd {
   }
 
   private takeCreatures(message: CreaturesMessage): void {
+    if (this.onGone !== null) {
+      const alive = new Set(message.ids);
+      for (const [id, at] of this.roster.where) if (!alive.has(id)) this.onGone(at.x, at.y);
+    }
     const census = new Set(this.roster.species.values());
     const { placed, removed } = this.roster.take(message);
     const layers = Object.values(this.layers);
@@ -257,11 +263,12 @@ export class Herd {
 
   /**
    * Where the animals with the glow gene shine (R4): a spot at every other joint of their
-   * backs, in the view's layer, those in `cells` only. None on the map.
+   * backs, in the view's layer (on the map, where its dots are), those in `cells` only.
    */
   glowing(cells: CellRect): Spot[] {
-    if (this.view === null || this.view === "map") return [];
-    const layer = this.view === "middle" ? this.layers.middle : this.layers.local;
+    if (this.view === null) return [];
+    // The map's dots are the middle view's animals.
+    const layer = this.view === "local" ? this.layers.local : this.layers.middle;
     const spots: Spot[] = [];
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);
