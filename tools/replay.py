@@ -120,6 +120,16 @@ def summary(world: World) -> dict[str, Any]:
     }
 
 
+def history(world: World) -> dict[str, Any]:
+    """Which world this is (M10) and how much history it holds."""
+    return {
+        "world": world.number,
+        "past_worlds": len(world.past_worlds),
+        "species_ever": world.species.count,
+        "chronicle_entries": len(world.chronicle.entries()),
+    }
+
+
 def render_still(world: World, scale: int = 1) -> np.ndarray:
     """Pixel-art picture of the world: ground, plants and one pixel per creature."""
     terrain, flora, fauna = world.terrain, world.flora, world.fauna
@@ -300,7 +310,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     world = load_world(args.save, args.config)
-    print(json.dumps(summary(world), indent=2))
+    print(json.dumps(summary(world) | history(world), indent=2))
     if args.still is not None:
         args.still.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(render_still(world, args.scale), mode="RGB").save(args.still)
