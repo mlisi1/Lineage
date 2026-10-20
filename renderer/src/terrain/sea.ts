@@ -7,9 +7,13 @@
  *   swash   (R4) the water running up the beach and draining back, in `SWASH_LEVELS`
  *           steps, also painted as layers; the higher the tide the further it runs
  *
- * Every band is cut into tiles `SURF_TILE` art pixels across, each on its own clock: a
- * smooth noise of where it is on the island (`tidePhase`), so that waves run along a
- * coast and no two coasts break together. Opacities a frame, a few hundred of them.
+ * One wave clock drives both: a crest comes in, breaks in foam, and the swash runs up
+ * the beach after it and drains, smoothly (each step fades in as the water reaches it).
+ * Every band is cut into tiles `SURF_TILE` art pixels across, each on the clock of its
+ * place (`tidePhase`): waves come in from one side of the sea and sweep across the island
+ * as one front, so that neighbouring stretches of coast are a moment apart and far ones
+ * break at their own time. Opacities a frame, a few hundred of them. The map has the surf
+ * only: a coast a pixel wide does not show a swash.
  *   glints  short light strokes on the open water that grow, drift a little with the
  *           waves and go, each on its own clock, in new places every time; a few dozen
  *           sprites of one white texture, moved a frame
@@ -22,16 +26,20 @@ import type { CellRect, Land } from "./land";
 import { SWASH_LEVELS } from "./ground";
 import { cellHash } from "./pixels";
 
-/** Seconds for the surf to come in and go back. */
-export const BREATH_S = 3.6;
-/** Seconds of a wave of the swash running up and draining; of a tide. */
-const SWASH_S = 5.4;
-const TIDE_S = 48;
-/** Share of a wave spent running up (the rest it drains back). */
-const SWASH_UP = 0.3;
-/** Art pixels across a tile of the surf; cells over which the phase of the waves turns. */
-export const SURF_TILE = 16;
-const TIDE_SPAN = 14;
+/** Seconds of a wave: its crest coming in, breaking, the swash running up and draining. */
+export const BREATH_S = 8;
+/** Seconds of a tide, which sets how far the swash runs. */
+const TIDE_S = 120;
+/** Where in the wave the swash starts up the beach (as the foam breaks), and the share of the wave it runs up for. */
+const SWASH_FROM = 0.58;
+const SWASH_UP = 0.35;
+/** Art pixels across a tile of the surf. */
+export const SURF_TILE = 8;
+/** The wave front: the way it travels (unit vector), its speed (cells a second); and how much it wanders (seconds, over cells). */
+const WAVE_HEADING = [0.8, 0.6] as const;
+const WAVE_SPEED = 3;
+const WAVE_WANDER_S = 1.2;
+const WAVE_WANDER_SPAN = 40;
 /** Seconds between two showings of a glint (from, to), and the share of that it shows. */
 const GLINT_EVERY_S: readonly [number, number] = [2.4, 5.2];
 const GLINT_SHOWS = 0.42;
@@ -121,23 +129,27 @@ function smooth(x: number, y: number, salt: number): number {
 
 /**
  * Where the waves are at a place of the island (x, y in cells), as seconds added to the
- * clock there: near places nearly together, so that a wave runs along a coast; the same
- * in every view.
+ * clock there: a front travelling across the sea at `WAVE_SPEED`, wandering a little, so
+ * near places break a moment apart and the wave runs along a coast; the same in every view.
  */
 export function tidePhase(x: number, y: number): number {
-  return 3 * SWASH_S * smooth(x / TIDE_SPAN, y / TIDE_SPAN, 31);
+  const along = x * WAVE_HEADING[0] + y * WAVE_HEADING[1];
+  const wander = WAVE_WANDER_S * smooth(x / WAVE_WANDER_SPAN, y / WAVE_WANDER_SPAN, 31);
+  return -along / WAVE_SPEED + wander;
 }
+
+const ease = (t: number): number => t * t * (3 - 2 * t);
 
 /**
  * How far up the beach the water has run at `timeS` (with the place's `tidePhase` added),
- * 0 to `SWASH_LEVELS`: each wave runs up quickly and drains slowly; the tide, rising and
- * falling over `TIDE_S`, sets how far the waves reach.
+ * 0 to `SWASH_LEVELS`, smoothly: after the foam breaks it runs up, easing in and out, and
+ * drains more slowly; the tide, rising and falling over `TIDE_S`, sets how far it reaches.
  */
-export function swashLevel(timeS: number, levels = SWASH_LEVELS): number {
-  const wave = (((timeS / SWASH_S) % 1) + 1) % 1;
-  const height = wave < SWASH_UP ? wave / SWASH_UP : (1 - wave) / (1 - SWASH_UP);
-  const tide = 0.55 + 0.45 * Math.sin((2 * Math.PI * timeS) / TIDE_S);
-  return Math.min(Math.floor(height * tide * (levels + 0.999)), levels);
+export function swashHeight(timeS: number, levels = SWASH_LEVELS): number {
+  const wave = (((timeS / BREATH_S - SWASH_FROM) % 1) + 1) % 1;
+  const up = wave < SWASH_UP ? ease(wave / SWASH_UP) : 1 - ease((wave - SWASH_UP) / (1 - SWASH_UP));
+  const tide = 0.6 + 0.4 * Math.sin((2 * Math.PI * timeS) / TIDE_S);
+  return up * tide * levels;
 }
 
 /** Which showing of glint `slot` it is at `timeS`, and how far through it (0–1). */
@@ -215,8 +227,11 @@ export class Sea {
           for (const piece of painting.children) {
             const at = tileTimes.get(piece);
             const t = timeS + (at ?? 0);
+            // The swash's steps fill in turn: each as the water reaches it, the last in part.
             piece.alpha =
-              index < 3 ? (surfAlphas(t)[index] ?? 0) : swashLevel(t) === index - 2 ? 1 : 0;
+              index < 3
+                ? (surfAlphas(t)[index] ?? 0)
+                : Math.min(Math.max(swashHeight(t) - (index - 3), 0), 1);
           }
         }
       });

@@ -9,7 +9,7 @@ import {
   glintAt,
   seaAt,
   surfAlphas,
-  swashLevel,
+  swashHeight,
   tidePhase,
 } from "../../src/terrain/sea";
 import { world } from "../spike/worlds";
@@ -178,19 +178,21 @@ describe("the surf the painter leaves for the sea", () => {
 });
 
 describe("the tide", () => {
-  it("runs the swash up the beach and back, further at high tide", () => {
-    const levels = Array.from({ length: 4800 }, (_, i) => swashLevel(i / 100));
-    expect(Math.min(...levels)).toBe(0);
-    expect(Math.max(...levels)).toBe(SWASH_LEVELS);
-    // Step by step, never jumping two levels at once.
-    for (let i = 1; i < levels.length; i++) {
-      expect(Math.abs((levels[i] ?? 0) - (levels[i - 1] ?? 0))).toBeLessThanOrEqual(1);
+  it("runs the swash up the beach and back smoothly, further at high tide", () => {
+    const heights = Array.from({ length: 24000 }, (_, i) => swashHeight(i / 100));
+    expect(Math.min(...heights)).toBeCloseTo(0, 5);
+    expect(Math.max(...heights)).toBeGreaterThan(SWASH_LEVELS * 0.95);
+    expect(Math.max(...heights)).toBeLessThanOrEqual(SWASH_LEVELS);
+    // Never a jump: a hundredth of a second moves it a small share of a step.
+    for (let i = 1; i < heights.length; i++) {
+      expect(Math.abs((heights[i] ?? 0) - (heights[i - 1] ?? 0))).toBeLessThan(0.05);
     }
   });
 
-  it("breaks at different moments along different coasts, nearly together close by", () => {
-    expect(Math.abs(tidePhase(10, 10) - tidePhase(10.5, 10))).toBeLessThan(1);
+  it("sweeps in as one front: neighbours a moment apart, far coasts at their own time", () => {
+    // A tile (8 art pixels) apart in the middle view is one cell: a small share of a wave.
+    expect(Math.abs(tidePhase(10, 10) - tidePhase(11, 10))).toBeLessThan(BREATH_S / 10);
     const far = [0, 40, 80, 120].map((x) => tidePhase(x, 37));
-    expect(Math.max(...far) - Math.min(...far)).toBeGreaterThan(2);
+    expect(Math.max(...far) - Math.min(...far)).toBeGreaterThan(BREATH_S);
   });
 });
