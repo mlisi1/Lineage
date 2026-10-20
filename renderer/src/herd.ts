@@ -9,6 +9,7 @@
  * kept near where the sim last put it (`life: "anchored"`), and lives there between ticks.
  */
 import type { Container } from "pixi.js";
+import type { Spot } from "./atmosphere/atmosphere";
 import { lookOf } from "./creatures/body";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
@@ -247,6 +248,30 @@ export class Herd {
       });
     }
     return subjects;
+  }
+
+  /**
+   * Where the animals with the glow gene shine (R4): a spot at every other joint of their
+   * backs, in the view's layer, those in `cells` only. None on the map.
+   */
+  glowing(cells: CellRect): Spot[] {
+    if (this.view === null || this.view === "map") return [];
+    const layer = this.view === "middle" ? this.layers.middle : this.layers.local;
+    const spots: Spot[] = [];
+    for (const id of this.roster.ids) {
+      const slot = this.roster.slotOf(id);
+      const known = this.roster.genomes.get(id);
+      if (slot === undefined || known === undefined || !layer.has(slot)) continue;
+      if (!rareLooks(known.slots, this.signatures).includes("glow")) continue;
+      const { joints, radii } = layer.spine(slot);
+      joints.forEach((joint, i) => {
+        if (i % 2 === 1 || i === joints.length - 1) return;
+        if (joint.x < cells.x0 - 1 || joint.x > cells.x1 + 1) return;
+        if (joint.y < cells.y0 - 1 || joint.y > cells.y1 + 1) return;
+        spots.push({ x: joint.x, y: joint.y, size: radii[i] ?? 0 });
+      });
+    }
+    return spots;
   }
 
   /** Species of animal `id`, 0 if none or dead. */

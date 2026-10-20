@@ -28,8 +28,23 @@
  *   ?quiet                     no captions of the stream's entries (pictures of the land;
  *                              those handed to `__receive` are still shown)
  *   ?painter=inline            paint the ground on the page's thread, not in a worker
+ *   ?recording=office          R4: two weeks of the owner's office hours (dusks, nights,
+ *                              the Long Night) with the rain god power twice
+ *   ?recording=end             R4: a day, then the world ends (the herd starved) and the
+ *                              next one begins: the apocalypse sequence
+ *   ?show=night,fire,meteor    R4: the light and events asked for, made up on the land in
+ *                              sight (`atmosphere/demo.ts`; the stream's own sky is then
+ *                              not taken): day, dusk, dawn, night, moon, rain, fire,
+ *                              volcano, quake, meteor, seed, ark, end. With `?still` the
+ *                              atmosphere stands still too, moved on only by `__advance`
+ *
+ * Over the scene the atmosphere (R4, `atmosphere/`): the light of the moment, what glows,
+ * the weather of events, and the end of a world, during which the camera stays on the map
+ * and the button does nothing.
  */
 import { Application, Container, WebGLRenderer } from "pixi.js";
+import { Atmosphere } from "./atmosphere/atmosphere";
+import { demoMessages, showsOf } from "./atmosphere/demo";
 import { sight, type Point } from "./camera";
 import { Captions } from "./captions";
 import { Director, TIMINGS, type Scene, type Shot } from "./director";
@@ -60,7 +75,11 @@ const RECORDINGS: Readonly<Record<string, string>> = {
   life: "stream/life.json",
   autumn: "stream/recording.json",
   winter: "stream/winter.json",
+  office: "stream/office.json",
+  end: "stream/end.json",
 };
+/** The recordings of creatures, played at `LIFE_SPEED` unless told otherwise. */
+const LIVING = ["life", "office", "end"];
 /** Sim-seconds a wall second, playing the creatures' recording: two sim-hours in 4 s. */
 const LIFE_SPEED = 1800;
 
@@ -78,6 +97,10 @@ declare global {
     __camera?: () => Shot & { motion: string; dipping: boolean };
     /** What the scroll shows (tests). */
     __captions?: () => { phase: string; text: string | null; waiting: number };
+    /** What the atmosphere shows (tests). */
+    __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
+    /** Move the atmosphere on by this many seconds (tests; with `?still` the only way it moves). */
+    __advance?: (seconds: number) => void;
   }
 }
 
@@ -140,6 +163,7 @@ async function start(): Promise<void> {
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const herd = new Herd(creatureAtlas(), mulberry32(seed + 1), () => landscape.current);
   world.addChild(...herd.containers);
+  const still = params.get("still") !== null;
 
   // Over the scene: the dip between views, then the captions above it.
   const dim = document.createElement("div");
@@ -153,24 +177,55 @@ async function start(): Promise<void> {
 
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
-  const receive = (message: Message): void => {
+  let lastMs = 0;
+  const deliver = (message: Message): void => {
     if (message.type === "clock") date = message.date;
+    if ("t_ms" in message) lastMs = message.t_ms;
     if (message.type === "chronicle") captions.take(message, date);
     landscape.receive(message);
     herd.receive(message);
+    atmosphere.receive(message);
   };
+  // The director comes later; a world's end sends the camera to the map through this.
+  let toMap = (): void => undefined;
+  const atmosphere = new Atmosphere(deliver, {
+    random: mulberry32(seed + 2),
+    onEnd: () => {
+      toMap();
+      // The last of them died: the dead leave the scene with the world they lived in.
+      herd.receive({
+        type: "creatures",
+        protocol: 1,
+        t_ms: lastMs,
+        ids: [],
+        positions: [],
+        born: [],
+      });
+    },
+  });
+  world.addChild(atmosphere.ground);
+  app.stage.addChild(atmosphere.weather, atmosphere.tint, atmosphere.lights, atmosphere.flash);
+  const receive = (message: Message): void => {
+    if (!atmosphere.hold(message)) deliver(message);
+  };
+  const shows = showsOf(params.get("show"));
 
   const socket = params.get("source");
   const name = params.get("recording") ?? "life";
   const recording = RECORDINGS[name] ?? RECORDINGS["life"] ?? "";
   const every = params.get("every");
-  const speed = Number(params.get("speed") ?? (every === null && name === "life" ? LIFE_SPEED : 0));
+  const speed = Number(
+    params.get("speed") ?? (every === null && LIVING.includes(name) ? LIFE_SPEED : 0),
+  );
   const source: Source =
     socket !== null
       ? new SocketSource(socket)
       : await Recording.load(recording, Number(every ?? 1000), speed);
   source.listen((message) => {
-    if (!(quiet && message.type === "chronicle")) receive(message);
+    if (quiet && message.type === "chronicle") return;
+    // Shown on demand, the light is the one asked for, not the recording's.
+    if (shows.length > 0 && message.type === "sky") return;
+    receive(message);
   });
 
   const number = (key: string, otherwise: number): number => {
@@ -192,9 +247,13 @@ async function start(): Promise<void> {
     },
   );
 
-  // The view button: a key on a keyboard, a tap on a phone.
+  toMap = () => {
+    if (pinned === null) director.toMap();
+  };
+
+  // The view button: a key on a keyboard, a tap on a phone. Not while a world ends.
   const press = (): void => {
-    if (pinned === null) director.press();
+    if (pinned === null && !atmosphere.ending) director.press();
   };
   window.addEventListener("keydown", (event) => {
     if (event.repeat) return;
@@ -204,7 +263,7 @@ async function start(): Promise<void> {
   // 2026-10-20) a click goes on to another animal and a double click back to the map.
   let pendingClick: ReturnType<typeof setTimeout> | null = null;
   frame.addEventListener("pointerdown", () => {
-    if (pinned !== null) return;
+    if (pinned !== null || atmosphere.ending) return;
     if (pendingClick !== null) {
       clearTimeout(pendingClick);
       pendingClick = null;
@@ -226,6 +285,11 @@ async function start(): Promise<void> {
   window.__receive = receive;
   window.__press = press;
   window.__camera = () => ({ ...shot, ...director.state, view: shot.view });
+  let advance = 0;
+  window.__atmosphere = () => ({ ...atmosphere.state, ...atmosphere.counts });
+  window.__advance = (seconds) => {
+    advance += seconds;
+  };
   window.__captions = () => {
     const { phase, caption, waiting } = captions.state;
     return { phase, text: caption?.text ?? null, waiting };
@@ -250,6 +314,7 @@ async function start(): Promise<void> {
   };
   // The view first, so that the first land is laid out for it alone.
   landscape.show(shot.view, { x0: 0, y0: 0, x1: 0, y1: 0 });
+  let shown = shows.length === 0;
   app.ticker.add((ticker) => {
     const size = landscape.size;
     if (size === null) {
@@ -279,11 +344,31 @@ async function start(): Promise<void> {
     landscape.show(shot.view, cells);
     landscape.update(dtS);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
+    const land = landscape.current;
+    if (!shown && land !== null) {
+      shown = true;
+      const centre = shot.view === "map" ? { x: land.width / 2, y: land.height / 2 } : shot.centre;
+      for (const message of demoMessages(shows, land, centre.x, centre.y, lastMs)) receive(message);
+      atmosphere.settleLight();
+    }
+    if (still) atmosphere.settleLight();
+    const shake = atmosphere.update((still ? 0 : dtS) + advance, {
+      view: shot.view,
+      cells,
+      tile,
+      width: WIDTH + 2 * MARGIN,
+      height: HEIGHT + 2 * MARGIN,
+      land,
+      glowing: herd.glowing(cells),
+    });
+    advance = 0;
     world.scale.set(tile);
     // Whole art pixels in the canvas, the fraction left by sliding the canvas itself.
     const x = -cells.x0 * tile;
     const y = -cells.y0 * tile;
-    world.position.set(Math.floor(x) + MARGIN, Math.floor(y) + MARGIN);
+    world.position.set(Math.floor(x) + MARGIN + shake.x, Math.floor(y) + MARGIN + shake.y);
+    atmosphere.lights.scale.set(tile);
+    atmosphere.lights.position.copyFrom(world.position);
     // In whole device pixels: a browser smooths a picture placed between them.
     const device = window.devicePixelRatio || 1;
     const slide = (value: number): number =>

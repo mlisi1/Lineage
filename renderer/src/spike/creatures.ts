@@ -268,6 +268,12 @@ export class CreatureLayer {
     return joints[Math.floor(joints.length / 2)] ?? { x: 0, y: 0 };
   }
 
+  /** Creature `index`'s joints from the head back, and the body's radius at each (cells; R4's glow). */
+  spine(index: number): { joints: readonly Point[]; radii: readonly number[] } {
+    const creature = this.creatures[index];
+    return { joints: creature?.joints ?? [], radii: creature?.plan.radii ?? [] };
+  }
+
   /** The box creature `index`'s body fills, in cells: what must show through what covers it. */
   box(index: number): CellRect {
     const creature = this.creatures[index];
