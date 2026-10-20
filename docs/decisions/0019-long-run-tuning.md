@@ -46,6 +46,13 @@ The owner answered the M11 brief's three questions at the start (2026-10-20):
 
 (Filled in as the sweeps land.)
 
+- **Held-out check of the M10 defaults** (`m11-heldout-base`, seeds 20–39, office, 3
+  years, 18 min at 10 jobs): the same two criteria fail as on seeds 0–19 (`m9-office`),
+  and nothing else does, so M2–M10's tuning did not overfit its seeds. M6.1 is 82 %
+  (target 90 %; 80 % on 0–19), and M3.5 has 2 seeds without closed forest in 3 years (see
+  below). M4.3 is 0.69 (0.63 on 0–19). Predators are present for 52 % of inhabited time
+  and omnivores for 23 %. No world ended, and there are 15 notable booms and crashes a year.
+
 - **M2.5 measures the wrong thing now.** Its 25 ms budget dates from M2, when the world
   held only terrain. A whole inhabited world takes about 390 ms per sim-day on this PC,
   and M4.4's 400 ms is the whole-world budget. To be settled before the final report.
