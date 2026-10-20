@@ -350,6 +350,12 @@ class World:
             raise TypeError("the chronicle subsystem was replaced")
         return chronicle
 
+    def witness(self, outputs: list[OutputEvent]) -> list[OutputEvent]:
+        """What the observers make of ``outputs`` made outside a step (a tool staging an
+        event by the subsystems' own functions), as they would of the step's own: the flora
+        bares the land round a staged cone, the chronicle writes it down."""
+        return self._observe(list(outputs))
+
     def _observe(self, outputs: list[OutputEvent]) -> list[OutputEvent]:
         """What the observers make of ``outputs`` (nothing to see: no call). Each observer
         also sees what the ones before it added."""

@@ -171,12 +171,14 @@ def staged(what: str, at: tuple[int, int] | None) -> Action:
                 cfg, geo, state["height"], state["fertility"], x, y, radius, cone
             )
             world.terrain.set_state(state)
-            return [VolcanoErupted(t_ms, float(x), float(y), radius, cone)]
+            erupted: list[OutputEvent] = [VolcanoErupted(t_ms, float(x), float(y), radius, cone)]
+            return erupted + world.witness(erupted)
         radius = (cfg.earthquake_radius_min_cells + cfg.earthquake_radius_max_cells) / 2
         throw = (cfg.earthquake_throw_min + cfg.earthquake_throw_max) / 2
         state["height"] = tr.apply_earthquake(geo, state["height"], x, y, radius, throw, 0.6)
         world.terrain.set_state(state)
-        return [EarthquakeStruck(t_ms, float(x), float(y), radius, throw)]
+        struck: list[OutputEvent] = [EarthquakeStruck(t_ms, float(x), float(y), radius, throw)]
+        return struck + world.witness(struck)
 
     return act
 

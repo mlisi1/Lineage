@@ -8,6 +8,7 @@ import itertools
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from lineage_sim.config import parse_config
 from lineage_sim.state import io
@@ -154,8 +155,11 @@ def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
 def test_staged_events_happen_and_the_land_follows_them() -> None:
     world = _world()
     x, y = stream._land_near_middle(world)
+    # The volcano away from the fire: it bares the land round it, fuel and all.
+    land = np.argwhere(world.terrain.height > world.terrain.sea_level)
+    far = land[np.argmax((land[:, 0] - y) ** 2 + (land[:, 1] - x) ** 2)]
     stages = [
-        stream._stage("1:6:volcano"),
+        stream._stage(f"1:6:volcano@{far[1]},{far[0]}"),
         stream._stage("1:9:quake"),
         stream._stage(f"1:12:fire@{x},{y}"),
         stream._stage("2:12:seed"),
@@ -168,6 +172,8 @@ def test_staged_events_happen_and_the_land_follows_them() -> None:
         event["kind"] for m in messages if m["type"] == "events" for event in m["events"]
     ]  # fmt: skip
     assert kinds[:2] == ["volcano", "earthquake"]
+    # The staged cone is seen by the world's observers: the flora bares the land round it.
+    assert world.flora.barren.max() > 0
     # The storm's lightning set the cell alight (a fire already burning takes it in silently).
     width = next(m for m in messages if m["type"] == "land")["width"]
     assert any(y * width + x in m["burning"] for m in messages if m["type"] == "sky")
