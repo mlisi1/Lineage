@@ -3,7 +3,13 @@
  *
  *   surf    the three bands the painter leaves on layers of their own (`GroundOptions.surf`):
  *           a line of lighter water far out, one nearer, and the foam at the shore, shown
- *           one after another as a crest comes in; three opacities a frame
+ *           one after another as a crest comes in
+ *   swash   (R4) the water running up the beach and draining back, in `SWASH_LEVELS`
+ *           steps, also painted as layers; the higher the tide the further it runs
+ *
+ * Every band is cut into tiles `SURF_TILE` art pixels across, each on its own clock: a
+ * smooth noise of where it is on the island (`tidePhase`), so that waves run along a
+ * coast and no two coasts break together. Opacities a frame, a few hundred of them.
  *   glints  short light strokes on the open water that grow, drift a little with the
  *           waves and go, each on its own clock, in new places every time; a few dozen
  *           sprites of one white texture, moved a frame
@@ -13,10 +19,19 @@
  */
 import { Container, Sprite, Texture } from "pixi.js";
 import type { CellRect, Land } from "./land";
+import { SWASH_LEVELS } from "./ground";
 import { cellHash } from "./pixels";
 
 /** Seconds for the surf to come in and go back. */
 export const BREATH_S = 3.6;
+/** Seconds of a wave of the swash running up and draining; of a tide. */
+const SWASH_S = 5.4;
+const TIDE_S = 48;
+/** Share of a wave spent running up (the rest it drains back). */
+const SWASH_UP = 0.3;
+/** Art pixels across a tile of the surf; cells over which the phase of the waves turns. */
+export const SURF_TILE = 16;
+const TIDE_SPAN = 14;
 /** Seconds between two showings of a glint (from, to), and the share of that it shows. */
 const GLINT_EVERY_S: readonly [number, number] = [2.4, 5.2];
 const GLINT_SHOWS = 0.42;
@@ -91,6 +106,40 @@ export function surfAlphas(timeS: number): number[] {
   });
 }
 
+/** Smooth noise in [0, 1) over the plane. */
+function smooth(x: number, y: number, salt: number): number {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const fx = x - x0;
+  const fy = y - y0;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const top = cellHash(x0, y0, salt) * (1 - sx) + cellHash(x0 + 1, y0, salt) * sx;
+  const bottom = cellHash(x0, y0 + 1, salt) * (1 - sx) + cellHash(x0 + 1, y0 + 1, salt) * sx;
+  return top * (1 - sy) + bottom * sy;
+}
+
+/**
+ * Where the waves are at a place of the island (x, y in cells), as seconds added to the
+ * clock there: near places nearly together, so that a wave runs along a coast; the same
+ * in every view.
+ */
+export function tidePhase(x: number, y: number): number {
+  return 3 * SWASH_S * smooth(x / TIDE_SPAN, y / TIDE_SPAN, 31);
+}
+
+/**
+ * How far up the beach the water has run at `timeS` (with the place's `tidePhase` added),
+ * 0 to `SWASH_LEVELS`: each wave runs up quickly and drains slowly; the tide, rising and
+ * falling over `TIDE_S`, sets how far the waves reach.
+ */
+export function swashLevel(timeS: number, levels = SWASH_LEVELS): number {
+  const wave = (((timeS / SWASH_S) % 1) + 1) % 1;
+  const height = wave < SWASH_UP ? wave / SWASH_UP : (1 - wave) / (1 - SWASH_UP);
+  const tide = 0.55 + 0.45 * Math.sin((2 * Math.PI * timeS) / TIDE_S);
+  return Math.min(Math.floor(height * tide * (levels + 0.999)), levels);
+}
+
 /** Which showing of glint `slot` it is at `timeS`, and how far through it (0–1). */
 export function glintShowing(slot: number, timeS: number): { showing: number; phase: number } {
   const [shortest, longest] = GLINT_EVERY_S;
@@ -131,6 +180,9 @@ export function glintAt(
   return { x, y, length };
 }
 
+/** Each tile of surf's `tidePhase`, set as the tile is made (`grounds.ts`). */
+export const tileTimes = new WeakMap<Container, number>();
+
 /** The moving sea of one view. */
 export class Sea {
   /** Add this to the world over the ground and its surf. */
@@ -152,12 +204,21 @@ export class Sea {
     }
   }
 
-  /** Move the sea on to `timeS` (wall seconds) over `view`; `surf` is the ground's two bands. */
+  /**
+   * Move the sea on to `timeS` (wall seconds) over `view`; `surf` is the ground's bands,
+   * the surf's three then the swash's, each holding its paintings, each of them its tiles.
+   */
   tick(timeS: number, land: Land, view: CellRect, surf: readonly Container[] | null): void {
     if (surf !== null) {
-      const alphas = surfAlphas(timeS);
       surf.forEach((band, index) => {
-        band.alpha = alphas[index] ?? 0;
+        for (const painting of band.children) {
+          for (const piece of painting.children) {
+            const at = tileTimes.get(piece);
+            const t = timeS + (at ?? 0);
+            piece.alpha =
+              index < 3 ? (surfAlphas(t)[index] ?? 0) : swashLevel(t) === index - 2 ? 1 : 0;
+          }
+        }
       });
     }
     const { tile } = this;

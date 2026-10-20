@@ -14,10 +14,12 @@
  * Asked for the surf (`PaintRequest.surf`), a painting comes with its three bands, which
  * go in layers of their own (`surf`, from the shore out) for the sea to show in turn.
  */
-import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
+import { CanvasSource, Container, Rectangle, Sprite, Texture, type TextureSource } from "pixi.js";
 import type { CellRect } from "./land";
 import { Dropped, type PaintRequest, type Painter } from "./painter";
 import type { Pixels } from "./pixels";
+import { SWASH_LEVELS } from "./ground";
+import { SURF_TILE, tidePhase, tileTimes } from "./sea";
 
 /** Seconds a new painting takes to come over the old. */
 export const FADE_S = 2;
@@ -72,9 +74,56 @@ export function pixelSprite(pixels: Pixels, tile: number, x = 0, y = 0): Sprite 
   return rgbaSprite(pixels.rgba, pixels, tile, { x, y });
 }
 
+/**
+ * A band of surf as tiles `SURF_TILE` art pixels across, those with anything in them, each
+ * told its place's `tidePhase` (`sea.ts`); one texture source for them all.
+ */
+function surfTiles(
+  rgba: Uint8ClampedArray<ArrayBuffer>,
+  size: { width: number; height: number },
+  tile: number,
+  at: Placing,
+): { container: Container; source: TextureSource } {
+  const whole = rgbaSprite(rgba, size, tile, at);
+  const source = whole.texture.source;
+  whole.destroy();
+  const container = new Container();
+  const offsetX = at.offsetX ?? 0;
+  const offsetY = at.offsetY ?? 0;
+  for (let ty = 0; ty < source.height; ty += SURF_TILE) {
+    for (let tx = 0; tx < source.width; tx += SURF_TILE) {
+      const w = Math.min(SURF_TILE, source.width - tx);
+      const h = Math.min(SURF_TILE, source.height - ty);
+      let any = false;
+      for (
+        let y = Math.max(ty - offsetY, 0);
+        y < Math.min(ty + h - offsetY, size.height) && !any;
+        y++
+      ) {
+        for (let x = Math.max(tx - offsetX, 0); x < Math.min(tx + w - offsetX, size.width); x++) {
+          if ((rgba[(y * size.width + x) * 4 + 3] ?? 0) > 0) {
+            any = true;
+            break;
+          }
+        }
+      }
+      if (!any) continue;
+      const piece = new Sprite(new Texture({ source, frame: new Rectangle(tx, ty, w, h) }));
+      piece.scale.set(1 / tile);
+      piece.position.set(at.x + tx / tile, at.y + ty / tile);
+      tileTimes.set(piece, tidePhase(at.x + (tx + w / 2) / tile, at.y + (ty + h / 2) / tile));
+      container.addChild(piece);
+    }
+  }
+  return { container, source };
+}
+
 /** A painting on the screen: the ground, and its surf if it was asked for. */
 interface Painting {
-  sprites: Sprite[];
+  /** What fades in: the ground's sprite, then a container of tiles for each band of surf. */
+  sprites: Container[];
+  /** The surf's texture sources, to free with it. */
+  sources: TextureSource[];
 }
 
 /** The sprites of `pixels`: the ground into `layers.ground`, each band of surf into its own layer. */
@@ -86,19 +135,20 @@ function show(
 ): Painting {
   const ground = rgbaSprite(pixels.rgba, pixels, tile, at);
   layers.ground.addChild(ground);
-  const sprites = [ground];
+  const sprites: Container[] = [ground];
+  const sources: TextureSource[] = [ground.texture.source];
   (pixels.surf ?? []).forEach((band, index) => {
-    const sprite = rgbaSprite(band, pixels, tile, at);
-    layers.surf[index]?.addChild(sprite);
-    sprites.push(sprite);
+    const { container, source } = surfTiles(band, pixels, tile, at);
+    layers.surf[index]?.addChild(container);
+    sprites.push(container);
+    sources.push(source);
   });
-  return { sprites };
+  return { sprites, sources };
 }
 
 const destroy = (painting: Painting | null): void => {
-  for (const sprite of painting?.sprites ?? []) {
-    sprite.destroy({ texture: true, textureSource: true });
-  }
+  for (const sprite of painting?.sprites ?? []) sprite.destroy({ children: true, texture: true });
+  for (const source of painting?.sources ?? []) source.destroy();
 };
 
 /** A painting fading in over another, which goes once the new one is all there. */
@@ -140,7 +190,10 @@ class Fade {
 class Layers {
   /** Add these to the world: the ground, then the surf's bands (the foam first, then the lines). */
   readonly container = new Container();
-  readonly surf: readonly Container[] = [new Container(), new Container(), new Container()];
+  readonly surf: readonly Container[] = Array.from(
+    { length: 3 + SWASH_LEVELS },
+    () => new Container(),
+  );
   protected readonly layers = { ground: this.container, surf: this.surf };
 }
 

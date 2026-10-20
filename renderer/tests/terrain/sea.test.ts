@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { paintGround } from "../../src/terrain/ground";
 import { LAND_PALETTE } from "../../src/terrain/palette";
-import { BREATH_S, GLINT_SLOTS, Sea, glintAt, seaAt, surfAlphas } from "../../src/terrain/sea";
+import { SWASH_LEVELS } from "../../src/terrain/ground";
+import {
+  BREATH_S,
+  GLINT_SLOTS,
+  Sea,
+  glintAt,
+  seaAt,
+  surfAlphas,
+  swashLevel,
+  tidePhase,
+} from "../../src/terrain/sea";
 import { world } from "../spike/worlds";
 
 const land = {
@@ -87,11 +97,11 @@ describe("the sea at a place, for creatures under water", () => {
 });
 
 describe("the surf the painter leaves for the sea", () => {
-  it("is three bands on the water by the shore, the foam nearest, and none on the ground", () => {
+  it("is three bands on the water by the shore, the foam nearest, then the swash up the beach", () => {
     const pixels = paintGround(land, { tile: 32, style: "blended", grain: true, surf: true });
     const bands = pixels.surf;
     if (bands === undefined) throw new Error("no surf");
-    expect(bands).toHaveLength(3);
+    expect(bands).toHaveLength(3 + SWASH_LEVELS);
     const row = 64;
     const shore = 10 * 32;
     // The lines are dashed: look along a few rows.
@@ -104,7 +114,7 @@ describe("the surf the painter leaves for the sea", () => {
       }
       return found;
     };
-    const [foam = [], near = [], far = []] = bands.map(xs);
+    const [foam = [], near = [], far = [], ...swash] = bands.map(xs);
     const middle = (values: number[]): number => values.reduce((a, b) => a + b, 0) / values.length;
     for (const band of [foam, near, far]) {
       expect(band.length).toBeGreaterThan(0);
@@ -112,6 +122,14 @@ describe("the surf the painter leaves for the sea", () => {
       expect(Math.max(...band)).toBeLessThan(shore + 12);
       expect(Math.min(...band)).toBeGreaterThan(shore - 40);
     }
+    // The swash on the beach, each step running further up it than the one before.
+    let reach = shore;
+    for (const level of swash) {
+      expect(Math.min(...level)).toBeGreaterThan(shore - 12);
+      expect(Math.max(...level)).toBeGreaterThan(reach);
+      reach = Math.max(...level);
+    }
+    expect(reach).toBeLessThan(shore + 40);
     expect(middle(far)).toBeLessThan(middle(near));
     expect(middle(near)).toBeLessThan(middle(foam));
     // The ground itself has no foam where the surf moves; it has it without the surf.
@@ -156,5 +174,23 @@ describe("the surf the painter leaves for the sea", () => {
       last = now;
     }
     expect(compared).toBeGreaterThan(100);
+  });
+});
+
+describe("the tide", () => {
+  it("runs the swash up the beach and back, further at high tide", () => {
+    const levels = Array.from({ length: 4800 }, (_, i) => swashLevel(i / 100));
+    expect(Math.min(...levels)).toBe(0);
+    expect(Math.max(...levels)).toBe(SWASH_LEVELS);
+    // Step by step, never jumping two levels at once.
+    for (let i = 1; i < levels.length; i++) {
+      expect(Math.abs((levels[i] ?? 0) - (levels[i - 1] ?? 0))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("breaks at different moments along different coasts, nearly together close by", () => {
+    expect(Math.abs(tidePhase(10, 10) - tidePhase(10.5, 10))).toBeLessThan(1);
+    const far = [0, 40, 80, 120].map((x) => tidePhase(x, 37));
+    expect(Math.max(...far) - Math.min(...far)).toBeGreaterThan(2);
   });
 });
