@@ -15,8 +15,11 @@
  *   lava     the eruption's own layer, drawn over the cone without the scene's tint: a pool
  *            of crusted lava in the mouth, rivers running down its south side, falling
  *            bright over each cliff
- *   crater   a raised rim with its own face, the inner wall of the bowl's far side showing,
- *            a scorched glassy floor with cracks, rays of thrown debris, scattered boulders
+ *   crater   drawn from a height field, as the Moon's simple craters look from above: a bowl
+ *            with a raised rim, scalloped where its walls slumped; lit from the upper left,
+ *            so the far wall is bright and the near wall in the rim's shadow; a slumped
+ *            lobe on the floor; a rumpled blanket of thrown earth with boulders, thinning
+ *            into patches; rays thrown downrange of the meteor, none uprange
  *
  * Pure per-pixel rules, made into textures once for each size (art pixels), kept for the
  * page's life.
@@ -40,12 +43,10 @@ const CRUST_CRACK = 0x3e2a26;
 const LAVA = [0xfff1a6, 0xffc44a, 0xff8a2a, 0xd8461c] as const;
 const LAVA_CRUST = 0x401c18;
 /** A crater's earth: rim tops, faces, outline; its scorched floor and glassy cracks; debris. */
-const EARTH = [0x6a503e, 0x8a6c52, 0xae8f6e, 0xcbb08e] as const;
-const EARTH_FACE = [0x4a3428, 0x5e4434] as const;
+const BOWL = [0x5a464e, 0x6e5856, 0x846a58, 0x9f7f62, 0xbb9a78, 0xd8bc98] as const;
+const EJECTA = [0x4e3a30, 0x6e5440, 0x8c6e52, 0xa98a6a, 0xc4a684, 0xdcc3a0] as const;
 const EARTH_OUTLINE = 0x2e1e18;
-const SCORCH = 0x2b2224;
-const GLASS = 0x5a5468;
-const DEBRIS = [0x8a6c52, 0xb4977a] as const;
+const RIM_CREST = 0xe4cfae;
 
 /** Bayer 4×4, 0–1: where two tones meet, which pixel takes which. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -236,49 +237,128 @@ export function lavaPixel(shape: ConeShape, x: number, y: number): MarkPixel {
   return null;
 }
 
-/** A crater `size` pixels across at pixel (x, y). */
+/** Where a crater's rim stands, as a share of its texture's half width; its ejecta fill the rest. */
+export const CRATER_RIM = 0.5;
+/** The bowl's depth and the rim's height, in rim radii; how fast the ejecta thin outward. */
+const BOWL_DEPTH = 0.42;
+const RIM_HEIGHT = 0.18;
+const EJECTA_FALL = 3;
+/** The light, from the upper left and above (unit vector, y down the picture). */
+const SUN = [-0.55, -0.55, 0.63] as const;
+
+/** A crater's shape round its middle: how far its rim stands at `angle` (0–1), in rim radii. */
+function rimReach(angle: number): number {
+  // Scalloped where the walls slumped, a little long along the meteor's path (from the
+  // upper right), never a perfect circle.
+  const scallops =
+    0.09 * (aroundNoise(angle, 7, 21) - 0.5) + 0.05 * (aroundNoise(angle, 17, 22) - 0.5);
+  const along = 0.06 * Math.cos(4 * Math.PI * (angle - 0.875));
+  return 1 + 2 * scallops + along;
+}
+
+/** The ground's height at (u, v) rim radii from a crater's middle (0 is the land round it). */
+export function craterHeight(u: number, v: number): number {
+  const angle = (Math.atan2(v, u) / (2 * Math.PI) + 1) % 1;
+  const rho = Math.hypot(u, v) / rimReach(angle);
+  // A slumped lobe: a tongue of the wall that slid toward the floor on the south east.
+  const slump = Math.max(0, 1 - Math.hypot(u - 0.45, v - 0.45) / 0.38);
+  if (rho < 1) {
+    const bowl = RIM_HEIGHT - (RIM_HEIGHT + BOWL_DEPTH) * (1 - rho * rho);
+    // The floor flat where the debris settled, rumpled.
+    const floor = -BOWL_DEPTH * 0.82 + 0.02 * (valueAt(u * 6, v * 6, 23) - 0.5);
+    return Math.max(bowl, floor) + 0.18 * slump * slump;
+  }
+  // The ejecta: thickest at the rim, thinning outward, lumpy.
+  const blanket = RIM_HEIGHT * Math.pow(rho, -EJECTA_FALL);
+  return blanket * (0.75 + 0.5 * valueAt(u * 5, v * 5, 24));
+}
+
+/** Smooth noise 0–1 on the plane. */
+function valueAt(x: number, y: number, salt: number): number {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const fx = x - x0;
+  const fy = y - y0;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const top = cellHash(x0, y0, salt) * (1 - sx) + cellHash(x0 + 1, y0, salt) * sx;
+  const bottom = cellHash(x0, y0 + 1, salt) * (1 - sx) + cellHash(x0 + 1, y0 + 1, salt) * sx;
+  return top * (1 - sy) + bottom * sy;
+}
+
+/** Whether the rim keeps the sun off (u, v) (rim radii): a walk toward the light. */
+function inShadow(u: number, v: number, step: number): boolean {
+  const here = craterHeight(u, v);
+  const climb = SUN[2] / Math.hypot(SUN[0], SUN[1]);
+  for (let t = step; t < 2.2; t += step) {
+    const along = Math.SQRT1_2 * t;
+    if (craterHeight(u - along, v - along) > here + climb * t * 1.9) return true;
+  }
+  return false;
+}
+
+/**
+ * A crater `size` pixels across (its ejecta's reach) at pixel (x, y): an uneven bowl with a
+ * raised, scalloped rim, lit from the upper left so its far wall is bright and its near
+ * wall in shadow; a slumped lobe on its floor; a rumpled blanket of thrown earth with
+ * boulders, thinning into the ground; rays thrown away from where the meteor came.
+ */
 export function craterPixel(size: number, x: number, y: number): MarkPixel {
-  const r = size / 2;
-  const dx = x + 0.5 - r;
-  const dy = y + 0.5 - r;
-  const angle = (Math.atan2(dy, dx) / (2 * Math.PI) + 1) % 1;
-  const edge = 0.9 + 0.1 * aroundNoise(angle, 9, 3);
-  const d = Math.hypot(dx, dy) / r / edge;
-  const facing = d === 0 ? 0 : (-dx - dy) / (Math.hypot(dx, dy) * Math.SQRT2);
-  const lip = Math.max(1, Math.round(size * 0.04));
-  if (d > 1) return null;
-  if (d > 0.82) {
-    // Thrown debris: rays out from the rim, and stones.
-    const ray = aroundNoise(angle, 23, 7);
-    const stone = boulder(x, y, 640);
-    if (stone !== null && cellHash(x, y, 641) < 0.6) return [stone, 255];
-    if (ray > 0.62 && cellHash(x, y, 642) < (ray - 0.62) * 2.2 * (1 - d) * 5) {
-      return [DEBRIS[cellHash(x, y, 643) < 0.5 ? 0 : 1] ?? DEBRIS[0], 255];
-    }
-    return null;
+  const half = size / 2;
+  const rim = half * CRATER_RIM;
+  const u = (x + 0.5 - half) / rim;
+  const v = (y + 0.5 - half) / rim;
+  const angle = (Math.atan2(v, u) / (2 * Math.PI) + 1) % 1;
+  const rho = Math.hypot(u, v) / rimReach(angle);
+  const far = Math.hypot(u, v) * CRATER_RIM;
+  if (far > 1) return null;
+  const pixel = 1 / rim;
+  const outside = rho >= 1;
+
+  // How much of the ground the blanket covers: all near the rim, then patchy, then rays.
+  let cover = outside ? 1 - (rho - 1) / 0.6 : 1;
+  const ray = aroundNoise(angle, 19, 25);
+  // Rays thrown downrange (away from the meteor's upper right), none uprange.
+  const downrange = 0.5 + 0.5 * Math.cos(2 * Math.PI * (angle - 0.625));
+  if (outside && cover < 1) {
+    const reach = ray > 0.6 ? (ray - 0.6) * 2.5 * downrange : 0;
+    cover = Math.max(cover, reach * (1 - (far - CRATER_RIM) / (1 - CRATER_RIM)) * 1.4);
   }
-  if (d > 0.66) {
-    // The rim stands up: its top lit toward the upper left, outlined outside; on the south
-    // its outer face shows below it.
-    if (d > 0.79 && dy > 0) return [EARTH_OUTLINE, 255];
-    if (d > 0.76 && dy > r * 0.2) return [EARTH_FACE[0] ?? EARTH_OUTLINE, 255];
-    const light = 1.4 + 1.3 * facing + (cellHash(x, y, 644) - 0.5) * 0.7;
-    const tone = Math.min(Math.max(Math.floor(light + dither(x, y) - 0.5), 0), 3);
-    return [EARTH[tone] ?? EARTH[1], 255];
+  if (cover <= 0) return null;
+  if (outside && cover < 1) {
+    // Thinning out: clods of earth, more of them where it is thicker.
+    const clod = cellHash(Math.floor(x / 2), Math.floor(y / 2), 26) * 0.6 + dither(x, y) * 0.4;
+    if (clod > cover) return null;
   }
-  // Inside: the far (north) wall's face shows below the rim; the floor is scorched, glassy
-  // cracks running out from the strike, the bared ground showing between.
-  const wallDepth = (0.66 - d) * r;
-  if (dy < 0 && wallDepth < lip * 3 && facing > -0.6) {
-    const tone = cellHash(Math.floor(x / 2), 1, 645) < 0.5 ? 0 : 1;
-    if (wallDepth < 1) return [EARTH_OUTLINE, 255];
-    return [EARTH_FACE[tone] ?? EARTH_FACE[0], 255];
+
+  const stone = outside && rho < 1.8 ? boulder(x, y, 640) : null;
+  if (stone !== null) return [stone, 255];
+
+  // The slope's light: the height field's gradient against the sun.
+  const dhx = (craterHeight(u + pixel, v) - craterHeight(u - pixel, v)) / (2 * pixel);
+  const dhy = (craterHeight(u, v + pixel) - craterHeight(u, v - pixel)) / (2 * pixel);
+  const relief = 2.6;
+  const nx = -dhx * relief;
+  const ny = -dhy * relief;
+  const lit = (nx * SUN[0] + ny * SUN[1] + SUN[2]) / Math.hypot(nx, ny, 1);
+  let light = (lit - SUN[2]) * 2.2; // flat ground 0, facing the sun > 0
+  const shade = !outside && inShadow(u, v, pixel * 1.5);
+  if (shade) light = Math.min(light, -0.45) - 0.1;
+  if (!outside) light -= 0.12 * (1 - rho); // deeper is darker: the floor sees less sky
+  const grain = (cellHash(x, y, 27) - 0.5) * 0.35;
+  // Fresh ejecta is paler than the ground it lies on.
+  const tone = Math.round((outside ? 3 : 2) + light * 2 + grain + (dither(x, y) - 0.5) * 0.9);
+  const ramp = outside ? EJECTA : BOWL;
+  // Shadow is cool and never black: the sky lights it.
+  const lowest = outside ? 1 : 0;
+  const colour =
+    ramp[Math.min(Math.max(tone, lowest), ramp.length - 1)] ?? ramp[2] ?? EARTH_OUTLINE;
+  // The rim's crest catches the light where it faces the sun; the floor's middle is scorched.
+  if (rho > 0.97 && rho < 1.03 && light > 0.35 && dither(x, y) < 0.6) return [RIM_CREST, 255];
+  if (!outside && rho < 0.3 && cellHash(x, y, 28) < 0.25 * (1 - rho / 0.3)) {
+    return [BOWL[1], 255];
   }
-  const crack = aroundNoise(angle, 13, 9);
-  if (d < 0.5 && crack > 0.78 && cellHash(x, y, 646) < 0.8) return [GLASS, 255];
-  if (d < 0.18) return [SCORCH, 230];
-  if (d < 0.5) return [SCORCH, Math.round(170 * (1 - d / 0.5) * (0.6 + 0.4 * dither(x, y)))];
-  return null;
+  return [colour, 255];
 }
 
 const made = new Map<string, { texture: Texture; cx: number; cy: number }>();

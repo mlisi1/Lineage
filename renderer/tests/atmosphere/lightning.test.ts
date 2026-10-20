@@ -5,6 +5,8 @@ import {
   coneSummit,
   conePixel,
   ledgeAt,
+  CRATER_RIM,
+  craterHeight,
   craterPixel,
   lavaPixel,
   type MarkPixel,
@@ -108,15 +110,39 @@ describe("the flame and the marks", () => {
     expect(lavaPixel(shape, 0, 0)).toBeNull();
   });
 
-  it("draws a crater: a lit rim, the far wall showing, a scorched floor, open ground beyond", () => {
-    const size = 80;
-    const centre = craterPixel(size, 40, 40);
-    expect(centre?.[0]).toBeDefined(); // scorched
-    expect(craterPixel(size, 40, 63)).toBeNull(); // the bared floor shows through
-    // The rim's top: lit on its upper left, darker on its lower right.
-    expect(brightness(craterPixel(size, 19, 19))).toBeGreaterThan(
-      brightness(craterPixel(size, 60, 60)),
+  it("draws a crater: a lit far wall, the near wall in shadow, ejecta beyond, never a circle", () => {
+    const size = 160;
+    const rim = (size / 2) * CRATER_RIM;
+    const mid = size / 2;
+    expect(craterPixel(size, mid, mid)).not.toBeNull(); // the floor is drawn, not a hole
+    // Inside, the wall facing the light (lower right) is brighter than the one in shadow.
+    const wall = Math.round(rim * 0.75 * Math.SQRT1_2);
+    expect(brightness(craterPixel(size, mid + wall, mid + wall))).toBeGreaterThan(
+      brightness(craterPixel(size, mid - wall, mid - wall)),
     );
+    // Thrown earth just beyond the rim, all round; open ground at the texture's corner.
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const at = rim * 1.2;
+      expect(
+        craterPixel(size, Math.round(mid + dx * at), Math.round(mid + dy * at)),
+      ).not.toBeNull();
+    }
     expect(craterPixel(size, 0, 0)).toBeNull();
+    // The rim wanders: its reach differs round the bowl.
+    const reaches = [0, 0.25, 0.5, 0.75].map((turn) => {
+      let r = 0;
+      while (
+        craterHeight(Math.cos(2 * Math.PI * turn) * r, Math.sin(2 * Math.PI * turn) * r) < 0.17
+      ) {
+        r += 0.005;
+      }
+      return r;
+    });
+    expect(Math.max(...reaches) - Math.min(...reaches)).toBeGreaterThan(0.03);
   });
 });

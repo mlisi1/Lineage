@@ -41,7 +41,7 @@ import {
   type Rgb,
 } from "./light";
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
-import { coneSummit, markTexture } from "./marks";
+import { CRATER_RIM, coneSummit, markTexture } from "./marks";
 import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
 import {
   HALO_SIZE,
@@ -620,7 +620,8 @@ export class Atmosphere {
     switch (effect.kind) {
       case "cone":
       case "crater": {
-        const across = radius * 2 * tile * (effect.kind === "crater" ? 1.2 : 1);
+        // A crater's rim stands where the sim dug, its thrown earth beyond.
+        const across = radius * 2 * tile * (effect.kind === "crater" ? 1 / CRATER_RIM : 1);
         this.mark(this.groundPool, effect.kind, x, y, across, tile, 1);
         return 0;
       }
