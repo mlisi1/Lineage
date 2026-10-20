@@ -4,7 +4,8 @@ One renderer draws the scene for the desk screen and for the phone (CLAUDE.md §
 TypeScript and PixiJS in a browser, which on the device is Chromium in kiosk mode at
 1024×600. The R0 spike (`renderer/src/spike/`) settled the approach; R1 draws the land
 and its plants from the state stream (`renderer/src/`, see "The land from the state
-stream" below); R2–R4 add creatures, the camera and the atmosphere.
+stream" below); R2 the creatures, R3 the camera, its captions and the animals in the
+scene ("The camera and captions" below); R4 the atmosphere.
 
 ## Pixel art
 
@@ -565,21 +566,25 @@ image draws WebGL with the GPU.
 ## The land from the state stream (R1)
 
 The scene (`renderer/index.html`, `src/main.ts`) draws the land and its plants from the
-state stream in one of the three views. Creatures (R2) and the camera's choices (R3)
-come on top. Page parameters:
+state stream in one of the three views; its animals and the camera's choices are R3's
+(below). Page parameters:
 
 | Parameter | What |
 |---|---|
-| `view=map\|middle\|local`, `x=…&y=…` | the view, and where it looks (cells) |
-| `recording=winter` | play the winter recording instead of the August–September one |
-| `every=1000` | wall milliseconds between the recording's messages; 0: all at once, the last day |
+| `view=map\|middle\|local`, `x=…&y=…` | pin the camera to a view (no director), and where it looks (cells) |
+| `recording=autumn\|winter` | R1's land recordings (August–September, or deep winter) instead of the creatures' (`life`, the default) |
+| `speed=1800` | sim-seconds to a wall second (the default for `life`) |
+| `every=1000` | instead, wall milliseconds between the recording's messages; 0: all at once, the last day (the default for `autumn` and `winter`, 1000) |
+| `follow=…`, `idle=…`, `seed=…` | seconds on one animal and before the map comes back, and the camera's random draws (tests) |
+| `quiet` | no captions of the stream's own entries |
 | `source=ws://…` | the server's stream instead of a recording (S1; not tried yet: there is no server) |
 | `still` | the sea does not move: for pictures that must not change |
 | `painter=inline` | paint the ground on the page's thread, to compare with the worker |
 
 For tests and measurements the page offers `window.__sceneSettled()` (the view shows the
-latest day, fully painted), `window.__receive(message)` and `window.__textures()` (live
-textures on the GPU).
+latest day, fully painted), `window.__receive(message)`, `window.__textures()` (live
+textures on the GPU), `window.__press()` (the view button), `window.__camera()` and
+`window.__captions()` (what the camera and the scroll are doing).
 
 **The stream.** One JSON message per frame, defined once in
 `server/lineage_server/protocol/schema.json`; the TypeScript types (`src/protocol.ts`)
@@ -594,6 +599,7 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
+| `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
 
 The palette is not sent: the renderer has the report maps' own. `tools/stream.py`
 records the stream from a save, and `src/stream.ts` decodes it. Two recordings are
@@ -724,6 +730,52 @@ plant, the turn of the year around three changes of season, and the four seasons
 **Snapshots** (`tests/e2e/scene.spec.ts`): seven fixed states of the scene, five from the
 autumn recording and two on the winter recording's snow line, taken with `still`.
 
+## The camera and captions (R3)
+
+The camera is the owner's to steer ([ADR 0020](../decisions/0020-the-camera-view-button-and-captions.md)):
+a **view button**, beside the god-power button, steps the screen map → middle → local →
+map. The map is where it rests, and it goes back there fifteen minutes after the last
+press. On the page the button is V, space or Enter, a tap on a phone, or
+`window.__press()`. `src/director.ts` decides what is shown; it is pure and seeded.
+
+| View | The camera |
+|---|---|
+| map | the whole continent, still; the animals as dots |
+| middle | drifts at 1.2 cells a second to a place on land 20–70 cells away, lingers 8–20 s, goes on; on a critically damped spring, so it eases in and out |
+| local | follows an animal of a species drawn at random (then one of its animals, awake if one is), for 4–6 minutes, then another; within a view's width it glides there, further it cuts |
+
+- **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
+  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
+- **Following** (`src/camera.ts`): a spring a little under critical damping (period
+  2.4 s, damping 0.75), so that the camera swings slightly past an animal that turns and
+  settles; it aims 1.2 s ahead of the animal's smoothed walk and lets it potter within
+  a cell of where the camera is before it moves. Fixed sub-steps (1/240 s) make it the
+  same at any frame rate. The view never looks off the world's edge.
+- **The animals** (`src/herd.ts`): R2's creature layers fed from the stream. A roster
+  gives each id a slot and frees the slots of the dead; the middle view's bodies (and the
+  map's dots) and the local view's are two layers, each anchored to the sim's positions,
+  and only the shown one moves. They stand among the plants of the view (the plant layer
+  drawn opaque, the old one while a new day fades in); what grows in front of the animal
+  followed is shown through.
+- **Captions** (`src/captions.ts`): the notable entries (importance ≥ 3) on a parchment
+  scroll at the foot of the screen, one at a time and above the dip. It unrolls from its
+  middle, stays open 4 s plus 0.07 s a character, rolls up and waits 1.5 s for the next;
+  at most four wait (the least important dropped). The date in words above the entry; at
+  most four lines, cut with an ellipsis. The text is in the caption font
+  (`src/pixelfont.ts`), drawn a pixel at a time so it keeps the hard edges and looks the
+  same in every browser.
+- **The creatures' recording** (`public/stream/life.json`): 28 days from the v9 fixture,
+  creatures every two sim-hours, a land every 14 days, six notable entries; played by sim
+  time (`Recording` with a speed, 1 800 sim-seconds a wall second: a day in 48 s).
+
+**Tests**: unit tests of the spring and framing, of the director's rules on synthetic
+worlds (the button's cycle, the dip waits for paint, idle return, drift stays on land and
+in the world, following, the species drawn fairly, awake preferred, glide or cut, death
+of the subject, seeded determinism), the caption queue (one at a time, never overlapping)
+and the scroll's painting, the font, and the roster; in the page
+(`tests/e2e/camera.spec.ts`) the button's cycle and a snapshot of the scroll. Its cost on
+the board is R5's to measure.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
@@ -751,8 +803,8 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   tree turns and how it spends the winter, and the rare genes have their looks (R1, from
   M7's signatures). Which broadleaf flowers or turns gold, and the kinds of flower, are
   still the renderer's own variety.
-- **Moving between the views.** The painted pixels shimmer at zooms in between, so the
-  camera would cut or cross-fade from one view to the next rather than glide.
+- **Moving between the views**: settled in R3 (ADR 0020): a dip to dark and back, never a
+  zoom.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local
   view's pauses is to be measured on the board in R5 (the owner moved every device
   benchmark there, once R1–R4 are in), and so is the GPU memory the middle view's surf
@@ -763,6 +815,6 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   Both could go to the worker if R5 shows a stutter on the board.
 - **The server's stream** has not been tried: there is no server until S1.
 - **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
-  what remains is R3's: which animal the camera follows, and when it cuts.
+  whom the camera follows and when it cuts, R3 (ADR 0020).
 - **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the
   turn and the snow forward.

@@ -19,7 +19,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
-| R3 | Documentary camera and captions | not started | — |
+| R3 | Documentary camera and captions | **done** 2026-10-20 on `r3-camera` (not merged): the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | not started | — |
 | R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
@@ -31,6 +31,26 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### R3 done (on `r3-camera`, worktree `/home/elechim/Lineage-r3`, 2026-10-20)
+
+- **What it left**: `renderer/src/director.ts` (the camera's rules), `camera.ts` (spring,
+  framing), `herd.ts` (the stream's animals in the scene), `captions.ts` and
+  `pixelfont.ts` (the scroll), `main.ts` rewired; `CreatureLayer` takes a changing cast;
+  the `chronicle` message (`schema.json`, `encode.chronicle_message`); `tools/stream.py
+  --creatures-every`, species resent on a change, chronicle recorded; the recording
+  `renderer/public/stream/life.json` (and the two R1 recordings regenerated: only
+  `chronicle` and `species` messages added). Design: `docs/design/renderer.md` "The
+  camera and captions"; decisions: ADR 0020.
+- **Merging**: touches the shared hot spots `schema.json` / `encode.py` (additive),
+  `tools/stream.py`, `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no
+  schema bump, so M11 (on `m11-tuning`) should merge cleanly beside it.
+- **For S2**: a second push button, `view`, debounced like the god power's; its presses
+  reach the page as `window.__press()` (or a reverse-channel message once S1 has one).
+- **For R4**: the dip is a plain plum overlay (`DARK` in `main.ts`); `WorldEnded` is still
+  not on the wire for the apocalypse sequence.
+- **For R5**: the local view moves every animal (about 200 in the v9 world) each frame;
+  measure it on the board with the rest.
 
 ### Starting M11 (long-run tuning and stability)
 
