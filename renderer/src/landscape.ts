@@ -196,7 +196,7 @@ export class Landscape {
           ? built.middle?.ground
           : this.view === "local"
             ? built.local?.ground
-            : undefined;
+            : (built.map ?? undefined);
       this.seas[this.view].tick(
         this.seaTime,
         this.land,
@@ -254,11 +254,13 @@ export class Landscape {
     if (land === null) return;
     const time = this.time();
     const close = name !== "map";
-    const request = { style: STYLES[name], grain: close, surf: close, look: look.name, time };
+    // Waves break on every coast in every view, the map's too (the owner, 2026-10-20).
+    const request = { style: STYLES[name], grain: close, surf: true, look: look.name, time };
     if (name === "map") {
       if (this.built.map === null) {
         this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
-        this.layers.map.addChild(this.built.map.container, this.seas.map.glints);
+        const { container, surf } = this.built.map;
+        this.layers.map.addChild(container, ...[...surf].reverse(), this.seas.map.glints);
       }
       void this.built.map.repaint(request, 5);
       return;

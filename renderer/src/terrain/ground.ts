@@ -936,7 +936,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   // pixel is from the other side of the shore, counted up to twice that reach.
   const far = 2 * surf + 1;
   // The surf that moves (`surf` option) reaches further out than the foam painted here.
-  const surfing = options.surf === true && grain;
+  const surfing = options.surf === true;
   // Its bands, as distances from the shore: foam up to `foamTo`, then two lines of
   // lighter water, each `line` pixels wide, further out.
   const foamTo = surf + 1;
