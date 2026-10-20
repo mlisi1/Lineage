@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 from lineage_sim import rare
+from lineage_sim.events import GodPower, WorldEnded
 from lineage_sim.fauna.genome import Gene
 from lineage_sim.fauna.phenotype import phenotype_config
 from lineage_sim.flora import Cover
+from lineage_sim.state import io
 from PIL import Image
 
 from tools import replay
@@ -187,3 +190,34 @@ def test_command_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     with Image.open(still) as image:
         assert image.size == (256, 150)
     assert sorted(p.name for p in fixture.iterdir()) == ["map.png", "terrain.png", "world.json"]
+
+
+def test_an_archived_world_loads_and_renders(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M10: the archive of a world that ended is a save; replay draws it like any other."""
+    world = replay.load_world(REPO_ROOT / "sim/tests/fixtures/saves/v9.lzma")
+    presence = dataclasses.replace(world.config.presence, meteor_blast_factor=1000.0)
+    lethal = replay.World.restore(
+        dataclasses.replace(world.config, presence=presence), world.snapshot()
+    )
+    lethal.step(7 * 86_400)  # past the fixture's god-power cooldown
+    ended = [o for o in lethal.apply(GodPower("meteor")) if isinstance(o, WorldEnded)]
+    assert len(ended) == 1
+    archive = tmp_path / "archives" / "42" / "world-1.lzma"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(io.dumps(ended[0].archive))
+    still = tmp_path / "world-1.png"
+    replay.main([str(archive), "--still", str(still), "--scale", "1"])
+    printed = capsys.readouterr().out
+    facts = json.loads(printed[: printed.index("\nwrote")])
+    assert facts["world"] == 1
+    assert facts["creatures"] == 0
+    assert facts["species_ever"] > 0
+    assert facts["chronicle_entries"] > 0
+    with Image.open(still) as image:
+        assert image.size == (256, 150)
+    # The world that followed is number 2, with one past world on record.
+    after = replay.history(lethal)
+    assert after["world"] == 2
+    assert after["past_worlds"] == 1

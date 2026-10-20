@@ -1,9 +1,11 @@
 """Step cost of an empty world (CLAUDE.md §4.8 budgets start here)."""
 
+import dataclasses
 from pathlib import Path
 from typing import Any
 
 from lineage_sim.config import Config
+from lineage_sim.events import GodPower, WorldEnded
 from lineage_sim.species import Species
 from lineage_sim.state import io
 from lineage_sim.terrain import Terrain
@@ -32,6 +34,10 @@ WORLD_SAVE_BUDGET_S = 0.3
 # The daily species census of a full population, labelling every creature from scratch
 # (its worst case, as after a v6 save is loaded). Once a day, it is free on any device.
 SPECIES_CENSUS_BUDGET_S = 50e-3
+# The end of a world and the start of the next (M10): the meteor that empties the island,
+# the archive's snapshot and a new continent. Rare; the device's 2 s save budget is the
+# yardstick, and a tenth of it is allowed here, as for the daily save.
+NEW_WORLD_BUDGET_S = 0.3
 
 
 def test_bench_empty_step_one_second(benchmark: Any, config: Config) -> None:
@@ -107,3 +113,20 @@ def test_bench_species_census(benchmark: Any, config: Config) -> None:
 
     benchmark.pedantic(census, rounds=20, iterations=1)
     assert benchmark.stats.stats.median < SPECIES_CENSUS_BUDGET_S
+
+
+def test_bench_new_world(benchmark: Any, config: Config) -> None:
+    presence = dataclasses.replace(config.presence, meteor_blast_factor=1000.0)
+    lethal = dataclasses.replace(config, presence=presence)
+    world = World.restore(lethal, io.loads((FIXTURES / "v9.lzma").read_bytes()))
+    world.step(7 * 86_400)  # past the fixture's god-power cooldown
+    doomed = world.snapshot()
+
+    def setup() -> tuple[tuple[World], dict[str, Any]]:
+        return (World.restore(lethal, doomed),), {}
+
+    def end(world: World) -> None:
+        assert any(isinstance(o, WorldEnded) for o in world.apply(GodPower("meteor")))
+
+    benchmark.pedantic(end, setup=setup, rounds=5)
+    assert benchmark.stats.stats.median < NEW_WORLD_BUDGET_S

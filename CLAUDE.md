@@ -167,7 +167,7 @@ Do not create directories outside this layout without updating this file.
     `--set fauna.learning=false` to change one config key for an ablation;
     `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5;
     `--schedule office` to play the owner's presence: `always`, `office`, `office-august`,
-    `conference`, M8)
+    `conference`, M8; worlds that end go to `runs/<id>/archives/<seed>/`, M10)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
     (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
     M8 takes the office run and `--baseline` once per other schedule)
@@ -404,7 +404,11 @@ needs a note in `docs/decisions/`.
   numbering.
 - **Tests**: scenario (forced collapse ends world exactly once), archive integrity,
   migrations cover archives.
-- **Accept**: archives load and render; new world starts within budget.
+- **Accept**: archives load and render; new world starts within budget. (As built,
+  ADR 0018: once life is established, the last creature's death ends the world (the
+  owner, 2026-10-20); the World archives itself (`WorldEnded`, the final save) and starts
+  the next at once from a seed drawn by the old one; every archive is kept; schema v10.
+  Ending a world and starting the next: 73 ms on the PC.)
 
 ### M11 — Long-run tuning and stability
 - **Deliver**: tuned `default.toml`; `tools/tune/` sweeps. Plan and evidence so far:

@@ -114,9 +114,11 @@ def test_v4_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(4))
     assert state.seed == 42
     assert state.t_ms == 520 * 86_400_000
-    # Loading migrates to the current version, which adds species, presence, chronicle.
+    # Loading migrates to the current version, which adds species, presence, chronicle,
+    # apocalypse.
     assert sorted(state.subsystems) == [
-        "chronicle", "fauna", "fire", "flora", "presence", "species", "terrain",
+        "apocalypse", "chronicle", "fauna", "fire", "flora", "presence", "species",
+        "terrain",
     ]  # fmt: skip
     world = World.restore(config, state)
     fauna = world.fauna
@@ -257,3 +259,41 @@ def test_v9_fixture_values(config: Config) -> None:
     assert "god_power" in kinds  # the ark on day 515
     assert [e.number for e in entries] == list(range(1, len(entries) + 1))
     assert len(world.chronicle.bestiary()) == world.species.count
+
+
+def test_v9_upgrades_to_v10_as_the_first_world(config: Config) -> None:
+    state = io.loads(_fixture(9))
+    assert state.world == 1
+    assert state.worlds == []
+    world = World.restore(config, state)
+    # Creatures live there: life counts as established since the world began.
+    assert world.fauna.count > 0
+    assert world.apocalypse.life_since_ms == 0
+    assert world.apocalypse.established(world.t_ms)
+
+
+def test_an_empty_world_upgrades_to_v10_waiting_for_founders(config: Config) -> None:
+    world = World.restore(config, io.loads(_fixture(3)))  # plants only
+    assert world.number == 1
+    assert world.apocalypse.life_since_ms == -1
+
+
+def test_v10_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(10))
+    assert state.world == 2
+    assert state.seed == 660476933
+    assert state.t_ms == 30 * 86_400_000
+    assert state.worlds == [
+        {
+            "world": 1,
+            "seed": 42,
+            "began_unix_ms": EPOCH_2026_03_01,
+            "ended_unix_ms": EPOCH_2026_03_01 + 527 * 86_400_000,
+            "cause": "last_creature",
+            "species": 9,
+        }
+    ]
+    assert state.epoch_unix_ms == EPOCH_2026_03_01 + 527 * 86_400_000
+    world = World.restore(config, state)
+    assert world.chronicle.entries()[0].kind == "world_begin"
+    assert world.fauna.count == 0  # founders wait for the plants of the new island

@@ -6,7 +6,8 @@ Layout::
     ├── manifest.json        # what was run: seeds, sim-years, config hash, commit, wall time
     ├── config.toml          # exact config text used
     ├── seeds/<seed>.npz     # per-seed time series; key "t_years" is the shared time axis
-    └── saves/<seed>.lzma    # latest world save per seed
+    ├── saves/<seed>.lzma    # latest world save per seed
+    └── archives/<seed>/world-<n>.lzma  # every world that ended (M10), if any
 """
 
 from __future__ import annotations

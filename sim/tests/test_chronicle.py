@@ -505,7 +505,7 @@ def test_every_template_renders() -> None:
         "name": "Gamiti", "parent": "Gamito", "members": 12, "lived": span(400), "value": 99,
         "share": "4%", "before": 10, "days": 30, "parts": 2, "landmasses": 3, "hours": 12,
         "years": "2 years", "ever": 7, "alive": 3, "season": "Winter", "creatures": 40,
-        "gene": "giant",
+        "gene": "giant", "species": "9 species", "world": 2,
     }  # fmt: skip
     for name, variants in TEMPLATES.items():
         for text in variants:

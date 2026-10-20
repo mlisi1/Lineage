@@ -702,6 +702,8 @@ dedup_days = 7.0
 # Importance of each kind of entry (1–5).
 importance_first_life = 5  # the first creatures land on an empty world
 importance_last_creature = 5  # the last creature dies
+importance_world_end = 5  # the world ends: life has collapsed (M10)
+importance_world_begin = 4  # a new continent rises after the last world ended (M10)
 importance_first = 4  # a first: hunters, swimmers, a forest, a rare gene, a fire
 importance_god_power = 4  # the button fired a power
 importance_volcano = 4
@@ -759,6 +761,13 @@ dark_age_hours = 120.0
 # A species' anniversary every species_anniversary_days (sim-days) on the island.
 species_anniversary_days = 365.0
 
+[apocalypse]
+# The end of a world (M10, ADR 0018). Once life is established, the death of the last
+# creature ends the world: it is archived and a new continent rises with a new seed. Before
+# that, a landing that dies out is re-founded (spring or summer, [fauna] founder_*).
+# Sim-days after the first creatures land before life counts as established.
+established_days = 30.0
+
 [schedule]
 # Subsystem tick periods, in sim seconds (1 sim second = 1 wall second on the device).
 # Ticks fire at whole multiples of the period since world creation, so results do not
@@ -780,3 +789,5 @@ species = 86400
 # Chronicle: daily detectors (records, booms, migrations, anniversaries, dark ages), after
 # the species census at midnight. Events are written as they happen.
 chronicle = 86400
+# Apocalypse: acts on what it observes (the last creature's death); its daily tick is idle.
+apocalypse = 86400

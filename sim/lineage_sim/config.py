@@ -631,6 +631,8 @@ class ChronicleConfig:
     dedup_days: float
     importance_first_life: int
     importance_last_creature: int
+    importance_world_end: int
+    importance_world_begin: int
     importance_first: int
     importance_god_power: int
     importance_volcano: int
@@ -691,6 +693,17 @@ class ChronicleConfig:
 
 
 @dataclass(frozen=True)
+class ApocalypseConfig:
+    """``[apocalypse]``; units and intent of every key are documented in default.toml."""
+
+    established_days: float
+
+    def __post_init__(self) -> None:
+        if self.established_days < 0:
+            raise ConfigError("[apocalypse] established_days must not be negative")
+
+
+@dataclass(frozen=True)
 class Config:
     config_version: int
     calendar: CalendarConfig
@@ -700,6 +713,7 @@ class Config:
     species: SpeciesConfig
     presence: PresenceConfig
     chronicle: ChronicleConfig
+    apocalypse: ApocalypseConfig
     # Subsystem name -> tick period in sim seconds.
     schedule: Mapping[str, float]
 
@@ -794,6 +808,7 @@ def parse_config(text: str) -> Config:
         "species",
         "presence",
         "chronicle",
+        "apocalypse",
     }
     if unknown:
         raise ConfigError(f"unknown sections: {sorted(unknown)}")
@@ -809,5 +824,6 @@ def parse_config(text: str) -> Config:
         _numeric_section(raw, "species", SpeciesConfig),
         _numeric_section(raw, "presence", PresenceConfig),
         _numeric_section(raw, "chronicle", ChronicleConfig),
+        _numeric_section(raw, "apocalypse", ApocalypseConfig),
         _schedule(raw),
     )

@@ -11,6 +11,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 from lineage_sim.clock import Season
+from lineage_sim.state.schema import WorldState
 
 # --- Input events -----------------------------------------------------------------------
 
@@ -206,6 +207,38 @@ class GodPowerRefused(OutputEvent):
 @dataclass(frozen=True)
 class GodPowerReady(OutputEvent):
     """The cooldown is over: the button works again (the LED's cue)."""
+
+
+@dataclass(frozen=True)
+class WorldCollapsed(OutputEvent):
+    """Life on the island has collapsed (M10): the world ends at this instant. Reported by
+    the apocalypse; the World then archives this world and starts the next one, from
+    ``next_seed``."""
+
+    cause: str
+    next_seed: int
+
+
+@dataclass(frozen=True)
+class WorldEnded(OutputEvent):
+    """World number ``world`` (from 1), grown from ``seed``, ended at its sim time
+    ``t_ms``. ``archive`` is its final state, saved like any other (``state.io.dumps``)
+    and loadable after later schema bumps."""
+
+    world: int
+    seed: int
+    cause: str
+    archive: WorldState
+
+
+@dataclass(frozen=True)
+class WorldBegan(OutputEvent):
+    """World number ``world`` began from ``seed``: a new continent, created at
+    ``epoch_unix_ms`` (the instant the last one ended). Its sim time starts at 0."""
+
+    world: int
+    seed: int
+    epoch_unix_ms: int
 
 
 @dataclass(frozen=True)

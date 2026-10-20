@@ -16,6 +16,10 @@ The chronicle is saved with the world, so the save is the whole history. A world
 before the chronicle existed wakes up with an empty one that first takes stock in
 silence (``primed``), so it does not announce as firsts what happened long ago.
 
+The chronicle belongs to one world (M10). It closes the world's history when the
+apocalypse reports the collapse (`world_end`), and the next world's chronicle opens with
+`world_begin`.
+
 The bestiary (`bestiary`) is a record per species that ever lived: the species record
 (`Species.records`, whose founding genome is the portrait), its ancestry and daughters,
 its diet and habitat, the rare genes its members ever carried, when it peaked, and the
@@ -52,6 +56,8 @@ from lineage_sim.events import (
     SpeciesBorn,
     SpeciesExtinct,
     VolcanoErupted,
+    WorldBegan,
+    WorldCollapsed,
 )
 from lineage_sim.fauna.genome import Gene
 from lineage_sim.flora import Rare as PlantRare
@@ -73,6 +79,8 @@ class Kind(Enum):
 
     FIRST_LIFE = "first_life"
     LAST_CREATURE = "last_creature"
+    WORLD_END = "world_end"
+    WORLD_BEGIN = "world_begin"
     FIRST = "first"
     ARRIVAL = "arrival"
     SPECIATION = "speciation"
@@ -129,6 +137,14 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
     "last_creature": (
         "The last creature on the island died. The land is empty.",
         "Nothing walks the island any more: its last creature is dead.",
+    ),
+    "world_end": (
+        "Life on the island has ended after {lived}; {species} lived on it. This world is over.",
+        "The island is dead. In {lived} it saw {species}; now the sea will take it.",
+    ),
+    "world_begin": (
+        "A new continent rose from the sea: world {world}.",
+        "From the ruins of the last, world {world} begins: a new island, bare rock and sea.",
     ),
     "arrival": (
         "Strangers landed: {members} {name} came ashore from elsewhere.",
@@ -658,6 +674,17 @@ class Chronicle:
         if isinstance(event, PopulationExtinct):
             return self._write(ctx, Kind.LAST_CREATURE, cfg.importance_last_creature,
                                "last_creature", {})  # fmt: skip
+        if isinstance(event, WorldCollapsed):
+            count = len(self._census.records())
+            fields = {
+                "lived": span(event.t_ms / MS_PER_DAY),
+                "species": "1 species" if count == 1 else f"{count} species",
+            }
+            return self._write(ctx, Kind.WORLD_END, cfg.importance_world_end, "world_end",
+                               fields)  # fmt: skip
+        if isinstance(event, WorldBegan):
+            return self._write(ctx, Kind.WORLD_BEGIN, cfg.importance_world_begin,
+                               "world_begin", {"world": event.world})  # fmt: skip
         if isinstance(event, LandmassSplit):
             fields = {"parts": event.parts, "landmasses": event.landmasses}
             return self._write(ctx, Kind.SPLIT, cfg.importance_split, "split", fields)

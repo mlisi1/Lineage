@@ -12,6 +12,10 @@ Each seed's world is stepped one sim-day at a time, exactly as the device would 
 it. Every ``--save-days`` it is saved to ``saves/<seed>.lzma`` (atomic replace); every
 ``--sample-days`` the probes record one sample of each series; every ``--snapshot-days``
 the height grid is stored (8-bit) in ``snapshots/<seed>.npz`` for maps and animations.
+A world that ends (M10) is archived to ``archives/<seed>/world-<n>.lzma`` and the run goes
+on in the next one; the ``world`` series says which world each sample saw. Tables built
+at the end of the run (phylogeny, chronicle) are the last world's; the others are in its
+archives.
 
 With ``--power-cut-day N`` the in-memory world is discarded half a day after day N and the
 run resumes from the last save on disk; the final state hash must match an uninterrupted
@@ -59,6 +63,7 @@ from lineage_sim.events import (
     SpeciesBorn,
     SpeciesExtinct,
     VolcanoErupted,
+    WorldEnded,
 )
 from lineage_sim.fauna import brain
 from lineage_sim.fauna.brain import Sense
@@ -95,6 +100,7 @@ EVENT_SERIES: dict[str, type[OutputEvent]] = {
     "fires": FireEnded,
     "extinctions": PopulationExtinct,
     "arrivals": CreaturesArrived,
+    "worlds_ended": WorldEnded,
 }
 # Arrays that are not sampled series (their length differs from the time axis) carry
 # this prefix; reports read them by name.
@@ -255,23 +261,34 @@ def epoch_unix_ms(start: dt.date) -> int:
     return round(dt.datetime(start.year, start.month, start.day, tzinfo=dt.UTC).timestamp() * 1000)
 
 
+def desk(world: World) -> tuple[int, int]:
+    """The run's seed and start (Unix ms): the first world's, whichever world lives now.
+    The owner's schedule follows the desk, not the world."""
+    if world.number > 1:
+        first = world.past_worlds[0]
+        return int(first["seed"]), int(first["began_unix_ms"])
+    return world.seed, world.epoch_unix_ms
+
+
 def live_day(world: World, schedule: str) -> tuple[list[OutputEvent], list[float]]:
-    """Advance ``world`` one sim-day from midnight, hour by hour, delivering the owner's
-    arrivals and departures of ``schedule`` at their hour. Returns the outputs and a
+    """Advance ``world`` one day from UTC midnight, hour by hour, delivering the owner's
+    arrivals and departures of ``schedule`` at their hour. Times are the desk's (Unix), so
+    a day carries on in the next world if this one ends. Returns the outputs and a
     `PRESENCE_DAILY_COLUMNS` row."""
     hour_ms = DAY_MS // 24
-    start = world.t_ms
+    start = world.unix_ms
     if start % DAY_MS:
         raise ValueError("a day is lived from midnight")
-    events = day_events(schedule, world.seed, start // DAY_MS, world.instant.date)
+    seed, run_start = desk(world)
+    events = day_events(schedule, seed, (start - run_start) // DAY_MS, world.instant.date)
     outputs: list[OutputEvent] = []
     light, present_hours, k = 0.0, 0.0, 0
     for hour in range(1, 25):
         while k < len(events) and events[k][0] < hour:
-            outputs += world.advance_to(start + round(events[k][0] * hour_ms))
+            outputs += world.advance_to_unix(start + round(events[k][0] * hour_ms))
             outputs += world.apply(PresenceChanged(events[k][1]))
             k += 1
-        outputs += world.advance_to(start + hour * hour_ms)
+        outputs += world.advance_to_unix(start + hour * hour_ms)
         light += world.presence.light
         present_hours += float(world.presence.present)
     return outputs, [light / 24, present_hours]
@@ -299,6 +316,7 @@ class Probes:
         self._alive: dict[int, tuple[int, int, bool]] = {}
         self.lives: list[list[float]] = []
         self.presence_daily: list[list[float]] = []
+        self._world = 1  # number of the world last counted
         self.counts |= {"species_splits": 0, "species_arrivals": 0, "species_extinctions": 0}
 
     def observe(self, outputs: list[OutputEvent], step_s: float) -> None:
@@ -336,6 +354,11 @@ class Probes:
         self.rare_daily.append(row)
 
         ids = fauna.ids.tolist()
+        if world.number != self._world:  # a new world: its ids start again
+            for first, slots, arrived in self._alive.values():
+                self.lives.append([first, day - 1, slots, float(arrived)])
+            self._alive.clear()
+            self._world = world.number
         now = set(ids)
         for gone in sorted(set(self._alive) - now):
             first, slots, arrived = self._alive.pop(gone)
@@ -379,6 +402,7 @@ class Probes:
         row |= self._fauna_row(world)
         row["species_alive"] = float(world.species.alive_count)
         row["species_ever"] = float(world.species.count)
+        row["world"] = float(world.number)
         row |= {name: float(count) for name, count in self.counts.items()}
         for name, value in row.items():
             self.rows.setdefault(name, []).append(value)
@@ -526,6 +550,14 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         atomic_write_bytes(save_path, data)
         return len(data) / 1024
 
+    def archive(outputs: list[OutputEvent]) -> None:
+        """Keep every world that ended: archives/<seed>/world-<n>.lzma."""
+        for output in outputs:
+            if isinstance(output, WorldEnded):
+                path = job.out_dir / "archives" / str(job.seed) / f"world-{output.world}.lzma"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_bytes(path, io.dumps(output.archive))
+
     def record(day: int, save_kib: float) -> None:
         if day % job.sample_days == 0 or day == job.days:
             probes.sample(world, day, save_kib, samples_per_year)
@@ -550,6 +582,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
         started = time.perf_counter()
         outputs, light_row = live_day(world, job.schedule)
         probes.observe(outputs, time.perf_counter() - started)
+        archive(outputs)
         probes.presence_daily.append(light_row)
         probes.species_daily.append(world.species.alive_count)
         probes.census(world, day)
@@ -568,8 +601,8 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             world.step(DAY_S / 2)  # lost: the power fails before the next save
             world = World.restore(config, io.loads(save_path.read_bytes()))
             # Replay the days since the last save; their samples were already recorded.
-            for _ in range(day - round(world.t_ms / 1000 / DAY_S)):
-                live_day(world, job.schedule)
+            for _ in range(day - (world.unix_ms - epoch_unix_ms(job.start)) // DAY_MS):
+                archive(live_day(world, job.schedule)[0])
 
     if snapshots:
         path = job.out_dir / "snapshots" / f"{job.seed}.npz"

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # A JSON-like mapping whose leaves may also be NumPy arrays.
 Tree = dict[str, Any]
@@ -27,6 +27,10 @@ class WorldState:
     t_ms: int  # sim time: milliseconds since world creation
     rng: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
     subsystems: dict[str, Tree] = field(default_factory=dict[str, Tree])
+    world: int = 1  # world number: 1 for the first continent, +1 at every apocalypse (M10)
+    # One small record per world that ended before this one (oldest first): world, seed,
+    # began_unix_ms, ended_unix_ms, cause, species. The worlds themselves are archives.
+    worlds: list[Tree] = field(default_factory=list[Tree])
     schema_version: int = SCHEMA_VERSION
 
     def to_tree(self) -> Tree:
@@ -37,20 +41,30 @@ class WorldState:
             "t_ms": self.t_ms,
             "rng": self.rng,
             "subsystems": self.subsystems,
+            "world": self.world,
+            "worlds": self.worlds,
         }
 
     @classmethod
     def from_tree(cls, tree: Tree) -> WorldState:
-        expected = {"schema_version", "seed", "epoch_unix_ms", "t_ms", "rng", "subsystems"}
+        expected = {
+            "schema_version", "seed", "epoch_unix_ms", "t_ms", "rng", "subsystems", "world",
+            "worlds",
+        }  # fmt: skip
         if set(tree) != expected:
             raise StateError(f"state keys {sorted(tree)} differ from {sorted(expected)}")
         if tree["schema_version"] != SCHEMA_VERSION:
             raise StateError(f"expected schema v{SCHEMA_VERSION}, got v{tree['schema_version']}")
-        for key in ("seed", "epoch_unix_ms", "t_ms"):
+        for key in ("seed", "epoch_unix_ms", "t_ms", "world"):
             if not isinstance(tree[key], int) or isinstance(tree[key], bool):
                 raise StateError(f"{key} must be an integer")
         if tree["seed"] < 0 or tree["t_ms"] < 0:
             raise StateError("seed and t_ms must be non-negative")
+        if tree["world"] < 1:
+            raise StateError("world numbers start at 1")
+        worlds = tree["worlds"]
+        if not isinstance(worlds, list) or len(cast(list[Tree], worlds)) != tree["world"] - 1:
+            raise StateError("worlds must hold one record per world before this one")
         if not isinstance(tree["rng"], dict) or not isinstance(tree["subsystems"], dict):
             raise StateError("rng and subsystems must be mappings")
         return cls(
@@ -59,4 +73,6 @@ class WorldState:
             t_ms=tree["t_ms"],
             rng=cast(dict[str, dict[str, Any]], tree["rng"]),
             subsystems=cast(dict[str, Tree], tree["subsystems"]),
+            world=tree["world"],
+            worlds=cast(list[Tree], tree["worlds"]),
         )
