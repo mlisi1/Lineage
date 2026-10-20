@@ -128,6 +128,43 @@ temperature, fertility and dispersal; a separate grid is simpler and cheaper); a
 brain sense for sea food (changes the brain's size and every saved brain; weighting the
 food sense by ease in water needs no new weight).
 
+### Mechanism 2: reach (no schema change)
+
+A creature reaches plants up to `reach_at_unit_mass` (0.5) × mass^(1/3), in the plants'
+height units (`Flora.stature`). Of a taller plant it bites `browse_floor` (0.3) of a
+full bite plus the share of the height it reaches, and it smells that plant's food the
+same way. `browse_floor` 1 turns it off (and reproduces the run without it).
+
+**Measured** (`m11-reach-on` against `m11-algae-on`, seeds 0–19, office, 3 years): the
+median size gene rose 0.30 → 0.35; D1 for size 0.45 → 0.55 of seeds, for limbs
+0.30 → 0.55, for swimming 0.05 → 0.15; M3.2 came back into its band (25.1 → 21.8
+months); M6.1 0.81 → 0.83 and speciation 1.14 → 1.34 a month. Predators fell back
+(5 % → 2.9 % of creatures) and omnivores too (23 % → 17 % of inhabited time).
+
+### Mechanism 3: cover (no schema change)
+
+Prey standing among plants taller than it reaches is hidden by the share of the plants'
+height above its reach, times their density (biomass over a closed canopy); a kill's
+chance is × (1 − `cover_protection` (0.6) × hidden). Small bodies hide in shrubs and
+forest, large ones cannot, so size trades browsing against hiding. In a scenario of 40
+one-on-one encounters in tall forest, hunters kill 26 small prey with cover against 38
+without; in low grass, cover changes nothing. A refuge is the classic stabiliser of
+predator–prey cycles (Křivan 2013, ADR 0009). `cover_protection` 0 turns it off.
+
+### Mechanism 5: nutrients (no schema change)
+
+A land cell gains `dung_fertility` (0.05) fertility per unit of plant biomass eaten there
+and `carrion_fertility` (0.2) per unit of carrion that rots there. Herds keep their
+pastures fertile; a kill leaves a rich patch. The saved state is the terrain's
+fertility, as before.
+
+### Mechanism 4: seeds carried by grazers (waits for schema v13)
+
+Seeds of fruiting plants travel in the gut of the grazer that ate them and are dropped
+where it goes. That is per-creature saved state, so a schema bump: v13, after R4's v12
+(weather, burnt deaths) reaches `main`. Until then fruiting plants keep their stand-in,
+far seeds as if wind-borne.
+
 ## Decision
 
 (Pending the mechanisms and the sweeps.)
