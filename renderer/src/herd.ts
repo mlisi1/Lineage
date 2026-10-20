@@ -114,6 +114,8 @@ export class Herd {
   private phenotypeConfig: PhenotypeConfig | null = null;
   private rareConfig: RareConfig = { giant_mass_factor: 1 };
   private signatures: Signatures = new Map();
+  /** The rare-gene bits whose look is glow (R4: they shine in the dark). */
+  private glowBits = 0;
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
   private land: Land | null = null;
@@ -161,6 +163,9 @@ export class Herd {
           .filter((gene) => gene.kingdom === "creature")
           .map((gene) => [gene.bit, gene.signature]),
       );
+      this.glowBits = 0;
+      for (const [bit, signature] of this.signatures)
+        if (signature === "glow") this.glowBits |= bit;
     } else if (message.type === "species") {
       for (const species of message.species) this.names.set(species.id, species.name);
     } else if (message.type === "creatures") this.takeCreatures(message);
@@ -262,7 +267,7 @@ export class Herd {
       const slot = this.roster.slotOf(id);
       const known = this.roster.genomes.get(id);
       if (slot === undefined || known === undefined || !layer.has(slot)) continue;
-      if (!rareLooks(known.slots, this.signatures).includes("glow")) continue;
+      if ((known.slots & this.glowBits) === 0) continue;
       const { joints, radii } = layer.spine(slot);
       joints.forEach((joint, i) => {
         if (i % 2 === 1 || i === joints.length - 1) return;
