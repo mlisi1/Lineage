@@ -118,6 +118,12 @@ networks, predator–prey coexistence): ADR 0009, "References".
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Cover** (M11): prey standing among plants taller than it reaches (see "Reach") is
+  hidden by the share of the plants' height above its reach, times their density
+  (biomass over `[flora] closed_canopy_biomass`). A kill's chance is × (1 −
+  `cover_protection` (0.6) × hidden). Small bodies hide in shrubs and forest, large ones
+  cannot: size trades browsing the trees against hiding in them. A refuge steadies
+  predator and prey (Křivan 2013, ADR 0009). `cover_protection` 0 turns it off.
 - **Reach** (M11): a creature reaches plants up to `reach_at_unit_mass` (0.5) ×
   mass^(1/3) in the plants' height units (`Flora.stature`: grass about 0.2, shrubs to
   0.6, trees to 1, emergent crowns 1.5), so about 0.3 at the smallest size, 1.0 at mass

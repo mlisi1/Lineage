@@ -273,6 +273,13 @@ def reach(cfg: FaunaConfig, mass: Values) -> Values:
     return (cfg.reach_at_unit_mass * np.cbrt(mass)).astype(np.float32)
 
 
+def hidden(plant_height: Values, density: Values, reaches: Values) -> Values:
+    """How hidden each prey is among the plants where it stands (M11): the share of the
+    plants' height above its reach, times their density in [0, 1]."""
+    above = np.clip(1.0 - reaches / np.maximum(plant_height, 1e-6), 0.0, 1.0)
+    return (above * np.clip(density, 0.0, 1.0)).astype(np.float32)
+
+
 def appetite(cfg: FaunaConfig, energy: Values, body: Phenotype, hours: float) -> Values:
     """Plant biomass each creature tries to graze this tick: its bite rate, less when it
     is nearly full, nothing when it cannot digest plants."""

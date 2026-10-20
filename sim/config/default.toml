@@ -480,6 +480,11 @@ armour_strength = 2.5
 attack_softness = 0.35
 # Energy an attempt costs the hunter, per unit mass.
 attack_cost = 1.5
+# Cover (M11): prey standing among plants taller than it reaches is hidden by the share
+# of the plants' height above its reach, times their density (biomass over [flora]
+# closed_canopy_biomass, at most 1). A kill's chance is × (1 − cover_protection ×
+# hidden): small bodies hide in shrubs and forest, large ones cannot. 0 turns it off.
+cover_protection = 0.6
 
 # --- Carrion (scavenging) ---
 # The dead leave carrion on land, in units of meat mass: what a hunter could not eat of

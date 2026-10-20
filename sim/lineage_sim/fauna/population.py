@@ -556,6 +556,19 @@ class Fauna:
             return dead
         chance = creature.kill_chance(cfg, body, hunters, prey[hunters], self._torpid)
         chance = chance * rare.kill_factor(cfg, self._slots)[prey[hunters]]
+        if cfg.cover_protection > 0.0:
+            # Cover (M11): prey hidden among plants taller than it is harder to kill.
+            victims = prey[hunters]
+            rows, columns = creature.cells_of(self._positions[victims], self._shape)
+            density = self._flora.biomass[rows, columns] / np.float32(
+                self._flora.config.closed_canopy_biomass
+            )
+            cover = creature.hidden(
+                self._flora.stature()[rows, columns],
+                density,
+                creature.reach(cfg, body.mass[victims]),
+            )
+            chance = chance * (np.float32(1.0) - np.float32(cfg.cover_protection) * cover)
         self._energy[hunters] -= np.float32(cfg.attack_cost) * body.mass[hunters]
         for k, hunter in enumerate(hunters.tolist()):
             victim = int(prey[hunter])

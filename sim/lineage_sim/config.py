@@ -412,6 +412,7 @@ class FaunaConfig:
     armour_strength: float
     attack_softness: float
     attack_cost: float
+    cover_protection: float
     compat_distance: float
     repro_energy_share: float
     repro_cooldown_days: float
@@ -515,6 +516,7 @@ class FaunaConfig:
         for key in positive:
             check(getattr(self, key) > 0, f"{key} must be positive")
         unit = (
+            "cover_protection",
             "founder_min_plant_cover",
             "immigrant_hunter_share",
             "founder_diet_max",
