@@ -147,6 +147,8 @@ export class PlantLayer {
 
   /** Take the layer off the screen for good, with what it owns. */
   destroy(): void {
+    // Guests are not the layer's: they leave before it goes (and find another host).
+    for (const guests of this.guests) guests.removeChildren();
     this.container.destroy({ children: true });
     for (const thing of this.owned) thing.destroy();
     this.owned.length = 0;

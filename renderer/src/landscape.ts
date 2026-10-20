@@ -10,8 +10,8 @@
  * Once a sim-day, or when the land changes, the plants are laid out again for the day
  * (each in the season of its own turn, with snow where the simulation has it) and the
  * grounds repainted off the frame; the new day fades in over the old. Only the views
- * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`). Creatures (R2) and the camera's moves (R3)
- * come on top of this.
+ * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`).
+ * Creatures (`herd.ts`) stand among the plants; the camera (`director.ts`) chooses the view.
  */
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
@@ -61,6 +61,11 @@ class PlantFade {
 
   get fading(): boolean {
     return this.outgoing !== null;
+  }
+
+  /** The layer drawn fully opaque: the old one while the new fades in over it. */
+  get host(): PlantLayer | null {
+    return this.outgoing ?? this.current;
   }
 
   tick(dtS: number, view: CellRect): void {
@@ -140,6 +145,22 @@ export class Landscape {
     if (this.view === "middle") return this.built.middle?.plants.current ?? null;
     if (this.view === "local") return this.built.local?.plants.current ?? null;
     return null;
+  }
+
+  /**
+   * Where the creatures of the view being shown stand (R3): among the plants of the view
+   * drawn opaque, so that they do not fade in with the next day's plants. The layer may
+   * change from one frame to the next; its guests are let go before it is destroyed.
+   */
+  get hosts(): PlantLayer | null {
+    if (this.view === "middle") return this.built.middle?.plants.host ?? null;
+    if (this.view === "local") return this.built.local?.plants.host ?? null;
+    return null;
+  }
+
+  /** The view being shown. */
+  get shown(): ViewName {
+    return this.view;
   }
 
   /** Take a message from the stream; what it changes is laid out on the next `update`. */

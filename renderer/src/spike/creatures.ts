@@ -134,7 +134,8 @@ interface Creature {
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
-  private readonly creatures: Creature[] = [];
+  /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
+  private readonly creatures: (Creature | undefined)[] = [];
   private active = 0;
   private only: number | null = null;
   private showing: Showing = "bodies";
@@ -163,7 +164,51 @@ export class CreatureLayer {
   }
 
   /** What each species among the seeds is drawn as (one plan per species). */
-  private readonly plans: ReadonlyMap<number, SpeciesPlan>;
+  private plans: ReadonlyMap<number, SpeciesPlan>;
+
+  /**
+   * Draw the species among `members` by their plans from now on (the census changed):
+   * animals placed after this take their species' kind from them; those drawn keep theirs.
+   */
+  replan(members: readonly CreatureSeed[]): void {
+    this.plans = speciesPlans(members);
+  }
+
+  /**
+   * Put `seed` in slot `index`, in place of whoever was there: a creature of the stream's
+   * cast (R3), which comes and goes as the sim's animals are born and die. With anchored
+   * life it then lives near the place `seed` gives until `anchor` moves it.
+   */
+  place(index: number, seed: CreatureSeed): void {
+    this.remove(index);
+    const creature = this.spawnFrom(seed, false);
+    this.creatures[index] = creature;
+    this.active = Math.max(this.active, index + 1);
+    this.reveal(creature, index);
+  }
+
+  /** Empty slot `index`: its creature is taken off the screen for good. */
+  remove(index: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    creature.container.destroy({ children: true });
+    creature.marker.destroy({ children: true });
+    creature.glass?.destroy();
+    this.creatures[index] = undefined;
+  }
+
+  /** Whether slot `index` holds a creature. */
+  has(index: number): boolean {
+    return this.creatures[index] !== undefined;
+  }
+
+  /** Creature `index` lies torpid (curled up, still) or wakes. */
+  setTorpid(index: number, torpid: boolean): void {
+    const creature = this.creatures[index];
+    if (creature === undefined || creature.torpid === torpid) return;
+    creature.torpid = torpid;
+    if (torpid) curl(creature.joints, creature.plan.spacing, creature.heading);
+  }
 
   /**
    * Where the sim now has creature `index`, in cells. An anchored creature walks there
@@ -197,7 +242,7 @@ export class CreatureLayer {
   get spriteCount(): number {
     let total = 0;
     for (const creature of this.creatures.slice(0, this.active)) {
-      total += creature.container.children.length;
+      total += creature?.container.children.length ?? 0;
     }
     return total;
   }
@@ -294,7 +339,9 @@ export class CreatureLayer {
   }
 
   private refresh(): void {
-    this.creatures.forEach((creature, index) => this.reveal(creature, index));
+    this.creatures.forEach((creature, index) => {
+      if (creature !== undefined) this.reveal(creature, index);
+    });
   }
 
   /** Show a creature or not: by the count, the choice of one, the way of showing, the view. */
@@ -321,10 +368,13 @@ export class CreatureLayer {
   private spawn(index: number): Creature {
     const seed = this.seeds[index % this.seeds.length];
     if (seed === undefined) throw new Error("the fixture has no creatures");
+    // Past the fixture's creatures, reuse them a few cells away.
+    return this.spawnFrom(seed, index >= this.seeds.length);
+  }
+
+  private spawnFrom(seed: CreatureSeed, clone: boolean): Creature {
     const random = this.random;
     const plan = bodyPlan(seed, this.body, kindFor(seed, this.plans));
-    // Past the fixture's creatures, reuse them a few cells away.
-    const clone = index >= this.seeds.length;
     const { x, y } = this.settle(
       seed.x + (clone ? (random() - 0.5) * 8 : 0),
       seed.y + (clone ? (random() - 0.5) * 8 : 0),
@@ -602,12 +652,13 @@ export class CreatureLayer {
 
     const bone = length * 0.6;
     solveKnee(hip, leg.foot, bone, bone, side, this.knee);
-    this.place(leg.upper, hip, this.knee, thickness);
-    this.place(leg.lower, this.knee, leg.foot, thickness * 0.8);
+    this.stretch(leg.upper, hip, this.knee, thickness);
+    this.stretch(leg.lower, this.knee, leg.foot, thickness * 0.8);
     const [upperEdge, lowerEdge, soleEdge] = leg.edges;
     const edge = 2 * leg.plan.edge;
-    if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
-    if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
+    if (upperEdge !== undefined) this.stretch(upperEdge, hip, this.knee, thickness + edge);
+    if (lowerEdge !== undefined)
+      this.stretch(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
     // A webbed foot lies ahead of the leg's end, across the way the shin points.
     const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
     const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
@@ -619,7 +670,7 @@ export class CreatureLayer {
   }
 
   /** Stretch a white square from `from` to `to`. */
-  private place(sprite: Sprite, from: Point, to: Point, thickness: number): void {
+  private stretch(sprite: Sprite, from: Point, to: Point, thickness: number): void {
     sprite.position.set(from.x, from.y);
     sprite.rotation = Math.atan2(to.y - from.y, to.x - from.x);
     sprite.scale.set(
