@@ -223,6 +223,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "scorch": {
+          "description": "How recently each cell burnt (R4): 1 just burnt, fading to 0 over [flora] scorch_days. Absent in recordings made before R4.",
+          "$ref": "#/$defs/Grid"
+        },
+        "algae": {
+          "description": "Algae on the shallow sea (M11): biomass 0 to [flora] algae_capacity per cell. Absent before M11.",
+          "$ref": "#/$defs/Grid"
         }
       }
     },
@@ -549,7 +557,7 @@
       }
     },
     "SkyMessage": {
-      "description": "The island's weather of the moment (R4): the light, whether the owner is at the desk, rain, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.",
+      "description": "The island's weather of the moment (R4): the light, whether the owner is at the desk, what rain falls, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.",
       "type": "object",
       "required": [
         "type",
@@ -557,7 +565,7 @@
         "t_ms",
         "light",
         "present",
-        "raining",
+        "rain",
         "burning"
       ],
       "additionalProperties": false,
@@ -581,9 +589,15 @@
           "description": "Whether the owner is at the desk (the light is rising toward day, or day).",
           "type": "boolean"
         },
-        "raining": {
-          "description": "Whether the rain god power's rain is falling (for [presence] rain_days after it fired).",
-          "type": "boolean"
+        "rain": {
+          "description": "What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out.",
+          "enum": [
+            "none",
+            "rain",
+            "thunder",
+            "storm",
+            "soaking"
+          ]
         },
         "burning": {
           "description": "The cells on fire, as indices y × width + x of the land's grid, in increasing order.",
@@ -622,7 +636,7 @@
             "additionalProperties": false,
             "properties": {
               "kind": {
-                "description": "fire_started and fire_ended (lightning), volcano, earthquake and crater (the terrain's events), god_power (a power fired), world_ended and world_began (M10).",
+                "description": "fire_started (lightning in a thunderstorm) and fire_ended, volcano, earthquake and crater (the terrain's events), god_power (a power fired), creatures_arrived (newcomers landed: the ark, or strangers), world_ended and world_began (M10).",
                 "enum": [
                   "fire_started",
                   "fire_ended",
@@ -630,6 +644,7 @@
                   "earthquake",
                   "crater",
                   "god_power",
+                  "creatures_arrived",
                   "world_ended",
                   "world_began"
                 ]
@@ -638,11 +653,11 @@
                 "$ref": "#/$defs/SimTime"
               },
               "x": {
-                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power).",
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).",
                 "type": "number"
               },
               "y": {
-                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power).",
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).",
                 "type": "number"
               },
               "radius_cells": {
@@ -677,6 +692,11 @@
               "cause": {
                 "description": "Why the world ended (world_ended).",
                 "type": "string"
+              },
+              "count": {
+                "description": "How many landed (creatures_arrived).",
+                "type": "integer",
+                "minimum": 0
               }
             }
           }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import base64
 import itertools
 import json
@@ -148,6 +149,36 @@ def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
     assert messages[-1]["type"] in {"sky", "events", "chronicle", "creatures"}
     last = [message for message in messages if message["type"] == "creatures"][-1]
     assert last["ids"] == []
+
+
+def test_staged_events_happen_and_the_land_follows_them() -> None:
+    world = _world()
+    x, y = stream._land_near_middle(world)
+    stages = [
+        stream._stage("1:6:volcano"),
+        stream._stage("1:9:quake"),
+        stream._stage(f"1:12:fire@{x},{y}"),
+        stream._stage("2:12:seed"),
+    ]
+    messages = stream.record(
+        world, days=2, land_every=2, creatures=True, creatures_every_s=7200, sky_every_s=600,
+        stages=stages,
+    )  # fmt: skip
+    kinds = [
+        event["kind"] for m in messages if m["type"] == "events" for event in m["events"]
+    ]  # fmt: skip
+    assert kinds[:2] == ["volcano", "earthquake"]
+    # The storm's lightning set the cell alight (a fire already burning takes it in silently).
+    width = next(m for m in messages if m["type"] == "land")["width"]
+    assert any(y * width + x in m["burning"] for m in messages if m["type"] == "sky")
+    assert "god_power" in kinds
+    # A land right after each event that changes it, as well as at the day's end.
+    lands = [i for i, m in enumerate(messages) if m["type"] == "land"]
+    assert len(lands) >= 1 + 4
+    skies = [m["rain"] for m in messages if m["type"] == "sky"]
+    assert "storm" in skies  # the fire came with a thunderstorm
+    with pytest.raises(argparse.ArgumentTypeError):
+        stream._stage("1:12:tsunami")
 
 
 def test_the_committed_recording_is_what_the_tool_writes(tmp_path: Path) -> None:

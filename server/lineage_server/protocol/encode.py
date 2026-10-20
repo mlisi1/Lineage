@@ -15,6 +15,7 @@ import numpy as np
 from lineage_sim.events import (
     ChronicleEntry,
     CraterFormed,
+    CreaturesArrived,
     EarthquakeStruck,
     FireEnded,
     FireStarted,
@@ -28,6 +29,7 @@ from lineage_sim.fauna import phenotype
 from lineage_sim.fauna.genome import Gene as CreatureGene
 from lineage_sim.flora import RARE_GENES, Cover
 from lineage_sim.flora import Gene as PlantGene
+from lineage_sim.weather import Rain
 from lineage_sim.world import World
 
 PROTOCOL = 1
@@ -83,6 +85,10 @@ def land_message(world: World) -> Message:
         "cover": grid(flora.cover()),
         "biomass": grid(flora.biomass, scale=SHARE_STEPS),
         "snow": grid(flora.snow(world.instant), scale=SHARE_STEPS),
+        # How recently each cell burnt (R4): 1 just burnt, fading to 0 over scorch_days.
+        "scorch": grid(flora.scorch, scale=SHARE_STEPS),
+        # Algae on the shallow sea (M11), biomass 0 to [flora] algae_capacity.
+        "algae": grid(flora.algae, scale=SHARE_STEPS),
         "plant_height": gene(PlantGene.HEIGHT),
         "plant_evergreen": gene(PlantGene.EVERGREEN),
         "plant_rare": grid(np.where(growing, flora.rare, 0)),
@@ -225,6 +231,15 @@ def entries_message(world: World, entries: Sequence[ChronicleEntry]) -> Message 
     }
 
 
+def rain_of(world: World) -> str:
+    """What falls now: the rain god power's soaking rain over the island's own (R4)."""
+    if world.presence.raining:
+        return "soaking"
+    return {Rain.NONE: "none", Rain.RAIN: "rain", Rain.THUNDER: "thunder", Rain.STORM: "storm"}[
+        world.weather.rain
+    ]
+
+
 def sky_message(world: World) -> Message:
     """The light of the moment, the owner's presence, rain and the cells on fire (R4)."""
     presence = world.presence
@@ -235,7 +250,7 @@ def sky_message(world: World) -> Message:
         "t_ms": world.t_ms,
         "light": round(min(max(float(presence.light), 0.0), 1.0), 4),
         "present": bool(presence.present),
-        "raining": bool(presence.raining),
+        "rain": rain_of(world),
         "burning": [int(index) for index in burning],
     }
 
@@ -273,6 +288,14 @@ def _event(output: OutputEvent) -> dict[str, Any] | None:
             "power": str(output.power),
             "x": round(float(output.x), 3),
             "y": round(float(output.y), 3),
+        }
+    if isinstance(output, CreaturesArrived):
+        return {
+            "kind": "creatures_arrived",
+            **at,
+            "x": round(float(output.x), 3),
+            "y": round(float(output.y), 3),
+            "count": int(output.count),
         }
     if isinstance(output, WorldEnded):
         return {

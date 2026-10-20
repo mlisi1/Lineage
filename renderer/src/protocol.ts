@@ -85,11 +85,41 @@ export interface LandMessage {
    * Names of the plants' rare genes, bit 0 first.
    */
   rare_genes: string[];
+  scorch?: Grid1;
+  algae?: Grid2;
 }
 /**
  * A grid of the world's cells, row by row from the top-left cell, as little-endian whole numbers in base64. A cell's value is its number divided by `scale`.
  */
 export interface Grid {
+  /**
+   * u8: one byte per cell; u16le: two bytes per cell, little-endian.
+   */
+  encoding: "u8" | "u16le";
+  /**
+   * What a cell's whole number is divided by: 1 for classes and bit masks, 255 or 65535 for shares.
+   */
+  scale: number;
+  data: string;
+}
+/**
+ * A grid of the world's cells, row by row from the top-left cell, as little-endian whole numbers in base64. A cell's value is its number divided by `scale`.
+ */
+export interface Grid1 {
+  /**
+   * u8: one byte per cell; u16le: two bytes per cell, little-endian.
+   */
+  encoding: "u8" | "u16le";
+  /**
+   * What a cell's whole number is divided by: 1 for classes and bit masks, 255 or 65535 for shares.
+   */
+  scale: number;
+  data: string;
+}
+/**
+ * A grid of the world's cells, row by row from the top-left cell, as little-endian whole numbers in base64. A cell's value is its number divided by `scale`.
+ */
+export interface Grid2 {
   /**
    * u8: one byte per cell; u16le: two bytes per cell, little-endian.
    */
@@ -244,7 +274,7 @@ export interface ChronicleMessage {
   }[];
 }
 /**
- * The island's weather of the moment (R4): the light, whether the owner is at the desk, rain, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.
+ * The island's weather of the moment (R4): the light, whether the owner is at the desk, what rain falls, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.
  */
 export interface SkyMessage {
   type: "sky";
@@ -259,9 +289,9 @@ export interface SkyMessage {
    */
   present: boolean;
   /**
-   * Whether the rain god power's rain is falling (for [presence] rain_days after it fired).
+   * What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out.
    */
-  raining: boolean;
+  rain: "none" | "rain" | "thunder" | "storm" | "soaking";
   /**
    * The cells on fire, as indices y × width + x of the land's grid, in increasing order.
    */
@@ -275,7 +305,7 @@ export interface EventsMessage {
   protocol: Protocol;
   events: {
     /**
-     * fire_started and fire_ended (lightning), volcano, earthquake and crater (the terrain's events), god_power (a power fired), world_ended and world_began (M10).
+     * fire_started (lightning in a thunderstorm) and fire_ended, volcano, earthquake and crater (the terrain's events), god_power (a power fired), creatures_arrived (newcomers landed: the ark, or strangers), world_ended and world_began (M10).
      */
     kind:
       | "fire_started"
@@ -284,15 +314,16 @@ export interface EventsMessage {
       | "earthquake"
       | "crater"
       | "god_power"
+      | "creatures_arrived"
       | "world_ended"
       | "world_began";
     t_ms: SimTime;
     /**
-     * The cell where it happened (fire_started, volcano, earthquake, crater, god_power).
+     * The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).
      */
     x?: number;
     /**
-     * The cell where it happened (fire_started, volcano, earthquake, crater, god_power).
+     * The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).
      */
     y?: number;
     /**
@@ -323,5 +354,9 @@ export interface EventsMessage {
      * Why the world ended (world_ended).
      */
     cause?: string;
+    /**
+     * How many landed (creatures_arrived).
+     */
+    count?: number;
   }[];
 }

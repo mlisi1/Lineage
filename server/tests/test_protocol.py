@@ -222,7 +222,8 @@ def test_the_sky_says_the_light_rain_and_fires_of_the_moment(world: World) -> No
     assert errors(sky, SCHEMA) == []
     assert sky["light"] == pytest.approx(world.presence.light, abs=1e-4)
     assert sky["present"] == world.presence.present
-    assert sky["raining"] == world.presence.raining
+    assert sky["rain"] == encode.rain_of(world)
+    assert sky["rain"] in {"none", "rain", "thunder", "storm", "soaking"}
     burning = world.wildfire.burning
     assert sky["burning"] == [int(i) for i in np.flatnonzero(burning)]
     assert sky["burning"] == sorted(sky["burning"])
@@ -233,6 +234,7 @@ def test_events_carry_what_the_scene_shows_and_nothing_else() -> None:
 
     from lineage_sim.events import (
         CraterFormed,
+        CreaturesArrived,
         DayStarted,
         EarthquakeStruck,
         FireEnded,
@@ -253,6 +255,7 @@ def test_events_carry_what_the_scene_shows_and_nothing_else() -> None:
         EarthquakeStruck(4, 20.0, 21.0, 6.0, 0.01),
         CraterFormed(5, 30.0, 31.0, 3.0, 0.1),
         GodPowerUsed(6, "meteor", 30.0, 31.0),
+        CreaturesArrived(6, 12, False, 40.0, 41.0, 900),
         WorldEnded(7, 1, 3, "last_creature", archive),
         WorldBegan(0, 2, 99, 1000),
     ]
@@ -268,11 +271,14 @@ def test_events_carry_what_the_scene_shows_and_nothing_else() -> None:
         "earthquake",
         "crater",
         "god_power",
+        "creatures_arrived",
         "world_ended",
         "world_began",
     ]
     assert message["events"][5]["power"] == "meteor"
-    assert message["events"][6] == {
+    assert message["events"][6] == {"kind": "creatures_arrived", "t_ms": 6, "x": 40.0, "y": 41.0,
+                                     "count": 12}  # fmt: skip
+    assert message["events"][7] == {
         "kind": "world_ended",
         "t_ms": 7,
         "world": 1,
@@ -281,3 +287,12 @@ def test_events_carry_what_the_scene_shows_and_nothing_else() -> None:
     }
     assert encode.events_message(outputs[:1]) is None
     assert encode.events_message([]) is None
+
+
+def test_the_land_carries_scorch_and_algae(world: World) -> None:
+    land = encode.land_message(world)
+    cells = land["width"] * land["height"]
+    scorch = decode(land["scorch"], cells).reshape(land["height"], land["width"])
+    algae = decode(land["algae"], cells).reshape(land["height"], land["width"])
+    assert np.allclose(scorch, world.flora.scorch, atol=1 / 255)
+    assert np.allclose(algae, world.flora.algae, atol=1 / 255)
