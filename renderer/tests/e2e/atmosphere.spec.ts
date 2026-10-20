@@ -184,7 +184,7 @@ test("the ark's newcomers come into being under its light", async ({ page }) => 
 });
 
 test("the seed's sprouts come up on the land it sowed", async ({ page }) => {
-  const errors = await open(page, "view=middle&x=120&y=60&show=day,seed");
+  const errors = await open(page, "view=middle&x=120&y=60&show=day,burnt,seed");
   expect(await page.evaluate(() => window.__atmosphere?.().sown)).toBe(0);
   for (let s = 0; s < 6; s++) await advance(page, 1);
   expect(await page.evaluate(() => window.__atmosphere?.().sown ?? 0)).toBeGreaterThan(0);

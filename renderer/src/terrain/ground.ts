@@ -1030,7 +1030,9 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   // The swash runs up the beach in `SWASH_LEVELS` steps of `surf` pixels (not on the map,
   // where a coast a pixel wide flickered).
   const swashLevels = close || tile >= 8 ? SWASH_LEVELS : 0;
-  const swashTo = swashLevels * surf + 1;
+  // Each step of the swash reaches this many pixels further up the beach.
+  const swashStep = Math.max(2, Math.round(surf * 1.5));
+  const swashTo = swashLevels * swashStep + 1;
   const away = new Uint8Array(wide * tall).fill(surfing ? Math.max(farTo, swashTo) + 1 : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
@@ -1120,7 +1122,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const worldY = originY + py;
       if (isLand[at] === 1) {
         for (let level = 1; level <= swashLevels; level++) {
-          const reach = level * surf + 1;
+          const reach = level * swashStep + 1;
           if (distance > reach) continue;
           const edge = distance === reach && cellHash(worldX, worldY, 22) < SURF_FOAM;
           put(2 + level, at, edge ? foam : mix(colours[at] ?? 0, shallow, SWASH_MIX));

@@ -193,6 +193,10 @@ const MS_PER_DAY = 86_400_000;
 const ASH_S = 3;
 /** Frames a second of the lava's flow (it loops over `LAVA_FRAMES`). */
 const LAVA_FPS = 4;
+/** Up close: frames a second of the big flame's flicker, its opacity, and the small flames round it per cell. */
+const FLAME_FPS_CLOSE = 4;
+const FLAME_ALPHA_CLOSE = 0.72;
+const SMALL_FLAMES = 3;
 
 /** How much bigger a light about a place is drawn the closer the view (art pixels per map's). */
 function closeness(tile: number): number {
@@ -750,7 +754,10 @@ export class Atmosphere {
         const inCrown = k === count;
         const ox = count === 1 && !inCrown ? 0 : (cellHash(index, k, 346) - 0.5) * 0.7;
         const oy = count === 1 && !inCrown ? 0 : (cellHash(index, k, 347) - 0.5) * 0.5;
-        const rate = 7 + 4 * cellHash(index, k, 349);
+        // Up close the big flame flickers slowly (its six frames are large); far, faster.
+        const rate = close
+          ? FLAME_FPS_CLOSE * (0.8 + 0.4 * cellHash(index, k, 349))
+          : 7 + 4 * cellHash(index, k, 349);
         const frame = (Math.floor(this.timeS * rate) + k + index) % frames.length;
         const footY = fy + (inCrown ? 0.05 : oy);
         const sprite = this.standPool.next(
@@ -764,7 +771,18 @@ export class Atmosphere {
         // Its foot on the place (or in the crown), rising from it.
         placeCentred(sprite, fx + ox, footY - (inCrown ? crown : 0) - h / 2 / tile, tile, w, h);
         sprite.tint = 0xffffff;
-        sprite.alpha = 1;
+        // Up close a flame is see-through, so what stands behind it shows.
+        sprite.alpha = close ? FLAME_ALPHA_CLOSE : 1;
+        // Fire makes its own light: in the dark (and under cloud's grey) the tinted flame
+        // is lit again by an added copy over it.
+        const unlit = Math.max(dark, this.overcast * 0.6);
+        if (unlit > 0.05) {
+          const lit = this.lightPool.next(sprite.texture);
+          lit.position.copyFrom(sprite.position);
+          lit.scale.copyFrom(sprite.scale);
+          lit.tint = 0xffffff;
+          lit.alpha = Math.min(unlit, 1) * (close ? 0.5 : 0.85);
+        }
         if (close) {
           const glow = FIRE[(frame + k) % FIRE.length] ?? FIRE[0];
           this.halo(
@@ -772,7 +790,7 @@ export class Atmosphere {
             footY - (inCrown ? crown : 0) - h / 3 / tile,
             w * 1.8,
             glow,
-            0.45 * strength * this.flicker(index + k),
+            (close ? 0.3 : 0.45) * strength * this.flicker(index + k),
             tile,
           );
           this.puffs(
@@ -796,6 +814,27 @@ export class Atmosphere {
         }
       }
       if (!close) this.puffs(flames, 2, SPARK, tile, true);
+      else {
+        // Small flames licking round the big ones, on the ground of the cell, each on its
+        // own slow flicker, sorted among the plants as they are.
+        for (let k = 0; k < SMALL_FLAMES; k++) {
+          const sx = x + (cellHash(index, k, 352) - 0.5) * 0.9;
+          const sy = y + (cellHash(index, k, 353) - 0.5) * 0.8;
+          const small = this.sprites.flames;
+          const frame =
+            (Math.floor(this.timeS * (5 + 3 * cellHash(index, k, 354))) + k) % small.length;
+          const flame = this.standPool.next(
+            small[frame] ?? this.sprites.fleck,
+            view.rows ?? null,
+            sy,
+          );
+          const w = flame.texture.width * 2;
+          const h = flame.texture.height * 2;
+          placeCentred(flame, sx, sy - h / 2 / tile, tile, w, h);
+          flame.tint = 0xffffff;
+          flame.alpha = FLAME_ALPHA_CLOSE;
+        }
+      }
     });
     // Smoke from some of them, grey and drifting with the wind.
     const smokes = Math.min(MOST_SMOKES, inSight.length);

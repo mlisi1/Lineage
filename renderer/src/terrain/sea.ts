@@ -27,9 +27,9 @@ import { SWASH_LEVELS } from "./ground";
 import { cellHash } from "./pixels";
 
 /** Seconds of a wave: its crest coming in, breaking, the swash running up and draining. */
-export const BREATH_S = 8;
+export const BREATH_S = 5;
 /** Seconds of a tide, which sets how far the swash runs. */
-const TIDE_S = 120;
+const TIDE_S = 60;
 /** Where in the wave the swash starts up the beach (as the foam breaks), and the share of the wave it runs up for. */
 const SWASH_FROM = 0.58;
 const SWASH_UP = 0.35;
@@ -37,7 +37,7 @@ const SWASH_UP = 0.35;
 export const SURF_TILE = 8;
 /** The wave front: the way it travels (unit vector), its speed (cells a second); and how much it wanders (seconds, over cells). */
 const WAVE_HEADING = [0.8, 0.6] as const;
-const WAVE_SPEED = 3;
+const WAVE_SPEED = 5;
 const WAVE_WANDER_S = 1.2;
 const WAVE_WANDER_SPAN = 40;
 /** Seconds between two showings of a glint (from, to), and the share of that it shows. */
