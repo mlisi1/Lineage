@@ -408,7 +408,7 @@ needs a note in `docs/decisions/`.
   ADR 0018: once life is established, the last creature's death ends the world (the
   owner, 2026-10-20); the World archives itself (`WorldEnded`, the final save) and starts
   the next at once from a seed drawn by the old one; every archive is kept; schema v10.
-  Ending a world and starting the next: 73 ms on the PC.)
+  Ending a world and starting the next: 73 ms on the PC; merged 2026-10-20.)
 
 ### M11 — Long-run tuning and stability
 - **Deliver**: tuned `default.toml`; `tools/tune/` sweeps. Plan and evidence so far:

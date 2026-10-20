@@ -14,8 +14,8 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
-| M10 | Apocalypse and worlds | **done** 2026-10-20 on branch `m10-worlds` (not merged): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
+| M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
+| M11 | Long-run tuning and stability | next (brief below); plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -32,7 +32,39 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M10 closed (branch `m10-worlds`, 2026-10-20)
+### Starting M11 (long-run tuning and stability)
+
+- **Branch**: `git switch main && git switch -c m11-tuning`. Spec: CLAUDE.md §8 M11.
+  **Read `docs/m11-plan.md` first**: goals in numbers (§1), method (§2), every lever with
+  its history (§3), risks (§4), order of work (§5) and what M6–M10 learned (§6). Read
+  "Working on a milestone here" below too.
+- **Accept**: every M2–M10 criterion passes at once, and mean genetic distance is still
+  rising at year 3. Three criteria were deferred here by the owner and fail today:
+  **M6.1** (3–12 species for 79 % of inhabited time, against 90 %; ADR 0012),
+  **M8.1** (selection on night traits, p = 0.15 against 0.05; ADR 0016), and M5's
+  feeding gain, which is reported without a band (ADR 0009). Bands change only with an
+  ADR (CLAUDE.md §8), never just to pass.
+- **Ask the owner before coding**:
+  1. The engagement targets in `m11-plan.md` §1, the "target to agree with the owner"
+     column, including how often a world may end (M10: today about once in decades).
+  2. Whether tuning may change mechanisms (a prey refuge in cover, dropping `SOCIAL` or
+     trial-and-error learning, schema bumps), or only numbers in `default.toml`.
+  3. The compute budget: a 20-seed × 3-year office run takes 15–22 min at 10 jobs, and
+     this PC is shared (memory `shared-machine`: check the load, `--jobs` 8–10).
+- **What exists**: every criterion is computed by `tools/milestones/mN.py` (M2–M9;
+  M10 has none, its tests cover it), and fast-forward takes `--set` overrides,
+  `--schedule office` and `--fork-days`. There is no `tools/tune/` yet; building it is
+  M11's first deliverable (sweep runner, score on every criterion, sensitivity report).
+  The slow tests `tools/tests/test_m*_statistical.py` hold the criteria on 20 seeds.
+- **Report**: statistical (§7): the full dashboard, held-out seeds (20–39) beside the
+  tuning seeds (0–19), and the sensitivity of the key metrics to the top levers.
+- **Since M10**: a seed whose island empties after life is established now ends its
+  world and goes on in the next one. Cumulative series (fauna tallies, `species_ever`)
+  restart there; read them with the `world` series, and count endings with
+  `worlds_ended`. Earlier worlds are in `runs/<id>/archives/`.
+- Next free ADR: 0019 (claim it in `/home/elechim/Lineage-coord/README.md`).
+
+### M10 closed (merged into `main` at `af98573`, 2026-10-20)
 
 - The owner's answers (ADR 0018): once life is established (`[apocalypse]
   established_days`, 30 days after the first landing), the last creature's death ends
@@ -48,6 +80,9 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   Fast-forward steps by the desk's clock, writes `archives/<seed>/world-<n>.lzma`, has a
   `world` series and a `worlds_ended` count; the owner's schedule follows the desk
   (`desk(world)`). `replay` prints `history(world)` beside the summary.
+- No report: M10 is not statistical (CLAUDE.md §7); its criteria are tests. Fast suite
+  653 passed; slow suite 11 passed (1 h 22 min). Schema v10 is released: `v10.lzma` is
+  frozen. Branch `m10-worlds` deleted.
 - Tests: `sim/tests/test_apocalypse.py` (toy hand-over: once, timing, chunking, save
   and resume, next seed, archive; the real v9 world emptied by a meteor; the apocalypse
   only watches), migrations, `test_bench_new_world` (73 ms), `tools/tests/test_worlds.py`

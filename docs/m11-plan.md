@@ -125,7 +125,7 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 
 ## 6. Findings from later milestones
 
-(M6–M10: add what each milestone learned about the balance here.)
+(M6–M10: what each milestone learned about the balance.)
 
 ### M6 — species (ADR 0012, reports/M6-species)
 
@@ -195,3 +195,17 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 - The year before life is quiet (about 2 notable entries a month); a late founding seed
   falls below the band.
 
+### M10 — worlds end (ADR 0018)
+
+- **A world ends when its last creature dies once life is established** (30 days after
+  the first landing; the owner, 2026-10-20). Before M10 such islands were re-founded. It
+  is rare at today's tuning: 2 of 80 three-year runs (M8/M9, all schedules) emptied
+  after first life, so a world lasts decades. Agree with the owner how often a desk
+  should see a new continent (§1, "Life persists"). If it should be more often, the
+  levers are the island's difficulty, immigration (`immigrant_groups_per_year`) and the
+  ark, not the criterion (`[apocalypse] established_days`).
+- **Endings change the statistics.** A run in which a world ends restarts every
+  cumulative series and puts the next world's bare first year into the record (the
+  founding bottleneck of §3 again). Criteria computed over a whole run (M4.1 extinct
+  seed-years, M6.1 inhabited time) must treat a new world as a new start; check
+  `worlds_ended` in each run before reading them.
