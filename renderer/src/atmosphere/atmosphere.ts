@@ -22,7 +22,7 @@
  * Short things (a shake, a meteor, a beam) last a few wall seconds, so that they read at
  * any speed; a volcano's eruption lasts sim-hours, and at least some wall seconds.
  */
-import { Container, Sprite, Texture } from "pixi.js";
+import { ColorMatrixFilter, Container, Sprite, Texture } from "pixi.js";
 import { GLOW_SPOT } from "../creatures/body";
 import type { ViewName } from "../landscape";
 import type { EventsMessage, Message, Season, SkyMessage } from "../protocol";
@@ -100,9 +100,15 @@ const OVERCAST: Readonly<Record<RainKind, number>> = {
   thunder: 0.9,
   storm: 1,
 };
-/** The veil at full overcast: its colour and opacity. */
+/** The veil at full overcast: its colour and opacity (a haze of cloud over the land). */
 const VEIL = 0x9aa2ac;
-const VEIL_ALPHA = 0.3;
+const VEIL_ALPHA = 0.14;
+/**
+ * The sun behind cloud takes the colour out of the land: at full overcast this share of
+ * each colour goes to its grey (a cloudy sky half that), with a cool cast (per channel).
+ */
+const GREY_OUT = 0.72;
+const CLOUD_CAST: Rgb = [0.96, 0.99, 1.05];
 /** How much the rain leans with the wind: pixels across for each pixel down. */
 const RAIN_LEAN: Readonly<Record<RainKind, number>> = {
   none: 0,
@@ -284,6 +290,11 @@ export class Atmosphere {
   readonly tint: Sprite;
   /** Cloud-grey laid over the land, under the tint, as the sky is overcast. */
   readonly veil: Sprite;
+  /**
+   * The colour grade of the world under cloud: put on the world's container while the sky
+   * is overcast (`graded`), and nothing otherwise, so a clear day costs no filter pass.
+   */
+  readonly grade = new ColorMatrixFilter();
   readonly lights = new Container();
   readonly flash: Sprite;
   /** Over everything, on the screen: lightning, and the flash. */
@@ -568,6 +579,7 @@ export class Atmosphere {
     // The veil is cloud lit by the day: grey by day, dark at night, none in the end of a world.
     const lit = Math.max(...colour);
     this.veil.alpha = moment === null ? VEIL_ALPHA * this.overcast * lit : 0;
+    this.setGrade(moment === null ? this.overcast : 0);
     // The rain is drawn over the tint, so that it shows on any ground: as bright as the
     // light it falls in.
     this.weather.alpha = 0.3 + 0.7 * Math.min(lit / 0.8, 1);
@@ -582,6 +594,33 @@ export class Atmosphere {
     this.tint.tint = packRgb(colour);
     this.tint.width = view.width;
     this.tint.height = view.height;
+  }
+
+  /** Grey the world's colours by `overcast` (0–1): toward their luminance, cooled a little. */
+  private setGrade(overcast: number): void {
+    const k = GREY_OUT * overcast;
+    const cast = mixRgb([1, 1, 1], CLOUD_CAST, overcast);
+    const luma = [0.299, 0.587, 0.114];
+    const row = (channel: number): number[] => [
+      ...luma.map((weight, i) => (cast[channel] ?? 1) * (k * weight + (i === channel ? 1 - k : 0))),
+      0,
+      0,
+    ];
+    this.grade.matrix = [
+      ...row(0),
+      ...row(1),
+      ...row(2),
+      0,
+      0,
+      0,
+      1,
+      0,
+    ] as unknown as typeof this.grade.matrix;
+  }
+
+  /** Whether the world is to be graded now (the sky overcast). */
+  get graded(): boolean {
+    return this.overcast > 0.01 && !this.sequence.active;
   }
 
   private halo(
@@ -1465,6 +1504,7 @@ export class Atmosphere {
     burning: number;
     effects: string[];
     act: string | null;
+    graded: boolean;
   } {
     return {
       light: this.ease.value,
@@ -1473,6 +1513,7 @@ export class Atmosphere {
       burning: this.burning.length,
       effects: this.effects.map((effect) => effect.kind),
       act: this.sequence.active ? this.sequence.moment.act : null,
+      graded: this.graded,
     };
   }
 

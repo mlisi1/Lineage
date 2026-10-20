@@ -903,8 +903,8 @@ god powers, a world's end and the next one's beginning).
   goes into the plants' rows by its foot (`RowPool`), as creatures do, so what stands in
   front covers it.
 - Rain is drawn over the tint, faded with the light, in pale blue; each spell has its own
-  strength; thunder falls at random times. A cloud-grey veil under the tint takes the
-  colour out of the land as the sky is overcast; `sky.rain = "cloud"` is an overcast sky.
+  strength; thunder falls at random times. Under cloud the world is colour-graded toward grey
+  (a colour-matrix filter, on only while the sky is overcast) under a faint grey haze; `sky.rain = "cloud"` is an overcast sky.
 - The close flame is 15 × 24 in six frames after pixel-art references, in a bed of
   embers; burning trees burn in their crowns. Glow is fainter closer in.
 - The lava's crust drifts outward from the pool's middle. A crater's land waits for its

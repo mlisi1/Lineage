@@ -166,6 +166,7 @@ async function start(): Promise<void> {
   layout();
 
   const world = new Container({ isRenderGroup: true });
+  let graded = false;
   app.stage.addChild(world);
   const landscape = new Landscape(
     params.get("painter") === "inline" ? new InlinePainter() : makePainter(),
@@ -425,6 +426,11 @@ async function start(): Promise<void> {
     });
     advance = 0;
     world.scale.set(tile);
+    // Under cloud the world is greyed (one filter pass); none on a clear day.
+    if (atmosphere.graded !== graded) {
+      graded = atmosphere.graded;
+      world.filters = graded ? [atmosphere.grade] : [];
+    }
     // Whole art pixels in the canvas, the fraction left by sliding the canvas itself.
     const x = -cells.x0 * tile;
     const y = -cells.y0 * tile;

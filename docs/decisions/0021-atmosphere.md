@@ -298,10 +298,14 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
 - **Thunder at random times.** Bolts fall by chance in windows a quarter of their mean
   spacing, at a rate that turns over 25 s (lulls and bursts, a bolt sometimes right after
   another).
-- **The sun blocked.** A multiply tint can only darken, so a veil of cloud-grey is laid
-  over the land under the tint, as overcast as the weather (cloud 50 %, the rain power
-  75 %, rain 80 %, thunder 90 %, storm 100 %): it takes the colour out as a blocked sun
-  does.
+- **The sun blocked.** A multiply tint can only darken, and a first grey veil did not read
+  in the films (the owner). Under cloud the world is now colour-graded: a colour-matrix
+  filter on the world's container takes each colour toward its grey and cools it a little
+  (`GREY_OUT` 72 % at full overcast), as overcast as the weather: cloud 50 %, the rain
+  power 75 %, rain 80 %, thunder 90 %, storm 100 %. A faint haze of cloud-grey (14 %) lies
+  over it. The filter is on only while the sky is overcast, so a clear day costs no pass
+  (R5 measures it on the board). Lights, lightning and rain are outside the world and keep
+  their colour.
 - **A cloudy weather** in the sim (`Rain.CLOUD`, `[weather] cloud_spells_per_month`,
   `cloud_hours_min`, `cloud_hours_max`): between rains the sky clouds over, 8 times a
   month for 3 to 36 hours, and rain can come out of it. The owner left its effect on

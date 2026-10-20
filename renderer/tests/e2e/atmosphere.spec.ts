@@ -223,3 +223,15 @@ test("a meteor's crater shows in the land only once the meteor has struck", asyn
   });
   expect(errors).toEqual([]);
 });
+
+test("cloud greys the world, more so rain; a clear day is not graded", async ({ page }) => {
+  for (const [sky, graded] of [
+    ["day", false],
+    ["day,cloud", true],
+    ["day,rain", true],
+  ] as const) {
+    await open(page, `view=middle&x=120&y=60&show=${sky}`);
+    await advance(page, 4);
+    expect(await page.evaluate(() => window.__atmosphere?.().graded)).toBe(graded);
+  }
+});
