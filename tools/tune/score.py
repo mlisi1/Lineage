@@ -34,7 +34,7 @@ from tools.runs import TIME_KEY, Run
 
 # Criteria a sweep cannot judge from one office run: the step-time budgets measure this
 # shared PC's load as much as the island, and are checked in the final runs instead.
-UNSWEPT = frozenset({"M2.5", "M4.4", "M5.3"})
+UNSWEPT = frozenset({"M4.4", "M5.3"})
 
 CRITERIA: list[Criterion] = [
     Criterion(

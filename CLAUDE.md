@@ -300,7 +300,8 @@ needs a note in `docs/decisions/`.
 - **Report** (20 seeds × 10 sim-years): land fraction, sea level, landmass count over time;
   coastline change per year; snapshot grid + GIF; event frequency.
 - **Accept**: land fraction stays in `[0.25, 0.6]`; ≥ 1 split/rejoin per 3 years in
-  `[≥ 50%]` of seeds; no seed loses all land; terrain step within budget.
+  `[≥ 50%]` of seeds; no seed loses all land; terrain step within budget (retired in
+  M11, ADR 0019: M4.4 budgets the whole world, 600 ms per sim-day on the PC).
 
 ### M3 — Flora
 - **Deliver**: vegetation grid, 8-gene plant genome, growth/suitability, dispersal (wind,

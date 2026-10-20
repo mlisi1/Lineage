@@ -53,9 +53,10 @@ The owner answered the M11 brief's three questions at the start (2026-10-20):
   below). M4.3 is 0.69 (0.63 on 0–19). Predators are present for 52 % of inhabited time
   and omnivores for 23 %. No world ended, and there are 15 notable booms and crashes a year.
 
-- **M2.5 measures the wrong thing now.** Its 25 ms budget dates from M2, when the world
-  held only terrain. A whole inhabited world takes about 390 ms per sim-day on this PC,
-  and M4.4's 400 ms is the whole-world budget. To be settled before the final report.
+- **M2.5 measured the wrong thing.** Its 25 ms budget dated from M2, when the world
+  held only terrain. A whole inhabited world takes 350–450 ms per sim-day on this PC,
+  depending on how busy the PC is. Settled with the owner (2026-10-20, below): M2.5 is
+  retired and M4.4/M5.3 budget the whole world at 600 ms.
 - **M3 is judged over 5 years** (CLAUDE.md §8). In 3-year office runs, 2 of 20 seeds
   have no closed forest by the end of the run (M3.5). The final M3 check must use a
   5-year run.
@@ -157,6 +158,25 @@ A land cell gains `dung_fertility` (0.05) fertility per unit of plant biomass ea
 and `carrion_fertility` (0.2) per unit of carrion that rots there. Herds keep their
 pastures fertile; a kill leaves a rich patch. The saved state is the terrain's
 fertility, as before.
+
+### Third round with the owner (2026-10-20)
+
+- **Wading.** Algae alone did not open the swimmers' niche (D1 for `AQUATIC` at 1 seed
+  in 20 with or without them): a land animal paid the full water penalty as soon as it
+  stepped into the shallows. Now no creature struggles in water no deeper than
+  `[fauna] wading_depth` (0.03, the algae's shelf). Land animals can graze the shallows,
+  slowly (they move at their swimming speed) and only smelling algae through `AQUATIC`,
+  so swimming pays as the next step out. In six hours on the shelf a land grazer loses
+  5 % of its reserve, against 12 % in deep water. `wading_depth` 0 turns it off.
+- **Tune now, gut seeds later.** The tuning sweep runs with mechanisms 1, 2, 3 and 5
+  and wading. Mechanism 4 comes after R4 reaches `main` (schema v13 on its v12), then a
+  short re-check sweep.
+- **Step budget.** The 400 ms per sim-day of M4.4 (and M5.3) was a PC-side guard, not
+  derived from the device: on the board the sim uses far less than 1 % of a core
+  (about 4 s of CPU per real day if the board is 10× slower), against the 25 % of
+  CLAUDE.md §4.8. What a higher budget costs is turnaround on the PC (runs, sweeps,
+  slow tests). Raised to **600 ms**; **M2.5 retired**. The sim is to be measured once on
+  the Orange Pi before M11 closes, to replace the 10× estimate.
 
 ### Mechanism 4: seeds carried by grazers (waits for schema v13)
 
