@@ -77,6 +77,75 @@ def test_new_chronicle_entries_follow_and_none_is_sent_twice() -> None:
     assert all(a != b for a, b in itertools.pairwise(censuses))
 
 
+def test_the_sky_follows_the_office_schedule_and_the_button() -> None:
+    world = _world()
+    messages = stream.record(
+        world,
+        days=3,
+        land_every=3,
+        creatures=True,
+        creatures_every_s=7200,
+        sky_every_s=600,
+        schedule="office",
+        press_days=[2],
+    )
+    skies = [message for message in messages if message["type"] == "sky"]
+    # On connect, then every ten minutes.
+    assert len(skies) == 1 + 3 * 144
+    assert [sky["t_ms"] for sky in skies] == sorted(sky["t_ms"] for sky in skies)
+    lights = [sky["light"] for sky in skies]
+    # The v4 world's first days are weekdays: dark nights, full days.
+    assert min(lights) <= 0.06
+    assert max(lights) == 1.0
+    assert any(sky["present"] for sky in skies) and not all(sky["present"] for sky in skies)
+    powers = [
+        event
+        for message in messages
+        if message["type"] == "events"
+        for event in message["events"]
+        if event["kind"] == "god_power"
+    ]
+    assert len(powers) == 1
+    assert powers[0]["power"] in {"meteor", "rain", "seed", "ark"}
+
+
+def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
+    world = _world()
+    messages = stream.record(
+        world, days=3, land_every=1, creatures=True, creatures_every_s=7200, sky_every_s=3600,
+        famine_day=2,
+    )  # fmt: skip
+    types = [message["type"] for message in messages]
+    events = [
+        (index, event)
+        for index, message in enumerate(messages)
+        if message["type"] == "events"
+        for event in message["events"]
+    ]
+    ended = [index for index, event in events if event["kind"] == "world_ended"]
+    began = [index for index, event in events if event["kind"] == "world_began"]
+    assert len(ended) == 1 and len(began) == 1
+    assert ended[0] < began[0]
+    assert world.number == 2
+    # The old world's last entries, then the next world is met as on connect.
+    after = types[ended[0] + 1 :]
+    assert after[:4] == ["chronicle", "clock", "sky", "land"]
+    lands = [message for message in messages if message["type"] == "land"]
+    seeds = [land["world"]["seed"] for land in lands]
+    assert seeds[0] != seeds[-1]
+    kinds = [
+        entry["kind"]
+        for message in messages
+        if message["type"] == "chronicle"
+        for entry in message["entries"]
+    ]
+    assert kinds.index("world_end") < kinds.index("world_begin")
+    # Nothing lives in the new world at first.
+    assert messages[-1]["type"] in {"sky", "events", "chronicle", "creatures"}
+    last = [message for message in messages if message["type"] == "creatures"][-1]
+    assert last["ids"] == []
+
+
 def test_the_committed_recording_is_what_the_tool_writes(tmp_path: Path) -> None:
     """renderer/public/stream/recording.json: regenerate with the command in its README line."""
     out = tmp_path / "recording.json"

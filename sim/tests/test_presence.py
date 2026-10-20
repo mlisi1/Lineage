@@ -241,8 +241,10 @@ def test_rain_puts_out_fires_and_wets_the_land(config: Config) -> None:
     assert (world.terrain.fertility[land] >= fertility[land]).all()
     assert world.terrain.fertility[land].mean() > fertility[land].mean()
     assert fire.dryness(world.instant) == 0.0
+    assert world.presence.raining  # what the scene draws (R4)
     world.step(config.presence.rain_days * DAY_S + HOUR_S)
     assert not world.snapshot().subsystems["presence"]["wet"]
+    assert not world.presence.raining
 
 
 def test_rain_makes_plants_grow_faster(config: Config) -> None:

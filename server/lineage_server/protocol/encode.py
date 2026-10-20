@@ -8,10 +8,22 @@ from __future__ import annotations
 
 import base64
 import importlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import numpy as np
+from lineage_sim.events import (
+    ChronicleEntry,
+    CraterFormed,
+    EarthquakeStruck,
+    FireEnded,
+    FireStarted,
+    GodPowerUsed,
+    OutputEvent,
+    VolcanoErupted,
+    WorldBegan,
+    WorldEnded,
+)
 from lineage_sim.fauna import phenotype
 from lineage_sim.fauna.genome import Gene as CreatureGene
 from lineage_sim.flora import RARE_GENES, Cover
@@ -183,7 +195,12 @@ def chronicle_message(world: World, after: int = 0) -> Message | None:
     chronicle = getattr(world, "chronicle", None)
     if chronicle is None:
         return None
-    entries = chronicle.entries(after)
+    return entries_message(world, chronicle.entries(after))
+
+
+def entries_message(world: World, entries: Sequence[ChronicleEntry]) -> Message | None:
+    """A chronicle message of ``entries`` (R4: those a step returned, which may span the
+    end of a world and the beginning of the next), or None when there are none."""
     if not entries:
         return None
     config = world.config.chronicle
@@ -208,9 +225,79 @@ def chronicle_message(world: World, after: int = 0) -> Message | None:
     }
 
 
+def sky_message(world: World) -> Message:
+    """The light of the moment, the owner's presence, rain and the cells on fire (R4)."""
+    presence = world.presence
+    burning = np.flatnonzero(world.wildfire.burning)
+    return {
+        "type": "sky",
+        "protocol": PROTOCOL,
+        "t_ms": world.t_ms,
+        "light": round(min(max(float(presence.light), 0.0), 1.0), 4),
+        "present": bool(presence.present),
+        "raining": bool(presence.raining),
+        "burning": [int(index) for index in burning],
+    }
+
+
+def _event(output: OutputEvent) -> dict[str, Any] | None:
+    """One output as an ``events`` entry, or None for those the scene does not show."""
+    at: dict[str, Any] = {"t_ms": int(output.t_ms)}
+    if isinstance(output, VolcanoErupted | EarthquakeStruck | CraterFormed):
+        kind = {VolcanoErupted: "volcano", EarthquakeStruck: "earthquake", CraterFormed: "crater"}
+        return {
+            "kind": kind[type(output)],
+            **at,
+            "x": round(float(output.x), 3),
+            "y": round(float(output.y), 3),
+            "radius_cells": round(float(output.radius_cells), 3),
+        }
+    if isinstance(output, FireStarted):
+        return {
+            "kind": "fire_started",
+            **at,
+            "x": round(float(output.x), 3),
+            "y": round(float(output.y), 3),
+        }
+    if isinstance(output, FireEnded):
+        return {
+            "kind": "fire_ended",
+            **at,
+            "cells": int(output.cells),
+            "hours": round(float(output.hours), 3),
+        }
+    if isinstance(output, GodPowerUsed):
+        return {
+            "kind": "god_power",
+            **at,
+            "power": str(output.power),
+            "x": round(float(output.x), 3),
+            "y": round(float(output.y), 3),
+        }
+    if isinstance(output, WorldEnded):
+        return {
+            "kind": "world_ended",
+            **at,
+            "world": int(output.world),
+            "seed": int(output.seed),
+            "cause": str(output.cause),
+        }
+    if isinstance(output, WorldBegan):
+        return {"kind": "world_began", **at, "world": int(output.world), "seed": int(output.seed)}
+    return None
+
+
+def events_message(outputs: Sequence[OutputEvent]) -> Message | None:
+    """What of ``outputs`` the scene shows as weather or a sequence (R4), or None."""
+    events = [event for event in map(_event, outputs) if event is not None]
+    if not events:
+        return None
+    return {"type": "events", "protocol": PROTOCOL, "events": events}
+
+
 def connect_messages(world: World, sent: set[int] | None = None) -> list[Message]:
     """Everything a renderer needs when it connects, in the order to send it."""
-    messages = [clock_message(world), land_message(world), fauna_message(world)]
+    messages = [clock_message(world), sky_message(world), land_message(world), fauna_message(world)]
     for extra in (species_message(world), rare_message(world)):
         if extra is not None:
             messages.append(extra)

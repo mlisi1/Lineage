@@ -24,6 +24,12 @@
     },
     {
       "$ref": "#/$defs/ChronicleMessage"
+    },
+    {
+      "$ref": "#/$defs/SkyMessage"
+    },
+    {
+      "$ref": "#/$defs/EventsMessage"
     }
   ],
   "$defs": {
@@ -536,6 +542,141 @@
               "y": {
                 "description": "The cell where it happened; -1 when it has no one place.",
                 "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SkyMessage": {
+      "description": "The island's weather of the moment (R4): the light, whether the owner is at the desk, rain, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "t_ms",
+        "light",
+        "present",
+        "raining",
+        "burning"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sky"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "t_ms": {
+          "$ref": "#/$defs/SimTime"
+        },
+        "light": {
+          "description": "The light of the moment ([presence]: 1 by day, night_light at night, the moonlight floor after a long absence), 0–1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "present": {
+          "description": "Whether the owner is at the desk (the light is rising toward day, or day).",
+          "type": "boolean"
+        },
+        "raining": {
+          "description": "Whether the rain god power's rain is falling (for [presence] rain_days after it fired).",
+          "type": "boolean"
+        },
+        "burning": {
+          "description": "The cells on fire, as indices y × width + x of the land's grid, in increasing order.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "EventsMessage": {
+      "description": "What just happened on the island that the scene shows as weather or a sequence (R4), oldest first: fires, volcanoes, earthquakes, craters, god powers, and the end of a world and the beginning of the next. Not sent on connect. After world_ended, every message is of the next world until the next world_ended.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "events"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "events"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "t_ms"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "description": "fire_started and fire_ended (lightning), volcano, earthquake and crater (the terrain's events), god_power (a power fired), world_ended and world_began (M10).",
+                "enum": [
+                  "fire_started",
+                  "fire_ended",
+                  "volcano",
+                  "earthquake",
+                  "crater",
+                  "god_power",
+                  "world_ended",
+                  "world_began"
+                ]
+              },
+              "t_ms": {
+                "$ref": "#/$defs/SimTime"
+              },
+              "x": {
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power).",
+                "type": "number"
+              },
+              "y": {
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power).",
+                "type": "number"
+              },
+              "radius_cells": {
+                "description": "How far it reached, in cells (volcano, earthquake, crater).",
+                "type": "number",
+                "minimum": 0
+              },
+              "power": {
+                "description": "Which power fired (god_power): meteor, rain, seed or ark.",
+                "type": "string"
+              },
+              "cells": {
+                "description": "Cells burnt (fire_ended).",
+                "type": "integer",
+                "minimum": 0
+              },
+              "hours": {
+                "description": "Sim-hours it burnt (fire_ended).",
+                "type": "number",
+                "minimum": 0
+              },
+              "world": {
+                "description": "The world's number, from 1 (world_ended: the one that ended; world_began: the new one).",
+                "type": "integer",
+                "minimum": 1
+              },
+              "seed": {
+                "description": "The world's seed (world_ended, world_began).",
+                "type": "integer",
+                "minimum": 0
+              },
+              "cause": {
+                "description": "Why the world ended (world_ended).",
+                "type": "string"
               }
             }
           }
