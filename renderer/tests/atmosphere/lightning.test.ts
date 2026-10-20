@@ -8,6 +8,7 @@ import {
   CRATER_RIM,
   craterHeight,
   craterPixel,
+  LAVA_FRAMES,
   lavaPixel,
   type MarkPixel,
 } from "../../src/atmosphere/marks";
@@ -76,6 +77,7 @@ describe("the flame and the marks", () => {
 
   it("draws cliff faces below the ledges' south edges, darker than the tops, and lava in its mouth", () => {
     const shape = coneShape(120);
+    let scree = 0;
     let faces = 0;
     let faceLight = 0;
     let tops = 0;
@@ -85,7 +87,13 @@ describe("the flame and the marks", () => {
         const at = ledgeAt(shape, x, y);
         const pixel = conePixel(shape, x, y);
         if (at === null) {
-          expect(pixel).toBeNull();
+          // Off the ledges only scree, round the foot, never above it.
+          if (pixel !== null) {
+            scree += 1;
+            expect(Math.hypot(x + 0.5 - shape.cx, y + 0.5 - shape.cy)).toBeGreaterThan(
+              shape.radius * 0.8,
+            );
+          }
           continue;
         }
         if (at.kind === "face") {
@@ -100,6 +108,7 @@ describe("the flame and the marks", () => {
     }
     expect(faces).toBeGreaterThan(100);
     expect(tops).toBeGreaterThan(faces);
+    expect(scree).toBeGreaterThan(0);
     expect(topLight / tops).toBeGreaterThan(faceLight / faces);
     const mouth = lavaPixel(
       shape,
@@ -108,6 +117,13 @@ describe("the flame and the marks", () => {
     );
     expect(mouth).not.toBeNull();
     expect(lavaPixel(shape, 0, 0)).toBeNull();
+    // The lava moves from frame to frame and comes round again.
+    const frames = (frame: number): string =>
+      Array.from({ length: shape.height * shape.width }, (_, i) =>
+        String(lavaPixel(shape, i % shape.width, Math.floor(i / shape.width), frame)?.[0]),
+      ).join();
+    expect(frames(1)).not.toBe(frames(0));
+    expect(frames(LAVA_FRAMES)).toBe(frames(0));
   });
 
   it("draws a crater: a lit far wall, the near wall in shadow, ejecta beyond, never a circle", () => {

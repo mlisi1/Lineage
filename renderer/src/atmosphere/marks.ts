@@ -12,9 +12,11 @@
  *            left in four dithered tones, with pebbles and boulders; striated cliff faces
  *            below each ledge's south edge; a rim of light along its north edge; a mouth
  *            whose back wall shows above a floor of dark crust
+ *            and round its foot a skirt of ash and scree thinning into the ground
  *   lava     the eruption's own layer, drawn over the cone without the scene's tint: a pool
  *            of crusted lava in the mouth, rivers running down its south side, falling
- *            bright over each cliff
+ *            bright over each cliff; in `LAVA_FRAMES` frames, the crust drifting across the
+ *            pool and down the rivers, the heat swelling and ebbing
  *   crater   drawn from a height field, as the Moon's simple craters look from above: a bowl
  *            with a raised rim, scalloped where its walls slumped; lit from the upper left,
  *            so the far wall is bright and the near wall in the rim's shadow; a slumped
@@ -34,6 +36,8 @@ export type MarkPixel = readonly [number, number] | null;
 const ROCK = [0x3e3036, 0x584549, 0x7a6262, 0x9c8279] as const;
 const FACE = [0x2a1f26, 0x3b2c33, 0x4f3c42] as const;
 const OUTLINE = 0x1b1218;
+/** Ash and scree round the foot: dark ash, grey stone. */
+const SCREE = [0x4a3e40, 0x6a5c5a] as const;
 const RIM_LIGHT = 0xb79c8c;
 const BOULDER = [0x4a3a3e, 0x6e5a58, 0xa48c80] as const;
 /** The mouth's cold floor: crust plates, and the cracks between them. */
@@ -73,6 +77,8 @@ export interface ConeShape {
   ledges: number;
   /** Pixels each ledge stands above the one below it (its cliff's height). */
   lift: number;
+  /** How far the scree round its foot reaches beyond the lowest ledge (pixels). */
+  skirt: number;
 }
 
 /** How far a cone whose foot is `width` art pixels across rises above its foot's middle to its mouth. */
@@ -81,12 +87,42 @@ export function coneSummit(width: number): number {
   return shape.ledges * shape.lift;
 }
 
-export function coneShape(width: number): ConeShape {
-  const radius = width / 2 - 1;
+/**
+ * The shape of a cone whose lowest ledge is `foot` pixels across; its scree reaches
+ * `SKIRT` of its radius further, and the texture holds both.
+ */
+export function coneShape(foot: number): ConeShape {
+  const radius = foot / 2 - 1;
   const ledges = Math.min(Math.max(Math.round(radius / 9), 1), 3);
   const lift = Math.max(1, Math.round(radius * 0.17));
+  const skirt = Math.max(2, Math.round(radius * SKIRT));
+  const width = foot + 2 * skirt;
   const height = width + ledges * lift + 2;
-  return { width, height, cx: width / 2, cy: height - width / 2, radius, ledges, lift };
+  return { width, height, cx: width / 2, cy: height - width / 2, radius, ledges, lift, skirt };
+}
+
+/** The scree and ash round a cone's foot, as a share of its radius. */
+const SKIRT = 0.35;
+/** Frames of the lava's flow, looped; pixels it moves each frame. */
+export const LAVA_FRAMES = 8;
+const LAVA_STEP = 2;
+
+/** Scree round the cone's foot, thinning into the ground: its colour, or null. */
+function screePixel(shape: ConeShape, x: number, y: number): MarkPixel {
+  const dx = x + 0.5 - shape.cx;
+  const dy = y + 0.5 - shape.cy;
+  const angle = (Math.atan2(dy, dx) / (2 * Math.PI) + 1) % 1;
+  const foot = ledgeRadius(shape, 0, angle);
+  const beyond =
+    (Math.hypot(dx, dy) - foot) / (shape.skirt * (0.7 + 0.6 * aroundNoise(angle, 11, 30)));
+  if (beyond < 0 || beyond >= 1) return null;
+  // Thick by the foot, in clumps further out; dark ash and grey stones, a boulder or two.
+  const clump = cellHash(Math.floor(x / 2), Math.floor(y / 2), 631) * 0.6 + dither(x, y) * 0.4;
+  if (clump > Math.pow(1 - beyond, 1.4)) return null;
+  const stone = boulder(x, y, 632);
+  if (stone !== null && beyond < 0.6) return [stone, 255];
+  const tone = cellHash(x, y, 633) < 0.3 + 0.4 * (1 - beyond) ? 0 : 1;
+  return [SCREE[tone] ?? SCREE[0], 255];
 }
 
 /** How far ledge `i` reaches at `angle` (pixels from the middle); ledge `ledges` is the mouth. */
@@ -150,7 +186,7 @@ function boulder(x: number, y: number, salt: number): number | null {
 /** The cone's pixel at (x, y), lava left out (it is its own layer). */
 export function conePixel(shape: ConeShape, x: number, y: number): MarkPixel {
   const at = ledgeAt(shape, x, y);
-  if (at === null) return null;
+  if (at === null) return screePixel(shape, x, y);
   const { kind, ledge, dx, dy, d, inside } = at;
   if (kind === "face") {
     // A cliff: strata in vertical streaks, darker toward its foot, cracked here and there.
@@ -173,7 +209,8 @@ export function conePixel(shape: ConeShape, x: number, y: number): MarkPixel {
   const r = Math.hypot(dx, dy);
   const facing = r === 0 ? 0 : (-dx - dy) / (r * Math.SQRT2);
   // A line of light along its north edge, an outline along its south edge: one pixel.
-  if (inside < 1 && dy > 0) return [OUTLINE, 255];
+  // The lowest ledge has no outline: it goes down into its scree.
+  if (inside < 1 && dy > 0) return ledge === 0 ? [FACE[2] ?? OUTLINE, 255] : [OUTLINE, 255];
   if (inside < 1.2 && dy < 0 && facing > -0.3) return [RIM_LIGHT, 255];
   const stone = boulder(x, y, 620 + ledge);
   if (stone !== null && d < 0.82) return [stone, 255];
@@ -202,7 +239,12 @@ function lineNoise(t: number, salt: number): number {
 }
 
 /** The lava's pixel at (x, y): the pool in the mouth, and the rivers. */
-export function lavaPixel(shape: ConeShape, x: number, y: number): MarkPixel {
+export function lavaPixel(shape: ConeShape, x: number, y: number, frame = 0): MarkPixel {
+  // The lava moves: crust drifts across the pool and down the rivers, looping every
+  // `LAVA_FRAMES` frames (its pattern repeats every `LAVA_FRAMES × LAVA_STEP` pixels).
+  const period = LAVA_FRAMES * LAVA_STEP;
+  const shift = frame * LAVA_STEP;
+  const wrap = (n: number): number => ((n % period) + period) % period;
   const at = ledgeAt(shape, x, y);
   if (at?.kind === "top" && at.ledge === shape.ledges && at.d < MOUTH_SHARE) {
     const pit = at.d / MOUTH_SHARE;
@@ -210,9 +252,12 @@ export function lavaPixel(shape: ConeShape, x: number, y: number): MarkPixel {
     if (at.dy < 0 && pit > 0.45) return null;
     // A pool of lava with plates of crust floating on it, hottest in the middle.
     // Small plates of crust, ragged, drifting on it.
-    const plate = cellHash(Math.floor(x / 2), Math.floor((y + (x >> 2)) / 2), 615);
-    if (plate < 0.16 && cellHash(x, y, 622) < 0.8) return [LAVA_CRUST, 255];
-    const hot = pit < 0.35 ? 0 : pit < 0.6 ? 1 : 2;
+    const drift = wrap(x + shift);
+    const plate = cellHash(Math.floor(drift / 2), Math.floor((y + (drift >> 2)) / 2), 615);
+    if (plate < 0.16 && cellHash(drift, y, 622) < 0.8) return [LAVA_CRUST, 255];
+    // Its heat swells and ebbs.
+    const swell = 0.08 * Math.sin((2 * Math.PI * frame) / LAVA_FRAMES);
+    const hot = pit < 0.35 + swell ? 0 : pit < 0.6 + swell ? 1 : 2;
     return [LAVA[hot] ?? LAVA[1], 255];
   }
   if (at === null) return null;
@@ -229,10 +274,17 @@ export function lavaPixel(shape: ConeShape, x: number, y: number): MarkPixel {
     const half = 0.6 + fall * shape.radius * 0.06;
     const off = Math.abs(x + 0.5 - river);
     if (off > half) continue;
-    if (at.kind === "face") return [LAVA[off < half * 0.5 ? 0 : 1] ?? LAVA[1], 255];
+    const down = wrap(y - shift);
+    if (at.kind === "face") {
+      // Falling over a cliff, it runs fast: bright, streaked.
+      const streak = cellHash(x, Math.floor(wrap(y - 2 * shift) / 3), 623) < 0.25;
+      return [LAVA[off < half * 0.5 && !streak ? 0 : 1] ?? LAVA[1], 255];
+    }
     if (off > half * 0.7) return [LAVA[3] ?? LAVA[2], 255];
-    if (cellHash(x, Math.floor(y / 2), 618) < 0.12 * fall) return [LAVA_CRUST, 255];
-    return [LAVA[off < half * 0.3 ? 1 : 2] ?? LAVA[2], 255];
+    // Crust floats down it, more as it cools; a brighter pulse rides the current.
+    if (cellHash(x, Math.floor(down / 2), 618) < 0.06 + 0.16 * fall) return [LAVA_CRUST, 255];
+    const pulse = cellHash(k, Math.floor(down / 4), 624) < 0.3;
+    return [LAVA[off < half * (pulse ? 0.5 : 0.3) ? 1 : 2] ?? LAVA[2], 255];
   }
   return null;
 }
@@ -398,9 +450,10 @@ function paint(
 export function markTexture(
   kind: "cone" | "lava" | "crater",
   size: number,
+  frame = 0,
 ): { texture: Texture; cx: number; cy: number } {
   const across = Math.max(Math.round(size), 5);
-  const key = `${kind}:${across}`;
+  const key = `${kind}:${across}:${frame}`;
   const known = made.get(key);
   if (known !== undefined) return known;
   let mark: { texture: Texture; cx: number; cy: number };
@@ -412,9 +465,10 @@ export function markTexture(
     };
   } else {
     const shape = coneShape(across);
-    const pixelOf = kind === "cone" ? conePixel : lavaPixel;
     mark = {
-      texture: paint(shape.width, shape.height, (x, y) => pixelOf(shape, x, y)),
+      texture: paint(shape.width, shape.height, (x, y) =>
+        kind === "cone" ? conePixel(shape, x, y) : lavaPixel(shape, x, y, frame),
+      ),
       cx: shape.cx,
       cy: shape.cy,
     };

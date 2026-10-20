@@ -41,15 +41,9 @@ import {
   type Rgb,
 } from "./light";
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
-import { CRATER_RIM, coneSummit, markTexture } from "./marks";
+import { CRATER_RIM, LAVA_FRAMES, coneSummit, markTexture } from "./marks";
 import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
-import {
-  HALO_SIZE,
-  RINGS,
-  atmosphereSprites,
-  streakTexture,
-  type Sprites,
-} from "./sprites";
+import { HALO_SIZE, RINGS, atmosphereSprites, streakTexture, type Sprites } from "./sprites";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
 const LAVA = [0xff5a1e, 0xff8a2a, 0xffc04a] as const;
@@ -121,6 +115,8 @@ const MARK_WALL_S = 90;
 const MS_PER_DAY = 86_400_000;
 /** Seconds a burnt animal's ash rises; motes of the seed power over the bare land in sight. */
 const ASH_S = 3;
+/** Frames a second of the lava's flow (it loops over `LAVA_FRAMES`). */
+const LAVA_FPS = 4;
 const SEED_MOTES = 120;
 const SPARKS_S = 2;
 const VOLCANO_HOURS = 12;
@@ -639,7 +635,8 @@ export class Atmosphere {
         this.halo(x, y - summit, size, colour, fading * this.flicker(salt), tile);
         // Its lava: the pool in the mouth and the rivers down the cone, drawn over it
         // untinted (it makes its own light), cooling to crust as the eruption ends.
-        this.mark(this.flamePool, "lava", x, y, radius * 2 * tile, tile, fading);
+        const frame = Math.floor(this.timeS * LAVA_FPS) % LAVA_FRAMES;
+        this.mark(this.flamePool, "lava", x, y, radius * 2 * tile, tile, fading, frame);
         // A column of ash, dark, rising high and spreading with the wind.
         this.puffs(
           {
@@ -963,11 +960,12 @@ export class Atmosphere {
     across: number,
     tile: number,
     alpha: number,
+    frame = 0,
   ): void {
     if (alpha <= 0.01) return;
     // Up close its art pixels are two screen pixels, as the plants' are.
     const pixel = tile >= 32 ? 2 : 1;
-    const mark = markTexture(kind, across / pixel);
+    const mark = markTexture(kind, across / pixel, frame);
     const sprite = pool.next(mark.texture);
     sprite.anchor.set(mark.cx / mark.texture.width, mark.cy / mark.texture.height);
     sprite.position.set(Math.round(x * tile) / tile, Math.round(y * tile) / tile);
