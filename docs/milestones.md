@@ -14,7 +14,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M7 | Rare genes (creatures and plants) | **done** 2026-10-19, merged into `main` (`d2f2d88`): M7.1 lowest gene appears in 95 % of seeds PASS; M7.2 85 % of seeds free of long fixation FAIL, 95 % without photosynthesis, which meets no night before M8: deferred to M8 by the owner (ADR 0015). Eight creature genes beside the phenotype, six plant genes; no schema bump | [reports/M7-rare-genes](../reports/M7-rare-genes/README.md) |
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
-| M10 | Apocalypse and worlds | not started | — |
+| M10 | Apocalypse and worlds | **done** 2026-10-20 on branch `m10-worlds` (not merged): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
 | M11 | Long-run tuning and stability | not started; plan and evidence so far in [m11-plan.md](m11-plan.md) (ADR 0011: tuning happens here, once) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
@@ -32,44 +32,38 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### Starting M10 (apocalypse and worlds)
+### M10 closed (branch `m10-worlds`, 2026-10-20)
 
-- **Branch**: `git switch main && git switch -c m10-worlds`. Spec: CLAUDE.md §8 M10 and
-  `docs/design/concept.md` "World lifecycle". Read "Working on a milestone here" below
-  first.
-- **Ask the owner before coding** (`concept.md` lists both as open):
-  1. *What ends a world.* Today a collapse never sticks: when the last creature dies
-     (`PopulationExtinct`), `Fauna.tick` waits for spring or summer and lands 40 new
-     founders once plants cover half the land (`_await_founders`, `[fauna]`
-     `founder_*`, `arrival_delay_days`); strangers also land about 6 times a year
-     (`immigrant_groups_per_year`) and the ark god power brings 12. Total extinction is
-     rare anyway: 0–5 % of seeds over 3 years (M8 report, all schedules). So the owner
-     must say what "life collapses" means: no creatures for N days, too few species for
-     N months, the land drowned, the island emptied of plants, or something else; and
-     whether re-founding should then stop. Propose a criterion with numbers from a run.
-  2. *How many archived worlds the device keeps* (SD card; S1 owns the files).
-- **What exists**: `sim/lineage_sim/apocalypse.py` is a 4-line skeleton; the
-  `APOCALYPSE` stream name is reserved in `rng.py` (no `[schedule]` key, no config
-  section yet). `World` has no world number; `WorldState` holds `seed`, `epoch_unix_ms`,
-  `t_ms`, `rng`, `subsystems` (`state/schema.py`, `SCHEMA_VERSION = 9`).
-- **What the chronicle gives an archive** (ADR 0017): the world's whole history is in
-  its save. `world.chronicle.entries()` (numbered `ChronicleEntry`), `bestiary()` (one
-  `BestiaryRecord` per species, founding genome = portrait), `world.species.records()`
-  (phylogeny), `terrain.height`, `flora.cover()` for the final map. The chronicle writes
-  `last_creature` (importance 5); an end-of-world entry would be a new `Kind` with its
-  own `importance_*` key, and `first_life` is once per world (the chronicle's state is
-  per world, so a new world needs a fresh chronicle).
-- **Design questions to settle in the plan** (CLAUDE.md §4.1: the sim is pure, outputs
-  are returned): how the World starts over (a new seed drawn from the `APOCALYPSE`
-  stream, the epoch moved to the end instant, a world number carried over); what the
-  archive is (the final `WorldState`, or a slimmer tree) and how it leaves the sim (an
-  output event such as `WorldEnded(archive=…)`, or a method the server calls); "migrations
-  cover archives": an archive saved at v10 must load after v11, so it should go through
-  the same `state/migrations` chain; schema v10 for the world number and apocalypse state.
-- **Report**: M10 is not statistical in §8 (accept: archives load and render, a new world
-  starts within budget), but a forced-collapse run and a benchmark of starting a new
-  world belong in the tests; "render" means `tools/replay.py --still` draws an archive.
-- Next free ADR: 0018 (claim it in `/home/elechim/Lineage-coord/README.md`).
+- The owner's answers (ADR 0018): once life is established (`[apocalypse]
+  established_days`, 30 days after the first landing), the last creature's death ends
+  the world, with no re-founding; a landing that dies out sooner is re-founded as before.
+  Keep every archive.
+- What M10 leaves: `sim/lineage_sim/apocalypse.py` (an observer that reports
+  `WorldCollapsed` with the next seed); `World` hands over to the next world by itself
+  (`WorldEnded` with the archive, `WorldBegan`, `number`, `past_worlds`, `unix_ms`,
+  `advance_to_unix`; `create`/`restore` take a `factory` for the next world's
+  subsystems); observers see what earlier observers added; chronicle kinds `world_end`
+  (5) and `world_begin` (4); schema v10 (`world`, `worlds`, subsystem `apocalypse`;
+  `v9_to_v10`, fixture `v10.lzma` = world 2 after the v9 island was emptied by a meteor).
+  Fast-forward steps by the desk's clock, writes `archives/<seed>/world-<n>.lzma`, has a
+  `world` series and a `worlds_ended` count; the owner's schedule follows the desk
+  (`desk(world)`). `replay` prints `history(world)` beside the summary.
+- Tests: `sim/tests/test_apocalypse.py` (toy hand-over: once, timing, chunking, save
+  and resume, next seed, archive; the real v9 world emptied by a meteor; the apocalypse
+  only watches), migrations, `test_bench_new_world` (73 ms), `tools/tests/test_worlds.py`
+  (a doomed fast-forward: archives, `world` series, a power cut after an ending resumes
+  identically), `test_replay.py` (an archive renders). Golden hashes changed (schema
+  version and the new state keys only; `test_the_apocalypse_only_watches`).
+- For S1: write `WorldEnded.archive` (`io.dumps`) atomically when it arrives, then save
+  the new world; drive the sim with `advance_to_unix` so world changes need no tracking.
+- For S3/S5: `World.past_worlds` lists the ended worlds; their archives hold the
+  histories, bestiaries and final maps.
+- For R3/R4: `WorldEnded`/`WorldBegan` cue the apocalypse sequence and the first wide
+  shot of the new continent; not on the wire yet.
+- For M11: worlds end rarely (2 of 80 three-year runs emptied after first life). If the
+  desk should see new continents more often, make the island harder (immigration, the
+  ark), not this criterion. Cumulative series (tallies, species ever) restart with each
+  world; read them with the `world` series.
 
 ### Working on a milestone here (lessons so far)
 
@@ -139,7 +133,6 @@ under `--schedule office` (ADR 0016).
 - For R3: captions from `ChronicleEntry` (`kind`, `importance`, `text`, `species`, `x`,
   `y`, -1 when no place); the wire schema does not carry entries yet.
 - For S4: push `importance >= config.chronicle.major_importance` (about 0.7 a month).
-- For M10: the archive of a world is its save; `Chronicle.bestiary()` gives the records.
 - For M11: big fires are rare in office light (5 of 150 reach 300 cells); booms and
   crashes are 23 % of entries together.
 

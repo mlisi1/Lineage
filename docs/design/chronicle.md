@@ -14,8 +14,8 @@ stream), a kind, an importance, the species it is about and the cell where it ha
 | 1 | background | a season begins |
 | 2 | minor | a short-lived, small species dies out |
 | 3 | notable | speciation, arrival, notable extinction, big fire, earthquake, a strait closes, record, boom, crash, migration, anniversary, dark age and dawn |
-| 4 | major | a first (hunters, swimmers, a forest, a rare gene, a fire), volcano, meteor, the sea splits the land, a god power, a huge fire |
-| 5 | historic | the first creatures land; the last creature dies |
+| 4 | major | a first (hunters, swimmers, a forest, a rare gene, a fire), volcano, meteor, the sea splits the land, a god power, a huge fire, a new world begins (M10) |
+| 5 | historic | the first creatures land; the last creature dies; the world ends (M10) |
 
 Notable entries (≥ 3) are what M9's criterion counts; major entries (≥ 4) are pushed to
 the phone (S4). Every importance and threshold is in `[chronicle]`.
@@ -42,6 +42,11 @@ Once a day, after the species census, it looks at the world for what no event sa
 **Filters.** An entry of the same kind about the same subject within a gap is dropped
 (7 days; records 30, booms and crashes 30, migrations 60). At most 3 entries below major
 per sim-day; major entries always pass.
+
+**Worlds** (M10, ADR 0018). The chronicle is per world. When life collapses it closes the
+world's history with a `world_end` entry after `last_creature` (it sees the apocalypse's
+`WorldCollapsed`, as observers see what earlier ones added); the next world's chronicle
+opens with `world_begin` ("a new continent rose from the sea: world 2").
 
 **Storage.** The chronicle lives in the world save (schema v9), so the save is the whole
 history and M10 archives a world with its state. A save from before the chronicle gets an

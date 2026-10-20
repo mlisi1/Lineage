@@ -136,8 +136,9 @@ networks, predator–prey coexistence): ADR 0009, "References".
 ## Arrivals
 
 - **Founders**: 40 small-to-medium land-walking plant eaters of one species land once
-  half the land carries well-grown plants, in spring or summer, and again after a total
-  extinction.
+  half the land carries well-grown plants, in spring or summer. They come again only if
+  the landing dies out within 30 days; once life is established, a total extinction ends
+  the world (M10, ADR 0018) and the founders land on the next continent.
 - **Strangers**: about six groups of eight per year reach an inhabited island. Half are a
   hunter species (land walkers, at least medium-sized, with jaw, legs and senses to
   match); the rest have a random genome. Most fail; some stay.
