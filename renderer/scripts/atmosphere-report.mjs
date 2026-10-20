@@ -68,6 +68,8 @@ const EVENT_SPEED = 1800;
 const RAIN_SPEED = 300;
 /** And while a fire spreads (a sim-day in 12 s). */
 const SPREAD_SPEED = 7200;
+/** A day at the desk: a sim-day in a minute. */
+const DAY_SPEED = 1440;
 
 const env_ = { ...env };
 delete env_.PYTHONPATH;
@@ -589,7 +591,8 @@ try {
     await open(page, address, `file=report/day.json&every=0&quiet&seed=7&view=map&show=${light}`);
     shots.lights[light] = await still(page, `light-${light}`);
   }
-  await each("day", fileOf("day", 7200), places.day, (name) => film(page, name, 12));
+  // A sim-day in a minute (the owner, round 4), at the screen's frame rate.
+  await each("day", fileOf("day", DAY_SPEED), places.day, (name) => film(page, name, 60));
   // Glow: the fixture has no glowing animal; two are sent as the stream would.
   await each(
     "glow",
@@ -608,7 +611,7 @@ try {
         torpid: [],
       });
     }, [x, y]); // prettier-ignore
-      return film(page, name, 5);
+      return film(page, name, 8);
     },
   );
   // The rains: each from a second before it begins (it sets in over 3 s).
@@ -648,17 +651,17 @@ try {
   );
   // The god powers that give.
   await each("seed", fileOf("seed", EVENT_SPEED), places.seed,
-    event("seed", EVENT_SPEED, kind("god_power"), 9)); // prettier-ignore
+    event("seed", EVENT_SPEED, kind("god_power"), 14)); // prettier-ignore
   await each("unsown", `file=report/seed.json&speed=1&quiet&seed=7&show=day`, places.seed,
     (name) => still(page, name)); // prettier-ignore
   await each("sown", `file=report/seed.json&${settledAt}`, places.seed, (name) =>
     still(page, name),
   );
   await each("ark", fileOf("ark", EVENT_SPEED), places.ark,
-    event("ark", EVENT_SPEED, kind("god_power"), 9)); // prettier-ignore
-  // Algae and the waves on the shallows.
+    event("ark", EVENT_SPEED, kind("god_power"), 12)); // prettier-ignore
+  // Algae, and the tide on the shore: long enough for the tide to turn.
   await each("algae", "file=report/day.json&every=0&quiet&seed=7&show=day", algae, (name) =>
-    film(page, name, 6),
+    film(page, name, 30),
   );
   // The end of a world: the committed recording, on the map, all three minutes of it.
   await open(page, address, "recording=end&speed=1800&quiet&seed=3");
@@ -817,6 +820,15 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 <tr><td>What the giving powers actually do</td><td>owner, round 2</td><td>Seed: motes over the bare land in sight, then the sprouts the sim sowed; ark: its light where the newcomers land, and them</td></tr>
 <tr><td>Algae drawn as their own plant</td><td>owner via M11</td><td>Olive fronds in clumps on the shallows, as thick as their biomass (M11's <code>Flora.algae</code> on the wire)</td></tr>
 <tr><td>Every effect in all three views, in full</td><td>owner, round 2</td><td>This report</td></tr>
+<tr><td>Every view at its own resolution and frame rate; crater and volcano less plain, a bare ring round them</td><td>owner, round 3</td><td>Films at 1024×600 and 30 fps beside the report; a terraced cone and lava; the sim bares 1.4 radii round both for 120 days</td></tr>
+<tr><td>Night and day over about a minute</td><td>owner, round 4</td><td>The day film is a sim-day in 60 s</td></tr>
+<tr><td>Glow: small on the map, the animal visible in the middle and local views, a slow pulse</td><td>owner, round 4</td><td>A light just round the map's square; a ring of light round the body, its heart clear, wider up close; all breathing over 3.5 s</td></tr>
+<tr><td>Rain that is in the world: drops in perspective, slanted by wind, parallax, a grey sky; the storm's rain following its wind</td><td>owner, round 4</td><td>Drops sized to the view (a pixel on the map), three layers at different speeds and sizes, leaning with the wind; cloud greys the light; in a storm, gusts swing the wind and all three layers with it</td></tr>
+<tr><td>Fire up close: bigger, more detailed flames, each with its own glow and sparks; the fire carried by the plants; a heavier burn that tracks where it went</td><td>owner, round 4</td><td>Two six-frame flames to a cell, each with a halo and embers; the made-up fire spreads cell to cell through fuel, the most flammable first, as the sim's does; the scorch drawn cell by cell, charcoal with drifts of ash and a ragged edge</td></tr>
+<tr><td>Lava that flows, a cone that blends in</td><td>owner, round 4</td><td>Lava in eight looped frames, crust drifting in the pool and down the rivers; a skirt of ash and scree round the cone's foot</td></tr>
+<tr><td>A crater that looks like one (with references), not bugged</td><td>owner, round 4</td><td>Drawn from a lit height field, after simple lunar craters: scalloped raised rim, the near wall in shadow, slumped floor, pale ejecta with boulders, rays downrange</td></tr>
+<tr><td>The ark larger up close; the newcomers spawning; the seed's plants growing</td><td>owner, round 4</td><td>The ark's light scaled to each view; each newcomer comes into being under a thread of light; sprouts break the soil and grow leaf by leaf on every cell the seed sowed</td></tr>
+<tr><td>Tides: water rising and falling, not every coast at once</td><td>owner, round 4</td><td>The swash runs up the beach in three steps and drains, on a tide that rises and falls; each stretch of coast on its own clock</td></tr>
 </tbody></table></div>
 </section>
 
@@ -841,7 +853,7 @@ ${lightChart(officePoints, officeFirst)}
 <h2>The light</h2>
 <p>A tint multiplied over the land, plants and animals. Night is moonlit blue, dusk (the owner away) is rose, dawn (the owner back) is lilac, and the day is graded by the season. Each of the sim's 10-minute steps is eased in over the time before the next.</p>
 <div class="stills">${["day", "dawn", "dusk", "night", "moon"].map((n) => `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`).join("")}</div>
-${threeViews(shots.day, "A day at the desk", { map: "The office stream from midnight, a sim-day in 12 s: night, the owner arriving (dawn), day, leaving (dusk), night.", middle: "", local: "" })}
+${threeViews(shots.day, "A day at the desk", { map: "The office stream from midnight, a sim-day in a minute: night, the owner arriving (dawn), day, leaving (dusk), night.", middle: "", local: "" })}
 <div class="table"><table><thead><tr><th>Light</th><th>Multiplier</th></tr></thead><tbody>
 <tr><td>Night</td><td>${swatch(NIGHT)}</td></tr><tr><td>Dusk</td><td>${swatch(DUSK)}</td></tr><tr><td>Dawn</td><td>${swatch(DAWN)}</td></tr>
 ${Object.entries(SEASON_DAY)
@@ -852,13 +864,13 @@ ${Object.entries(SEASON_DAY)
 
 <section id="glow">
 <h2>Glow</h2>
-<p>Light added over the tint. Here, two animals with the glow gene at night, sent to the scene as the stream would send them (the fixture's world has none). On the map they are the glowing dots.</p>
+<p>Light added over the tint, breathing slowly (3.5 s). Here, two animals with the glow gene at night, sent to the scene as the stream would send them (the fixture's world has none). On the map, a small light just round each animal's square. In the middle and local views, a ring of light round the body whose heart is clear, so that the animal itself is seen; up close the ring is wider.</p>
 ${threeViews(shots.glow, "Glowing animals at night", {})}
 </section>
 
 <section id="rain">
 <h2>Rain, thunder and thunderstorms</h2>
-<p>Each is a staged spell of the sim's own weather. Rain greys the day. Rings spread where drops hit the water, and drops splash on the land, in the middle view and up close. With thunder, a thin bolt now and then and a faint flash: it starts nothing. A thunderstorm is bigger: a darker sky, heavier rain driven slantwise, forked bolts every few seconds and brighter flashes. The rain power's soaking rain is gentler and falls straight.</p>
+<p>Each is a staged spell of the sim's own weather. Cloud greys the light while it rains. The drops are sized to the view (a pixel's streak on the map, longer closer in), fall in three layers at different sizes and speeds, and lean with the wind. Rings spread where drops hit the water, and drops splash on the land, in the middle view and up close. With thunder, a thin bolt now and then and a faint flash: it starts nothing. A thunderstorm is bigger: a darker sky, heavier rain, gusts that swing the wind and every layer of rain with it, forked bolts every few seconds and brighter flashes. The rain power's soaking rain is steadier and leans least.</p>
 <h3>Rain</h3>${threeViews(shots.shower, "Rain", {})}
 <h3>Rain with thunder</h3>${threeViews(shots.thunder, "Thunder", {})}
 <h3>A thunderstorm</h3>${threeViews(shots.storm, "Thunderstorm", {})}
@@ -867,17 +879,17 @@ ${threeViews(shots.glow, "Glowing animals at night", {})}
 
 <section id="fire">
 <h2>Fire</h2>
-<p>A thunderstorm at 02:00 on the office schedule (night), its lightning striking ${at("fire")}: the biggest bolt, thick and forked, with the brightest flash. Flames then rise from every burning cell under a wide glow, with embers and smoke. Up close each cell has three larger flames on their own flicker. An animal that dies in the fire leaves a puff of ash. Then the fire spreads, at a sim-day in 12 s. Two sim-days later the burnt wood is charcoal ground with the skeletons of the trees that stood.</p>
+<p>A thunderstorm at 02:00 on the office schedule (night), its lightning striking ${at("fire")}: the biggest bolt, thick and forked, with the brightest flash. Flames then rise from every burning cell under a wide glow, with embers and smoke. Up close each cell has two large six-frame flames, each with its own glow and sparks. An animal that dies in the fire leaves a puff of ash. Then the fire spreads, at a sim-day in 12 s. Two sim-days later the burnt land is charcoal ground, drawn cell by cell where the fire went, with drifts of ash, a ragged edge and the skeletons of the trees that stood.</p>
 <h3>The strike</h3>${threeViews(shots.strike, "Lightning sets the land alight", {})}
 <h3>The fire spreading (time-lapse)</h3>${threeViews(shots.spread, "The fire spreads", {})}
 <h3>A larger fire, made up</h3>
-<p>The sim's fires are often small, as this one is (it burnt 4 cells in 18 hours); how far they spread is M11's to tune. To show the fire's look at a larger scale, here is a patch of 21 cells set alight on demand (<code>?show=night,fire</code>), with the thunderstorm and the strike that come with it. Only the land is the sim's.</p>${threeViews(shots.bigfire, "A larger fire (made up)", {})}
+<p>The sim's fires are often small, as this one is (it burnt 4 cells in 18 hours); how far they spread is M11's to tune. To show the fire's look at a larger scale, here are 24 cells set alight on demand (<code>?show=night,fire</code>), with the thunderstorm and the strike that come with it. They are chosen as the sim's fire spreads: from cell to neighbouring cell, only where plants carry it, the most flammable fuel first. Only the land is the sim's.</p>${threeViews(shots.bigfire, "A larger fire (made up)", {})}
 <h3>What it leaves</h3>${threeViews(shots.burnt, "The burnt wood, two days on", { map: "", middle: "", local: "Charred trees and scorched ground; stumps, logs and snags (R1) between them." })}
 </section>
 
 <section id="volcano">
 <h2>Volcano</h2>
-<p>Staged at ${at("volcano")} with the terrain's own <code>apply_volcano</code>. The sim raises a cone in the heights and bares the land round it (1.4 times its radius, for 120 days, so no plant stands on it). The ground's gentle shading hardly shows a cone from above, so the scene draws it, after how top-down pixel-art games draw mountains (<em>Zelda: A Link to the Past</em>, the <em>Pokémon</em> GBA overworlds, <em>Stardew Valley</em>): stacked basalt ledges with lit, grainy tops and cliff faces toward the viewer, boulders, and a mouth whose back wall shows. While it erupts, its lava is a layer of its own: a crusted pool and rivers meandering down the ledges. Above it rise an ash column and embers. The cone stays drawn for 30 sim-days.</p>
+<p>Staged at ${at("volcano")} with the terrain's own <code>apply_volcano</code>. The sim raises a cone in the heights and bares the land round it (1.4 times its radius, for 120 days, so no plant stands on it). The ground's gentle shading hardly shows a cone from above, so the scene draws it, after how top-down pixel-art games draw mountains (<em>Zelda: A Link to the Past</em>, the <em>Pokémon</em> GBA overworlds, <em>Stardew Valley</em>): stacked basalt ledges with lit, grainy tops and cliff faces toward the viewer, boulders, and a mouth whose back wall shows. Round its foot a skirt of ash and scree thins into the ground. While it erupts, its lava is a layer of its own, a crusted pool and rivers meandering down the ledges, and it flows: eight looped frames of crust drifting across the pool and down the rivers, the heat swelling and ebbing. Above it rise an ash column and embers. The cone stays drawn for 30 sim-days.</p>
 ${threeViews(shots.volcano, "The eruption", {})}
 ${threeViews(shots.cone, "The cone, two days on", {})}
 </section>
@@ -890,14 +902,14 @@ ${threeViews(shots.quake, "An earthquake", {})}
 
 <section id="meteor">
 <h2>Meteor</h2>
-<p>The meteor god power, pressed at 02:00; the sim aimed it at ${at("meteor")}. A streak from high up, a flash as it strikes, a glow and dust; every animal within twice its radius is killed. The bowl it digs is drawn from then on, and the sim bares the land round it: a raised rim, the far wall showing, a scorched floor with glassy cracks, rays of debris and boulders.</p>
+<p>The meteor god power, pressed at 02:00; the sim aimed it at ${at("meteor")}. A streak from high up, a flash as it strikes, a glow and dust; every animal within twice its radius is killed. The bowl it digs is drawn from then on, and the sim bares the land round it. It is drawn from a height field lit from the upper left, after how simple craters look from above (a bowl with a raised rim of thrown-out earth and uplifted rock, a rumpled ejecta blanket that thins outward, rays thrown away from the impact's direction, walls that slump): a rim scalloped where it slumped, the near wall in its shadow, the far wall lit, a slumped lobe on the floor, pale ejecta with boulders thinning into clods, and rays downrange of the meteor, none uprange.</p>
 ${threeViews(shots.meteor, "The meteor", {})}
 ${threeViews(shots.crater, "The crater, two days on", {})}
 </section>
 
 <section id="seed">
 <h2>Seed</h2>
-<p>The seed god power sows 400 seeds of random genomes on bare land across the whole island; the sim does not aim it. On the screen, golden motes drift down onto the bare cells in sight. The films are at ${at("seed")}, where most seeds took. The sprouts are the sim's own, in the land it sent next.</p>
+<p>The seed god power sows 400 seeds of random genomes on bare land across the whole island; the sim does not aim it. On the screen, golden motes drift down onto the bare cells in sight. In the land the sim sends with the power, every cell it sowed sprouts: each sprout breaks the soil with a glint of gold and grows leaf by leaf over three seconds, and stays until the cell's plants are big enough to be drawn. The films are at ${at("seed")}, where most seeds took.</p>
 ${threeViews(shots.seed, "The seed power", {})}
 ${threeViews(shots.unsown, "Before the seed", {})}
 ${threeViews(shots.sown, "The sown land, a month on", {})}
@@ -905,14 +917,14 @@ ${threeViews(shots.sown, "The sown land, a month on", {})}
 
 <section id="ark">
 <h2>Ark</h2>
-<p>The ark god power brings 12 plant eaters, landing on a vegetated spot. The light comes down where the stream says they landed (<code>creatures_arrived</code>, at ${at("ark")}), and they are there.</p>
+<p>The ark god power brings 12 plant eaters, landing on a vegetated spot. The light comes down where the stream says they landed (<code>creatures_arrived</code>, at ${at("ark")}), as wide as the place they land on in every view. Each newcomer comes into being there: a thread of light comes down onto it, flares, and leaves sparks rising while it fades in, in steps, over 2.5 s.</p>
 ${threeViews(shots.ark, "The ark", {})}
 </section>
 
 <section id="sea">
-<h2>Algae and waves</h2>
-<p>M11's algae on the shallow sea, two weeks after the save: olive fronds in clumps, as thick as their biomass. The waves break on the coast in all three views.</p>
-${threeViews(shots.algae, "Algae on the shallows", {})}
+<h2>Algae, waves and the tide</h2>
+<p>M11's algae on the shallow sea, two weeks after the save: olive fronds in clumps, as thick as their biomass. The waves break on the coast, and the swash runs up the beach in three steps and drains back (a wave every 5.4 s), further while the tide is high (it turns over 48 s). Each stretch of coast is on its own clock, from a smooth noise of where it is, so waves run along a coast and no two coasts break together. On the map the swash reaches one pixel. The film is 30 s.</p>
+${threeViews(shots.algae, "Algae and the tide", {})}
 </section>
 
 <section id="end">
@@ -951,6 +963,7 @@ ${figure(shots.end, "World 1 ends and world 2 rises", "The whole sequence, as it
 <h2>Left for later</h2>
 <ul>
 <li><strong>R5</strong> measures all of this on the board. During a fire, up to a few hundred flames and halos are drawn; rain draws 180 drops and up to 80 ripples. R5 also tunes the look, the cone among it.</li>
+<li><strong>Sanity checks</strong>: the ark lands only on land now (a fix in this round), and the seed sows only bare land; a milestone checking such rules across the sim was proposed to the owner.</li>
 <li>A volcano's cone and a meteor's crater are drawn for 30 sim-days from their event. A renderer that connects later sees only the land's own shading, because the wire carries no "volcano" fact.</li>
 <li><strong>M11</strong> re-checks fire frequency, mortality and chronicle numbers once R4 is in <code>main</code>.</li>
 </ul>
