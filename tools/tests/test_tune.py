@@ -11,7 +11,7 @@ import pytest
 
 from tools.milestones.base import Criterion
 from tools.tune import sensitivity
-from tools.tune.score import shortfall
+from tools.tune.score import REPORTED, UNSWEPT, shortfall
 from tools.tune.sweep import Lever, latin_hypercube, load_sweep, ranked, run_sweep, toml_value
 
 
@@ -92,6 +92,12 @@ rng_seed = 0
     assert len(document["points"]) == 3
     first = document["points"][0]
     assert {j["cid"] for j in first["judged"]} >= {"M2.1", "M4.1", "M6.1", "M9.1", "M11.1"}
+    # The diversity criteria are measured (niches over time included) but do not rank yet.
+    proposed = {j["cid"]: j for j in first["judged"] if j["cid"] in REPORTED}
+    assert set(proposed) == {"D1", "D2", "D3a", "D3b"}
+    assert "D:niche.size.share_of_seeds" in first["metrics"]
+    counted = [j for j in first["judged"] if j["cid"] not in UNSWEPT | REPORTED]
+    assert first["fails"] == sum(j["status"] != "PASS" for j in counted)
     assert ranked(results)[0]["fails"] <= ranked(results)[-1]["fails"]
     # Resuming reads the finished points instead of running them again.
     manifest = tmp_path / "sweep-tiny" / "p001" / "manifest.json"

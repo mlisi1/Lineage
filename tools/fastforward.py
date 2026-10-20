@@ -170,6 +170,10 @@ def override_config(text: str, assignment: str) -> str:
     return changed
 
 
+# A gene value at or above NICHE_HIGH, or at or below NICHE_LOW, is one end of its range:
+# the M11 niche measure (D1) counts the creatures at each end.
+NICHE_HIGH, NICHE_LOW = 2.0 / 3.0, 1.0 / 3.0
+
 # Diet fit (M5): half-width, in cells, of the neighbourhood whose plants a grazer is
 # compared with; and how many cells of each form it must hold to count.
 FIT_RADIUS = 8
@@ -440,6 +444,10 @@ class Probes:
         for gene in Gene:
             mean = float(fauna.genes[:, gene].mean()) if n else np.nan
             row[f"gene_{gene.name.lower()}"] = mean
+            # Niches (M11 D1): shares of creatures at either end of the gene's range.
+            values, name = fauna.genes[:, gene], f"gene_{gene.name.lower()}"
+            row[f"{name}_high"] = float(np.mean(values >= NICHE_HIGH)) if n else np.nan
+            row[f"{name}_low"] = float(np.mean(values <= NICHE_LOW)) if n else np.nan
         # Habitat: share of creatures standing on each land-cover class.
         if n:
             xs = np.clip(np.rint(fauna.positions[:, 0]), 0, flora.biomass.shape[1] - 1)
