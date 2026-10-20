@@ -20,7 +20,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
-| R4 | Atmosphere | **built** 2026-10-20 on `r4-atmosphere` (worktree `../Lineage-r4`), not merged: waiting for the owner. Moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season; an additive glow pass (glow-gene animals, fires, lava); rain, smoke and flames, volcano ash and lava, quake shake, meteor streak and flash, seed and ark light; the three-minute apocalypse on the map; waves on the map's coasts. `sky` and `events` messages on the wire; office and world's-end recordings (ADR 0021). Round 2 (owner): the island's own weather and storms in the sim, fire kills animals (schema v12, on M11's v11 algae), flames, charred woods, ripples, drawn volcano cones and craters, the powers' effects, algae. Rounds 3–4 (owner): films at the screen's resolution and frame rate, a barren ring round cones and craters, a pulsing glow, rain in perspective under grey cloud, larger flames, plant-carried scorch, flowing lava, a lit crater, the ark's newcomers coming into being, the seed's sprouts, tides. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
+| R4 | Atmosphere | **in look tuning** 2026-10-20 on `r4-atmosphere` (worktree `../Lineage-r4`), not merged: the owner is tuning the look round by round (5 rounds so far). Moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season; an additive glow pass (glow-gene animals, fires, lava); rain, smoke and flames, volcano ash and lava, quake shake, meteor streak and flash, seed and ark light; the three-minute apocalypse on the map; waves on the map's coasts. `sky` and `events` messages on the wire; office and world's-end recordings (ADR 0021). Round 2 (owner): the island's own weather and storms in the sim, fire kills animals (schema v12, on M11's v11 algae), flames, charred woods, ripples, drawn volcano cones and craters, the powers' effects, algae. Rounds 3–4 (owner): films at the screen's resolution and frame rate, a barren ring round cones and craters, a pulsing glow, rain in perspective under grey cloud, larger flames, plant-carried scorch, flowing lava, a lit crater, the ark's newcomers coming into being, the seed's sprouts, tides. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
 | R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
@@ -60,6 +60,27 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   newcomers coming into being (`CreatureLayer.arrive`, `Herd.arrival`); the seed's
   sprouts; tides (`terrain/sea.ts` `tidePhase`, `swashLevel`; surf and swash bands cut
   into 16-pixel tiles in `terrain/grounds.ts`).
+- **Round 5** (owner, 2026-10-20, ADR 0021 "Round 5"): in the sim, overcast spells seen
+  only (`Rain.CLOUD`, `[weather] cloud_*`, `sky.rain = "cloud"`; golden hashes changed),
+  `World.witness` (a tool's staged events reach the observers), and `tools.stream` sends
+  an event's land after its news. Renderer: waves as one travelling front (`tidePhase`,
+  `swashHeight`, 8-pixel tiles, no swash on the map); the world colour-graded toward grey
+  under cloud (`Atmosphere.grade`, a filter on only while overcast); rain over the tint
+  in pale blue, its strength per spell; thunder at random times; `Landscape.floor` under
+  the plants for craters, scree and embers, and `RowPool` sorting flames, cones, lava and
+  sprouts among the plants' rows; a new close flame (15 × 24, six frames, slow,
+  see-through) in embers with small flames, lit at night; radial lava; a crater's land
+  held until its meteor strikes; sprouts found as bare cells that grew; the ark's beam
+  pooled at its foot; fainter glow closer in.
+- **Where tuning stands (end of 2026-10-20)**: the owner is still tuning the look from
+  the films. Last asked and done: slower, see-through close fire with small flames round
+  it; quicker waves (a wave every 5 s); the grey of cloud. Waiting for the owner's
+  comments on the partial report (fire, tides, rain, storm, overcast, filmed with
+  `R4_REPORT_ONLY`; not committed: the committed `report.html` is round 4's). **No tests
+  are written or run while the look is tuned (the owner)**: when the owner says the look
+  is final, add unit and browser tests for the round-5 pieces (rows and floor, grade,
+  waves, fire, embers, sowing, held crater land, overcast) and refresh every snapshot
+  baseline (`--update-snapshots=all`), then render and commit the full report.
 - **To look at** (`cd renderer && npm run dev`): `/?recording=office` (dusks and nights,
   rain), `/?recording=end` (a day, then the end of the world and the next),
   `/?view=middle&x=120&y=60&recording=autumn&every=0&show=night,fire` (any of day, dusk,
