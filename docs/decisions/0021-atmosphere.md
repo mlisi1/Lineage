@@ -282,10 +282,11 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
 
 - **Waves coordinated.** The tiles' clocks no longer come from a noise (which made the map's
   coast flicker at random): a wave front travels across the sea in one direction at
-  3 cells a second, wandering a little, so neighbouring stretches of coast break a moment
-  apart and far ones at their own time. One wave clock (8 s) drives the crest coming in,
-  the foam breaking and the swash running up after it. The swash rises and drains
-  smoothly (each step fades in as the water reaches it), on a tide turning over 2 minutes.
+  5 cells a second, wandering a little, so neighbouring stretches of coast break a moment
+  apart and far ones at their own time. One wave clock (5 s; first 8 s, which the owner
+  found too slow) drives the crest coming in, the foam breaking and the swash running up
+  after it. The swash rises and drains smoothly (each step fades in as the water reaches
+  it), each step 1.5 times the surf's width, on a tide turning over a minute.
   The map keeps its surf without a swash; its tiles are 8 art pixels.
 - **Glow** fainter closer in: its pulse runs from 12 % to 30 % in the middle view and 6 %
   to 16 % up close (30 % to 70 % on the map), so that the animal shows through it.
@@ -319,7 +320,10 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
   rising. The colours run from a deep red rim (never brown, which reads as smoke) through
   orange and yellow to a white-gold heart. Each burning cell has a bed of glowing embers
   on the ground, so the flames rise out of it. A burning tree or bush burns in its crown
-  too.
+  too. After the owner saw it: the big flames flicker slowly (about 4 frames a second)
+  and are 72 % opaque so what stands behind them shows; three small flames lick round
+  them in every burning cell; at night an added copy of each flame keeps it lit, since
+  among the plants it is under the tint.
 - **Depth sorting.** What lies on the ground (a crater, a cone's scree, a fire's embers) is
   drawn on a floor under the plants (`Landscape.floor`). What stands (flames, a cone and
   its lava, the seed's sprouts) goes into the plants' rows by its foot (`RowPool`, the

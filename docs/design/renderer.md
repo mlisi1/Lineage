@@ -689,10 +689,10 @@ it at its first moment, which the snapshots use. The land sheet films it. **Tide
 (R4): the painter also leaves the swash, three layers of water running further up the
 beach (the shallowest sea over the sand, foam at its edge; not on the map). Every surf
 and swash layer is cut into tiles 8 art pixels across, each on the clock of its place
-(`tidePhase`): a wave front travelling across the sea at 3 cells a second, so waves run
-along a coast and far coasts break at their own time. One wave every 8 s: the far line,
+(`tidePhase`): a wave front travelling across the sea at 5 cells a second, so waves run
+along a coast and far coasts break at their own time. One wave every 5 s: the far line,
 the near one, the foam breaking, then the swash running up the beach and draining,
-smoothly (`swashHeight`), as far as a tide turning over 2 minutes lets it. `seaAt(land)`
+smoothly (`swashHeight`), as far as a tide turning over a minute lets it. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -905,8 +905,9 @@ god powers, a world's end and the next one's beginning).
 - Rain is drawn over the tint, faded with the light, in pale blue; each spell has its own
   strength; thunder falls at random times. Under cloud the world is colour-graded toward grey
   (a colour-matrix filter, on only while the sky is overcast) under a faint grey haze; `sky.rain = "cloud"` is an overcast sky.
-- The close flame is 15 × 24 in six frames after pixel-art references, in a bed of
-  embers; burning trees burn in their crowns. Glow is fainter closer in.
+- The close flame is 15 × 24 in six frames after pixel-art references, flickering slowly
+  and see-through (72 %), in a bed of embers with small flames round it; burning trees
+  burn in their crowns; at night an added copy keeps the flames lit. Glow is fainter closer in.
 - The lava's crust drifts outward from the pool's middle. A crater's land waits for its
   meteor to strike. The ark's beam fades into a pool of light at its foot.
 
