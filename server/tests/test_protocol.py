@@ -198,3 +198,20 @@ def test_no_rare_message_before_the_sim_has_rare_genes(world: World) -> None:
         pytest.skip("lineage_sim.rare has its table (M7 merged)")
     assert encode.rare_message(world) is None
     assert "torpid" not in encode.creatures_message(world)
+
+
+def test_the_chronicle_sends_only_entries_not_sent_before() -> None:
+    config = parse_config(CONFIG.read_text(encoding="utf-8"))
+    world = World.restore(config, io.loads((SAVE.parent / "v9.lzma").read_bytes()))
+    entries = world.chronicle.entries()
+    assert len(entries) > 2
+    message = encode.chronicle_message(world)
+    assert message is not None
+    assert errors(message, SCHEMA) == []
+    assert json.loads(json.dumps(message)) == message
+    assert [entry["number"] for entry in message["entries"]] == [e.number for e in entries]
+    assert message["notable_importance"] == config.chronicle.notable_importance
+    later = encode.chronicle_message(world, after=len(entries) - 2)
+    assert later is not None
+    assert [entry["number"] for entry in later["entries"]] == [len(entries) - 1, len(entries)]
+    assert encode.chronicle_message(world, after=len(entries)) is None
