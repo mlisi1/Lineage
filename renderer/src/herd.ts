@@ -120,6 +120,11 @@ export class Herd {
   readonly names = new Map<number, string>();
   /** Told where each animal that dies was last (R4: the fire's dead leave a puff of ash). */
   onGone: ((x: number, y: number) => void) | null = null;
+  /**
+   * Asked of each animal new to the scene where it is (R4): whether it arrives with the ark,
+   * so comes into being over this many seconds; 0 for one simply born.
+   */
+  arrival: ((x: number, y: number) => number) | null = null;
   private land: Land | null = null;
   private sea: SeaAt | null = null;
   private passable: Passable | null = null;
@@ -229,7 +234,11 @@ export class Herd {
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
-      for (const layer of layers) layer.place(slot, seed);
+      const arriving = this.arrival?.(seed.x, seed.y) ?? 0;
+      for (const layer of layers) {
+        layer.place(slot, seed);
+        if (arriving > 0) layer.arrive(slot, arriving);
+      }
     }
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);

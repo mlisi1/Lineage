@@ -171,3 +171,14 @@ test("fire up close draws flames, and a thunderstorm its bolts", async ({ page }
   expect(fire?.bolts).toBeGreaterThan(50);
   expect(fire?.ripples).toBeGreaterThanOrEqual(0);
 });
+
+test("the ark's newcomers come into being under its light", async ({ page }) => {
+  const errors = await open(page, "view=local&x=120&y=60&show=day,ark");
+  await advance(page, 1);
+  await advance(page, 1);
+  const arrivals = (await page.evaluate(() => window.__atmosphere?.().effects ?? [])).filter(
+    (kind) => kind === "arrival",
+  );
+  expect(arrivals).toHaveLength(6); // the demo's ark brings six
+  expect(errors).toEqual([]);
+});

@@ -107,6 +107,14 @@ const METEOR_FALL_S = 1.2;
 const METEOR_S = 7;
 const BEAM_S = 8;
 /**
+ * The ark's newcomers: how long each takes to come into being (wall seconds), and how far
+ * from the ark's light (cells) and how long after it (wall seconds) an animal new to the
+ * scene counts as one of them rather than as born.
+ */
+const ARRIVE_S = 2.5;
+const ARK_REACH = 8;
+const ARK_LATE_S = BEAM_S + 4;
+/**
  * A volcano's cone and a meteor's crater stay drawn this many sim-days after (the land
  * keeps them; its shading barely shows them), and at least this many wall seconds.
  */
@@ -117,6 +125,11 @@ const MS_PER_DAY = 86_400_000;
 const ASH_S = 3;
 /** Frames a second of the lava's flow (it loops over `LAVA_FRAMES`). */
 const LAVA_FPS = 4;
+
+/** How much bigger a light about a place is drawn the closer the view (art pixels per map's). */
+function closeness(tile: number): number {
+  return tile >= 32 ? 4 : tile >= 8 ? 2 : 1;
+}
 const SEED_MOTES = 120;
 const SPARKS_S = 2;
 const VOLCANO_HOURS = 12;
@@ -163,7 +176,17 @@ export interface View {
 }
 
 type Kind =
-  "volcano" | "quake" | "meteor" | "seed" | "ark" | "sparks" | "strike" | "ash" | "cone" | "crater";
+  | "volcano"
+  | "quake"
+  | "meteor"
+  | "seed"
+  | "ark"
+  | "arrival"
+  | "sparks"
+  | "strike"
+  | "ash"
+  | "cone"
+  | "crater";
 /** What falls from the sky (the `sky` message's `rain`). */
 export type RainKind = SkyMessage["rain"];
 
@@ -753,17 +776,19 @@ export class Atmosphere {
           this.drawSeedMotes(view, life, salt);
           return 0;
         }
+        // As wide as the place the newcomers land on, in every view.
+        const grow = closeness(tile);
         const beam = this.lightPool.next(this.sprites.beam);
-        placeCentred(beam, x, y - 40 / tile, tile, 16, 88);
+        placeCentred(beam, x, y - (40 * grow) / tile, tile, 16 * grow, 88 * grow);
         beam.tint = colour;
         beam.alpha = 0.9 * life;
-        this.halo(x, y, 28, colour, 0.8 * life, tile);
+        this.halo(x, y, 28 * grow, colour, 0.8 * life, tile);
         // Motes falling onto the place.
         this.puffs(
           {
             x,
-            y: y - 20 / tile,
-            spread: 2.5 * Math.max(8 / tile, 0.5),
+            y: y - (20 * grow) / tile,
+            spread: (2.5 * grow) / Math.max(tile / 8, 1) + 0.5,
             rise: -10,
             drift: 0,
             life: 2,
@@ -774,6 +799,45 @@ export class Atmosphere {
           },
           24,
           colour,
+          tile,
+          true,
+        );
+        return 0;
+      }
+      case "arrival": {
+        // One of the ark's newcomers coming into being: a thread of light comes down onto
+        // it, flares, and leaves sparks rising as it takes shape.
+        const phase = age / ARRIVE_S;
+        if (phase >= 1) return 0;
+        const grow = closeness(tile);
+        const thread = this.lightPool.next(this.sprites.beam);
+        const fall = Math.min(phase / 0.3, 1);
+        placeCentred(
+          thread,
+          x,
+          y - (30 * grow * (1 - fall * 0.5)) / tile,
+          tile,
+          3 * grow,
+          60 * grow * fall,
+        );
+        thread.tint = ARK_LIGHT;
+        thread.alpha = 0.8 * (1 - phase);
+        this.halo(x, y, 10 * grow * (0.6 + phase), ARK_LIGHT, 0.7 * (1 - phase), tile);
+        this.puffs(
+          {
+            x,
+            y,
+            spread: (0.4 * grow) / Math.max(tile / 8, 1) + 0.15,
+            rise: 6 * grow,
+            drift: 0,
+            life: 1.2,
+            from: 1,
+            to: 1,
+            alpha: 1 - phase,
+            salt,
+          },
+          8,
+          ARK_LIGHT,
           tile,
           true,
         );
@@ -987,6 +1051,33 @@ export class Atmosphere {
       salt: ++this.salts,
       struck: false,
     });
+  }
+
+  /**
+   * An animal new to the scene at (x, y) cells: if the ark's light is on that place, it is
+   * one of its newcomers, so it comes into being here (how many wall seconds that takes);
+   * otherwise 0 (it was born).
+   */
+  arrival(x: number, y: number): number {
+    const ark = this.effects.find(
+      (effect) =>
+        effect.kind === "ark" &&
+        effect.age < ARK_LATE_S &&
+        Math.hypot(effect.x - x, effect.y - y) <= ARK_REACH,
+    );
+    if (ark === undefined) return 0;
+    this.effects.push({
+      kind: "arrival",
+      x,
+      y,
+      radius: 0,
+      age: 0,
+      wallS: ARRIVE_S,
+      untilMs: -1,
+      salt: ++this.salts,
+      struck: false,
+    });
+    return ARRIVE_S;
   }
 
   /** Whether cell (x, y) is burning now. */

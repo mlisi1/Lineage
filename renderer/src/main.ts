@@ -227,6 +227,8 @@ async function start(): Promise<void> {
     if (land === null) return;
     if (atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x))) atmosphere.burnt(x, y);
   };
+  // The ark's newcomers come into being where its light is.
+  herd.arrival = (x, y) => atmosphere.arrival(x, y);
   const receive = (message: Message): void => {
     if (!atmosphere.hold(message)) deliver(message);
   };

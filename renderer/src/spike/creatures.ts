@@ -129,7 +129,12 @@ interface Creature {
   /** The joint at its widest, which breathes; and how far into a breath it started. */
   chest: number;
   breathOffset: number;
+  /** Arriving (R4, the ark): seconds into its arrival and how long it takes, while it lasts. */
+  arriving?: { age: number; lasts: number };
 }
+
+/** Steps of opacity an arriving creature comes into being in. */
+const ARRIVE_STEPS = 4;
 
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
@@ -195,6 +200,36 @@ export class CreatureLayer {
     creature.marker.destroy({ children: true });
     creature.glass?.destroy();
     this.creatures[index] = undefined;
+  }
+
+  /**
+   * The creature in slot `index` arrives (R4, the ark's newcomers): it comes into being
+   * over `seconds`, see-through at first, in a few steps as pixel art does.
+   */
+  arrive(index: number, seconds: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    creature.arriving = { age: 0, lasts: seconds };
+    this.materialise(creature);
+  }
+
+  private materialise(creature: Creature): void {
+    const arriving = creature.arriving;
+    if (arriving === undefined) return;
+    const done = arriving.age >= arriving.lasts;
+    const opacity = done
+      ? 1
+      : (Math.floor((arriving.age / arriving.lasts) * ARRIVE_STEPS) + 1) / (ARRIVE_STEPS + 1);
+    creature.marker.alpha = opacity;
+    if (done) {
+      creature.arriving = undefined;
+      creature.container.filters = [];
+      creature.seaKey = -2; // colour it for the water it is in again
+      return;
+    }
+    creature.glass ??= new AlphaFilter();
+    creature.glass.alpha = opacity;
+    creature.container.filters = [creature.glass];
   }
 
   /** Whether slot `index` holds a creature. */
@@ -335,7 +370,11 @@ export class CreatureLayer {
           head.y <= view.y1 + reach);
       if (inView && posed) {
         this.pose(creature, dtS);
-        if (creature.plan.swims) this.wet(creature, head);
+        if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
+      }
+      if (creature.arriving !== undefined) {
+        creature.arriving.age += dtS;
+        this.materialise(creature);
       }
       if (creature.inView !== inView) {
         creature.inView = inView;
