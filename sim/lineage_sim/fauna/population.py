@@ -35,7 +35,7 @@ from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype
-from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora
+from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora, Wildfire
 from lineage_sim.rare import body_of
 from lineage_sim.rng import FAUNA
 from lineage_sim.state.schema import Tree
@@ -71,6 +71,7 @@ class Death(IntEnum):
     OLD_AGE = 1
     KILLED = 2
     DROWNED = 3
+    BURNT = 4  # caught in a burning cell on land (R4)
 
 
 @dataclass
@@ -85,19 +86,24 @@ class Tally:
     old_age: int = 0
     killed: int = 0
     drowned: int = 0
+    burnt: int = 0
 
     @property
     def deaths(self) -> int:
-        return self.starved + self.old_age + self.killed + self.drowned
+        return self.starved + self.old_age + self.killed + self.drowned + self.burnt
 
 
 class Fauna:
     """The fauna subsystem. Read the population through the properties."""
 
-    def __init__(self, cfg: FaunaConfig, terrain: Terrain, flora: Flora) -> None:
+    def __init__(
+        self, cfg: FaunaConfig, terrain: Terrain, flora: Flora, fire: Wildfire | None = None
+    ) -> None:
         self._cfg = cfg
         self._terrain = terrain
         self._flora = flora
+        # Burning cells hurt the creatures in them (R4); none in a world without fire.
+        self._fire = fire
         self._shape: tuple[int, int] = (terrain.height.shape[0], terrain.height.shape[1])
         self._positions = np.zeros((0, 2), dtype=np.float32)
         self._energy = np.zeros(0, dtype=np.float32)
@@ -311,7 +317,8 @@ class Fauna:
         dead = self._hunt(rng, hours)
         # The tick's own balance, before any breeding: what eating and moving earned.
         self._learn(self._energy - before, hours, ctx.t_ms)
-        dead = self._expire(dead)
+        in_fire = self._burn(hours)
+        dead = self._expire(dead, in_fire)
         newborn = self._breed(rng, dead)
         self._bury(dead, ctx.t_ms)
         if newborn is not None:
@@ -607,10 +614,27 @@ class Fauna:
             for i in which.tolist()
         ]
 
-    def _expire(self, dead: NDArray[np.int8]) -> NDArray[np.int8]:
-        """Mark the starved (or drowned) and the old."""
+    def _burn(self, hours: float) -> NDArray[np.bool_]:
+        """Creatures on land in a burning cell lose ``fire_damage_per_hour`` of their
+        capacity an hour (R4): one that stays in the fire dies of it. Returns who is in it."""
+        if self._fire is None or self.count == 0:
+            return np.zeros(self.count, dtype=np.bool_)
+        rows, columns = creature.cells_of(self._positions, self._shape)
+        caught = self._fire.burning[rows, columns] & ~self._in_water
+        if caught.any():
+            damage = np.float32(self._cfg.fire_damage_per_hour * hours) * self._body.capacity
+            self._energy = np.where(caught, self._energy - damage, self._energy).astype(np.float32)
+        return caught
+
+    def _expire(
+        self, dead: NDArray[np.int8], in_fire: NDArray[np.bool_] | None = None
+    ) -> NDArray[np.int8]:
+        """Mark the burnt, the starved (or drowned) and the old."""
         alive = dead < 0
         starved = alive & (self._energy <= 0)
+        if in_fire is not None:
+            dead[starved & in_fire] = Death.BURNT
+            starved &= ~in_fire
         dead[starved & self._in_water] = Death.DROWNED
         dead[starved & ~self._in_water] = Death.STARVED
         dead[(dead < 0) & (self._age_h >= self._body.lifespan_h)] = Death.OLD_AGE
@@ -758,6 +782,7 @@ class Fauna:
         self.tally.old_age += int(causes[Death.OLD_AGE])
         self.tally.killed += int(causes[Death.KILLED])
         self.tally.drowned += int(causes[Death.DROWNED])
+        self.tally.burnt += int(causes[Death.BURNT])
         keep = ~gone
         self._positions, self._energy = self._positions[keep], self._energy[keep]
         self._age_h, self._idle_h = self._age_h[keep], self._idle_h[keep]

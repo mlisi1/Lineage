@@ -29,12 +29,12 @@ from numpy.random import PCG64, Generator
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "02357c8ca6cf2b9280d7e2764fe250a5176c0f93ac63a334997db8a9d0bf0314"
+GOLDEN_FAUNA_SEED_42 = "42413c4eee00af1bb666da33fafe4a36af3680710895fe9766b63b75cb980bac"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "8cab44eddcd588b4cd0e4388fe14c25eea11c88516616eb06b8cf9871a3a57fe"
+GOLDEN_AFTER_THREE_DAYS = "83aae00b6b030e3585c74432c7c991bb8e073789c3a95a13ac9218bd41b1f590"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "cfceee85d06f842cfcb5309525e7f47726e7cfe83c58027e589489bcf3cc4f62"
+GOLDEN_BARE_ROCK_520_DAYS = "f580b8488d8f04f8ea78079ca887bf41aa1e0f6b870a6c6ae86b71baaa3a64d9"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -411,6 +411,48 @@ def test_land_animal_drowns_and_a_swimmer_does_not(config: Config) -> None:
         site.run(1.0)
     assert site.fauna.tally.drowned == 1
     assert site.alive(swimmer) == 1  # no food out here either, but it is in no hurry
+
+
+def _set_alight(site: Site, x0: int, x1: int) -> None:
+    """Every land cell in columns x0–x1 burning, as if a fire had reached them."""
+    assert site.fire is not None
+    for y in range(ROWS):
+        for x in range(x0, x1):
+            site.fire.ignite(y, x, site.t_ms)
+
+
+def test_a_creature_caught_in_a_fire_dies_of_it(config: Config) -> None:
+    site = Site(config, fire=True)
+    _set_alight(site, 0, 30)
+    caught = site.add(GRAZER, [(15.0, 20.0)], energy_share=0.9)
+    away = site.add(GRAZER, [(50.0, 20.0)], energy_share=0.9)
+    site.run(1.0)
+    assert site.alive(caught) == 0  # an hour in the flames (fire_damage_per_hour 1)
+    assert site.alive(away) == 1
+    assert site.fauna.tally.burnt == 1
+    assert site.fauna.tally.starved == 0
+    assert site.fauna.tally.deaths == 1
+    assert float(site.fauna.carrion.sum()) == 0.0  # nothing left to scavenge
+
+
+def test_fire_hurts_only_while_a_creature_is_in_it(config: Config) -> None:
+    site = Site(config, fire=True)
+    _set_alight(site, 0, 30)
+    caught = site.add(GRAZER, [(15.0, 20.0)], energy_share=0.9)
+    away = site.add(GRAZER, [(50.0, 20.0)], energy_share=0.9)
+    site.run(TICK_S / 3600)
+    burnt = 0.9 - float(site.energy_share(caught)[0])
+    spent = 0.9 - float(site.energy_share(away)[0])
+    tick_damage = config.fauna.fire_damage_per_hour * TICK_S / 3600
+    assert burnt - spent == pytest.approx(tick_damage, abs=0.03)
+
+
+def test_without_a_fire_nothing_burns(config: Config) -> None:
+    site = Site(config)  # no fire on the site: the fauna of a world without one
+    ids = site.add(GRAZER, [(15.0, 20.0)])
+    site.run(2.0)
+    assert site.alive(ids) == 1
+    assert site.fauna.tally.burnt == 0
 
 
 def test_compatible_pair_breeds(config: Config) -> None:

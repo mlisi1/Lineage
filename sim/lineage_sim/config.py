@@ -244,7 +244,7 @@ class FloraConfig:
     algae_seed: float
     algae_winter_share: float
     algae_meal_share: float
-    fire_ignitions_per_year: float
+    fire_strikes_per_storm_hour: float
     fire_dry_temperature: float
     fire_dry_span: float
     fire_spread_per_hour: float
@@ -399,6 +399,7 @@ class FaunaConfig:
     attack_min_diet: float
     carcass_share: float
     carrion_decay_hours: float
+    fire_damage_per_hour: float
     scavenge_rate: float
     carrion_scent_cells: int
     instinct_scavenge: float
@@ -504,6 +505,7 @@ class FaunaConfig:
             "exploration_hours",
             "exploration_fade_hours",
             "carrion_decay_hours",
+            "fire_damage_per_hour",
             "baseline_hours",
             "learned_max",
             "forget_hours",
@@ -630,6 +632,38 @@ class PresenceConfig:
 
 
 @dataclass(frozen=True)
+class WeatherConfig:
+    """``[weather]``; units and intent of every key are documented in default.toml."""
+
+    rain_spells_per_month_spring: float
+    rain_spells_per_month_summer: float
+    rain_spells_per_month_autumn: float
+    rain_spells_per_month_winter: float
+    rain_hours_min: float
+    rain_hours_max: float
+    thunder_share: float
+    storm_share: float
+    storm_hours_min: float
+    storm_hours_max: float
+
+    def __post_init__(self) -> None:
+        def check(ok: bool, message: str) -> None:
+            if not ok:
+                raise ConfigError(f"[weather] {message}")
+
+        for key in ("rain_spells_per_month_spring", "rain_spells_per_month_summer",
+                    "rain_spells_per_month_autumn", "rain_spells_per_month_winter"):  # fmt: skip
+            check(getattr(self, key) >= 0, f"{key} must not be negative")
+        for key in ("rain_hours_min", "storm_hours_min"):
+            check(getattr(self, key) > 0, f"{key} must be positive")
+        check(self.rain_hours_max >= self.rain_hours_min, "rain_hours_max below rain_hours_min")
+        check(self.storm_hours_max >= self.storm_hours_min, "storm_hours_max below storm_hours_min")
+        for key in ("thunder_share", "storm_share"):
+            check(0 <= getattr(self, key) <= 1, f"{key} must be within [0, 1]")
+        check(self.thunder_share + self.storm_share <= 1, "thunder_share + storm_share above 1")
+
+
+@dataclass(frozen=True)
 class ChronicleConfig:
     """``[chronicle]``; units and intent of every key are documented in default.toml."""
 
@@ -720,6 +754,7 @@ class Config:
     fauna: FaunaConfig
     species: SpeciesConfig
     presence: PresenceConfig
+    weather: WeatherConfig
     chronicle: ChronicleConfig
     apocalypse: ApocalypseConfig
     # Subsystem name -> tick period in sim seconds.
@@ -815,6 +850,7 @@ def parse_config(text: str) -> Config:
         "fauna",
         "species",
         "presence",
+        "weather",
         "chronicle",
         "apocalypse",
     }
@@ -831,6 +867,7 @@ def parse_config(text: str) -> Config:
         _numeric_section(raw, "fauna", FaunaConfig),
         _numeric_section(raw, "species", SpeciesConfig),
         _numeric_section(raw, "presence", PresenceConfig),
+        _numeric_section(raw, "weather", WeatherConfig),
         _numeric_section(raw, "chronicle", ChronicleConfig),
         _numeric_section(raw, "apocalypse", ApocalypseConfig),
         _schedule(raw),

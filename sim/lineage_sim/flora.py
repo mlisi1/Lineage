@@ -50,7 +50,6 @@ Index = NDArray[np.intp]
 
 _F = np.float32
 _GENE_MAX = 255.0
-_HOURS_PER_YEAR = SECONDS_PER_YEAR / 3600.0
 _DAYS_PER_YEAR = SECONDS_PER_YEAR / 86_400.0
 # Share of the seedling biomass below which a population is gone.
 _DEATH_SHARE = 0.25
@@ -778,6 +777,10 @@ class Wildfire:
         self._started_ms = 0
         # Wet after rain (M8, set by the presence model): no lightning, slow spread.
         self._wet = False
+        # The weather (R4, set by the weather model): rain slows spread like wet land, and
+        # lightning strikes only in a thunderstorm.
+        self._raining = False
+        self._storm = False
         self._flammability = np.zeros(len(Cover), dtype=_F)
         for cover, value in (
             (Cover.LICHEN, cfg.flammability_lichen),
@@ -808,6 +811,11 @@ class Wildfire:
         """Hook for the rain god power: wet land does not dry out until it is unset."""
         self._wet = wet
 
+    def set_weather(self, raining: bool, storm: bool) -> None:
+        """Hook for the weather: whether rain falls, and whether a thunderstorm rages."""
+        self._raining = raining
+        self._storm = storm
+
     def extinguish(self, t_ms: int) -> list[OutputEvent]:
         """Rain puts out every fire; the cells already burnt stay burnt."""
         if not self._active:
@@ -836,7 +844,9 @@ class Wildfire:
         outputs: list[OutputEvent] = []
 
         # One draw per tick whether or not lightning strikes, to keep the stream aligned.
-        strike = rng.random() < cfg.fire_ignitions_per_year * dryness * hours / _HOURS_PER_YEAR
+        # Lightning comes only with a thunderstorm (R4).
+        rate = cfg.fire_strikes_per_storm_hour * dryness * hours if self._storm else 0.0
+        strike = rng.random() < rate
         if strike:
             rows, columns = self._shape
             y, x = int(rng.integers(0, rows)), int(rng.integers(0, columns))
@@ -845,7 +855,8 @@ class Wildfire:
             return outputs
 
         ys, xs = np.nonzero(self._burning > 0)
-        self._spread(rng, ys, xs, dryness, hours)
+        # Under rain, fire spreads as on wet land.
+        self._spread(rng, ys, xs, 0.0 if self._raining else dryness, hours)
         self._burning[ys, xs] -= _F(hours)
         out = self._burning[ys, xs] <= 0
         if out.any():

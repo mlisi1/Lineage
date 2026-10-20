@@ -22,6 +22,7 @@ SPECIES = "species"
 PRESENCE = "presence"
 CHRONICLE = "chronicle"
 APOCALYPSE = "apocalypse"
+WEATHER = "weather"
 
 _BIT_GENERATOR = "PCG64"
 
