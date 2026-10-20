@@ -207,6 +207,13 @@ const views = (query, [x, y]) => ({
 const FPS = 30;
 const FILMS = fileURLToPath(new URL("films/", OUT));
 const REUSE = Boolean(env.R4_REPORT_REUSE_FILMS);
+/**
+ * While the look is tuned: `R4_REPORT_ONLY=fire,algae,…` films only those scenes (names as
+ * the films', e.g. `strike`, `algae`, `lights`, `end`); the others are left out of the page.
+ */
+const ONLY = env.R4_REPORT_ONLY ? new Set(env.R4_REPORT_ONLY.split(",")) : null;
+const wanted = (name) => ONLY === null || ONLY.has(name);
+const SKIPPED = "<p><em>Not filmed in this partial run (<code>R4_REPORT_ONLY</code>).</em></p>";
 
 /** Open the scene at `query` in film mode, and step it until its ground is painted. */
 async function open(page, address, query) {
@@ -490,6 +497,7 @@ for (const chart of document.querySelectorAll(".chart")) {
 
 /** A film (or still) of the report: its poster inline, the video beside the report. */
 function figure(item, title, text) {
+  if (item == null) return SKIPPED;
   const meta =
     item.frames === undefined
       ? `still, 1024×600 (<code>films/${item.file}</code>)`
@@ -506,6 +514,7 @@ function figure(item, title, text) {
 
 /** The three views of one thing, one below the other, each at the screen's own size. */
 function threeViews(items, title, texts) {
+  if (items == null) return SKIPPED;
   return `<div class="views">${["map", "middle", "local"]
     .map((view) =>
       items[view] === undefined
@@ -591,6 +600,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   /** Run `take` in the three views of `place`, the query given to each. */
   const each = async (name, query, place, take) => {
+    if (!wanted(name)) return;
     shots[name] = {};
     for (const [view, q] of Object.entries(views(query, place))) {
       await open(page, address, q);
@@ -611,7 +621,7 @@ try {
 
   // The light: the stills of each time of day, and a day at the desk.
   shots.lights = {};
-  for (const light of ["day", "dawn", "dusk", "night", "moon"]) {
+  for (const light of wanted("lights") ? ["day", "dawn", "dusk", "night", "moon"] : []) {
     await open(page, address, `file=report/day.json&every=0&quiet&seed=7&view=map&show=${light}`);
     shots.lights[light] = await still(page, `light-${light}`);
   }
@@ -691,6 +701,7 @@ try {
     film(page, name, 30),
   );
   // The end of a world: the committed recording, on the map, all three minutes of it.
+  if (wanted("end")) {
   await open(page, address, "recording=end&speed=1800&quiet&seed=3");
   await skip(
     page,
@@ -705,6 +716,7 @@ try {
   );
   // The acts' moments, a second in from the start of the film.
   shots.end = await film(page, "end", 184, 1, [16, 51, 96, 131, 166]);
+  }
 } finally {
   await browser.close();
   await server.close();
@@ -886,7 +898,7 @@ ${lightChart(officePoints, officeFirst)}
 <section id="light">
 <h2>The light</h2>
 <p>A tint multiplied over the land, plants and animals. Night is moonlit blue, dusk (the owner away) is rose, dawn (the owner back) is lilac, and the day is graded by the season. Each of the sim's 10-minute steps is eased in over the time before the next.</p>
-<div class="stills">${["day", "dawn", "dusk", "night", "moon"].map((n) => `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`).join("")}</div>
+<div class="stills">${["day", "dawn", "dusk", "night", "moon"].filter((n) => shots.lights[n] !== undefined).map((n) => `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`).join("")}</div>
 ${threeViews(shots.day, "A day at the desk", { map: "The office stream from midnight, a sim-day in a minute: night, the owner arriving (dawn), day, leaving (dusk), night.", middle: "", local: "" })}
 <div class="table"><table><thead><tr><th>Light</th><th>Multiplier</th></tr></thead><tbody>
 <tr><td>Night</td><td>${swatch(NIGHT)}</td></tr><tr><td>Dusk</td><td>${swatch(DUSK)}</td></tr><tr><td>Dawn</td><td>${swatch(DAWN)}</td></tr>
@@ -970,7 +982,7 @@ ${threeViews(shots.algae, "Algae and the tide", {})}
 <h2>The end of a world</h2>
 <p>From <code>end.json</code>, where the herd starves on day 2 and the sim ends the world. The film is the whole three-minute sequence at the screen's own frame rate. It plays on the map only, since it holds the camera there.</p>
 ${figure(shots.end, "World 1 ends and world 2 rises", "The whole sequence, as it plays on the screen.")}
-<div class="stills">${shots.end.kept
+<div class="stills">${(shots.end?.kept ?? [])
   .map(
     (m, k) =>
       `<figure><img src="${uri(m.poster)}" width="512" height="300" alt="${endMoments[k][0]}"><figcaption><strong>${endMoments[k][0]}</strong> about ${endMoments[k][1]} s in</figcaption></figure>`,
