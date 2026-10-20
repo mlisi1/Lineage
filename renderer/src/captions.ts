@@ -8,7 +8,6 @@
  *
  * The queue and the painting are pure; `Captions` puts the painting on screen.
  */
-import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import { GLYPH_ROWS, draw, measure, wrap } from "./pixelfont";
 import type { ChronicleMessage } from "./protocol";
 
@@ -302,19 +301,28 @@ export function paintScroll(caption: Caption, open: number): Picture {
 /** Art pixels between the scroll and the foot of the screen. */
 const FOOT = 6;
 
-/** The scroll on screen: add `container` over the world, in art pixels. */
+/**
+ * The scroll on screen: a canvas of its own laid over the scene (`element`, to add to the
+ * box the scene's canvas is in), placed and sized in shares of the screen's art pixels so
+ * that it scales with the scene. It is not drawn in the scene's canvas, which slides by
+ * fractions of a pixel as the camera moves (`main.ts`): the scroll keeps still.
+ */
 export class Captions {
-  readonly container = new Container();
+  readonly element = document.createElement("canvas");
   private readonly queue = new CaptionQueue();
-  private sprite: Sprite | null = null;
-  private source: CanvasSource | null = null;
-  private canvas: HTMLCanvasElement | null = null;
   private painted: { number: number; open: number } | null = null;
 
   constructor(
     private readonly screenWidth: number,
     private readonly screenHeight: number,
-  ) {}
+  ) {
+    const style = this.element.style;
+    style.position = "absolute";
+    style.imageRendering = "pixelated";
+    style.pointerEvents = "none";
+    style.display = "none";
+    this.element.dataset.testid = "scroll";
+  }
 
   take(message: ChronicleMessage, date: string | null): void {
     this.queue.take(message, date);
@@ -327,38 +335,31 @@ export class Captions {
   update(dtS: number): void {
     const { caption, open } = this.queue.update(dtS);
     if (caption === null || open <= 0) {
-      if (this.sprite !== null) this.sprite.visible = false;
+      this.element.style.display = "none";
       this.painted = null;
       return;
     }
     if (this.painted?.number === caption.number && this.painted.open === open) return;
     this.painted = { number: caption.number, open };
-    const picture = paintScroll(caption, open);
-    this.show(picture);
+    this.show(paintScroll(caption, open));
   }
 
   private show(picture: Picture): void {
-    if (
-      this.canvas === null ||
-      this.canvas.width !== picture.width ||
-      this.canvas.height !== picture.height
-    ) {
-      this.sprite?.destroy({ texture: true, textureSource: true });
-      this.canvas = document.createElement("canvas");
-      this.canvas.width = picture.width;
-      this.canvas.height = picture.height;
-      this.source = new CanvasSource({ resource: this.canvas, scaleMode: "nearest" });
-      this.sprite = new Sprite(new Texture({ source: this.source }));
-      this.container.addChild(this.sprite);
+    const { element } = this;
+    if (element.width !== picture.width || element.height !== picture.height) {
+      element.width = picture.width;
+      element.height = picture.height;
+      const share = (value: number, of: number): string => `${(100 * value) / of}%`;
+      const x = Math.round((this.screenWidth - picture.width) / 2);
+      const y = this.screenHeight - FOOT - picture.height;
+      element.style.left = share(x, this.screenWidth);
+      element.style.top = share(y, this.screenHeight);
+      element.style.width = share(picture.width, this.screenWidth);
+      element.style.height = share(picture.height, this.screenHeight);
     }
-    const context = this.canvas.getContext("2d");
-    if (context === null || this.sprite === null) return;
-    context.putImageData(new ImageData(picture.rgba, picture.width, picture.height), 0, 0);
-    this.source?.update();
-    this.sprite.visible = true;
-    this.sprite.position.set(
-      Math.round((this.screenWidth - picture.width) / 2),
-      this.screenHeight - FOOT - picture.height,
-    );
+    element
+      .getContext("2d")
+      ?.putImageData(new ImageData(picture.rgba, picture.width, picture.height), 0, 0);
+    element.style.display = "block";
   }
 }

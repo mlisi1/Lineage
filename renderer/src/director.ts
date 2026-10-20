@@ -40,14 +40,14 @@ const DRIFT_TRIES = 40;
 /** The next animal within this many view widths is glided to; further, the camera cuts. */
 const GLIDE_WIDTHS = 1;
 /** Following: lead the subject by this many seconds of its walk; let it potter this far. */
-const LEAD_S = 1.2;
+const LEAD_S = 1;
 const DEAD_ZONE_CELLS = 1;
 /** Seconds over which the subject's walking speed is taken in. */
-const VELOCITY_SMOOTH_S = 0.8;
+const VELOCITY_SMOOTH_S = 1.5;
 /** How the camera moves in each way of moving. */
 const DRIFTING: SpringOptions = { periodS: 6, damping: 1, maxSpeed: 2.5 };
-const FOLLOWING: SpringOptions = { periodS: 2.4, damping: 0.75, maxSpeed: 6 };
-const GLIDING: SpringOptions = { periodS: 3.2, damping: 0.9, maxSpeed: 8 };
+const FOLLOWING: SpringOptions = { periodS: 3, damping: 0.9, maxSpeed: 6 };
+const GLIDING: SpringOptions = { periodS: 3.6, damping: 1, maxSpeed: 8 };
 /** A glide is over when the camera is this close to its new subject (cells). */
 const GLIDE_DONE_CELLS = 0.5;
 

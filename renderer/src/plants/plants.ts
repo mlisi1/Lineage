@@ -276,9 +276,17 @@ export class PlantLayer {
           anchor: { x: placed.anchorX, y: placed.anchorY },
         });
         sprite.scale.set(placed.scale);
-        // The foot of a cell is the middle of its lower edge.
-        const footY = y + 1 + placed.dy;
-        sprite.position.set(x + 0.5 + placed.dx, footY);
+        // The foot of a cell is the middle of its lower edge. The drawing's corner goes on a
+        // whole art pixel: one left between two would be rounded one way or the other as the
+        // camera moves, and the plant would flicker a pixel back and forth over its ground.
+        const tile = 1 / placed.scale;
+        const whole = (at: number, foot: number): number =>
+          (Math.round(at * tile - foot) + foot) / tile;
+        const footY = whole(y + 1 + placed.dy, placed.anchorY * placed.texture.height);
+        sprite.position.set(
+          whole(x + 0.5 + placed.dx, placed.anchorX * placed.texture.width),
+          footY,
+        );
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
         const at = Math.min(
           Math.max(Math.ceil(footY * this.rowsPerCell) - 1, 0),

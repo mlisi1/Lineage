@@ -2,7 +2,9 @@
  * The scene (R1–R3): the land, its plants and its animals from the state stream, filmed
  * by the documentary camera (`director.ts`), with the chronicle's notable entries on a
  * scroll (`captions.ts`); drawn at 512×300 art pixels and stretched to the screen
- * without smoothing.
+ * without smoothing. The picture is drawn a pixel larger all round and slid by the
+ * camera's fraction of a pixel, so that slow pans glide instead of stepping a whole art
+ * pixel at a time.
  *
  * The camera starts on the map. The view button (V, space or Enter on a keyboard, a tap
  * on a phone; on the desk the hardware button, S2) steps map → middle → local → map;
@@ -26,7 +28,7 @@
  *                              those handed to `__receive` are still shown)
  *   ?painter=inline            paint the ground on the page's thread, not in a worker
  */
-import { Application, Container, Sprite, Texture, WebGLRenderer } from "pixi.js";
+import { Application, Container, WebGLRenderer } from "pixi.js";
 import { sight, type Point } from "./camera";
 import { Captions } from "./captions";
 import { Director, TIMINGS, type Scene, type Shot } from "./director";
@@ -47,7 +49,9 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
-const DARK = 0x10081c;
+const DARK = "#10081c";
+/** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
+const MARGIN = 1;
 /** The committed recordings (`tools/stream.py`). */
 const RECORDINGS: Readonly<Record<string, string>> = {
   life: "stream/life.json",
@@ -84,24 +88,39 @@ async function start(): Promise<void> {
 
   const app = new Application();
   await app.init({
-    width: WIDTH,
-    height: HEIGHT,
+    width: WIDTH + 2 * MARGIN,
+    height: HEIGHT + 2 * MARGIN,
     background: BACKGROUND,
     antialias: false,
     roundPixels: true,
     resolution: 1,
     autoDensity: false,
   });
-  app.canvas.dataset.testid = "stage";
-  app.canvas.style.imageRendering = "pixelated";
-  app.canvas.style.position = "absolute";
-  document.body.appendChild(app.canvas);
+  // The screen: a box the size of the scene, which crops the canvas's margin; the dip and
+  // the scroll lie over it, still while the canvas slides.
+  const frame = document.createElement("div");
+  frame.dataset.testid = "stage";
+  frame.style.position = "absolute";
+  frame.style.overflow = "hidden";
+  document.body.appendChild(frame);
+  const canvas = app.canvas;
+  canvas.style.imageRendering = "pixelated";
+  canvas.style.position = "absolute";
+  canvas.style.left = `${(-100 * MARGIN) / WIDTH}%`;
+  canvas.style.top = `${(-100 * MARGIN) / HEIGHT}%`;
+  canvas.style.width = `${(100 * (WIDTH + 2 * MARGIN)) / WIDTH}%`;
+  canvas.style.height = `${(100 * (HEIGHT + 2 * MARGIN)) / HEIGHT}%`;
+  canvas.style.willChange = "transform";
+  frame.appendChild(canvas);
+  /** Screen pixels to the art pixel, as the page is laid out now. */
+  let artPixel = ART;
   const layout = (): void => {
     const fit = fitToViewport(window.innerWidth, window.innerHeight);
-    app.canvas.style.width = `${DESIGN_WIDTH * fit.scale}px`;
-    app.canvas.style.height = `${DESIGN_HEIGHT * fit.scale}px`;
-    app.canvas.style.left = `${fit.offsetX}px`;
-    app.canvas.style.top = `${fit.offsetY}px`;
+    frame.style.width = `${DESIGN_WIDTH * fit.scale}px`;
+    frame.style.height = `${DESIGN_HEIGHT * fit.scale}px`;
+    frame.style.left = `${fit.offsetX}px`;
+    frame.style.top = `${fit.offsetY}px`;
+    artPixel = ART * fit.scale;
   };
   window.addEventListener("resize", layout);
   layout();
@@ -119,14 +138,15 @@ async function start(): Promise<void> {
   const herd = new Herd(creatureAtlas(), mulberry32(seed + 1), () => landscape.current);
   world.addChild(...herd.containers);
 
-  // Over the world, in art pixels: the dip between views, then the captions above it.
-  const dim = new Sprite(Texture.WHITE);
-  dim.tint = DARK;
-  dim.width = WIDTH;
-  dim.height = HEIGHT;
-  dim.alpha = 0;
+  // Over the scene: the dip between views, then the captions above it.
+  const dim = document.createElement("div");
+  dim.style.position = "absolute";
+  dim.style.inset = "0";
+  dim.style.background = DARK;
+  dim.style.opacity = "0";
+  dim.style.pointerEvents = "none";
   const captions = new Captions(WIDTH, HEIGHT);
-  app.stage.addChild(dim, captions.container);
+  frame.append(dim, captions.element);
 
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
@@ -177,7 +197,7 @@ async function start(): Promise<void> {
     if (event.repeat) return;
     if (event.key === "v" || event.key === " " || event.key === "Enter") press();
   });
-  app.canvas.addEventListener("pointerdown", press);
+  frame.addEventListener("pointerdown", press);
 
   let shot: Shot = { view: pinned ?? "map", centre: { x: 0, y: 0 }, dim: 0, subject: null };
   window.__sceneSettled = () => landscape.settled;
@@ -238,9 +258,16 @@ async function start(): Promise<void> {
     landscape.update(dtS);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
     world.scale.set(tile);
-    world.position.set(Math.round(-cells.x0 * tile), Math.round(-cells.y0 * tile));
-    dim.alpha = shot.dim;
-    dim.visible = shot.dim > 0;
+    // Whole art pixels in the canvas, the fraction left by sliding the canvas itself.
+    const x = -cells.x0 * tile;
+    const y = -cells.y0 * tile;
+    world.position.set(Math.floor(x) + MARGIN, Math.floor(y) + MARGIN);
+    // In whole device pixels: a browser smooths a picture placed between them.
+    const device = window.devicePixelRatio || 1;
+    const slide = (value: number): number =>
+      Math.round((value - Math.floor(value)) * artPixel * device) / device;
+    canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
+    dim.style.opacity = String(shot.dim);
     captions.update(dtS);
   });
 }

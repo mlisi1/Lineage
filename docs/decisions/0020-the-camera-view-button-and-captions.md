@@ -43,9 +43,9 @@ the file (renderer convention); the page may shorten the idle and follow times f
 - **The middle view** drifts: a target point travels at 1.2 cells a second to a place on
   land 20–70 cells away, whose view stays inside the world, lingers 8–20 s, and goes on;
   the camera follows the point on a critically damped spring, so it eases in and out.
-- **The local view** follows on an under-damped spring (period 2.4 s, damping 0.75), so
-  that it swings a little past a turning animal and settles, as a hand-held camera
-  would; it aims 1.2 s ahead of the animal's smoothed walk and lets it potter within a
+- **The local view** follows on a spring a little under critical damping (period 3 s,
+  damping 0.9), so that it eases after a turning animal and settles with hardly a swing;
+  it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within a
   dead zone of one cell before moving. Sub-steps of 1/240 s make the motion the same at
   30 and 60 fps; a top speed and a longest frame (0.25 s) keep a hidden page from
   flinging it.
@@ -56,6 +56,13 @@ the file (renderer convention); the page may shorten the idle and follow times f
   to (a slower, stronger spring) when it is within one view's width, and cut to otherwise.
   This replaces the spec's interest score.
 - **The view stays inside the world**; the map shows the whole of it, still.
+- **Pans glide** (amended after the owner found the first camera rough, 2026-10-20): the
+  world is drawn in whole art pixels in a canvas a pixel larger all round, slid by the
+  camera's fraction in whole device pixels, so a pan moves a screen pixel at a time
+  instead of an art pixel (twice as often; finer would need blurring). The scroll and the
+  dip are page elements over it, still. Plant corners are snapped to whole art pixels: the
+  owner saw trees in the middle view snap back and forth, plants at half a pixel rounded
+  one way or the other as the world moved (3 % of the picture at some offsets, none now).
 
 **The stream's animals in the scene** (`renderer/src/herd.ts`): a roster gives each id a
 slot of R2's `CreatureLayer` and frees the slots of the dead; two layers, the middle view's

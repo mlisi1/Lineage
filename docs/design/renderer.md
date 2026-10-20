@@ -14,7 +14,10 @@ hard edges, no smoothing.
 
 - **Art pixels are 2 screen pixels.** The scene is drawn into a canvas of 512×300 and
   stretched to the screen by CSS with `image-rendering: pixelated`. No antialiasing,
-  nearest-neighbour textures, positions rounded to whole art pixels.
+  nearest-neighbour textures, positions rounded to whole art pixels. The camera alone moves
+  by less: the canvas is drawn an art pixel larger all round and slid by the camera's
+  fraction of a pixel, in whole screen pixels (R3), so that a slow pan glides. Plants are
+  laid out with their corners on whole art pixels, so that none flickers as it moves.
 - **One palette.** Land and plant colours come from `tools/viz/pixelmap.py`, the same
   ramps the report maps use, so a forest is the same green in a report and on the desk.
   Since ADR 0014 it is the cosy palette, after Stardew Valley; the renderer reads a copy
@@ -744,11 +747,19 @@ press. On the page the button is V, space or Enter, a tap on a phone, or
 | middle | drifts at 1.2 cells a second to a place on land 20–70 cells away, lingers 8–20 s, goes on; on a critically damped spring, so it eases in and out |
 | local | follows an animal of a species drawn at random (then one of its animals, awake if one is), for 4–6 minutes, then another; within a view's width it glides there, further it cuts |
 
+- **Smooth pans**: the world is placed in whole art pixels in a canvas one art pixel larger
+  all round, and the canvas is slid by the rest of the camera's position in whole device
+  pixels (CSS), so the picture moves a screen pixel at a time, half an art pixel, at no cost
+  to the GPU; the dip and the scroll are laid over it in the page and keep still. Before,
+  a drift moved the picture on one frame in six; now on one in three, as fine as a
+  1024-pixel screen goes without blurring. Plants' corners are put on whole art pixels:
+  one at half a pixel was rounded either way as the world moved, and 3 % of the middle
+  view flickered a pixel back and forth.
 - **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
   painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
 - **Following** (`src/camera.ts`): a spring a little under critical damping (period
-  2.4 s, damping 0.75), so that the camera swings slightly past an animal that turns and
-  settles; it aims 1.2 s ahead of the animal's smoothed walk and lets it potter within
+  3 s, damping 0.9), so that the camera eases after an animal that turns and settles with
+  hardly a swing; it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within
   a cell of where the camera is before it moves. Fixed sub-steps (1/240 s) make it the
   same at any frame rate. The view never looks off the world's edge.
 - **The animals** (`src/herd.ts`): R2's creature layers fed from the stream. A roster
