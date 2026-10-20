@@ -106,6 +106,23 @@ land animal is not lured out to sea. Meals of algae teach nothing about plant fo
 `algae_capacity` 0 turns them off. Migration `v10_to_v11` adds an empty algae grid; the
 next flora tick sows the shelf. Design: `plants.md`, "Algae"; `creatures.md`, "Life".
 
+**Measured** (seeds 0–19, office, 3 years; `m11-algae-on` against `m11-algae-off`,
+which reproduces the defaults metric for metric, so the switch is clean):
+
+- The algae stand mostly uneaten (mean 0.30 of 0.4). 2 % of creatures are in water;
+  the median `AQUATIC` gene ends at 0.10 (max 0.35). **D1 for `AQUATIC` is unchanged at
+  1 seed in 20**, a stranger species in either run. Food alone does not open the niche:
+  a land animal pays the full water penalty as soon as it wades into the shallows, and
+  barely smells algae, so there is no gentle path from shore to sea. To try in the
+  tuning sweep: `water_stress`, `aquatic_land_slowdown`, `algae_meal_share`; as
+  mechanisms if numbers fail, wading without penalty on the shelf for anyone, or
+  stranger groups that are swimmers (as half of them are hunters).
+- Indirectly, predators rose (1.2 % → 5 % of creatures; present 53 % → 60 % of days
+  after year 1), and M3.2 moved from 21.4 to 25.1 months. **M3.2's median is fragile**:
+  forests close in two clusters, the second summer (about 21 months) or the autumn
+  after (about 27 months), and the median falls between them; a few seeds crossing
+  over shift it by four months. M3's report should show the distribution.
+
 Alternatives considered: an aquatic plant form inside the plant genome (entangled with
 temperature, fertility and dispersal; a separate grid is simpler and cheaper); a new
 brain sense for sea food (changes the brain's size and every saved brain; weighting the
