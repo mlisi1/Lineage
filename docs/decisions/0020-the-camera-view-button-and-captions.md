@@ -97,8 +97,8 @@ wooden rolls are in the cosy palette, lit from the upper left, with a see-throug
 
 ## Results
 
-On the PC: 252 renderer unit tests (spring, framing, the director's rules on synthetic
-worlds, the queue and the scroll's painting, the font, the roster), 24 Playwright tests
+On the PC: 255 renderer unit tests (spring, framing, the director's rules on synthetic
+worlds, the queue and the scroll's painting, the font, the roster), 25 Playwright tests
 (the button cycles the views in the page and the local view follows an animal; a snapshot
 of the scroll; R1's seven snapshots unchanged). Nothing is measured on the board: R5
 does that (the local view now carries every animal's motion, about 200 in the v9 world).
