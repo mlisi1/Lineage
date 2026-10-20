@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import itertools
 import json
 from pathlib import Path
 
@@ -40,6 +41,40 @@ def test_a_recording_is_what_a_server_sends_day_by_day() -> None:
         b["id"] for message in messages if message["type"] == "creatures" for b in message["born"]
     ]
     assert len(born) == len(set(born))
+
+
+def test_creatures_can_be_recorded_more_often_than_daily() -> None:
+    world = _world()
+    start = world.t_ms
+    messages = stream.record(world, days=1, land_every=1, creatures=True, creatures_every_s=3600)
+    types = [message["type"] for message in messages]
+    # On connect, then each hour a clock and the creatures; the land once, at the day's end.
+    assert types.count("creatures") == 1 + 24
+    assert types.count("clock") == 1 + 24
+    assert types.count("land") == 1 + 1
+    times = [message["t_ms"] for message in messages if message["type"] == "creatures"]
+    assert times == [start + hour * 3_600_000 for hour in range(25)]
+    with pytest.raises(ValueError, match="divide"):
+        stream.record(_world(), days=1, land_every=1, creatures=True, creatures_every_s=7000)
+
+
+def test_new_chronicle_entries_follow_and_none_is_sent_twice() -> None:
+    world = _world()
+    before = len(world.chronicle.entries())
+    messages = stream.record(world, days=30, land_every=30, creatures=True, creatures_every_s=21600)
+    numbers = [
+        entry["number"]
+        for message in messages
+        if message["type"] == "chronicle"
+        for entry in message["entries"]
+    ]
+    # Only what was written while recording, each once, in order.
+    assert numbers == list(range(before + 1, len(world.chronicle.entries()) + 1))
+    assert numbers, "a month of the v4 world writes some history"
+    # Species are sent again when the census changes, and only then.
+    censuses = [message for message in messages if message["type"] == "species"]
+    assert len(censuses) >= 2
+    assert all(a != b for a, b in itertools.pairwise(censuses))
 
 
 def test_the_committed_recording_is_what_the_tool_writes(tmp_path: Path) -> None:
