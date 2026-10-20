@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { paintGround } from "../../src/terrain/ground";
 import { LAND_PALETTE } from "../../src/terrain/palette";
-import { BREATH_S, GLINT_SLOTS, glintAt, seaAt, surfAlphas } from "../../src/terrain/sea";
+import { BREATH_S, GLINT_SLOTS, Sea, glintAt, seaAt, surfAlphas } from "../../src/terrain/sea";
 import { world } from "../spike/worlds";
 
 const land = {
@@ -128,5 +128,33 @@ describe("the surf the painter leaves for the sea", () => {
     expect(still.surf).toBeUndefined();
     expect(foamColour(still.rgba)).toBeGreaterThan(0);
     expect(foamColour(pixels.rgba)).toBe(0);
+  });
+
+  it("leaves a glint where it is on the water while the view moves", () => {
+    const open = { ...world(Array.from({ length: 40 }, () => "~".repeat(80))), ...LAND_PALETTE };
+    const sea = new Sea(8);
+    const sprites = sea.glints.children;
+    let compared = 0;
+    let last: (readonly [number, number] | null)[] = [];
+    for (let step = 0; step < 60; step++) {
+      // The camera pans six cells a second (more than an art pixel a frame); the glints
+      // drift on their own only a little.
+      const time = step / 30;
+      const x0 = 10 + 6 * time;
+      sea.tick(time, open, { x0, y0: 10, x1: x0 + 64, y1: 10 + 37.5 }, null);
+      const now = sprites.map((sprite) =>
+        sprite.visible ? ([sprite.x, sprite.y] as const) : null,
+      );
+      now.forEach((at, slot) => {
+        const before = last[slot];
+        if (at === null || before === null || before === undefined) return;
+        // Within a showing, at most the drift's own art pixel or so a frame.
+        expect(Math.abs(at[0] - before[0])).toBeLessThanOrEqual(1 / 8 + 1e-9);
+        expect(at[1]).toBe(before[1]);
+        compared += 1;
+      });
+      last = now;
+    }
+    expect(compared).toBeGreaterThan(100);
   });
 });

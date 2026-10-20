@@ -7,7 +7,13 @@
  * The state stream from the server to every renderer (desk kiosk and phone), one JSON message per WebSocket frame (CLAUDE.md §4.7). The TypeScript types in renderer/src/protocol.ts are generated from this file (`cd renderer && npm run protocol`); the Python encoder is server/lineage_server/protocol/encode.py. A renderer that meets a message type it does not know ignores it. Bump `protocol` only for a change an older renderer would misread.
  */
 export type Message =
-  ClockMessage | LandMessage | FaunaMessage | CreaturesMessage | SpeciesMessage | RareMessage;
+  | ClockMessage
+  | LandMessage
+  | FaunaMessage
+  | CreaturesMessage
+  | SpeciesMessage
+  | RareMessage
+  | ChronicleMessage;
 /**
  * Version of this protocol.
  */
@@ -187,5 +193,51 @@ export interface RareMessage {
      * What the signature looks like, in words.
      */
     look: string;
+  }[];
+}
+/**
+ * New lines of the island's history (M9, R3): the chronicle's entries written since the last chronicle message, oldest first. Not sent on connect; a renderer captions the notable ones as they come. The full history is the API's (S3).
+ */
+export interface ChronicleMessage {
+  type: "chronicle";
+  protocol: Protocol;
+  /**
+   * Entries at this importance and above are notable ([chronicle] notable_importance): the desk captions them.
+   */
+  notable_importance: number;
+  /**
+   * Entries at this importance and above are major ([chronicle] major_importance): pushed to the phone (S4).
+   */
+  major_importance: number;
+  entries: {
+    /**
+     * The entry's number in the chronicle, from 1.
+     */
+    number: number;
+    t_ms: SimTime;
+    /**
+     * What kind of event it tells of (lineage_sim.chronicle Kind values: speciation, extinction, fire…).
+     */
+    kind: string;
+    /**
+     * 1 (background) to 5 (historic).
+     */
+    importance: number;
+    /**
+     * The entry, in English.
+     */
+    text: string;
+    /**
+     * The species it is about; 0 for none.
+     */
+    species: number;
+    /**
+     * The cell where it happened; -1 when it has no one place.
+     */
+    x: number;
+    /**
+     * The cell where it happened; -1 when it has no one place.
+     */
+    y: number;
   }[];
 }

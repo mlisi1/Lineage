@@ -178,6 +178,36 @@ def species_message(world: World) -> Message | None:
     }
 
 
+def chronicle_message(world: World, after: int = 0) -> Message | None:
+    """The chronicle's entries numbered above ``after`` (M9), or None when there are none."""
+    chronicle = getattr(world, "chronicle", None)
+    if chronicle is None:
+        return None
+    entries = chronicle.entries(after)
+    if not entries:
+        return None
+    config = world.config.chronicle
+    return {
+        "type": "chronicle",
+        "protocol": PROTOCOL,
+        "notable_importance": int(config.notable_importance),
+        "major_importance": int(config.major_importance),
+        "entries": [
+            {
+                "number": int(entry.number),
+                "t_ms": int(entry.t_ms),
+                "kind": str(entry.kind),
+                "importance": int(entry.importance),
+                "text": str(entry.text),
+                "species": int(entry.species),
+                "x": round(float(entry.x), 3),
+                "y": round(float(entry.y), 3),
+            }
+            for entry in entries
+        ],
+    }
+
+
 def connect_messages(world: World, sent: set[int] | None = None) -> list[Message]:
     """Everything a renderer needs when it connects, in the order to send it."""
     messages = [clock_message(world), land_message(world), fauna_message(world)]

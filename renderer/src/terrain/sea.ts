@@ -91,7 +91,20 @@ export function surfAlphas(timeS: number): number[] {
   });
 }
 
-/** Where glint `slot` is at `timeS` in `view`, and how long its stroke is (art pixels), if it shows. */
+/** Which showing of glint `slot` it is at `timeS`, and how far through it (0–1). */
+export function glintShowing(slot: number, timeS: number): { showing: number; phase: number } {
+  const [shortest, longest] = GLINT_EVERY_S;
+  const every = shortest + (longest - shortest) * cellHash(slot, 0, 201);
+  const shifted = timeS + every * cellHash(slot, 0, 202);
+  const showing = Math.floor(shifted / every);
+  return { showing, phase: (shifted - showing * every) / every };
+}
+
+/**
+ * Where glint `slot` is at `timeS`, and how long its stroke is (art pixels), if it shows.
+ * It is placed somewhere in `view`, the view as it was when this showing began: a glint
+ * lies on the water, and stays there while the camera moves.
+ */
 export function glintAt(
   land: Land,
   slot: number,
@@ -101,9 +114,7 @@ export function glintAt(
 ): { x: number; y: number; length: number } | null {
   const [shortest, longest] = GLINT_EVERY_S;
   const every = shortest + (longest - shortest) * cellHash(slot, 0, 201);
-  const shifted = timeS + every * cellHash(slot, 0, 202);
-  const showing = Math.floor(shifted / every);
-  const phase = (shifted - showing * every) / every;
+  const { showing, phase } = glintShowing(slot, timeS);
   if (phase >= GLINT_SHOWS) return null;
   const x =
     view.x0 +
@@ -125,6 +136,8 @@ export class Sea {
   /** Add this to the world over the ground and its surf. */
   readonly glints = new Container();
   private readonly sprites: Sprite[] = [];
+  /** Each slot's showing, and the view it was placed in when that showing began. */
+  private readonly placed: { showing: number; view: CellRect }[] = [];
 
   constructor(
     private readonly tile: number,
@@ -151,7 +164,13 @@ export class Sea {
     // Texture.WHITE is 16 texels: sized in cells, a stroke `length` art pixels long and one tall.
     const texel = Texture.WHITE.width;
     this.sprites.forEach((sprite, slot) => {
-      const glint = glintAt(land, slot, timeS, view, tile);
+      const { showing } = glintShowing(slot, timeS);
+      let placed = this.placed[slot];
+      if (placed?.showing !== showing) {
+        placed = { showing, view: { ...view } };
+        this.placed[slot] = placed;
+      }
+      const glint = glintAt(land, slot, timeS, placed.view, tile);
       sprite.visible = glint !== null;
       if (glint === null) return;
       // On whole art pixels, as everything else.
