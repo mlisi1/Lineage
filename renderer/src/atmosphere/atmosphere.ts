@@ -43,7 +43,16 @@ import {
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
 import { CRATER_RIM, LAVA_FRAMES, coneSummit, markTexture } from "./marks";
 import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
-import { HALO_SIZE, RINGS, atmosphereSprites, streakTexture, type Sprites } from "./sprites";
+import {
+  HALO_SIZE,
+  RINGS,
+  SPROUT_FRAMES,
+  atmosphereSprites,
+  sproutTextures,
+  streakTexture,
+  type Sprites,
+} from "./sprites";
+import { VISIBLE_FROM } from "../plants/look";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
 const LAVA = [0xff5a1e, 0xff8a2a, 0xffc04a] as const;
@@ -114,6 +123,17 @@ const BEAM_S = 8;
 const ARRIVE_S = 2.5;
 const ARK_REACH = 8;
 const ARK_LATE_S = BEAM_S + 4;
+/**
+ * The seed's sprouts: land that had less biomass than this (0–255) and has some after the
+ * seed is sown; they grow over this many wall seconds, each starting up to so many seconds
+ * after the land comes, and are drawn until the plants show or so many sim-days pass. The
+ * sown land is looked for this many wall seconds after the power.
+ */
+const SOWN_BARE = 10;
+const SPROUT_GROW_S = 3;
+const SPROUT_STAGGER_S = 2.5;
+const SPROUT_DAYS = 20;
+const SOWING_WAIT_S = 60;
 /**
  * A volcano's cone and a meteor's crater stay drawn this many sim-days after (the land
  * keeps them; its shading barely shows them), and at least this many wall seconds.
@@ -246,6 +266,15 @@ export class Atmosphere {
   private season: Season = "summer";
   private progress = 0.5;
   private simMs = 0;
+  /** The seed power, waiting for the land it sows (scene seconds it came). */
+  private sowing: { since: number } | null = null;
+  /** The land drawn now, the one before it, and when (scene seconds) it changed. */
+  private landNow: Land | null = null;
+  private landBefore: Land | null = null;
+  private landChangedS = -Infinity;
+  /** The cells it sowed, and when (scene seconds) their sprouts begin; drawn until `sownUntilMs`. */
+  private sown: { cell: number; at: number }[] = [];
+  private sownUntilMs = 0;
   private timeS = 0;
   private flashLeft = 0;
   private effects: Effect[] = [];
@@ -342,8 +371,10 @@ export class Atmosphere {
           add("meteor", METEOR_S);
           break;
         case "god_power":
-          if (event.power === "seed") add("seed", BEAM_S);
-          else if (event.power === "ark") add("ark", BEAM_S);
+          if (event.power === "seed") {
+            add("seed", BEAM_S);
+            this.sowing = { since: this.timeS };
+          } else if (event.power === "ark") add("ark", BEAM_S);
           break;
         case "creatures_arrived": {
           // The ark's newcomers land here: its light goes where they are.
@@ -364,6 +395,8 @@ export class Atmosphere {
         case "world_ended":
           this.effects = [];
           this.burning = [];
+          this.sown = [];
+          this.sowing = null;
           break;
         default:
           break;
@@ -401,6 +434,8 @@ export class Atmosphere {
     this.boltPool.begin();
     let shake = 0;
     const dark = this.darkness(moment);
+    this.watchSowing(view.land);
+    this.drawSprouts(view);
     this.drawGlow(view, dark);
     this.drawFires(view, dark);
     for (const effect of this.effects) shake = Math.max(shake, this.drawEffect(effect, view));
@@ -989,6 +1024,93 @@ export class Atmosphere {
     return flash;
   }
 
+  /** After the seed power, find the cells it sowed in the land that comes next. */
+  private watchSowing(land: Land | null): void {
+    if (this.sown.length > 0 && this.simMs > this.sownUntilMs) this.sown = [];
+    if (land !== this.landNow) {
+      this.landBefore = this.landNow;
+      this.landNow = land;
+      this.landChangedS = this.timeS;
+    }
+    const sowing = this.sowing;
+    if (sowing === null || land === null) return;
+    if (this.timeS - sowing.since > SOWING_WAIT_S) {
+      this.sowing = null;
+      return;
+    }
+    // The sown land comes with the power (a stream sends it just before) or after it.
+    const before = this.landBefore;
+    if (this.landChangedS < sowing.since || before === null) return;
+    this.sowing = null;
+    if (before.width !== land.width || before.height !== land.height) return;
+    for (let cell = 0; cell < land.biomass.length; cell++) {
+      if ((before.biomass[cell] ?? 255) >= SOWN_BARE || (land.biomass[cell] ?? 0) <= 0) continue;
+      if ((land.heights[cell] ?? 0) <= land.seaLevel) continue;
+      this.sown.push({ cell, at: this.timeS + SPROUT_STAGGER_S * cellHash(cell, 0, 517) });
+    }
+    this.sownUntilMs = this.simMs + SPROUT_DAYS * MS_PER_DAY;
+  }
+
+  /**
+   * The seed's sprouts on the cells it sowed: breaking the soil and growing leaf by leaf,
+   * a few to a cell up close, one in the middle view, a green fleck on the map; a cell's
+   * go once its plants are big enough to be drawn.
+   */
+  private drawSprouts(view: View): void {
+    const land = view.land;
+    if (land === null || this.sown.length === 0) return;
+    const { cells, tile } = view;
+    const frames = sproutTextures();
+    const each = tile >= 32 ? 5 : tile >= 8 ? 1 : 0;
+    const pixel = tile >= 32 ? 2 : 1;
+    for (const { cell, at } of this.sown) {
+      const cx = cell % land.width;
+      const cy = Math.floor(cell / land.width);
+      if (cx < cells.x0 - 1 || cx > cells.x1 || cy < cells.y0 - 1 || cy > cells.y1) continue;
+      if ((land.biomass[cell] ?? 0) >= VISIBLE_FROM) continue;
+      const age = this.timeS - at;
+      if (age < 0) continue;
+      if (each === 0) {
+        const fleck = this.groundPool.next(this.sprites.fleck);
+        placeCentred(fleck, cx + 0.5, cy + 0.5, tile, 1);
+        fleck.tint = 0x7cc04a;
+        fleck.alpha = Math.min(age / SPROUT_GROW_S, 1);
+        continue;
+      }
+      for (let k = 0; k < each; k++) {
+        const grown = age - k * 0.35;
+        if (grown < 0) continue;
+        const frame = Math.min(
+          Math.floor((grown / SPROUT_GROW_S) * SPROUT_FRAMES.length),
+          SPROUT_FRAMES.length - 1,
+        );
+        const texture = frames[frame];
+        if (texture === undefined) continue;
+        const x = cx + 0.15 + 0.7 * cellHash(cell, k, 518);
+        const y = cy + 0.2 + 0.7 * cellHash(cell, k, 519);
+        const sprite = this.groundPool.next(texture);
+        // Its foot on the spot.
+        placeCentred(
+          sprite,
+          x,
+          y - (texture.height * pixel) / 2 / tile,
+          tile,
+          texture.width * pixel,
+          texture.height * pixel,
+        );
+        sprite.tint = 0xffffff;
+        sprite.alpha = 1;
+        // A glint of the seed's gold as it breaks the soil.
+        if (grown < 0.4) {
+          const glint = this.lightPool.next(this.sprites.fleck);
+          placeCentred(glint, x, y - pixel / tile, tile, pixel * 2);
+          glint.tint = SEED_GOLD;
+          glint.alpha = 1 - grown / 0.4;
+        }
+      }
+    }
+  }
+
   /** The seed power's motes falling on the bare land in sight. */
   private drawSeedMotes(view: View, life: number, salt: number): void {
     const land = view.land;
@@ -1200,8 +1322,10 @@ export class Atmosphere {
     flames: number;
     ripples: number;
     bolts: number;
+    sown: number;
   } {
     return {
+      sown: this.sown.length,
       lights: this.lightPool.shown,
       ground: this.groundPool.shown,
       weather: this.weatherPool.shown,

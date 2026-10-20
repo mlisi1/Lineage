@@ -182,3 +182,11 @@ test("the ark's newcomers come into being under its light", async ({ page }) => 
   expect(arrivals).toHaveLength(6); // the demo's ark brings six
   expect(errors).toEqual([]);
 });
+
+test("the seed's sprouts come up on the land it sowed", async ({ page }) => {
+  const errors = await open(page, "view=middle&x=120&y=60&show=day,seed");
+  expect(await page.evaluate(() => window.__atmosphere?.().sown)).toBe(0);
+  for (let s = 0; s < 6; s++) await advance(page, 1);
+  expect(await page.evaluate(() => window.__atmosphere?.().sown ?? 0)).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});

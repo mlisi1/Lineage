@@ -295,7 +295,7 @@ export function withSprouts(message: LandMessage, x: number, y: number, land: La
       if (cellHash(cell, 0, 501) > 0.5 * (1 - d) + 0.1) continue;
       const kind = cellHash(cell, 1, 502);
       cover[cell] = Math.max(cls(kind < 0.6 ? "GRASS" : kind < 0.85 ? "SHRUB" : "BROADLEAF"), 0);
-      biomass[cell] = 40;
+      biomass[cell] = 10; // seedlings, as the sim sows them (`seedling_biomass`, 0.04)
       plantHeight[cell] = kind < 0.6 ? 40 : kind < 0.85 ? 120 : 190;
     }
   });

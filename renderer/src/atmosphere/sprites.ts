@@ -294,3 +294,47 @@ export function streakTexture(length: number, lean: number): Texture {
   streaks.set(key, texture);
   return texture;
 }
+
+/** A sprout as it grows (R4, the seed power), frame by frame: pixel rows, bottom at its foot. */
+export const SPROUT_FRAMES: readonly (readonly string[])[] = [
+  [".......", ".......", ".......", ".......", ".......", "...g...", "..ddd.."],
+  [".......", ".......", ".......", ".......", "..L.L..", "...s...", "...s..."],
+  [".......", ".......", ".L...L.", ".lL.Ll.", "...s...", "...s...", "...s..."],
+  [".L...L.", ".l.L.l.", ".lLlLl.", "l.lsl.l", "..lsl..", "...s...", "...s..."],
+];
+const SPROUT_COLOURS: Readonly<Record<string, number>> = {
+  s: 0x3f7a35, // stem
+  l: 0x5fa83e, // leaf
+  L: 0x9ed65a, // leaf in the light
+  g: 0x9ed65a, // the first green out of the seed
+  d: 0x5a4636, // the soil it broke
+};
+
+let sprouts: Texture[] | null = null;
+
+/** The sprout's frames (made on first use). */
+export function sproutTextures(): Texture[] {
+  if (sprouts !== null) return sprouts;
+  const width = SPROUT_FRAMES.length * 8;
+  const height = 7;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (context === null) throw new Error("no 2D canvas for the sprouts");
+  SPROUT_FRAMES.forEach((rows, frame) => {
+    rows.forEach((row, y) => {
+      [...row].forEach((key, x) => {
+        const colour = SPROUT_COLOURS[key];
+        if (colour === undefined) return;
+        context.fillStyle = `#${colour.toString(16).padStart(6, "0")}`;
+        context.fillRect(frame * 8 + x, y, 1, 1);
+      });
+    });
+  });
+  const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
+  sprouts = SPROUT_FRAMES.map(
+    (_, frame) => new Texture({ source, frame: new Rectangle(frame * 8, 0, 7, height) }),
+  );
+  return sprouts;
+}
