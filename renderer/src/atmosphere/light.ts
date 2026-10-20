@@ -39,8 +39,8 @@ const NEXT_SEASON: Readonly<Record<Season, Season>> = {
   autumn: "winter",
   winter: "spring",
 };
-/** Rain greys the day: multiplied in while the rain god power's rain falls. */
-export const RAIN_GREY: Rgb = [0.8, 0.84, 0.92];
+/** Rain greys the day, clouds over the sun: multiplied in while any rain falls. */
+export const RAIN_GREY: Rgb = [0.7, 0.73, 0.8];
 /** The shortest and longest time (wall seconds) the shown light takes to reach a new step. */
 export const EASE_MIN_S = 0.25;
 export const EASE_MAX_S = 600;

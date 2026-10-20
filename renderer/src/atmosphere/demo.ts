@@ -6,8 +6,9 @@
  *
  *   day, dusk, dawn, night, moon        the light ([presence]: night 0.05, moonlight 0.15)
  *   rain, thunder, storm, soaking       what falls (the island's own rain; the rain power's)
- *   fire                                a thunderstorm's lightning sets a patch alight
- *   burnt                               a wood a fire went through: charred trees, scorch
+ *   fire                                a thunderstorm's lightning sets the plants alight
+ *                                       (the fire goes where they carry it, `fireReach`)
+ *   burnt                               where such a fire went: charred trees, scorch
  *   volcano, quake, meteor              the terrain's events; a volcano raises its cone and
  *                                       a meteor digs its bowl in the land sent with them
  *   seed, ark                           the powers: seed motes, then sprouts on the bare
@@ -60,9 +61,65 @@ const LIGHTS: Readonly<Record<string, { light: number; present: boolean }>> = {
 };
 const RAINS = ["rain", "thunder", "storm", "soaking"] as const;
 
-/** Cells of the patch set on fire, across; of a burnt wood; of the bare land sown. */
-const FIRE_CELLS = 5;
-const BURNT_CELLS = 9;
+/** Cells set on fire, and burnt in a burnt wood; cells across the bare land sown. */
+const FIRE_CELLS = 24;
+const BURNT_CELLS = 60;
+/** Least biomass (0–255) that carries fire (the sim's `fire_min_fuel`, 0.15). */
+const FUEL_FROM = 38;
+/** How readily each form burns (the sim's `[flora] flammability_*`). */
+const FLAMMABLE: Readonly<Record<string, number>> = {
+  LICHEN: 0.2,
+  GRASS: 1,
+  SHRUB: 0.8,
+  BROADLEAF: 0.35,
+  CONIFER: 0.9,
+};
+
+/**
+ * The cells a fire from (x, y) reaches first: it goes from cell to neighbouring cell only
+ * where plants carry it, the most flammable fuel first, as the sim's fire spreads. The
+ * cells come in the order the fire reached them.
+ */
+export function fireReach(land: Land, x: number, y: number, count: number): number[] {
+  const fuel = (cell: number): number => {
+    const biomass = land.biomass[cell] ?? 0;
+    if (biomass < FUEL_FROM || (land.heights[cell] ?? 0) <= land.seaLevel) return 0;
+    const form = land.coverClasses[land.cover[cell] ?? 0] ?? "";
+    return (FLAMMABLE[form] ?? 0) * (biomass / 255);
+  };
+  const start = Math.floor(y) * land.width + Math.floor(x);
+  const reached = new Set<number>();
+  // The burning edge, the most flammable cell taken next (a hash breaks ties).
+  const edge: { cell: number; score: number }[] = [{ cell: start, score: 1 }];
+  while (edge.length > 0 && reached.size < count) {
+    edge.sort((a, b) => b.score - a.score);
+    const next = edge.shift();
+    if (next === undefined || reached.has(next.cell)) continue;
+    reached.add(next.cell);
+    const cx = next.cell % land.width;
+    const cy = Math.floor(next.cell / land.width);
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= land.width || ny >= land.height) continue;
+      const cell = ny * land.width + nx;
+      const carries = fuel(cell);
+      if (carries > 0 && !reached.has(cell)) {
+        // A fire runs most where fuel is best, and widens out from where it began.
+        const away = Math.hypot(nx - x, ny - y) / Math.sqrt(count);
+        const luck = 0.6 + 0.4 * cellHash(cell, 0, 503);
+        edge.push({ cell, score: carries * luck * Math.exp(-away) });
+      }
+    }
+  }
+  return [...reached];
+}
+
 const SOWN_CELLS = 24;
 /** A demo volcano's and meteor's size (cells), and the cone's height and bowl's depth (height units). */
 const VOLCANO_RADIUS = 5;
@@ -217,14 +274,16 @@ export function withCrater(message: LandMessage, x: number, y: number): LandMess
 }
 
 /** A wood a fire went through round (x, y): the trees it killed, the ground scorched. */
-export function withBurnt(message: LandMessage, x: number, y: number): LandMessage {
+export function withBurnt(message: LandMessage, x: number, y: number, land: Land): LandMessage {
+  const burnt = fireReach(land, x, y, BURNT_CELLS);
   return changed(message, ({ cover, biomass, plantHeight, scorch, cls }) => {
-    for (const [cell, d] of around(message, x, y, BURNT_CELLS / 2)) {
+    burnt.forEach((cell, n) => {
+      const wood = (land.plantHeight?.[cell] ?? 0) >= 153;
       cover[cell] = Math.max(cls("BURNT"), 0);
-      biomass[cell] = 6; // what a fire leaves of a tree: 3 %
-      plantHeight[cell] = 200; // trees stood here
-      scorch[cell] = Math.round(255 * (1 - 0.3 * d));
-    }
+      biomass[cell] = wood ? 6 : 0; // what a fire leaves of a tree: 3 %
+      plantHeight[cell] = land.plantHeight?.[cell] ?? 0;
+      scorch[cell] = Math.round(255 * (1 - (0.3 * n) / burnt.length));
+    });
   });
 }
 
@@ -269,19 +328,7 @@ export function demoMessages(
   const rain: SkyMessage["rain"] =
     RAINS.find((kind) => shows.includes(kind)) ?? (fire ? "storm" : "none");
   const burning: number[] = [];
-  if (fire) {
-    const half = Math.floor(FIRE_CELLS / 2);
-    for (let dy = -half; dy <= half; dy++) {
-      for (let dx = -half; dx <= half; dx++) {
-        if (dx * dx + dy * dy > half * half + 1) continue;
-        const cx = Math.floor(at.x) + dx;
-        const cy = Math.floor(at.y) + dy;
-        if (cx < 0 || cy < 0 || cx >= land.width || cy >= land.height) continue;
-        burning.push(cy * land.width + cx);
-      }
-    }
-    burning.sort((a, b) => a - b);
-  }
+  if (fire) burning.push(...fireReach(land, at.x, at.y, FIRE_CELLS).sort((a, b) => a - b));
   const sky: SkyMessage = {
     type: "sky",
     protocol: 1,
@@ -298,7 +345,9 @@ export function demoMessages(
     out.push({ afterS, message: { ...message, t_ms: tMs } });
   };
   if (fire) events.push({ kind: "fire_started", ...near });
-  if (shows.includes("burnt") && landMessage !== null) sendLand(withBurnt(landMessage, at.x, at.y));
+  if (shows.includes("burnt") && landMessage !== null) {
+    sendLand(withBurnt(landMessage, at.x, at.y, land));
+  }
   if (shows.includes("volcano")) {
     events.push({ kind: "volcano", ...near, radius_cells: VOLCANO_RADIUS });
     if (landMessage !== null) sendLand(withCone(landMessage, at.x, at.y));

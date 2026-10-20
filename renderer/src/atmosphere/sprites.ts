@@ -41,8 +41,45 @@ export const MOUTH_HEIGHT = 8;
 const MOUTH_RIM = 0x2a1e1c;
 const MOUTH_LAVA = [0xd2401c, 0xff8a2a, 0xffd25a] as const;
 
+/** The larger flame of the local view: size in texels, frames, and colours from its rim in. */
+export const BIG_FLAME_WIDTH = 11;
+export const BIG_FLAME_HEIGHT = 17;
+export const BIG_FLAME_FRAMES = 6;
+const BIG_FLAME = [0x9c2416, 0xd8401c, 0xf47a28, 0xffb83e, 0xffe7a0] as const;
+
+/**
+ * Which of the big flame's colours (index into its five) texel (x, y) of `frame` is, or
+ * -1: a broad foot rising into two or three tongues that lick up and sway as the frames
+ * go by, outlined in deep red, white-gold at its heart.
+ */
+export function bigFlameTexel(frame: number, x: number, y: number): number {
+  const fromFoot = BIG_FLAME_HEIGHT - 1 - y;
+  const centre = (BIG_FLAME_WIDTH - 1) / 2;
+  const phase = (2 * Math.PI * frame) / BIG_FLAME_FRAMES;
+  const off = (x - centre) / (BIG_FLAME_WIDTH / 2);
+  // The body: tallest in the middle; tongues rise and fall in turn across it.
+  const body = (1 - off * off) * (BIG_FLAME_HEIGHT * 0.62);
+  const tongues =
+    Math.max(0, Math.cos(off * 5.2 + phase)) * BIG_FLAME_HEIGHT * 0.3 +
+    Math.max(0, Math.cos(off * 3.1 - phase * 0.7 + 1)) * BIG_FLAME_HEIGHT * 0.18;
+  const height = body + tongues * (1 - Math.abs(off) * 0.6);
+  if (Math.abs(off) > 1 || fromFoot > height) return -1;
+  const inside = height - fromFoot;
+  const edge = (1 - Math.abs(off)) * BIG_FLAME_WIDTH * 0.5;
+  const depth = Math.min(inside, edge);
+  if (depth < 0.9) return 0;
+  if (depth < 1.8) return 1;
+  if (depth < 2.8 || fromFoot > body * 0.85) return 2;
+  if (depth < 3.6 || fromFoot > body * 0.5) return 3;
+  return 4;
+}
+
 export interface Sprites {
+  /** The local view's larger flame, frame by frame. */
+  bigFlames: Texture[];
   halo: Texture;
+  /** A halo with a dark heart: light round a thing without hiding it (glowing animals). */
+  ring: Texture;
   puff: Texture;
   fleck: Texture;
   beam: Texture;
@@ -71,6 +108,25 @@ export function flameTexel(frame: number, x: number, y: number): number {
   return 3;
 }
 
+/** The ring's steps: (share of its radius, opacity), from the outside in; clear in its middle. */
+export const RING_STEPS: readonly (readonly [number, number])[] = [
+  [1, 0.12],
+  [0.8, 0.3],
+  [0.62, 0.55],
+  [0.44, 0.3],
+  [0.3, 0.08],
+  [0.18, 0],
+];
+
+/** Opacity of the ring at texel (x, y). */
+export function ringAlpha(x: number, y: number, size = HALO_SIZE): number {
+  const r = size / 2;
+  const d = Math.hypot(x + 0.5 - r, y + 0.5 - r) / r;
+  let alpha = 0;
+  for (const [reach, opacity] of RING_STEPS) if (d <= reach) alpha = opacity;
+  return alpha;
+}
+
 /** Opacity of the halo at texel (x, y): the step it falls in, or 0 outside. */
 export function haloAlpha(x: number, y: number, size = HALO_SIZE): number {
   const r = size / 2;
@@ -85,11 +141,13 @@ let made: Sprites | null = null;
 /** The textures (made on first use; they live as long as the page). */
 export function atmosphereSprites(): Sprites {
   if (made !== null) return made;
-  const flamesX = HALO_SIZE + PUFF_SIZE + 1 + BEAM_WIDTH + 1;
+  const ringX = HALO_SIZE + PUFF_SIZE + 1 + BEAM_WIDTH + 1;
+  const flamesX = ringX + HALO_SIZE + 1;
   const ringsX = flamesX + FLAME_FRAMES * (FLAME_WIDTH + 1);
   const mouthX = ringsX + RINGS.reduce((sum, size) => sum + size + 1, 0);
-  const width = mouthX + MOUTH_WIDTH + 1;
-  const height = Math.max(HALO_SIZE, BEAM_HEIGHT);
+  const bigX = mouthX + MOUTH_WIDTH + 1;
+  const width = bigX + BIG_FLAME_FRAMES * (BIG_FLAME_WIDTH + 1);
+  const height = Math.max(HALO_SIZE, BEAM_HEIGHT, BIG_FLAME_HEIGHT);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -129,6 +187,14 @@ export function atmosphereSprites(): Sprites {
     }
     ringAt += size + 1;
   }
+  for (let frame = 0; frame < BIG_FLAME_FRAMES; frame++) {
+    for (let y = 0; y < BIG_FLAME_HEIGHT; y++) {
+      for (let x = 0; x < BIG_FLAME_WIDTH; x++) {
+        const tone = bigFlameTexel(frame, x, y);
+        if (tone >= 0) paint(bigX + frame * (BIG_FLAME_WIDTH + 1) + x, y, BIG_FLAME[tone] ?? 0);
+      }
+    }
+  }
   for (let y = 0; y < MOUTH_HEIGHT; y++) {
     for (let x = 0; x < MOUTH_WIDTH; x++) {
       const dx = (x + 0.5 - MOUTH_WIDTH / 2) / (MOUTH_WIDTH / 2);
@@ -140,7 +206,10 @@ export function atmosphereSprites(): Sprites {
     }
   }
   for (let y = 0; y < HALO_SIZE; y++) {
-    for (let x = 0; x < HALO_SIZE; x++) put(x, y, haloAlpha(x, y));
+    for (let x = 0; x < HALO_SIZE; x++) {
+      put(x, y, haloAlpha(x, y));
+      put(ringX + x, y, ringAlpha(x, y));
+    }
   }
   // The puff: a disc, its upper part lighter (lit from above), the rest a shade darker.
   const puffX = HALO_SIZE;
@@ -170,6 +239,7 @@ export function atmosphereSprites(): Sprites {
     new Texture({ source, frame: new Rectangle(x, 0, w, h) });
   made = {
     halo: frame(0, HALO_SIZE, HALO_SIZE),
+    ring: frame(ringX, HALO_SIZE, HALO_SIZE),
     puff: frame(puffX, PUFF_SIZE, PUFF_SIZE),
     fleck: frame(fleckX, 1, 1),
     beam: frame(beamX, BEAM_WIDTH, BEAM_HEIGHT),
@@ -180,6 +250,47 @@ export function atmosphereSprites(): Sprites {
       frame(ringsX + RINGS.slice(0, k).reduce((sum, s) => sum + s + 1, 0), size, size),
     ),
     mouth: frame(mouthX, MOUTH_WIDTH, MOUTH_HEIGHT),
+    bigFlames: Array.from({ length: BIG_FLAME_FRAMES }, (_, k) =>
+      frame(bigX + k * (BIG_FLAME_WIDTH + 1), BIG_FLAME_WIDTH, BIG_FLAME_HEIGHT),
+    ),
   };
   return made;
+}
+
+const streaks = new Map<string, Texture>();
+
+/**
+ * A raindrop's streak `length` art pixels long, leaning `lean` pixels across for each
+ * pixel down (the wind), drawn a pixel a row as pixel art does a slanted line: its head
+ * (lowest, brightest) at the bottom right. Made once for each length and lean.
+ */
+export function streakTexture(length: number, lean: number): Texture {
+  const rows = Math.max(Math.round(length), 1);
+  const step = Math.round(lean * 4) / 4;
+  const key = `${rows}:${step}`;
+  const known = streaks.get(key);
+  if (known !== undefined) return known;
+  const width = Math.round((rows - 1) * Math.abs(step)) + 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = rows;
+  const context = canvas.getContext("2d");
+  if (context === null) throw new Error("no 2D canvas for rain");
+  const image = context.createImageData(width, rows);
+  for (let row = 0; row < rows; row++) {
+    const across = Math.round(row * Math.abs(step));
+    const x = step >= 0 ? across : width - 1 - across;
+    const at = (row * width + x) * 4;
+    image.data[at] = 255;
+    image.data[at + 1] = 255;
+    image.data[at + 2] = 255;
+    // Fainter toward its tail.
+    image.data[at + 3] = Math.round(255 * (0.35 + 0.65 * ((row + 1) / rows)));
+  }
+  context.putImageData(image, 0, 0);
+  const texture = new Texture({
+    source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }),
+  });
+  streaks.set(key, texture);
+  return texture;
 }

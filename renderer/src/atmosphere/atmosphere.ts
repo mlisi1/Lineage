@@ -43,7 +43,13 @@ import {
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
 import { coneSummit, markTexture } from "./marks";
 import { SpritePool, dropAt, placeCentred, puffAt, type Fall, type Plume } from "./particles";
-import { FLAME_FRAMES, HALO_SIZE, RINGS, atmosphereSprites, type Sprites } from "./sprites";
+import {
+  HALO_SIZE,
+  RINGS,
+  atmosphereSprites,
+  streakTexture,
+  type Sprites,
+} from "./sprites";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
 const LAVA = [0xff5a1e, 0xff8a2a, 0xffc04a] as const;
@@ -67,13 +73,32 @@ const RAIN_STRENGTH: Readonly<Record<RainKind, number>> = {
   storm: 1,
   soaking: 0.6,
 };
-const RAIN_SLANT: Readonly<Record<RainKind, number>> = {
+/** How much the rain leans with the wind: pixels across for each pixel down. */
+const RAIN_LEAN: Readonly<Record<RainKind, number>> = {
   none: 0,
-  rain: -30,
-  thunder: -40,
-  storm: -90,
-  soaking: -15,
+  rain: 0.35,
+  thunder: 0.45,
+  storm: 0.8,
+  soaking: 0.2,
 };
+/** Rain as the view is close: how long a drop is (art pixels), how fast it falls (art pixels a second), how many, how bright. */
+const RAIN_SCALE: Readonly<
+  Record<ViewName, { length: number; speed: number; count: number; alpha: number }>
+> = {
+  map: { length: 2, speed: 80, count: 1.6, alpha: 0.4 },
+  middle: { length: 3, speed: 120, count: 1.3, alpha: 0.5 },
+  local: { length: 6, speed: 170, count: 1, alpha: 0.7 },
+};
+/** The layers of rain, far to near: share of the drops, and how fast, long and bright against the view's. */
+const RAIN_LAYERS = [
+  { share: 0.45, speed: 0.6, length: 0.6, alpha: 0.55 },
+  { share: 0.35, speed: 1, length: 1, alpha: 0.85 },
+  { share: 0.2, speed: 1.45, length: 1.45, alpha: 1 },
+] as const;
+/** Glow: seconds a pulse takes, the least of it, and the glow round an animal's square on the map (art pixels). */
+const GLOW_PULSE_S = 3.5;
+const GLOW_LOW = 0.45;
+const GLOW_MAP_PX = 8;
 /** A thunderstorm darkens the sky this much more than rain (multiplied in as it builds). */
 const STORM_GREY: Rgb = [0.6, 0.64, 0.78];
 /** Ripples on the water a frame at full rain, in the middle and local views, and how long one lasts (s). */
@@ -387,7 +412,9 @@ export class Atmosphere {
 
   private paintTint(view: View, moment: Moment | null): void {
     let colour = skyTint(this.ease.value, this.present, this.season, this.progress);
-    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, Math.min(this.rain / 0.7, 1)));
+    // Clouds over the sun: any rain greys the day, thunder more.
+    const cloud = Math.min(this.rain / 0.7, 1) * (this.rainKind === "thunder" ? 1.15 : 1);
+    colour = multiplyRgb(colour, mixRgb([1, 1, 1], RAIN_GREY, Math.min(cloud, 1.15)));
     colour = multiplyRgb(colour, mixRgb([1, 1, 1], STORM_GREY, this.storm));
     if (moment !== null) {
       // Red whatever the hour: the end of a world is lit by its fires, not by the owner.
@@ -423,10 +450,20 @@ export class Atmosphere {
 
   private drawGlow(view: View, dark: number): void {
     if (dark <= 0.02) return;
-    const breath = 0.85 + 0.15 * Math.sin(this.timeS * 1.7);
+    // A slow pulse, a breath every few seconds.
+    const pulse = 0.5 + 0.5 * Math.sin((2 * Math.PI * this.timeS) / GLOW_PULSE_S);
+    const strength = dark * (GLOW_LOW + (1 - GLOW_LOW) * pulse);
+    const map = view.view === "map";
     for (const spot of view.glowing) {
-      const size = Math.max(spot.size * view.tile * 5, 14);
-      this.halo(spot.x, spot.y, size, GLOW_SPOT, 0.85 * dark * breath, view.tile);
+      // On the map a soft light just round the animal's square; closer, a ring of light
+      // round each spot of its back, its heart clear so that the animal shows through.
+      const size = map
+        ? GLOW_MAP_PX
+        : Math.max(spot.size * view.tile * (view.tile >= 32 ? 7 : 5), 12);
+      const sprite = this.lightPool.next(map ? this.sprites.halo : this.sprites.ring);
+      placeCentred(sprite, spot.x, spot.y, view.tile, Math.min(size, 3 * HALO_SIZE));
+      sprite.tint = GLOW_SPOT;
+      sprite.alpha = Math.min((map ? 0.7 : 0.6) * strength, 1);
     }
   }
 
@@ -484,26 +521,56 @@ export class Atmosphere {
         this.puffs(flames, 1, FIRE[(flame + 1) % FIRE.length] ?? SPARK, tile, true);
         return;
       }
-      // Closer, flames: one to a cell in the middle view, three (twice as large) up close,
-      // each on its own frame of the flicker; embers rise between them.
-      const count = tile >= 32 ? 3 : 1;
-      // Some flames taller than others.
-      // Whole multiples only, so that the flames keep hard pixel edges.
-      const scale = tile >= 32 ? (cellHash(index, 9, 348) < 0.3 ? 3 : 2) : 1;
+      // Closer, flames: one to a cell in the middle view; up close two larger,
+      // more detailed ones, each with its own glow and embers rising from it. Each on its
+      // own frame of the flicker; whole multiples of size only, for hard pixel edges.
+      const close = tile >= 32;
+      const count = close ? 2 : 1;
+      const frames = close ? this.sprites.bigFlames : this.sprites.flames;
+      const scale = close ? 2 : 1;
       for (let k = 0; k < count; k++) {
         const ox = count === 1 ? 0 : (cellHash(index, k, 346) - 0.5) * 0.8;
         const oy = count === 1 ? 0 : (cellHash(index, k, 347) - 0.5) * 0.6;
         const rate = 7 + 4 * cellHash(index, k, 349);
-        const frame = (Math.floor(this.timeS * rate) + k + index) % FLAME_FRAMES;
-        const sprite = this.flamePool.next(this.sprites.flames[frame] ?? this.sprites.fleck);
+        const frame = (Math.floor(this.timeS * rate) + k + index) % frames.length;
+        const sprite = this.flamePool.next(frames[frame] ?? this.sprites.fleck);
         const w = sprite.texture.width * scale;
         const h = sprite.texture.height * scale;
         // Its foot on the place, rising from it.
         placeCentred(sprite, fx + ox, fy + oy - h / 2 / tile, tile, w, h);
         sprite.tint = 0xffffff;
         sprite.alpha = 1;
+        if (close) {
+          const glow = FIRE[(frame + k) % FIRE.length] ?? FIRE[0];
+          this.halo(
+            fx + ox,
+            fy + oy - h / 3 / tile,
+            w * 1.8,
+            glow,
+            0.45 * strength * this.flicker(index + k),
+            tile,
+          );
+          this.puffs(
+            {
+              x: fx + ox,
+              y: fy + oy - (h * 0.6) / tile,
+              spread: 0.08,
+              rise: 22,
+              drift: 4,
+              life: 1.1,
+              from: 2,
+              to: 1,
+              alpha: strength,
+              salt: index * 7 + k,
+            },
+            3,
+            SPARK,
+            tile,
+            true,
+          );
+        }
       }
-      this.puffs(flames, tile >= 32 ? 5 : 2, SPARK, tile, true);
+      if (!close) this.puffs(flames, 2, SPARK, tile, true);
     });
     // Smoke from some of them, grey and drifting with the wind.
     const smokes = Math.min(MOST_SMOKES, inSight.length);
@@ -761,17 +828,30 @@ export class Atmosphere {
 
   private drawRain(view: View): void {
     if (this.rain <= 0.01) return;
-    const slant = RAIN_SLANT[this.rainKind] * Math.max(this.storm, 0.4);
-    const fall: Fall = { speed: 160 + 80 * this.storm, slant, salt: 7 };
-    const drops = Math.round(RAINDROPS * this.rain);
-    const length = 6 + Math.round(4 * this.storm);
-    for (let slot = 0; slot < drops; slot++) {
-      const at = dropAt(fall, slot, this.timeS, view.width, view.height);
-      const sprite = this.weatherPool.next(this.sprites.fleck);
-      sprite.position.set(Math.round(at.x), Math.round(at.y));
-      sprite.scale.set(1, length);
-      sprite.tint = RAIN;
-      sprite.alpha = 0.7;
+    // Drops as large as the view is close: fine on the map, longer up close; in layers
+    // that fall at different speeds (the near ones faster, longer, brighter), all leaning
+    // with the wind, which gusts in a thunderstorm.
+    const scale = RAIN_SCALE[view.view];
+    const gust = this.storm * 0.25 * Math.sin(this.timeS * 0.7);
+    const lean = RAIN_LEAN[this.rainKind] + gust;
+    for (const [layer, depth] of RAIN_LAYERS.entries()) {
+      const speed = scale.speed * depth.speed * (1 + 0.4 * this.storm);
+      const fall: Fall = { speed, slant: speed * lean, salt: 7 + layer };
+      const length = Math.max(Math.round(scale.length * depth.length * (1 + 0.3 * this.storm)), 1);
+      const texture = streakTexture(length, lean);
+      const drops = Math.round(RAINDROPS * this.rain * depth.share * scale.count);
+      for (let slot = 0; slot < drops; slot++) {
+        const at = dropAt(fall, slot, this.timeS, view.width, view.height);
+        const sprite = this.weatherPool.next(texture);
+        // The streak's head where the drop is; its tail up the wind.
+        sprite.position.set(
+          Math.round(at.x) - (lean >= 0 ? texture.width - 1 : 0),
+          Math.round(at.y) - texture.height + 1,
+        );
+        sprite.scale.set(1, 1);
+        sprite.tint = RAIN;
+        sprite.alpha = scale.alpha * depth.alpha;
+      }
     }
     // Where it falls: rings spreading on the water, and splashes on the land.
     const land = view.land;

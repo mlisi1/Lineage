@@ -275,6 +275,19 @@ export class Herd {
       const known = this.roster.genomes.get(id);
       if (slot === undefined || known === undefined || !layer.has(slot)) continue;
       if ((known.slots & this.glowBits) === 0) continue;
+      if (this.view === "map") {
+        // On the map, one light round its square.
+        const at = layer.centre(slot);
+        if (
+          at.x >= cells.x0 - 1 &&
+          at.x <= cells.x1 + 1 &&
+          at.y >= cells.y0 - 1 &&
+          at.y <= cells.y1 + 1
+        ) {
+          spots.push({ x: at.x, y: at.y, size: 0 });
+        }
+        continue;
+      }
       const { joints, radii } = layer.spine(slot);
       joints.forEach((joint, i) => {
         if (i % 2 === 1 || i === joints.length - 1) return;

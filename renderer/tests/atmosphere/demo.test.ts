@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   demoMessages,
+  fireReach,
   landNear,
   showsOf,
   withBurnt,
@@ -127,11 +128,30 @@ describe("the atmosphere on demand", () => {
     expect(after.biomass[at(12, 7)]).toBe(0);
   });
 
-  it("burns a wood: the ground scorched, trees stood there", () => {
-    const after = landOf(withBurnt(message, 12.5, 7.5), null);
+  it("burns where plants carry the fire, and nowhere else", () => {
+    const after = landOf(withBurnt(message, 12.5, 7.5, land), null);
     expect(after.coverClasses[after.cover[at(12, 7)] ?? 0]).toBe("BURNT");
     expect(after.scorch?.[at(12, 7)] ?? 0).toBeGreaterThan(200);
-    expect(after.plantHeight?.[at(12, 7)] ?? 0).toBeGreaterThan(150);
+    let burnt = 0;
+    for (let i = 0; i < cells; i++) {
+      if (after.coverClasses[after.cover[i] ?? 0] !== "BURNT") continue;
+      burnt += 1;
+      // Only grass burnt: never the bare patch, never the sea.
+      expect(land.biomass[i] ?? 0).toBeGreaterThan(38);
+    }
+    expect(burnt).toBeGreaterThan(30);
+  });
+
+  it("spreads a fire from cell to neighbouring cell", () => {
+    const reach = fireReach(land, 12.5, 7.5, 24);
+    expect(reach).toHaveLength(24);
+    const set = new Set(reach);
+    for (const cell of reach) {
+      if (cell === at(12, 7)) continue;
+      const near = [cell - 1, cell + 1, cell - WIDTH, cell + WIDTH].some((n) => set.has(n));
+      expect(near).toBe(true);
+    }
+    expect(fireReach(land, 3.5, 7.5, 24)).toEqual([at(3, 7)]);
   });
 
   it("sprouts seeds on bare land only", () => {

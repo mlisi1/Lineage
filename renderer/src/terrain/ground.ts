@@ -181,15 +181,20 @@ const ALGAE_CLUMP = 3;
 const ALGAE: readonly number[] = [0x4f7a3a, 0x86a24a];
 const ALGAE_MIX = 0.7;
 /**
- * Burnt ground (R4): charcoal mixed in (more where the fire was recent), patches of this
- * many pixels, how far they reach at full scorch, and a share of pixels that are pale ash.
+ * Burnt ground (R4): charcoal mixed in (more where the fire was recent), and a share of
+ * pixels that are pale ash.
  */
-const CHARRED = 0x2e2626;
-const CHAR_MIX = 0.55;
-const CHAR_PATCH = 4;
-const CHAR_REACH = 1.15;
-const CHAR_ASH = 0.06;
-const CHAR_ASH_COLOUR = 0x9a918a;
+const CHARRED = 0x241c1c;
+const CHAR_MIX = 0.62;
+/**
+ * Scorch (0–1) from which a cell is drawn burnt; how far its edge wanders (cells) and over
+ * how many cells the wander turns; ash lies in drifts where a noise passes this.
+ */
+const CHAR_FROM = 0.04;
+const CHAR_RAGGED = 0.55;
+const CHAR_RAGGED_SPAN = 0.7;
+const CHAR_ASH = 0.8;
+const CHAR_ASH_COLOUR = 0x8a827c;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
 /** The moving surf: share of the foam band's pixels that are foam, and of a line's dashes. */
@@ -483,7 +488,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
             (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
           );
         };
-  const scorchAt = between4(world.scorch);
+  const scorchCells = world.scorch;
   const algaeAt = between4(world.algae);
   // The season of the pixel being painted.
   let now = seasonalOf(options.season ?? "summer");
@@ -978,24 +983,29 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
-  // Burnt ground (R4): charred in patches as hot as the fire was recent, with flecks of
-  // ash; it greens again as the scorch fades.
-  if (scorchAt !== null) {
+  // Burnt ground (R4): every cell that burnt is charcoal, darker the more recent the fire,
+  // with drifts of pale ash; its edge follows the cells, wandering by half a cell or so.
+  if (scorchCells !== undefined) {
     for (let py = 0; py < tall; py++) {
       for (let px = 0; px < wide; px++) {
         const at = py * wide + px;
         if (isLand[at] !== 1) continue;
         const worldX = originX + px;
         const worldY = originY + py;
-        const scorch = scorchAt((worldX + 0.5) / tile - 0.5, (worldY + 0.5) / tile - 0.5);
-        if (scorch <= 0.01) continue;
-        const patch = valueNoise(worldX / CHAR_PATCH, worldY / CHAR_PATCH, 53);
-        const bayer = (BAYER[(worldY & 3) * 4 + (worldX & 3)] ?? 0.5) * 2 - 1;
-        if (patch + 0.12 * bayer > scorch * CHAR_REACH) continue;
-        const ash = cellHash(worldX, worldY, 54) < CHAR_ASH;
+        const bayer = (BAYER[(worldY & 3) * 4 + (worldX & 3)] ?? 0.5) - 0.5;
+        const u = (worldX + 0.5) / tile;
+        const v = (worldY + 0.5) / tile;
+        const wanderX = valueNoise(u / CHAR_RAGGED_SPAN, v / CHAR_RAGGED_SPAN, 55) - 0.5;
+        const wanderY = valueNoise(u / CHAR_RAGGED_SPAN, v / CHAR_RAGGED_SPAN, 56) - 0.5;
+        const cx = clampX(Math.floor(u + 2 * wanderX * CHAR_RAGGED + bayer * 0.15));
+        const cy = clampY(Math.floor(v + 2 * wanderY * CHAR_RAGGED - bayer * 0.15));
+        const scorch = (scorchCells[cy * width + cx] ?? 0) / 255;
+        if (scorch <= CHAR_FROM) continue;
+        const drift = valueNoise(u * 3, v * 3, 54) + 0.25 * bayer;
+        const ash = drift > CHAR_ASH && cellHash(worldX, worldY, 57) < 0.6;
         colours[at] = ash
           ? CHAR_ASH_COLOUR
-          : mix(colours[at] ?? 0, CHARRED, CHAR_MIX * scorch + 0.25);
+          : mix(colours[at] ?? 0, CHARRED, CHAR_MIX + (1 - CHAR_MIX) * 0.8 * scorch);
       }
     }
   }
