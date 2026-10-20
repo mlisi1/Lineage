@@ -11,7 +11,7 @@ test("a day's plants and grounds are let go when the next day comes", async ({ p
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/?every=0&still&view=local&x=60&y=60");
+  await page.goto("/?recording=autumn&every=0&still&quiet&view=local&x=60&y=60");
   const settled = (): Promise<unknown> =>
     page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
   await settled();
