@@ -31,10 +31,10 @@ DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "02357c8ca6cf2b9280d7e2764fe250a5176c0f93ac63a334997db8a9d0bf0314"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "8cab44eddcd588b4cd0e4388fe14c25eea11c88516616eb06b8cf9871a3a57fe"
+GOLDEN_AFTER_THREE_DAYS = "6e8d7a3f28793f66ed11ccdfbd739b7fa4585e7a45c496d88135bd468f94f210"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "cfceee85d06f842cfcb5309525e7f47726e7cfe83c58027e589489bcf3cc4f62"
+GOLDEN_BARE_ROCK_520_DAYS = "80599a3927e7049c357fd0071d7271b0df1e86f036f047cd3ad88ba621b173fb"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 

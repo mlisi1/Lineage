@@ -400,6 +400,10 @@ class Fauna:
         low = np.where(is_low, biomass, np.float32(0.0)).astype(np.float32)
         woody = np.where(is_woody, biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
+        # Reach (M11): of a plant taller than it reaches, a creature bites only a share.
+        browse = creature.Browse(
+            self._flora.stature(), creature.reach(cfg, body.mass), cfg.browse_floor
+        )
         # Food at sea (M11): smelled by those at ease in water (swimmers, amphibians).
         algae = self._flora.grazeable_algae()
         sea, ease = None, None
@@ -428,6 +432,7 @@ class Fauna:
             rare.sight(cfg, self._slots, body.sense_range, self._daylight),
             sea,
             ease,
+            browse,
         )
         # Roaming: a heading that drifts slowly, so a creature with nothing to steer by
         # covers ground instead of jittering in place.
@@ -480,6 +485,7 @@ class Fauna:
         sun = np.minimum(sun, np.maximum(body.capacity - self._energy, 0.0))
         self._energy = (self._energy + sun).astype(np.float32)
         appetite = creature.appetite(cfg, self._energy, body, hours)
+        appetite = (appetite * browse.share(rows, columns)).astype(np.float32)
         appetite[torpid] = 0.0
         eaten = self._flora.graze(rows, columns, appetite)
         # Defended plants are not only harder to bite: what is eaten is worth less (toxins).

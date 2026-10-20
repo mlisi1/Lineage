@@ -325,6 +325,7 @@ class Flora:
         # Plant form of every cell, derived from the genome; None when the genome changed.
         self._forms: Bytes | None = None
         self._form_masks: tuple[Mask, Mask] | None = None
+        self._stature: Grid | None = None  # `stature` of every cell; None when it changed
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         self._algae: Grid = np.zeros(shape, dtype=_F)
@@ -487,7 +488,14 @@ class Flora:
 
     def shade(self) -> Grid:
         """Share of sunlight the plants intercept on every cell, in [0, 1]."""
-        return canopy(self._cfg, self._biomass, stature(self._cfg, self.genes(), self._rare))
+        return canopy(self._cfg, self._biomass, self.stature())
+
+    def stature(self) -> Grid:
+        """Height of every cell's plant (`stature`; 0 where none grows): what light sees,
+        and how high a grazer must reach (M11). Cached until the genome changes."""
+        if self._stature is None:
+            self._stature = stature(self._cfg, self.genes(), self._rare)
+        return self._stature
 
     def grazeable(self) -> Grid:
         """Plant biomass grazers can reach in each cell (what they see as food on land)."""
@@ -618,6 +626,7 @@ class Flora:
         self._biomass, self._genome = biomass, genome
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._algae = np.array(tree["algae"], dtype=_F)
@@ -632,6 +641,7 @@ class Flora:
         self._genome[:, dead] = 0
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare[dead] = 0
 
     def _disperse(self, rng: Generator, temp: Grid, elevation: Grid, dt_years: float) -> None:
@@ -755,6 +765,7 @@ class Flora:
         self._genome[:, ys, xs] = genome
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare[ys, xs] = rare
         self._biomass[ys, xs] = np.maximum(kept, _F(cfg.seedling_biomass))
         return count

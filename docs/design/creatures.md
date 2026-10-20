@@ -118,6 +118,14 @@ networks, predator–prey coexistence): ADR 0009, "References".
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Reach** (M11): a creature reaches plants up to `reach_at_unit_mass` (0.5) ×
+  mass^(1/3) in the plants' height units (`Flora.stature`: grass about 0.2, shrubs to
+  0.6, trees to 1, emergent crowns 1.5), so about 0.3 at the smallest size, 1.0 at mass
+  8, and more for giants. Of a taller plant it bites `browse_floor` (0.3) of a full bite
+  (low leaves, seedlings) plus the rest in proportion to the share of the plant's height
+  it reaches, and it smells that plant's food the same way, so a small grazer heads for
+  the grass it can eat rather than a forest it cannot. Large bodies get food small ones
+  cannot reach; forests are browsed less. `browse_floor` 1 turns it off. No saved state.
 - **Food at sea** (M11): algae grow on the shallow sea (`plants.md`). A creature eats
   them wherever it swims and no plant stands, like a plant meal worth
   `[flora] algae_meal_share` of one. It smells them in proportion to its ease in water:

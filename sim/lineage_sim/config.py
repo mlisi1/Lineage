@@ -393,6 +393,8 @@ class FaunaConfig:
     water_stress: float
     graze_rate: float
     graze_jaw_floor: float
+    reach_at_unit_mass: float
+    browse_floor: float
     plant_energy: float
     meat_energy: float
     diet_exponent: float
@@ -526,6 +528,7 @@ class FaunaConfig:
             "maturity_share",
             "founder_energy_share",
             "graze_jaw_floor",
+            "browse_floor",
             "attack_min_diet",
             "hunt_below_energy_share",
             "repro_energy_share",

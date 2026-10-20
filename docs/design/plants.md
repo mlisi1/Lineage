@@ -112,7 +112,8 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 
 - `Flora.graze(ys, xs, demand)` for fauna (M4): defended plants refuse part of a bite;
   grazers on one cell share what is there; where no plant stands they eat algae (M11:
-  `Flora.algae`, `grazeable_algae`, `on_algae`). What is eaten is also worth less to the grazer
+  `Flora.algae`, `grazeable_algae`, `on_algae`). `Flora.stature()` (cached) is how
+  high a grazer must reach (M11, `creatures.md`, "Reach"). What is eaten is also worth less to the grazer
   (`[fauna] defence_toxicity`, M5), and grazers see plant form, not defence:
   `Flora.forms()` (cached until the genome changes) and `Flora.defence_at`.
 - `Flora.set_daylight(level)` and `Flora.set_rain(factor)` for presence (M8).
