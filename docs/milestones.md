@@ -51,6 +51,29 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   not on the wire for the apocalypse sequence.
 - **For R5**: the local view moves every animal (about 200 in the v9 world) each frame;
   measure it on the board with the rest.
+- **Noted by the owner at the R3 demo (2026-10-20), given to later milestones** (CLAUDE.md
+  §8). What is known of each so far, not yet investigated:
+  - *R4: waves on every coast, in every view.* The surf (`terrain/sea.ts`, R1) is painted
+    only for the middle and local views (`surf: close` in `landscape.ts`); the map has
+    none.
+  - *R5: animals walk into bushes and trees.* Strolls between sim ticks
+    (`creatures/motion.ts`) only ask whether a place is land or water (`Passable`); the
+    plants' footprints are not in it. The sim's own positions may lie in a wood, so the
+    anchor itself may need to be drawn beside the trunk rather than on it.
+  - *R5: a body folds through itself as it turns.* The chain (`creatures/chain.ts`)
+    follows the head with no limit on the angle between joints, so a sharp turn (the
+    motion's `TURN_RATE`, pauses that look about) bends it back over itself.
+  - *R5: some animals drag all their legs at once.* In `spike/creatures.ts` `walk` a foot
+    steps when its rest point is `0.8` leg lengths away, so on a short-legged or slow body
+    every foot crosses that threshold on the same frame; legs need a phase (left/right,
+    front/back alternating) and one foot of a pair down while the other swings.
+  - *R5: plants pop in over animals.* Candidates: the plants in front of the animal
+    followed turn see-through (`PlantLayer.fade`) and back as its box crosses rows;
+    an animal changes row (`hostIn`) and a plant goes from behind it to in front at once;
+    the middle view builds plant chunks as they come into sight (`lazy`).
+  - *R5 (and S3): a name scroll by the animal followed.* R3's scroll (`captions.ts`) and
+    font, small, beside it in the local view: its species' name (`Herd.names`) and a few
+    genes in words (size, diet, rare genes from `slots`).
 
 ### Starting M11 (long-run tuning and stability)
 

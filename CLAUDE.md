@@ -463,7 +463,8 @@ needs a note in `docs/decisions/`.
 
 ### R4 — Atmosphere
 - **Deliver**: day/night tint from presence, glow pass, seasons, weather of events,
-  apocalypse sequence.
+  apocalypse sequence; waves breaking on the coasts in all three views, the map too
+  (added by the owner, 2026-10-20).
 - **Tests**: snapshots per lighting state. (Its device benchmark moved to R5.)
 
 ### R5 — Final rendering pass and device benchmark
@@ -471,7 +472,12 @@ needs a note in `docs/decisions/`.
   pass over R1–R4 (the cosy palette, ADR 0013, is the starting point); the R0 benchmark's
   views rebuilt on the real renderer and the state stream; on-device numbers in a report.
   R1–R4 do not measure on the device; they keep within the PC-side checks and leave the
-  board to R5.
+  board to R5. Added by the owner (2026-10-20, from the R3 demo): animals do not walk
+  through bushes and trees; a body never folds through itself when it turns; every legged
+  animal steps with its legs in turn (IK), none drags all its legs at once; plants do not
+  pop in over animals; and a small scroll by the animal followed in the local view gives
+  its species' name and a few of its genes (the phone's follow-a-creature, S3, shows the
+  same).
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
@@ -489,7 +495,7 @@ needs a note in `docs/decisions/`.
 
 ### S3 — Phone app and API
 - **Deliver**: read-only API (chronicle, bestiary, stats, phylogeny), PWA reusing the
-  renderer, follow-a-creature.
+  renderer, follow-a-creature (with R5's name scroll).
 - **Tests**: API contract tests; Playwright mobile viewport snapshots.
 
 ### S4 — Notifications
