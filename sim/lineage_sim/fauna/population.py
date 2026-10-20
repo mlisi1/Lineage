@@ -964,6 +964,10 @@ class Fauna:
         positions = np.array([spots_x[spot], spots_y[spot]], dtype=np.float32) + scatter
         positions[:, 0] = np.clip(positions[:, 0], 0.0, self._shape[1] - 1.0)
         positions[:, 1] = np.clip(positions[:, 1], 0.0, self._shape[0] - 1.0)
+        # Newcomers land on land: one scattered into the sea stands on the spot instead.
+        rows, columns = creature.cells_of(positions, self._shape)
+        at_sea = ~self._terrain.land[rows, columns]
+        positions[at_sea] = np.array([spots_x[spot], spots_y[spot]], dtype=np.float32)
         body = body_of(cfg, genes, np.zeros(count, dtype=np.uint16))
         energy = (cfg.founder_energy_share * body.capacity).astype(np.float32)
         # Arrive at random ages so they do not all die of old age together.

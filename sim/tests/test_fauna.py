@@ -19,6 +19,7 @@ from lineage_sim.events import CreaturesArrived, JuvenileGrown, PopulationExtinc
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
+from lineage_sim.fauna.creature import cells_of
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import CONFIG_KEYS, Phenotype, phenotype, phenotype_config
 from lineage_sim.flora import Gene as FloraGene
@@ -34,7 +35,7 @@ GOLDEN_FAUNA_SEED_42 = "1bd9023cd1be8e499c86ae8d594dd527636a0346bfd70bcfd805d547
 GOLDEN_AFTER_THREE_DAYS = "bff1997127c52eb7d72903dffe4917da39286a5907a911d21f0382d580eb4e36"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "565e4aae04b94539c67aebe3ed7ee3ae2f3ec10070408985c79c60aa7302f6bc"
+GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -419,6 +420,16 @@ def _set_alight(site: Site, x0: int, x1: int) -> None:
     for y in range(ROWS):
         for x in range(x0, x1):
             site.fire.ignite(y, x, site.t_ms)
+
+
+def test_newcomers_land_on_land_even_on_a_narrow_shore(config: Config) -> None:
+    """The ark and every group of founders (R4: the owner asked for this sanity check)."""
+    wide = replace(config.fauna, immigrant_groups_per_year=0.0, founder_radius_cells=12.0)
+    site = Site(config, water_from=6, fauna=wide)  # a strip of land six cells wide
+    outputs = site.fauna.arrive(Generator(PCG64(3)), 0, 40)
+    assert outputs
+    rows, columns = cells_of(site.fauna.positions, (ROWS, COLUMNS))
+    assert bool(site.terrain.land[rows, columns].all())
 
 
 def test_a_creature_caught_in_a_fire_dies_of_it(config: Config) -> None:
