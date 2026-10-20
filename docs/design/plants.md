@@ -105,7 +105,8 @@ Lightning ignites vegetation, and lightning comes only with a thunderstorm (R4, 
 island's own weather, `weather.py`): fires start only while it rains, mostly in the warm
 season, when the land is dry (`fire_strikes_per_storm_hour` × dryness; calibrated to the
 same expected strikes a year as before R4). While any rain falls a fire spreads as on
-wet land. A fire burns animals that stay in it (`creatures.md`). A volcano's cone and a
+wet land. An overcast sky without rain (`Rain.CLOUD`, round 5) is only seen: it neither
+dims the plants' light nor slows a fire. A fire burns animals that stay in it (`creatures.md`). A volcano's cone and a
 crater (natural or the meteor's) bare the land round them: plants within `barren_reach`
 (1.4) × the event's radius are destroyed and nothing grows there for `barren_days` (120;
 `Flora.observe`, `Flora.barren`, R4). A burning cell burns for 8 hours and

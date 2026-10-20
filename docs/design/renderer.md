@@ -687,11 +687,12 @@ little and go, forty slots to a view, each on its own clock and somewhere new ea
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
 it at its first moment, which the snapshots use. The land sheet films it. **Tides**
 (R4): the painter also leaves the swash, three layers of water running further up the
-beach (the shallowest sea over the sand, foam at its edge; one pixel on the map). Every
-surf and swash layer is cut into tiles 16 art pixels across, each on its own clock, a
-smooth noise of where it is on the island (`tidePhase`), so a wave runs along a coast and
-no two coasts break together. A wave runs up the beach in 30 % of 5.4 s and drains in the
-rest, as far as a tide turning over 48 s lets it. `seaAt(land)`
+beach (the shallowest sea over the sand, foam at its edge; not on the map). Every surf
+and swash layer is cut into tiles 8 art pixels across, each on the clock of its place
+(`tidePhase`): a wave front travelling across the sea at 3 cells a second, so waves run
+along a coast and far coasts break at their own time. One wave every 8 s: the far line,
+the near one, the foam breaking, then the swash running up the beach and draining,
+smoothly (`swashHeight`), as far as a tide turning over 2 minutes lets it. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -894,6 +895,20 @@ god powers, a world's end and the next one's beginning).
 - The seed's sprouts grow leaf by leaf on each cell the seed sowed (the land before and
   after the power, diffed), until the plants show.
 - Tides (above, under the sea).
+
+**Round 5** (ADR 0021):
+
+- What lies on the ground (a crater, a cone's scree, a fire's embers) is drawn on
+  `Landscape.floor`, under the plants; what stands (flames, a cone and its lava, sprouts)
+  goes into the plants' rows by its foot (`RowPool`), as creatures do, so what stands in
+  front covers it.
+- Rain is drawn over the tint, faded with the light, in pale blue; each spell has its own
+  strength; thunder falls at random times. A cloud-grey veil under the tint takes the
+  colour out of the land as the sky is overcast; `sky.rain = "cloud"` is an overcast sky.
+- The close flame is 15 × 24 in six frames after pixel-art references, in a bed of
+  embers; burning trees burn in their crowns. Glow is fainter closer in.
+- The lava's crust drifts outward from the pool's middle. A crater's land waits for its
+  meteor to strike. The ark's beam fades into a pool of light at its foot.
 
 **Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
 the particles and the shows (and the land they change), lightning, flames and marks; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of

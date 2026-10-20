@@ -278,6 +278,61 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
   spot itself when they do (sim fix, with a test that fails without it). The owner was
   asked whether checks of this kind across the sim deserve a milestone of their own.
 
+## Round 5: the owner's comments on the fourth report (2026-10-20)
+
+- **Waves coordinated.** The tiles' clocks no longer come from a noise (which made the map's
+  coast flicker at random): a wave front travels across the sea in one direction at
+  3 cells a second, wandering a little, so neighbouring stretches of coast break a moment
+  apart and far ones at their own time. One wave clock (8 s) drives the crest coming in,
+  the foam breaking and the swash running up after it. The swash rises and drains
+  smoothly (each step fades in as the water reaches it), on a tide turning over 2 minutes.
+  The map keeps its surf without a swash; its tiles are 8 art pixels.
+- **Glow** fainter closer in: its pulse runs from 12 % to 30 % in the middle view and 6 %
+  to 16 % up close (30 % to 70 % on the map), so that the animal shows through it.
+- **Rain.** The drops are pale blue (three tones, far to near) and drawn over the tint,
+  faded with the light, so that they show on any ground; under the tint they had vanished
+  on the light map. They are longer and fall about twice as fast (3, 5 and 6 pixels; 170,
+  210 and 230 pixels a second). Each spell draws its own strength (45 % to 135 %) when it
+  begins and swells within it over 18 s. A thunderstorm falls half as heavy again, faster,
+  and leans and gusts harder.
+- **Thunder at random times.** Bolts fall by chance in windows a quarter of their mean
+  spacing, at a rate that turns over 25 s (lulls and bursts, a bolt sometimes right after
+  another).
+- **The sun blocked.** A multiply tint can only darken, so a veil of cloud-grey is laid
+  over the land under the tint, as overcast as the weather (cloud 50 %, the rain power
+  75 %, rain 80 %, thunder 90 %, storm 100 %): it takes the colour out as a blocked sun
+  does.
+- **A cloudy weather** in the sim (`Rain.CLOUD`, `[weather] cloud_spells_per_month`,
+  `cloud_hours_min`, `cloud_hours_max`): between rains the sky clouds over, 8 times a
+  month for 3 to 36 hours, and rain can come out of it. The owner left its effect on
+  evolution to us: it has none. It is only seen, so plants and animals live under the
+  same light, fire is not slowed, and M11's tuning is not disturbed. Its state is the
+  weather's own (`rain`, `until_ms`), so no schema change. On the wire it is
+  `sky.rain = "cloud"`.
+- **Fire.** Up close the flame is redrawn after pixel-art fire references (below): 15 × 24
+  texels in six frames, with a steady base on its fuel, a body that narrows and sways more
+  the higher it is, tongues licking up in turn, and on each loop a lick pinching off and
+  rising. The colours run from a deep red rim (never brown, which reads as smoke) through
+  orange and yellow to a white-gold heart. Each burning cell has a bed of glowing embers
+  on the ground, so the flames rise out of it. A burning tree or bush burns in its crown
+  too.
+- **Depth sorting.** What lies on the ground (a crater, a cone's scree, a fire's embers) is
+  drawn on a floor under the plants (`Landscape.floor`). What stands (flames, a cone and
+  its lava, the seed's sprouts) goes into the plants' rows by its foot (`RowPool`, the
+  rows the creatures already use), so what stands in front covers it. These were drawn
+  over every plant before. On the map there are no rows: they go over the ground.
+- **The volcano's lava** wells up in the middle of the pool and drifts outward to its rim,
+  where before it slid sideways.
+- **A crater only after its meteor.** The stream now sends the land an event changed just
+  after the event's news (`tools/stream.py`; a server does the same). The scene holds a
+  crater's land until its meteor strikes (1.2 s).
+- **The seed's growth.** The scene finds the sown cells as those bare before whose
+  biomass grew. A land that changed for another reason is passed over (a fire's, coming
+  with the power), and the next one is waited for. The recorded seed took on few cells,
+  so the report also shows it made up on burnt ground (`?show=burnt,seed`).
+- **The ark's foot.** The beam fades in steps toward its foot into a flattened pool of
+  light on the ground; each newcomer's thread of light likewise.
+
 ## Results
 
 On the PC, renderer tests went from 255 to 281 unit tests: the light's colours,
@@ -330,5 +385,13 @@ R5 does that.
   <https://cratermaker.readthedocs.io/en/latest/auto_examples/04-topography/4.1-plot_shaded_crater.html>;
   EGU 2014 abstracts on simple crater rims (the rim's height is ejecta and structural
   uplift in about equal parts), <https://meetingorganizer.copernicus.org/EGU2014/EGU2014-2240.pdf>.
+- Pixel-art fire, for the flames of round 5: Sprite AI, *Fire pixel art* (a near-white
+  core, yellow, orange, deep red at the edge; no brown, which reads as smoke or dirt;
+  four to six looping frames; a base kept nearly still so the fire stays on its fuel;
+  tongues that appear at the top and pinch off), <https://www.sprite-ai.art/gallery/fire>;
+  Wacom community, *Easy and quick flame animation tutorial* (filling a flame shape from a
+  dark red rim inward to brighter colours, eight to ten colours),
+  <https://community.wacom.com/en-de/easy-and-quick-flame-animation-tutorial>;
+  OpenGameArt, *Camp fire animation for RPGs*, <https://lpc.opengameart.org/node/14162>.
 - ADR 0016 (light and god powers), ADR 0018 (the world's end and the next), ADR 0020 (the
   camera and the dip).
