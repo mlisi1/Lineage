@@ -79,6 +79,8 @@ lineage/
 │   └── tests/                # fauna_site.py: hand-built site shared by fauna scenario tests
 ├── tools/                    # dev-only CLIs (not deployed)
 │   ├── fastforward.py        # run N sim-years headless for M seeds → runs/<id>/
+│   ├── tune/                 # M11: score a run on every criterion, sweep levers
+│   │                         #   (sweeps/<name>.toml → runs/sweep-<name>/), sensitivity
 │   ├── report.py             # build a milestone report from runs → reports/<milestone>/
 │   ├── runs.py               # on-disk format of runs/<id>/
 │   ├── milestones/           # per-milestone metrics, acceptance criteria, report sections
@@ -171,6 +173,10 @@ Do not create directories outside this layout without updating this file.
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
     (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
     M8 takes the office run and `--baseline` once per other schedule)
+  - `uv run python -m tools.tune.sweep tools/tune/sweeps/<name>.toml --jobs 10 --max-load 14`
+    — run and score a sweep (M11; resumes where it stopped; `--dry-run` lists the points),
+    then `uv run python -m tools.tune.sensitivity runs/sweep-<name>` (which levers move
+    which criteria)
   - `uv run python -m tools.replay <save.lzma> [--still out.png] [--renderer-fixture DIR]`
     — inspect a save; `--renderer-fixture renderer/public/spike` regenerates the spike's world
   - `uv run python -m tools.stream <save.lzma> --out renderer/public/stream/recording.json

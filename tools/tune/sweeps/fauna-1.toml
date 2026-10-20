@@ -1,0 +1,29 @@
+# M11 first sweep (docs/m11-plan.md §5.3): predator, founding and plant levers, the ones
+# that move everything. Tuning seeds 0–19 under the office schedule; held-out seeds are
+# 20–39 and never swept. 30 Latin-hypercube points besides the defaults.
+[sweep]
+name = "fauna-1"
+seeds = 20
+seed_base = 0
+years = 3
+schedule = "office"
+samples = 30
+sampler = "lhs"
+rng_seed = 11
+
+[levers]
+# Predators (m11-plan §3): energy per kg of meat, pack room, arrivals, carrion.
+"fauna.meat_energy" = { low = 1000, high = 2400, integer = true }
+"fauna.predator_cap" = { low = 12, high = 32, integer = true }
+"fauna.immigrant_groups_per_year" = { low = 3.0, high = 12.0 }
+"fauna.immigrant_hunter_share" = { low = 0.3, high = 0.8 }
+"fauna.carrion_decay_hours" = { low = 36.0, high = 144.0, log = true }
+# Plants against grazers.
+"fauna.defence_toxicity" = { low = 0.25, high = 1.0 }
+# Founding (M6.1's empty months, the year-1 bottleneck).
+"fauna.founder_min_plant_cover" = { low = 0.25, high = 0.6 }
+"fauna.founder_count" = { low = 30, high = 80, integer = true }
+# Genetic spread (M6's species count follows it).
+"fauna.mutation_sigma_body" = { low = 0.015, high = 0.04 }
+# Succession under office light (M3.5).
+"flora.growth_rate_max_per_year" = { low = 60.0, high = 130.0 }
