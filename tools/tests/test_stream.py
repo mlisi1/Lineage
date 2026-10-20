@@ -97,7 +97,8 @@ def test_the_sky_follows_the_office_schedule_and_the_button() -> None:
     # The v4 world's first days are weekdays: dark nights, full days.
     assert min(lights) <= 0.06
     assert max(lights) == 1.0
-    assert any(sky["present"] for sky in skies) and not all(sky["present"] for sky in skies)
+    assert any(sky["present"] for sky in skies)
+    assert not all(sky["present"] for sky in skies)
     powers = [
         event
         for message in messages
@@ -124,7 +125,8 @@ def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
     ]
     ended = [index for index, event in events if event["kind"] == "world_ended"]
     began = [index for index, event in events if event["kind"] == "world_began"]
-    assert len(ended) == 1 and len(began) == 1
+    assert len(ended) == 1
+    assert len(began) == 1
     assert ended[0] < began[0]
     assert world.number == 2
     # The old world's last lines come before its end; the next world is met as on connect.
