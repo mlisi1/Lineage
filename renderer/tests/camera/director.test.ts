@@ -285,4 +285,30 @@ describe("the documentary camera", () => {
     };
     expect(film()).toEqual(film());
   });
+
+  it("goes on to another animal when asked, in the local view only", () => {
+    const director = new Director(SIZES, mulberry32(15));
+    const scene = sceneWith(herd());
+    director.nextSubject();
+    expect(run(director, scene, 1).view).toBe("map");
+    director.press();
+    director.press();
+    const first = run(director, scene, DIP_S).subject;
+    director.nextSubject();
+    const next = run(director, scene, DIP_S).subject;
+    expect(next).not.toBeNull();
+    expect(next).not.toBe(first);
+  });
+
+  it("goes straight back to the map when asked", () => {
+    const director = new Director(SIZES, mulberry32(16));
+    const scene = sceneWith(herd());
+    director.press();
+    director.press();
+    run(director, scene, DIP_S);
+    director.toMap();
+    expect(run(director, scene, DIP_S).view).toBe("map");
+    director.toMap();
+    expect(run(director, scene, DIP_S)).toMatchObject({ view: "map", dim: 0 });
+  });
 });

@@ -739,7 +739,9 @@ The camera is the owner's to steer ([ADR 0020](../decisions/0020-the-camera-view
 a **view button**, beside the god-power button, steps the screen map → middle → local →
 map. The map is where it rests, and it goes back there fifteen minutes after the last
 press. On the page the button is V, space or Enter, a tap on a phone, or
-`window.__press()`. `src/director.ts` decides what is shown; it is pure and seeded.
+`window.__press()`. For the demo (the owner, 2026-10-20) a click or tap in the local view
+goes on to another animal instead, and a double click back to the map; the button itself
+keeps the cycle. `src/director.ts` decides what is shown; it is pure and seeded.
 
 | View | The camera |
 |---|---|
