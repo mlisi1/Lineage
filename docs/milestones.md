@@ -42,9 +42,15 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   `renderer/public/stream/life.json` (and the two R1 recordings regenerated: only
   `chronicle` and `species` messages added). Design: `docs/design/renderer.md` "The
   camera and captions"; decisions: ADR 0020.
-- **Merging**: touches the shared hot spots `schema.json` / `encode.py` (additive),
-  `tools/stream.py`, `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no
-  schema bump, so M11 (on `m11-tuning`) should merge cleanly beside it.
+- **After the owner's demo**: pans slide the canvas by the camera's fraction of a pixel
+  (a screen pixel at a time), plants sit on whole art pixels (they had flickered), glints
+  keep their place on the water, local-view animals are drawn 1.2 times larger, and in the
+  local view a click picks another animal and a double click the map (demo only; the
+  button keeps the cycle).
+- **Shared files it changed**: `schema.json` / `encode.py` (additive), `tools/stream.py`,
+  `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no schema bump: M11
+  (on `m11-tuning`) merges main with conflicts in the docs only.
+- **Tests at the merge**: renderer 255 unit, 25 Playwright; Python fast suite 656.
 - **For S2**: a second push button, `view`, debounced like the god power's; its presses
   reach the page as `window.__press()` (or a reverse-channel message once S1 has one).
 - **For R4**: the dip is a plain plum overlay (`DARK` in `main.ts`); `WorldEnded` is still

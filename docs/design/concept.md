@@ -85,7 +85,8 @@ records each past world in a small ledger (number, seed, dates, cause, species).
 
 - One continuous scene on the 7" desk screen: documentary camera and captions. The
   camera shows the world from three distances: the whole continent as a map, a region,
-  and one animal from close to the ground (`renderer.md`).
+  and one animal from close to the ground (`renderer.md`). A view button steps between
+  them; the map is where it rests (ADR 0020).
 - Phone web app with the same renderer, plus chronicle, bestiary and stats.
 - Push notifications for major events.
 - A daily public journal (static site) that also backs up the save off-device.

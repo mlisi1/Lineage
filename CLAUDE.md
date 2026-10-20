@@ -24,7 +24,8 @@ own history.
   Past worlds are archived.
 - **Chronicle and bestiary**: an event detector writes dated history entries; every species
   that ever lived is recorded.
-- **Outputs**: one continuous scene on a 7" screen (documentary camera + captions), a phone
+- **Outputs**: one continuous scene on a 7" screen (documentary camera + captions, its view
+  chosen with a view button, ADR 0020), a phone
   web app, push notifications for major events, and a daily public journal (static site).
 - **Look**: pixel art everywhere (flat palettes, stepped shading, hard pixel edges); see
   `docs/design/concept.md`. The screen shows the world from three distances: the

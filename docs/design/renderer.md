@@ -34,7 +34,7 @@ The world is a continent, and the screen shows it from three distances
 |---|---|---|---|---|
 | **map** | 2 | all 256 × 150 cells | the continent | a dot |
 | **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 4½ art pixels long |
-| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 |
+| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 (13 in the scene, R3) |
 
 The land and its plants are not rescaled between the views: a grown tree is three cells
 tall in the middle view and in the local one, drawn by the same rule, and the plants of
@@ -338,7 +338,9 @@ How long an animal is drawn is the renderer's choice (the simulation knows mass,
 length): a number times 1.1 cells at mass 1. **The local view draws at 0.35**, chosen
 against a line-up of full-grown trees and bushes: mass 1 is 11 art pixels long, an
 eighth as long as a grown tree is tall, and the heaviest a genome allows (mass 16) two
-thirds of a bush's height. **The middle view draws at 0.5**, larger than life: at 0.35
+thirds of a bush's height. The scene (R3) draws its local view's animals 1.2 times that,
+0.42 (13 art pixels at mass 1), the owner's choice: at 0.35 markings and eyes were lost.
+The creature sheet keeps 0.35. **The middle view draws at 0.5**, larger than life: at 0.35
 its animals would be 3 pixels long, dots with an outline, and it was found good at 4½.
 So the views are in proportion for the land and its plants and not for the animals,
 each view exaggerating them as much as it needs to show them: not at all from close,
@@ -354,8 +356,10 @@ it lives where its species does (in the water or on land), so that a fish is nev
 on the shore; an animal of no species yet (0) is drawn as its own genes make it. In the
 fixture's world (v7, day 520) 10 of the 186 members of species 1 would be hoppers on their
 own genes (the leg gene rounding to one pair) and are drawn as beasts. A layer works the
-plans out from its creatures; when the census changes them, the creatures are drawn again
-with the new plans (R3, with the state stream).
+plans out from its creatures. In the scene (R3, `herd.ts`) the plans are worked out again
+when the census changes (a species born or gone); animals placed after that take their
+species' kind from the new plans, and those already drawn keep theirs, so that no animal
+changes kind under the camera.
 
 **Creatures are drawn in `cosy`** ([ADR 0013](../decisions/0013-cosy-creature-style.md)),
 after Stardew Valley's animals with the camera kept straight above: the plans and layers
@@ -605,14 +609,17 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
 
 The palette is not sent: the renderer has the report maps' own. `tools/stream.py`
-records the stream from a save, and `src/stream.ts` decodes it. Two recordings are
-committed in `renderer/public/stream/`, both from the v4 fixture:
+records the stream from a save, and `src/stream.ts` decodes it. Three recordings are
+committed in `renderer/public/stream/`, two from the v4 fixture (land only):
 
 - `recording.json`: 56 days from 3 August, a land every 28, ending on 28 September in
   the middle of the autumn turn;
 - `winter.json`: 165 days on unrecorded, then 15 January to 5 February 2028, a land every
   10; snow lies on about 10 600 of the 38 400 cells (checking it is what the tool writes
-  takes 186 sim-days, so that test is nightly).
+  takes 186 sim-days, so that test is nightly);
+
+and `life.json` from the v9 fixture, with the creatures every two sim-hours and the
+chronicle (R3, see "The camera and captions"), the page's default.
 
 **Painting off the frame.** Grounds are painted in a Web Worker (`terrain/painter.ts`,
 `paint.worker.ts`) so that the page keeps drawing frames: the map's and the middle view's
@@ -810,7 +817,7 @@ the board is R5's to measure.
   the simulation's plant genome does not yet reach the renderer. The season is the
   fixture's (`source.season`).
 - **The camera.** The benchmark's local view follows the first creature of the save;
-  choosing whom to follow, and moving between the views, is R3.
+  the scene's camera (whom it follows, the moves between the views) is R3's director.
 
 ## Open
 
@@ -835,3 +842,7 @@ the board is R5's to measure.
   whom the camera follows and when it cuts, R3 (ADR 0020).
 - **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the
   turn and the snow forward.
+- **From the R3 demo** (the owner, 2026-10-20; CLAUDE.md §8, docs/milestones.md "R3
+  closed"): waves on every coast in all three views (R4); animals that keep out of
+  plants, never fold through themselves, and step their legs in turn, no plant popping in
+  over them, and a name scroll by the animal followed (R5).

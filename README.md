@@ -17,7 +17,7 @@ uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/demo
 uv run python -m tools.report M0 --runs runs/demo
 
 cd renderer && npm ci && npm test && npx playwright test
-npm run dev                               # then /?view=middle (the scene) or /land.html
+npm run dev                               # then / (the scene: V or a click steps the views) or /land.html
 ```
 
 If your shell exports `PYTHONPATH` (for example a sourced ROS environment), prefix the

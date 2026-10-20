@@ -93,7 +93,10 @@ system font shrunk to art pixels smears and differs between browsers; the paper 
 wooden rolls are in the cosy palette, lit from the upper left, with a see-through shadow.
 
 **The button on the page**: V, space or Enter on a keyboard, a tap on a phone, and
-`window.__press()`, which S2's hardware button reaches.
+`window.__press()`, which S2's hardware button reaches. For the demo (the owner,
+2026-10-20) a click or tap in the local view goes on to another animal instead, and a
+double click back to the map (`Director.nextSubject`, `toMap`); the button keeps the
+cycle.
 
 ## Results
 
