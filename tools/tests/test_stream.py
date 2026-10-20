@@ -175,6 +175,13 @@ def test_staged_events_happen_and_the_land_follows_them() -> None:
     # A land right after each event that changes it, as well as at the day's end.
     lands = [i for i, m in enumerate(messages) if m["type"] == "land"]
     assert len(lands) >= 1 + 4
+    # It comes just after the event's news, so that a renderer knows what is coming.
+    for i, m in enumerate(messages):
+        changes = m["type"] == "events" and any(
+            e["kind"] in ("volcano", "earthquake") for e in m["events"]
+        )
+        if changes:
+            assert messages[i + 1]["type"] == "land"
     skies = [m["rain"] for m in messages if m["type"] == "sky"]
     assert "storm" in skies  # the fire came with a thunderstorm
     with pytest.raises(argparse.ArgumentTypeError):

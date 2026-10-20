@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 from dataclasses import replace
 from typing import cast
 
@@ -31,6 +32,14 @@ class Sky:
         self.raining, self.storm = raining, storm
 
 
+FALLING = (Rain.RAIN, Rain.THUNDER, Rain.STORM)
+
+
+def _clear(config: Config) -> Config:
+    """``config`` without overcast spells: what the rain tests measure is the rain alone."""
+    return replace(config, weather=replace(config.weather, cloud_spells_per_month=0.0))
+
+
 def _weather(config: Config) -> tuple[Weather, Sky]:
     sky = Sky()
     return Weather(config.weather, cast(Wildfire, sky)), sky
@@ -48,7 +57,7 @@ def _ticks(
         weather.tick(Context(hour * 3_600_000, HOUR_S, instant, rng))
         seen.append((weather.rain, int(weather.get_state()["until_ms"])))
         if sky is not None:
-            assert sky.raining == (weather.rain is not Rain.NONE)
+            assert sky.raining == (weather.rain in FALLING)
             assert sky.storm == (weather.rain is Rain.STORM)
     return seen
 
@@ -71,6 +80,7 @@ def _spells(seen: list[tuple[Rain, int]]) -> list[tuple[Rain, float]]:
 
 @pytest.mark.parametrize("season", ["spring", "summer", "autumn", "winter"])
 def test_spells_begin_at_the_seasons_rate(config: Config, season: str) -> None:
+    config = _clear(config)
     weather, _ = _weather(config)
     hours = 24 * 365 * 8
     seen = _ticks(weather, config, SEASON_DAYS[season], hours)
@@ -83,6 +93,7 @@ def test_spells_begin_at_the_seasons_rate(config: Config, season: str) -> None:
 
 
 def test_spells_last_as_long_as_configured_and_come_in_three_kinds(config: Config) -> None:
+    config = _clear(config)
     cfg = config.weather
     weather, _ = _weather(config)
     spells = _spells(_ticks(weather, config, SEASON_DAYS["autumn"], 24 * 365 * 10))
@@ -119,7 +130,39 @@ def test_no_rain_where_no_spell_is_due(config: Config) -> None:
         ),
     )
     weather, _ = _weather(dry)
-    assert set(_hours(weather, dry, SEASON_DAYS["autumn"], 24 * 365)) == {Rain.NONE}
+    assert not set(_hours(weather, dry, SEASON_DAYS["autumn"], 24 * 365)) & set(FALLING)
+
+
+def test_the_sky_clouds_over_between_rains_and_nothing_falls(config: Config) -> None:
+    cfg = config.weather
+    dry = replace(
+        config,
+        weather=replace(
+            cfg,
+            rain_spells_per_month_spring=0.0,
+            rain_spells_per_month_summer=0.0,
+            rain_spells_per_month_autumn=0.0,
+            rain_spells_per_month_winter=0.0,
+        ),
+    )
+    weather, sky = _weather(dry)
+    seen = _ticks(weather, dry, SEASON_DAYS["summer"], 24 * 365 * 4, sky=sky)
+    spells = _spells(seen)
+    assert {kind for kind, _ in spells} == {Rain.CLOUD}
+    # At the configured rate (a spell begins only in a clear hour), as long as configured.
+    clear_hours = sum(rain is Rain.NONE for rain, _ in seen)
+    per_month = len(spells) / clear_hours * 30 * 24
+    assert per_month == pytest.approx(cfg.cloud_spells_per_month, rel=0.15)
+    assert all(cfg.cloud_hours_min <= hours <= cfg.cloud_hours_max for _, hours in spells)
+    # Clouds never wet the land: the fire was told dry every hour (checked in `_ticks`).
+    assert not sky.raining
+
+
+def test_rain_comes_out_of_a_clouded_sky(config: Config) -> None:
+    weather, _ = _weather(config)
+    rains = _hours(weather, config, SEASON_DAYS["autumn"], 24 * 365 * 2)
+    after_cloud = [b for a, b in itertools.pairwise(rains) if a is Rain.CLOUD]
+    assert any(rain in FALLING for rain in after_cloud)
 
 
 def test_state_round_trips_and_tells_the_fire_again(config: Config) -> None:

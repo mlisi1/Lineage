@@ -289,9 +289,9 @@ export interface SkyMessage {
    */
   present: boolean;
   /**
-   * What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out.
+   * What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out; or cloud, an overcast sky with nothing falling (seen only).
    */
-  rain: "none" | "rain" | "thunder" | "storm" | "soaking";
+  rain: "none" | "rain" | "thunder" | "storm" | "soaking" | "cloud";
   /**
    * The cells on fire, as indices y × width + x of the land's grid, in increasing order.
    */

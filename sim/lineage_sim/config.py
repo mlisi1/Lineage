@@ -649,11 +649,18 @@ class WeatherConfig:
     storm_share: float
     storm_hours_min: float
     storm_hours_max: float
+    cloud_spells_per_month: float
+    cloud_hours_min: float
+    cloud_hours_max: float
 
     def __post_init__(self) -> None:
         def check(ok: bool, message: str) -> None:
             if not ok:
                 raise ConfigError(f"[weather] {message}")
+
+        check(self.cloud_spells_per_month >= 0, "cloud_spells_per_month must not be negative")
+        check(self.cloud_hours_min > 0, "cloud_hours_min must be positive")
+        check(self.cloud_hours_max >= self.cloud_hours_min, "cloud_hours_max below cloud_hours_min")
 
         for key in ("rain_spells_per_month_spring", "rain_spells_per_month_summer",
                     "rain_spells_per_month_autumn", "rain_spells_per_month_winter"):  # fmt: skip

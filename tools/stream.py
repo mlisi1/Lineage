@@ -24,7 +24,7 @@ that the herd dies on the next tick and the world ends the way it does when its 
 creature dies: the sim's own end, archive and next continent, which is then recorded on.
 ``--stage DAY:HOUR:WHAT[@X,Y]`` makes WHAT happen then (for the report's films, R4):
 ``fire`` (a thunderstorm whose lightning strikes cell X,Y), a spell of the island's own
-rain (``shower``, ``thunder``, ``storm``, for four hours), ``volcano`` or
+rain (``shower``, ``thunder``, ``storm``, for four hours) or an overcast (``cloud``), ``volcano`` or
 ``quake`` (at X,Y, by the terrain's own functions, sized as the middle of its ranges), or a
 god power by name (``meteor``, ``rain``, ``seed``, ``ark``: the button, with the power
 chosen; the sim aims it). Without X,Y a fire, volcano or quake is put on land near the
@@ -84,7 +84,7 @@ STAGED_STORM_HOURS = 4
 STAGED_FIRE_STORM_HOURS = 1
 POWERS = ("meteor", "rain", "seed", "ark")
 # The island's own rain kinds that can be staged, as the weather's state has them.
-SPELLS = {"shower": Rain.RAIN, "thunder": Rain.THUNDER, "storm": Rain.STORM}
+SPELLS = {"shower": Rain.RAIN, "thunder": Rain.THUNDER, "storm": Rain.STORM, "cloud": Rain.CLOUD}
 STAGES = ("fire", *SPELLS, "volcano", "quake", *POWERS)
 
 # Something done to the world at a time: an input event, or a staged happening.
@@ -292,8 +292,10 @@ def record(
             step = elapsed % every_ms == 0
             if step:
                 messages.append(encode.clock_message(world))
-            changed = any(isinstance(output, LAND_CHANGES) for output in outputs)
-            if (elapsed == MS_PER_DAY and day % land_every == 0) or (sky and changed):
+            # The land after an event that changes it comes after the event's news, so that
+            # a renderer knows what is coming (a meteor's crater shows once it has struck).
+            changed = sky and any(isinstance(output, LAND_CHANGES) for output in outputs)
+            if elapsed == MS_PER_DAY and day % land_every == 0 and not changed:
                 messages.append(encode.land_message(world))
             # A species born or gone is sent, as a server would, before the animals of it.
             species = encode.species_message(world)
@@ -305,6 +307,8 @@ def record(
             if sky and elapsed % sky_ms == 0:
                 messages.append(encode.sky_message(world))
             messages += _news(world, outputs, sky)
+            if changed:
+                messages.append(encode.land_message(world))
     return messages
 
 

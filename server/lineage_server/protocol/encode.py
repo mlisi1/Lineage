@@ -235,9 +235,13 @@ def rain_of(world: World) -> str:
     """What falls now: the rain god power's soaking rain over the island's own (R4)."""
     if world.presence.raining:
         return "soaking"
-    return {Rain.NONE: "none", Rain.RAIN: "rain", Rain.THUNDER: "thunder", Rain.STORM: "storm"}[
-        world.weather.rain
-    ]
+    return {
+        Rain.NONE: "none",
+        Rain.RAIN: "rain",
+        Rain.THUNDER: "thunder",
+        Rain.STORM: "storm",
+        Rain.CLOUD: "cloud",
+    }[world.weather.rain]
 
 
 def sky_message(world: World) -> Message:

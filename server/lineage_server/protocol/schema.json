@@ -590,13 +590,14 @@
           "type": "boolean"
         },
         "rain": {
-          "description": "What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out.",
+          "description": "What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out; or cloud, an overcast sky with nothing falling (seen only).",
           "enum": [
             "none",
             "rain",
             "thunder",
             "storm",
-            "soaking"
+            "soaking",
+            "cloud"
           ]
         },
         "burning": {

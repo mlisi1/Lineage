@@ -731,6 +731,12 @@ thunder_share = 0.3
 storm_share = 0.12
 storm_hours_min = 1.0
 storm_hours_max = 6.0
+# Overcast (round 5, the owner): between spells of rain the sky clouds over at this rate
+# per month, for cloud_hours_min–max hours (uniform). It is only seen (a greyer day on the
+# screen): plants and animals live under the same light, and fire is not slowed.
+cloud_spells_per_month = 8.0
+cloud_hours_min = 3.0
+cloud_hours_max = 36.0
 
 [chronicle]
 # The chronicle (M9): detectors turn what happens into dated entries with English text and

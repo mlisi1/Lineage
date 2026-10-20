@@ -32,7 +32,7 @@ DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "1bd9023cd1be8e499c86ae8d594dd527636a0346bfd70bcfd805d5471af0a6ea"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "bff1997127c52eb7d72903dffe4917da39286a5907a911d21f0382d580eb4e36"
+GOLDEN_AFTER_THREE_DAYS = "5094a09a7ee4e03d4d390f31010eb4e66f7d9058a283d2756a76f0974ca3f2ff"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
 GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
