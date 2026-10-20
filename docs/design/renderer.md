@@ -755,6 +755,8 @@ press. On the page the button is V, space or Enter, a tap on a phone, or
   1024-pixel screen goes without blurring. Plants' corners are put on whole art pixels:
   one at half a pixel was rounded either way as the world moved, and 3 % of the middle
   view flickered a pixel back and forth.
+- **Glints stay on the water**: each is placed in the view as it was when that glint began
+  to show, and kept there in the world while the camera pans (they had moved with it).
 - **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
   painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
 - **Following** (`src/camera.ts`): a spring a little under critical damping (period
@@ -764,7 +766,9 @@ press. On the page the button is V, space or Enter, a tap on a phone, or
   same at any frame rate. The view never looks off the world's edge.
 - **The animals** (`src/herd.ts`): R2's creature layers fed from the stream. A roster
   gives each id a slot and frees the slots of the dead; the middle view's bodies (and the
-  map's dots) and the local view's are two layers, each anchored to the sim's positions,
+  map's dots) and the local view's are two layers (the local view's drawn 1.2 times R2's
+  true-to-the-trees size, the owner's choice: an animal of mass 1 about 13 art pixels
+  long, so that its eyes and markings show), each anchored to the sim's positions,
   and only the shown one moves. They stand among the plants of the view (the plant layer
   drawn opaque, the old one while a new day fades in); what grows in front of the animal
   followed is shown through.

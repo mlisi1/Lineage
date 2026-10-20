@@ -29,7 +29,7 @@ import type { Atlas } from "./spike/atlas";
 import { CreatureLayer } from "./spike/creatures";
 import type { CreatureSeed } from "./spike/fixture";
 import { passableIn, type Passable } from "./spike/habitat";
-import { MID_BODY, WATER_LOOK, localBody, LOCAL_PIXELS } from "./spike/proposal";
+import { CREATURE_SCALE, LOCAL_PIXELS, MID_BODY, WATER_LOOK, localBody } from "./spike/proposal";
 import type { CellRect, Land } from "./terrain/land";
 import { seaAt } from "./terrain/sea";
 
@@ -96,10 +96,15 @@ export class Roster {
   }
 }
 
+/**
+ * In the local view animals are drawn this much larger than R2's true-to-the-trees size
+ * (the owner, 2026-10-20: at that size markings and eyes were lost).
+ */
+const LOCAL_ENLARGED = 1.2;
 /** The body plans of the two views: larger than life in the middle view (R2). */
 const BODIES = {
   middle: MID_BODY,
-  local: localBody(LOCAL_PIXELS),
+  local: localBody(LOCAL_PIXELS, CREATURE_SCALE * LOCAL_ENLARGED),
 } as const;
 
 export class Herd {

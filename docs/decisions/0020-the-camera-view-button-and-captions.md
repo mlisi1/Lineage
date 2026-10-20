@@ -63,11 +63,14 @@ the file (renderer convention); the page may shorten the idle and follow times f
   dip are page elements over it, still. Plant corners are snapped to whole art pixels: the
   owner saw trees in the middle view snap back and forth, plants at half a pixel rounded
   one way or the other as the world moved (3 % of the picture at some offsets, none now).
+  The sea's glints, placed as shares of the view, moved with it; each now keeps the place
+  it had when it began to show.
 
 **The stream's animals in the scene** (`renderer/src/herd.ts`): a roster gives each id a
 slot of R2's `CreatureLayer` and frees the slots of the dead; two layers, the middle view's
 body plans (also the map's dots) and the local view's, anchored to the sim's positions on
-each `creatures` message. Only the layer of the view shown moves. Animals stand among the
+each `creatures` message. Only the layer of the view shown moves. In the local view animals are drawn 1.2 times R2's
+size (the owner, 2026-10-20: at R2's size markings and eyes were lost). Animals stand among the
 plants of the view's opaque plant layer (the old one while the next day fades in), and a
 plant layer now lets its guests go before it is destroyed. `CreatureLayer` gained a cast
 that changes (`place`, `remove`, `setTorpid`, `replan`) and the atlas a creature-only form.
