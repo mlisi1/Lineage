@@ -260,6 +260,8 @@ class FloraConfig:
     fire_loss_tree: float
     fire_fertility_loss: float
     scorch_days: float
+    barren_reach: float
+    barren_days: float
     species_min_cells: int
 
     def __post_init__(self) -> None:
@@ -332,6 +334,8 @@ class FloraConfig:
             "fire_burn_hours",
             "wind_range_cells",
             "scorch_days",
+            "barren_reach",
+            "barren_days",
             "species_min_cells",
         )
         for key in positive:

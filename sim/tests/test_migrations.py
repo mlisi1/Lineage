@@ -329,6 +329,7 @@ def test_v11_upgrades_to_v12_dry_with_no_one_burnt(config: Config) -> None:
     world = World.restore(config, io.loads(_fixture(11)))
     assert world.weather.rain.name == "NONE"
     assert world.fauna.tally.burnt == 0
+    assert float(world.flora.barren.max()) == 0.0
 
 
 def test_a_world_without_fire_gets_no_weather_from_the_migration() -> None:

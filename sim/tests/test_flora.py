@@ -14,7 +14,7 @@ from hypothesis import strategies as st
 from lineage_sim import clock
 from lineage_sim import flora as fl
 from lineage_sim.config import Config, FloraConfig, Hemisphere
-from lineage_sim.events import FireEnded, FireStarted, OutputEvent
+from lineage_sim.events import CraterFormed, FireEnded, FireStarted, OutputEvent, VolcanoErupted
 from lineage_sim.flora import Cover, Flora, Gene, Rare, Wildfire
 from lineage_sim.state import io
 from lineage_sim.subsystem import Context
@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "9569aab1efab9d6f577b69b8b0b84af2862c96aa1ceea55235ce27ca089890d6"
+GOLDEN_FLORA_SEED_42 = "bb62374b6005b018261e4e4f4e3ff42eede8f05ba31b206a20fa71a6cd1893f1"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -783,6 +783,31 @@ def test_rain_slows_a_fire(config: Config) -> None:
 
     dry, wet = scorched(False), scorched(True)
     assert wet < dry / 2
+
+
+def test_a_volcano_or_a_crater_leaves_the_land_round_it_bare_for_a_while(config: Config) -> None:
+    """R4 (the owner): plants within barren_reach × the radius go, and stay gone."""
+    cfg = config.flora
+    site = Site(config, _plain(), 0.5)
+    site.plant(_all(), GRASS, 0.6)
+    ctx = site._context(dt.date(2026, 5, 1), 0.0)  # pyright: ignore[reportPrivateUsage]
+    site.flora.observe([VolcanoErupted(0, 30.0, 20.0, 4.0, 0.1)], ctx)
+    reach = cfg.barren_reach * 4.0
+    yy, xx = np.indices((ROWS, COLUMNS))
+    d = np.hypot(xx - 30.0, yy - 20.0)
+    assert float(site.flora.biomass[d <= reach].max()) == 0.0
+    assert float(site.flora.biomass[d > reach + 1].min()) > 0.0
+    assert float(site.flora.barren[d <= reach].min()) == pytest.approx(cfg.barren_days)
+    # It stays bare while the ground is barren, though grass grows all round it.
+    site.grow(int(cfg.barren_days) - 5)
+    assert float(site.flora.biomass[d <= reach].max()) == 0.0
+    # And plants come back after.
+    site.grow(120, start=dt.date(2026, 9, 1))
+    assert float(site.flora.barren.max()) == 0.0
+    assert float(site.flora.biomass[d <= reach].max()) > 0.0
+    # A crater does the same; other events nothing.
+    site.flora.observe([CraterFormed(0, 10.0, 10.0, 3.0, 0.05), FireEnded(0, 1, 1.0)], ctx)
+    assert float(site.flora.biomass[np.hypot(xx - 10.0, yy - 10.0) <= 3.0].max()) == 0.0
 
 
 # --- The world as a whole ---------------------------------------------------------------

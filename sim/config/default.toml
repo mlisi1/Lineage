@@ -360,6 +360,11 @@ fire_loss_tree = 0.97
 # again; shown as burnt ground while bare).
 fire_fertility_loss = 0.15
 scorch_days = 60.0
+# A volcano's cone and a crater (natural or the meteor's) leave the land round them bare
+# (R4; the owner, 2026-10-20): plants within barren_reach × the event's radius are
+# destroyed, and nothing grows there for barren_days.
+barren_reach = 1.4
+barren_days = 120.0
 
 # --- Bookkeeping ---
 # Cells a genome cluster must occupy to count as a plant species.

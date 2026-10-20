@@ -28,6 +28,7 @@ gene value = byte / 255.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from enum import IntEnum, IntFlag
 from typing import Any, cast
 
@@ -37,7 +38,14 @@ from numpy.typing import NDArray
 
 from lineage_sim.clock import SECONDS_PER_YEAR, Instant, Season
 from lineage_sim.config import FloraConfig
-from lineage_sim.events import FireEnded, FireStarted, InputEvent, OutputEvent
+from lineage_sim.events import (
+    CraterFormed,
+    FireEnded,
+    FireStarted,
+    InputEvent,
+    OutputEvent,
+    VolcanoErupted,
+)
 from lineage_sim.rng import FIRE, FLORA
 from lineage_sim.state.schema import Tree
 from lineage_sim.subsystem import Context
@@ -327,6 +335,8 @@ class Flora:
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         self._algae: Grid = np.zeros(shape, dtype=_F)
+        # Days each cell stays bare after a volcano or a crater (R4).
+        self._barren: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1] and rain's growth factor (>= 1), set by the presence model
         # (M8); both scale growth.
         self._daylight = 1.0
@@ -511,6 +521,27 @@ class Flora:
         self._terrain.adjust_fertility(relative * self._terrain.fertility)
         self._clear_dead()
 
+    @property
+    def barren(self) -> Grid:
+        """Days each cell stays bare after a volcano or a crater (R4)."""
+        return self._barren
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
+        """A volcano's cone and a crater leave the land round them bare for a while."""
+        cfg = self._cfg
+        for event in outputs:
+            if not isinstance(event, VolcanoErupted | CraterFormed):
+                continue
+            rows, columns = self._biomass.shape
+            yy, xx = np.ogrid[:rows, :columns]
+            reach = cfg.barren_reach * event.radius_cells
+            within = (xx - event.x) ** 2 + (yy - event.y) ** 2 <= reach * reach
+            self._biomass[within] = 0.0
+            self._barren[within] = _F(cfg.barren_days)
+            self._clear_dead()
+            self._terrain.set_vegetation_cover(self._biomass)
+        return []
+
     def clear(self, ys: Index, xs: Index) -> None:
         """Plants on cells (ys, xs) are destroyed outright (a meteor's bowl)."""
         self._biomass[ys, xs] = 0.0
@@ -589,8 +620,13 @@ class Flora:
         self._scorch = np.maximum(
             self._scorch - _F(dt_years * _DAYS_PER_YEAR / cfg.scorch_days), _F(0.0)
         )
+        self._barren = np.maximum(self._barren - _F(dt_years * _DAYS_PER_YEAR), _F(0.0))
         self._disperse(rng, temp, elevation, dt_years)
         self._seed_rain(rng, temp, elevation, dt_years)
+        # Nothing takes on the bare land round a fresh cone or crater.
+        if (self._barren > 0).any():
+            self._biomass[self._barren > 0] = 0.0
+            self._clear_dead()
 
         # 6. Feedback to the terrain.
         terrain.set_vegetation_cover(self._biomass)
@@ -606,6 +642,7 @@ class Flora:
             "rare": self._rare.copy(),
             "scorch": self._scorch.copy(),
             "algae": self._algae.copy(),
+            "barren": self._barren.copy(),
         }
 
     def set_state(self, tree: Tree) -> None:
@@ -620,6 +657,7 @@ class Flora:
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._algae = np.array(tree["algae"], dtype=_F)
+        self._barren = np.array(tree["barren"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
 
     # -- internals --
