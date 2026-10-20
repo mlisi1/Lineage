@@ -478,7 +478,8 @@ needs a note in `docs/decisions/`.
   animal steps with its legs in turn (IK), none drags all its legs at once; plants do not
   pop in over animals; and a small scroll by the animal followed in the local view gives
   its species' name and a few of its genes (the phone's follow-a-creature, S3, shows the
-  same).
+  same). The R3 demo's clicks (local view: a click for another animal, a double click for
+  the map) come out here: the final build has only the view button's cycle.
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0

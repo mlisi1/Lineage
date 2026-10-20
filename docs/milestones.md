@@ -32,6 +32,32 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
+### Starting R4 (atmosphere)
+
+- **Branch**: in a worktree of its own, so that M11 keeps `/home/elechim/Lineage`:
+  `git worktree add -b r4-atmosphere ../Lineage-r4 main`; announce it and claim the next
+  ADR on the coordination board (`/home/elechim/Lineage-coord/`, next free ADR 0021).
+  Spec: CLAUDE.md §8 R4; `docs/design/renderer.md`, `presence.md` (light), ADR 0016 (light
+  and god powers), ADR 0020 (the camera).
+- **Deliver**: day/night tint from presence, glow pass, seasons, weather of events, the
+  apocalypse sequence, and (the owner, 2026-10-20) waves breaking on every coast in all
+  three views, the map too (today `surf: close` in `landscape.ts` leaves the map without).
+- **Not on the wire yet**, so R4 starts there (`schema.json`, `encode.py`, `tools/stream.py`,
+  additive like R3's `chronicle`): the light of the moment (`Presence.light`,
+  `Presence.present`), the events the weather and the sequence play (`FireStarted`/`Ended`,
+  `VolcanoErupted`, `EarthquakeStruck`, `CraterFormed`, `GodPowerUsed`, `WorldEnded`,
+  `WorldBegan`). The clock already carries the season; `torpid` already comes with the
+  creatures; the land message carries snow.
+- **What it builds on**: the dip to dark between views is a plain overlay (`DARK` in
+  `src/main.ts`, a page element over the canvas); glow spots are drawn on creatures but
+  never lit (R2); the scroll and the dip are page elements and do not take the scene's tint.
+- **Ask the owner before coding**: how dark a night is (a moonlit scene or nearly black);
+  whether the tint follows the light step by step (10-minute presence ticks) or eases;
+  what the apocalypse sequence shows and how long; which events get weather (rain for the
+  rain god power, smoke for fires, ash for volcanoes).
+- **Device**: R4 keeps to the PC; every board measurement is R5's.
+- **Not to carry into the final build**: the demo clicks (below, "R3 closed").
+
 ### R3 closed (merged into `main`, 2026-10-20; branch `r3-camera` and its worktree removed)
 
 - **What it left**: `renderer/src/director.ts` (the camera's rules), `camera.ts` (spring,
@@ -45,8 +71,10 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **After the owner's demo**: pans slide the canvas by the camera's fraction of a pixel
   (a screen pixel at a time), plants sit on whole art pixels (they had flickered), glints
   keep their place on the water, local-view animals are drawn 1.2 times larger, and in the
-  local view a click picks another animal and a double click the map (demo only; the
-  button keeps the cycle).
+  local view a click picks another animal and a double click the map. **Demo only** (the
+  owner, 2026-10-20): the final build does not have it; R5 takes it out (the pointer
+  handler in `src/main.ts`, `Director.nextSubject` and `toMap` with their tests), leaving
+  a click or tap as the view button.
 - **Shared files it changed**: `schema.json` / `encode.py` (additive), `tools/stream.py`,
   `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no schema bump: M11
   (on `m11-tuning`) merges main with conflicts in the docs only.

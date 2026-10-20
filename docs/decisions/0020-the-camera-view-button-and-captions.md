@@ -96,7 +96,7 @@ wooden rolls are in the cosy palette, lit from the upper left, with a see-throug
 `window.__press()`, which S2's hardware button reaches. For the demo (the owner,
 2026-10-20) a click or tap in the local view goes on to another animal instead, and a
 double click back to the map (`Director.nextSubject`, `toMap`); the button keeps the
-cycle.
+cycle. This is for the demo only: the final build does not have it (R5 removes it).
 
 ## Results
 
