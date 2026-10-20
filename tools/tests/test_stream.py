@@ -127,9 +127,11 @@ def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
     assert len(ended) == 1 and len(began) == 1
     assert ended[0] < began[0]
     assert world.number == 2
-    # The old world's last entries, then the next world is met as on connect.
-    after = types[ended[0] + 1 :]
-    assert after[:4] == ["chronicle", "clock", "sky", "land"]
+    # The old world's last lines come before its end; the next world is met as on connect.
+    assert types[ended[0] - 1] == "chronicle"
+    last_lines = [entry["kind"] for entry in messages[ended[0] - 1]["entries"]]
+    assert "world_end" in last_lines
+    assert types[ended[0] + 1 : ended[0] + 4] == ["clock", "sky", "land"]
     lands = [message for message in messages if message["type"] == "land"]
     seeds = [land["world"]["seed"] for land in lands]
     assert seeds[0] != seeds[-1]

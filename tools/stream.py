@@ -93,15 +93,16 @@ def _connect(world: World, census: _Census, creatures: bool, sky: bool) -> list[
 
 
 def _news(world: World, outputs: Sequence[OutputEvent], sky: bool) -> list[dict[str, Any]]:
-    """The events (with ``sky``) and chronicle entries among ``outputs``, as messages."""
+    """The chronicle entries and events (with ``sky``) among ``outputs``, as messages: the
+    entries first, so that a world's last lines come before its end."""
     messages: list[dict[str, Any]] = []
-    events = encode.events_message(outputs) if sky else None
-    if events is not None:
-        messages.append(events)
     entries = [output for output in outputs if isinstance(output, ChronicleEntry)]
     chronicle = encode.entries_message(world, entries)
     if chronicle is not None:
         messages.append(chronicle)
+    events = encode.events_message(outputs) if sky else None
+    if events is not None:
+        messages.append(events)
     return messages
 
 
