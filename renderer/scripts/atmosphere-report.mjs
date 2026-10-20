@@ -1,225 +1,299 @@
 /**
  * Write the R4 report (the atmosphere) as one self-contained HTML file.
  *
- *   npm run atmosphere   builds the pages, then writes ../reports/R4-atmosphere/
+ *   npm run atmosphere   records the report's streams, builds the pages, then writes
+ *                        ../reports/R4-atmosphere/
  *
- * Serves the built scene, opens it in headless Chromium at the art pixels' own size
- * (512×300: one screen pixel an art pixel) and films it: the committed recordings played
- * as they are (`office`, `end`), and each event made up on demand (`?show=`). The films
- * are animated PNGs (`apng.mjs`), lossless, looping, playing without a script. They are
- * taken in wall time, so two runs differ in when a frame was caught, not in what the
- * scene draws. The chart and the tables are read from the committed recordings; the unit
- * tests of `tests/atmosphere/` are run while the report is written.
+ * 1. Records a short real stream for each event (`tools/stream.py --stage`, from the v9
+ *    fixture two weeks on): a thunderstorm's fire, each rain, a volcano, a quake and each
+ *    god power, into `public/stream/report/` (not committed).
+ * 2. Reads from each where its event happened (the strike's cell, the ark's landing, the
+ *    sown cells), and films the built scene there in headless Chromium at the art pixels'
+ *    own size, in all three views: the map (one pixel a cell), the middle view and the
+ *    local view; time-lapses where it is slow (a fire spreading); stills of what is left.
+ * 3. Writes the page: films as animated PNGs (`apng.mjs`: lossless up to 256 colours a
+ *    film, a median cut beyond), a chart of the light and rain over the office fortnight,
+ *    the wire, and the atmosphere's unit tests, run for it.
+ *
+ * Films are caught in wall time, so two runs differ in when a frame was caught, not in
+ * what the scene draws.
  */
 import { Buffer } from "node:buffer";
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { env } from "node:process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
-import { preview } from "vite";
-import { Apng, decodePng, png, shrink } from "./apng.mjs";
+import { build, preview } from "vite";
+import { decodePng, pngIndexed as png, shrink } from "./apng.mjs";
 
 const OUT = new URL("../../reports/R4-atmosphere/", import.meta.url);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const RENDERER = fileURLToPath(new URL("../", import.meta.url));
-const WIDTH = 512;
-const HEIGHT = 300;
-/** The middle of the screen, a quarter of it: where events made up on demand happen. */
-const MIDDLE = { x: 128, y: 75, width: 256, height: 150 };
-const SHOW = "recording=autumn&every=0&quiet&seed=7";
+const STREAMS = fileURLToPath(new URL("../public/stream/report/", import.meta.url));
+/** The desk's screen (CLAUDE.md §2): films are taken at its own size. */
+const WIDTH = 1024;
+const HEIGHT = 600;
+const SAVE = "sim/tests/fixtures/saves/v9.lzma";
 
-/** A glowing animal, sent as the stream would (the fixture's world has none). */
-async function glowingAnimal(page) {
-  await page.evaluate(() =>
-    window.__receive?.({
-      type: "creatures",
-      protocol: 1,
-      t_ms: 0,
-      ids: [900001, 900002],
-      positions: [
-        [120, 60],
-        [121.5, 61],
-      ],
-      species: [1, 1],
-      born: [
-        { id: 900001, genome: Array.from({ length: 32 }, () => 0.5), slots: 128 },
-        {
-          id: 900002,
-          genome: Array.from({ length: 32 }, (_, i) => (i % 3 === 0 ? 0.8 : 0.4)),
-          slots: 128,
-        },
-      ],
-      torpid: [],
-    }),
+/** Each scenario's stream: the owner's schedule, and what is staged (day 1, at `hour`, 02:00 unless said). */
+const SCENARIOS = {
+  day: { schedule: "office", stage: null },
+  fire: { schedule: "office", stage: "fire" },
+  shower: { schedule: "always", stage: "shower", hour: 0.25 },
+  thunder: { schedule: "always", stage: "thunder", hour: 0.25 },
+  storm: { schedule: "always", stage: "storm", hour: 0.25 },
+  soaking: { schedule: "always", stage: "rain", hour: 0.25 },
+  volcano: { schedule: "always", stage: "volcano" },
+  quake: { schedule: "always", stage: "quake" },
+  meteor: { schedule: "always", stage: "meteor" },
+  // A month, so that what the seed power sowed has grown large enough to be seen.
+  seed: { schedule: "always", stage: "seed", days: 30 },
+  ark: { schedule: "always", stage: "ark" },
+};
+/** Sim-seconds a wall second while an event is filmed: 02:00 comes 4 s after the start. */
+const EVENT_SPEED = 1800;
+/** While rain falls: a staged spell (4 sim-hours) lasts 48 s, time to catch its bolts. */
+const RAIN_SPEED = 300;
+/** And while a fire spreads (a sim-day in 12 s). */
+const SPREAD_SPEED = 7200;
+
+const env_ = { ...env };
+delete env_.PYTHONPATH;
+
+function recordStreams() {
+  mkdirSync(STREAMS, { recursive: true });
+  for (const [name, scenario] of Object.entries(SCENARIOS)) {
+    const args = [
+      "run", "python", "-m", "tools.stream", SAVE,
+      "--out", join(STREAMS, `${name}.json`),
+      "--skip-days", "14", "--days", String(scenario.days ?? 2), "--land-every", "1",
+      "--creatures", "--creatures-every", "3600", "--sky-every", "600",
+      "--schedule", scenario.schedule,
+    ]; // prettier-ignore
+    if (scenario.stage !== null) args.push("--stage", `1:${scenario.hour ?? 2}:${scenario.stage}`);
+    execFileSync("uv", args, { cwd: ROOT, env: env_, stdio: ["ignore", "ignore", "inherit"] });
+    console.log(`recorded ${name}`);
+  }
+}
+
+/** A recording's messages, and what is read from them. */
+function loadStream(path) {
+  const messages = JSON.parse(readFileSync(path, "utf8")).messages;
+  const lands = messages.filter((m) => m.type === "land");
+  const events = messages.filter((m) => m.type === "events").flatMap((m) => m.events);
+  return { messages, lands, events, size: readFileSync(path).length };
+}
+
+function gridOf(grid, cells) {
+  const bytes = Buffer.from(grid.data, "base64");
+  if (grid.encoding === "u8") return Array.from(bytes, (v) => v / grid.scale);
+  return Array.from(
+    { length: cells },
+    (_, i) => (bytes[2 * i] | (bytes[2 * i + 1] << 8)) / grid.scale,
+  );
+}
+
+/** The land cell nearest the island's middle (cells). */
+function middleOfLand(land) {
+  const cells = land.width * land.height;
+  const heights = gridOf(land.heights, cells);
+  let best = [land.width / 2, land.height / 2];
+  let bestD = Infinity;
+  for (let i = 0; i < cells; i++) {
+    if (heights[i] <= land.sea_level + 0.01) continue;
+    const x = (i % land.width) + 0.5;
+    const y = Math.floor(i / land.width) + 0.5;
+    const d = (x - land.width / 2) ** 2 + (y - land.height / 2) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = [x, y];
+    }
+  }
+  return best;
+}
+
+/** Where the cells that `pick` chooses in `grid` are thickest, within boxes of 9 cells. */
+function densest(land, values) {
+  let best = middleOfLand(land);
+  let bestCount = 0;
+  for (let y = 4; y < land.height - 4; y += 2) {
+    for (let x = 4; x < land.width - 4; x += 2) {
+      let count = 0;
+      for (let dy = -4; dy <= 4; dy++)
+        for (let dx = -4; dx <= 4; dx++) count += values[(y + dy) * land.width + x + dx] ?? 0;
+      if (count > bestCount) {
+        bestCount = count;
+        best = [x + 0.5, y + 0.5];
+      }
+    }
+  }
+  return best;
+}
+
+/** Where each scenario's event happened (cells), read from its stream. */
+function placeOf(name, stream) {
+  const first = stream.lands[0];
+  const kinds = {
+    fire: "fire_started",
+    volcano: "volcano",
+    quake: "earthquake",
+    meteor: "crater",
+    ark: "creatures_arrived",
+  };
+  const kind = kinds[name];
+  const event = stream.events.find((e) => e.kind === kind && e.x !== undefined);
+  if (event !== undefined) return [Math.round(event.x) + 0.5, Math.round(event.y) + 0.5];
+  if (name === "seed") {
+    // Where most of the seed power's seeds took: cells bare before and growing after.
+    const cells = first.width * first.height;
+    const before = gridOf(first.biomass, cells);
+    const after = gridOf(stream.lands[stream.lands.length - 1].biomass, cells);
+    return densest(
+      first,
+      before.map((b, i) => (b === 0 && after[i] > 0 ? 1 : 0)),
+    );
+  }
+  return middleOfLand(first);
+}
+
+/** Where algae grow thickest, on the last land of `stream`. */
+function algaePlace(stream) {
+  const land = stream.lands[stream.lands.length - 1];
+  return densest(land, gridOf(land.algae, land.width * land.height));
+}
+
+const views = (query, [x, y]) => ({
+  map: `${query}&view=map`,
+  middle: `${query}&view=middle&x=${x}&y=${y}`,
+  local: `${query}&view=local&x=${x}&y=${y}`,
+});
+
+/** Frames a second the films are taken and played at: the renderer's own on the board. */
+const FPS = 30;
+const FILMS = fileURLToPath(new URL("films/", OUT));
+const REUSE = Boolean(env.R4_REPORT_REUSE_FILMS);
+
+/** Open the scene at `query` in film mode, and step it until its ground is painted. */
+async function open(page, address, query) {
+  await page.goto(`${address}?${query}&film`);
+  await page.waitForFunction(() => typeof window.__frame === "function", null, {
+    timeout: 120_000,
+  });
+  for (let tries = 0; tries < 2000; tries++) {
+    const settled = await page.evaluate(() => {
+      window.__frame?.(0);
+      return window.__sceneSettled?.() === true;
+    });
+    if (settled) return;
+    await page.waitForTimeout(25);
+  }
+  throw new Error(`the scene never settled: ${query}`);
+}
+
+/** Move the scene on one frame, wait for any painting, and screenshot the whole screen. */
+async function frame(page, seconds = 1 / FPS) {
+  await page.evaluate((s) => window.__frame?.(s), seconds);
+  for (let tries = 0; tries < 400; tries++) {
+    if (!(await page.evaluate(() => window.__painting?.() === true))) break;
+    await page.waitForTimeout(10);
+  }
+  return page.screenshot({ type: "png" });
+}
+
+/** Run the scene on `seconds` without filming it. */
+async function skip(page, seconds) {
+  await page.evaluate(
+    ([frames, step]) => {
+      for (let k = 0; k < frames; k++) window.__frame?.(step);
+    },
+    [Math.round(seconds * FPS), 1 / FPS],
   );
 }
 
 /**
- * The films: where the page goes, what is filmed (`clip`, or the whole map at one pixel
- * a cell with `half`), how many frames how far apart, and for the end of a world how far
- * its sequence is moved on between frames (a time-lapse).
+ * Film `seconds` of the scene at `FPS` into films/`name`.webm (VP9, 4:4:4 so that pixel
+ * edges stay hard, nearly lossless), each frame stepping it on `speedUp` times a frame's
+ * time (1: real time; more for a time-lapse). Returns the film's file and a poster: its
+ * middle frame at the art pixels' size (half the screen's).
  */
-const FILMS = {
-  day: {
-    query: "recording=office&speed=7200&quiet&seed=7&view=map",
-    half: true,
-    frames: 40,
-    everyMs: 200,
-  },
-  glow: {
-    query: "recording=office&every=0&quiet&seed=7&view=local&x=120&y=60&show=night",
-    setup: glowingAnimal,
-    clip: MIDDLE,
-    frames: 40,
-    everyMs: 80,
-  },
-  "fire-middle": {
-    query: `${SHOW}&view=middle&x=120&y=60&show=night,fire`,
-    clip: MIDDLE,
-    frames: 26,
-    everyMs: 80,
-  },
-  "fire-local": {
-    query: `${SHOW}&view=local&x=120&y=60&show=night,fire`,
-    clip: MIDDLE,
-    frames: 26,
-    everyMs: 80,
-  },
-  rain: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=day,rain`,
-    clip: MIDDLE,
-    frames: 20,
-    everyMs: 60,
-  },
-  volcano: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=day,volcano`,
-    clip: MIDDLE,
-    frames: 36,
-    everyMs: 120,
-  },
-  "volcano-night": {
-    query: `${SHOW}&view=middle&x=120&y=60&show=night,volcano`,
-    clip: MIDDLE,
-    frames: 28,
-    everyMs: 120,
-  },
-  quake: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=day,quake`,
-    clip: MIDDLE,
-    frames: 30,
-    everyMs: 80,
-  },
-  meteor: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=dusk,meteor`,
-    clip: MIDDLE,
-    frames: 44,
-    everyMs: 80,
-  },
-  seed: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=night,seed`,
-    clip: MIDDLE,
-    frames: 36,
-    everyMs: 120,
-  },
-  ark: {
-    query: `${SHOW}&view=middle&x=120&y=60&show=dusk,ark`,
-    clip: MIDDLE,
-    frames: 36,
-    everyMs: 120,
-  },
-  waves: {
-    query: "recording=autumn&every=0&quiet&seed=7&view=map",
-    clip: { x: 0, y: 150, width: 200, height: 130 },
-    frames: 40,
-    everyMs: 70,
-  },
-  end: {
-    query: "recording=end&speed=20000&quiet&seed=3",
-    waitFor: () => typeof window.__atmosphere?.().act === "string",
-    half: true,
-    frames: 72,
-    everyMs: 30,
-    advanceS: 2.5,
-    delayMs: 110,
-  },
-};
-
-/** Moments of the end of a world shown as stills (act, seconds into the sequence). */
-const MOMENTS = [
-  ["omen", 15],
-  ["fire", 50],
-  ["flood", 95],
-  ["dark", 130],
-  ["rise", 165],
-];
-
-/** The light of each time of day, on the map (stills). */
-const STILLS = ["day", "dawn", "dusk", "night", "moon"];
-
-async function settle(page, address, query, waitFor) {
-  await page.goto(`${address}?${query}`);
-  await page.waitForFunction(waitFor ?? (() => window.__sceneSettled?.() === true), null, {
-    timeout: 120_000,
-  });
-}
-
-async function shoot(page, film) {
-  const shot = await page.screenshot({
-    clip: film.clip ?? { x: 0, y: 0, width: WIDTH, height: HEIGHT },
-  });
-  const image = decodePng(shot);
-  return film.half ? shrink(image, 2) : image;
-}
-
-async function makeFilm(page, address, film) {
-  await settle(page, address, film.query, film.waitFor);
-  if (film.setup !== undefined) await film.setup(page);
-  const pictures = [];
-  for (let frame = 0; frame < film.frames; frame++) {
-    if (film.advanceS !== undefined)
-      await page.evaluate((s) => window.__advance?.(s), film.advanceS);
-    await page.waitForTimeout(film.everyMs);
-    const at = Date.now();
-    pictures.push({ at, image: await shoot(page, film) });
+async function film(page, name, seconds, speedUp = 1, keepAt = []) {
+  mkdirSync(FILMS, { recursive: true });
+  const file = `${name}.webm`;
+  const frames = Math.round(seconds * FPS);
+  // With R4_REPORT_REUSE_FILMS, a film already made is kept (its poster and stills beside it).
+  if (REUSE && existsSync(join(FILMS, file)) && existsSync(join(FILMS, `${name}.poster.png`))) {
+    const kept = keepAt.map((at, k) => ({
+      at,
+      poster: readFileSync(join(FILMS, `${name}.kept-${k}.png`)),
+    }));
+    const bytes = statSync(join(FILMS, file)).size;
+    return {
+      file,
+      poster: readFileSync(join(FILMS, `${name}.poster.png`)),
+      frames,
+      seconds,
+      bytes,
+      kept,
+    };
   }
-  const { width, height } = pictures[0].image;
-  const apng = new Apng(width, height);
-  pictures.forEach(({ at, image }, index) => {
-    const next = pictures[index + 1]?.at ?? at + film.everyMs + 40;
-    apng.add(image.rgb, film.delayMs ?? next - at);
+  const encoder = spawn(
+    "ffmpeg",
+    ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png",
+     "-i", "-", "-c:v", "libvpx-vp9", "-pix_fmt", "yuv444p", "-crf", "16", "-b:v", "0",
+     "-row-mt", "1", "-deadline", "good", "-cpu-used", "4", join(FILMS, file)],
+    { stdio: ["pipe", "ignore", "inherit"] },
+  ); // prettier-ignore
+  const done = new Promise((resolve, reject) => {
+    encoder.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
   });
-  const seconds =
-    pictures.reduce(
-      (sum, _, i) =>
-        sum +
-        (film.delayMs ??
-          (pictures[i + 1]?.at ?? pictures[i].at + film.everyMs + 40) - pictures[i].at),
-      0,
-    ) / 1000;
-  return { bytes: apng.bytes(), width, height, frames: pictures.length, seconds, pictures };
+  let poster = null;
+  const kept = [];
+  for (let k = 0; k < frames; k++) {
+    const shot = await frame(page, speedUp / FPS);
+    if (k === Math.floor(frames / 2)) poster = shrink(decodePng(shot), 2);
+    for (const at of keepAt) {
+      if (k === Math.round(at * FPS)) kept.push({ at, poster: png(shrink(decodePng(shot), 2)) });
+    }
+    if (!encoder.stdin.write(shot))
+      await new Promise((resolve) => encoder.stdin.once("drain", resolve));
+  }
+  encoder.stdin.end();
+  await done;
+  const bytes = statSync(join(FILMS, file)).size;
+  const posterPng = png(poster);
+  writeFileSync(join(FILMS, `${name}.poster.png`), posterPng);
+  kept.forEach((k, n) => writeFileSync(join(FILMS, `${name}.kept-${n}.png`), k.poster));
+  return { file, poster: posterPng, frames, seconds, bytes, kept };
 }
 
-/** The light's colours, as \`src/atmosphere/light.ts\` has them (read from it, not copied). */
-async function lightValues() {
-  const source = await readFile(new URL("../src/atmosphere/light.ts", import.meta.url), "utf8");
-  const rgb = (text) => text.split(",").map((value) => Number(value.trim()));
-  const named = (name) => {
-    const found = new RegExp(`export const ${name}: Rgb = \\[([^\\]]+)\\]`).exec(source);
-    if (found === null) throw new Error(`light.ts: no ${name}`);
-    return rgb(found[1]);
-  };
-  const seasons = /SEASON_DAY[^{]*\{([^}]+)\}/.exec(source)?.[1] ?? "";
-  const SEASON_DAY = Object.fromEntries(
-    [...seasons.matchAll(/(\w+): \[([^\]]+)\]/g)].map((match) => [match[1], rgb(match[2])]),
-  );
-  return {
-    NIGHT: named("NIGHT"),
-    DUSK: named("DUSK"),
-    DAWN: named("DAWN"),
-    RAIN_GREY: named("RAIN_GREY"),
-    SEASON_DAY,
-  };
+/**
+ * A still of the scene after it has run a few seconds (what came all at once has played
+ * out: a flash, a meteor's fall), saved to films/`name`.png, with its poster.
+ */
+async function still(page, name) {
+  mkdirSync(FILMS, { recursive: true });
+  if (REUSE && existsSync(join(FILMS, `${name}.png`))) {
+    return {
+      file: `${name}.png`,
+      poster: png(shrink(decodePng(readFileSync(join(FILMS, `${name}.png`))), 2)),
+    };
+  }
+  await skip(page, 10);
+  const shot = await frame(page, 0);
+  writeFileSync(join(FILMS, `${name}.png`), shot);
+  return { file: `${name}.png`, poster: png(shrink(decodePng(shot), 2)) };
 }
 
 const uri = (bytes) => `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`;
@@ -235,27 +309,23 @@ function git(...args) {
 
 /** The atmosphere's unit tests, run now. */
 function unitTests() {
-  const file = fileURLToPath(
-    new URL("../node_modules/.cache-atmosphere-tests.json", import.meta.url),
-  );
+  const folder = mkdtempSync(join(tmpdir(), "lineage-r4-"));
+  const file = join(folder, "tests.json");
   execFileSync(
     "npx",
-    ["vitest", "run", "tests/atmosphere", "--reporter=json", `--outputFile=${file}`],
+    ["vitest", "run", "tests/atmosphere", "--reporter=json", `--outputFile.json=${file}`],
     {
       cwd: RENDERER,
       stdio: "ignore",
     },
   );
   const result = JSON.parse(readFileSync(file, "utf8"));
+  rmSync(folder, { recursive: true, force: true });
   return {
     passed: result.numPassedTests,
     failed: result.numFailedTests,
     names: result.testResults.flatMap((file) =>
-      file.assertionResults.map((test) => ({
-        file: file.name.replace(`${RENDERER}`, ""),
-        name: [...test.ancestorTitles, test.title].join(" › "),
-        status: test.status,
-      })),
+      file.assertionResults.map((test) => [...test.ancestorTitles, test.title].join(" › ")),
     ),
   };
 }
@@ -277,85 +347,72 @@ function listed() {
   return { units, browser: total, atmosphere };
 }
 
-/** The sky of a recording: time (days from its start), light, presence, rain. */
-async function skies(name) {
-  const document = JSON.parse(
-    await readFile(new URL(`../public/stream/${name}.json`, import.meta.url), "utf8"),
-  );
-  const messages = document.messages;
-  const counts = {};
-  const bytes = {};
-  for (const message of messages) {
-    counts[message.type] = (counts[message.type] ?? 0) + 1;
-    bytes[message.type] = (bytes[message.type] ?? 0) + JSON.stringify(message).length;
-  }
-  const clocks = messages.filter((m) => m.type === "clock");
-  const first = clocks[0];
-  const sky = messages.filter((m) => m.type === "sky");
+/** The light and rain of a stream's skies, for the chart. */
+function skyPoints(stream) {
+  const sky = stream.messages.filter((m) => m.type === "sky");
   const t0 = sky[0]?.t_ms ?? 0;
-  return {
-    messages,
-    counts,
-    bytes,
-    first,
-    last: clocks[clocks.length - 1],
-    points: sky.map((m) => ({
-      d: (m.t_ms - t0) / 86_400_000,
-      light: m.light,
-      present: m.present,
-      rain: m.raining,
-    })),
-    events: messages.filter((m) => m.type === "events").flatMap((m) => m.events),
-    entries: messages.filter((m) => m.type === "chronicle").flatMap((m) => m.entries),
-    size: JSON.stringify(document).length,
-  };
+  return sky.map((m) => ({
+    d: (m.t_ms - t0) / 86_400_000,
+    light: m.light,
+    present: m.present,
+    rain: m.rain,
+  }));
 }
 
-/** The light over the office fortnight, as an SVG drawn to scale. */
-function lightChart(record) {
+const RAIN_TOKENS = {
+  rain: "--rain",
+  thunder: "--thunder",
+  storm: "--storm",
+  soaking: "--soaking",
+};
+
+/** The light over a stream's days, the owner at the desk, and the rain by kind: an SVG to scale. */
+function lightChart(points, firstDate) {
   const W = 960;
   const H = 300;
   const left = 96;
   const right = 16;
   const top = 16;
-  const bottom = 44;
-  const days = Math.ceil(record.points[record.points.length - 1]?.d ?? 14);
+  const bottom = 56;
+  const days = Math.ceil(points[points.length - 1]?.d ?? 1);
   const x = (d) => left + ((W - left - right) * d) / days;
   const y = (v) => top + (H - top - bottom) * (1 - v);
-  const bands = (key) => {
+  const spans = (test) => {
     const out = [];
     let start = null;
-    record.points.forEach((p, i) => {
-      if (p[key] && start === null) start = p.d;
-      const next = record.points[i + 1];
-      if (start !== null && (!next || !next[key])) {
+    points.forEach((p, i) => {
+      if (test(p) && start === null) start = p.d;
+      const next = points[i + 1];
+      if (start !== null && (!next || !test(next))) {
         out.push([start, next ? next.d : p.d]);
         start = null;
       }
     });
     return out;
   };
-  const present = bands("present")
+  const present = spans((p) => p.present)
     .map(
       ([a, b]) =>
         `<rect x="${x(a).toFixed(1)}" y="${top}" width="${Math.max(x(b) - x(a), 1).toFixed(1)}" height="${H - top - bottom}" fill="var(--desk)"/>`,
     )
     .join("");
-  const rain = bands("rain")
-    .map(
-      ([a, b]) =>
-        `<rect x="${x(a).toFixed(1)}" y="${H - bottom + 6}" width="${(x(b) - x(a)).toFixed(1)}" height="6" rx="2" fill="var(--rain)"/>`,
+  const rain = Object.entries(RAIN_TOKENS)
+    .flatMap(([kind, token]) =>
+      spans((p) => p.rain === kind).map(
+        ([a, b]) =>
+          `<rect x="${x(a).toFixed(1)}" y="${H - bottom + 6}" width="${Math.max(x(b) - x(a), 2).toFixed(1)}" height="8" rx="2" fill="var(${token})"><title>${kind}</title></rect>`,
+      ),
     )
     .join("");
-  const line = record.points
+  const line = points
     .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.d).toFixed(1)},${y(p.light).toFixed(1)}`)
     .join("");
-  const start = new Date(`${record.first.date}T00:00:00Z`);
+  const start = new Date(`${firstDate}T00:00:00Z`);
   const ticks = Array.from({ length: days + 1 }, (_, d) => {
     const date = new Date(start.getTime() + d * 86_400_000);
     const label =
       d % 2 === 0 && d < days ? `${date.toUTCString().slice(0, 3)} ${date.getUTCDate()}` : "";
-    return `<line x1="${x(d)}" x2="${x(d)}" y1="${top}" y2="${H - bottom}" stroke="var(--grid)"/>${label ? `<text x="${x(d) + 3}" y="${H - bottom + 28}" class="tick">${label}</text>` : ""}`;
+    return `<line x1="${x(d)}" x2="${x(d)}" y1="${top}" y2="${H - bottom}" stroke="var(--grid)"/>${label ? `<text x="${x(d) + 3}" y="${H - bottom + 34}" class="tick">${label}</text>` : ""}`;
   }).join("");
   const levels = [
     [1, "1 day"],
@@ -369,12 +426,12 @@ function lightChart(record) {
     )
     .join("");
   const data = JSON.stringify(
-    record.points
+    points
       .filter((_, i) => i % 3 === 0)
-      .map((p) => [Number(p.d.toFixed(4)), p.light, p.present ? 1 : 0, p.rain ? 1 : 0]),
+      .map((p) => [Number(p.d.toFixed(4)), p.light, p.present ? 1 : 0, p.rain]),
   );
   return `<div class="chart" data-start="${start.getTime()}" data-days="${days}" data-left="${left}" data-right="${right}" data-width="${W}">
-<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The sim's light over the office fortnight, sampled every ten sim-minutes">
+<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="The sim's light and rain over the office fortnight, every ten sim-minutes">
 <rect x="0" y="0" width="${W}" height="${H}" fill="var(--panel)"/>
 ${present}${ticks}${levels}${rain}
 <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
@@ -400,17 +457,41 @@ for (const chart of document.querySelectorAll(".chart")) {
     cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
     const when = new Date(start + best[0] * 86400000);
     tip.hidden = false;
-    tip.textContent = when.toUTCString().slice(0, 22) + " UTC · light " + best[1].toFixed(2) + (best[2] ? " · at the desk" : " · away") + (best[3] ? " · rain" : "");
-    tip.style.left = Math.min(Math.max((px / width) * box.width - 90, 0), box.width - 200) + "px";
+    tip.textContent = when.toUTCString().slice(0, 22) + " UTC · light " + best[1].toFixed(2) + (best[2] ? " · at the desk" : " · away") + (best[3] !== "none" ? " · " + best[3] : "");
+    tip.style.left = Math.min(Math.max((px / width) * box.width - 90, 0), box.width - 220) + "px";
   });
   svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
 }`;
 
-function filmFigure(name, film, title, text, query, wide = false) {
-  return `<figure class="film${wide ? " wide" : ""}">
-<img src="${uri(film.bytes)}" width="${film.width}" height="${film.height}" alt="${escape(title)}" style="aspect-ratio:${film.width}/${film.height}">
-<figcaption><strong>${escape(title)}</strong> ${text} <span class="meta">${film.frames} frames, ${film.seconds.toFixed(1)} s loop · <code>/?${escape(query)}</code></span></figcaption>
+/** A film (or still) of the report: its poster inline, the video beside the report. */
+function figure(item, title, text) {
+  const meta =
+    item.frames === undefined
+      ? `still, 1024×600 (<code>films/${item.file}</code>)`
+      : `${item.frames} frames at ${FPS} fps, ${item.seconds.toFixed(1)} s, 1024×600, ${(item.bytes / 1e6).toFixed(1)} MB`;
+  const poster = uri(item.poster);
+  const media =
+    item.frames === undefined
+      ? `<a href="films/${item.file}"><img src="${poster}" width="512" height="300" alt="${escape(title)}"></a>`
+      : `<video src="films/${item.file}" poster="${poster}" width="1024" height="600" autoplay loop muted playsinline controls aria-label="${escape(title)}"></video>`;
+  return `<figure class="film">${media}
+<figcaption><strong>${escape(title)}</strong> ${text} <span class="meta">${meta}</span></figcaption>
 </figure>`;
+}
+
+/** The three views of one thing, one below the other, each at the screen's own size. */
+function threeViews(items, title, texts) {
+  return `<div class="views">${["map", "middle", "local"]
+    .map((view) =>
+      items[view] === undefined
+        ? ""
+        : figure(
+            items[view],
+            `${title}: ${view === "local" ? "up close" : view === "middle" ? "middle view" : "map"}`,
+            texts[view] ?? "",
+          ),
+    )
+    .join("")}</div>`;
 }
 
 const swatch = (rgb) => {
@@ -421,12 +502,58 @@ const swatch = (rgb) => {
         .padStart(2, "0"),
     )
     .join("")}`;
-  return `<span class="swatch" style="background:${hex}"></span><code>${hex}</code> <span class="meta">[${rgb.join(", ")}]</span>`;
+  return `<span class="swatch" style="background:${hex}"></span><code>${hex}</code>`;
 };
 
-const server = await preview({ logLevel: "silent" });
+/** The light's colours, as `src/atmosphere/light.ts` has them (read from it, not copied). */
+function lightValues() {
+  const source = readFileSync(new URL("../src/atmosphere/light.ts", import.meta.url), "utf8");
+  const rgb = (text) => text.split(",").map((value) => Number(value.trim()));
+  const named = (name) => {
+    const found = new RegExp(`export const ${name}: Rgb = \\[([^\\]]+)\\]`).exec(source);
+    if (found === null) throw new Error(`light.ts: no ${name}`);
+    return rgb(found[1]);
+  };
+  const seasons = /SEASON_DAY[^{]*\{([^}]+)\}/.exec(source)?.[1] ?? "";
+  const SEASON_DAY = Object.fromEntries(
+    [...seasons.matchAll(/(\w+): \[([^\]]+)\]/g)].map((m) => [m[1], rgb(m[2])]),
+  );
+  return { NIGHT: named("NIGHT"), DUSK: named("DUSK"), DAWN: named("DAWN"), SEASON_DAY };
+}
+
+// --- 1. the streams -----------------------------------------------------------------------
+if (!env.R4_REPORT_REUSE_STREAMS || !existsSync(join(STREAMS, "ark.json"))) recordStreams();
+const streams = Object.fromEntries(
+  Object.keys(SCENARIOS).map((name) => [name, loadStream(join(STREAMS, `${name}.json`))]),
+);
+const places = Object.fromEntries(
+  Object.keys(SCENARIOS).map((name) => [name, placeOf(name, streams[name])]),
+);
+const algae = algaePlace(streams.day);
+// The rains are filmed on that coast, where they meet the water as well as the land.
+for (const rain of ["shower", "thunder", "storm", "soaking"]) places[rain] = algae;
+
+// --- 2. the films ---------------------------------------------------------------------------
+/** Wall seconds from a stream's start (played at `speed`) to its first event of `kind`, or to its first sky of `rain`. */
+function dueOf(stream, speed, test) {
+  const first = stream.messages.find((m) => typeof m.t_ms === "number")?.t_ms ?? 0;
+  for (const message of stream.messages) {
+    if (message.type === "events" && message.events.some((e) => test(e))) {
+      return (message.events.find((e) => test(e)).t_ms - first) / 1000 / speed;
+    }
+    if (message.type === "sky" && test({ kind: `rain:${message.rain}` })) {
+      return (message.t_ms - first) / 1000 / speed;
+    }
+  }
+  throw new Error("the stream has no such event");
+}
+
+if (!REUSE) rmSync(FILMS, { recursive: true, force: true });
+await build({ root: RENDERER, logLevel: "silent" });
+const server = await preview({ root: RENDERER, logLevel: "silent" });
 const browser = await chromium.launch();
 const errors = [];
+const shots = {};
 try {
   const address = server.resolvedUrls?.local[0];
   if (address === undefined) throw new Error("the preview server gave no address");
@@ -436,100 +563,187 @@ try {
   });
   page.setDefaultTimeout(600_000);
   page.on("pageerror", (error) => errors.push(error.message));
+  /** Run `take` in the three views of `place`, the query given to each. */
+  const each = async (name, query, place, take) => {
+    shots[name] = {};
+    for (const [view, q] of Object.entries(views(query, place))) {
+      await open(page, address, q);
+      shots[name][view] = await take(`${name}-${view}`);
+      console.log(`filmed ${name} ${view}`);
+    }
+  };
+  /** A stream's event, from a second before it, for `seconds`. */
+  const event =
+    (stream, speed, test, seconds, speedUp = 1) =>
+    async (name) => {
+      await skip(page, Math.max(dueOf(streams[stream], speed, test) - 1, 0));
+      return film(page, name, seconds, speedUp);
+    };
+  const kind = (k) => (e) => e.kind === k;
+  const fileOf = (stream, speed) => `file=report/${stream}.json&speed=${speed}&quiet&seed=7`;
+  const settledAt = `every=0&quiet&seed=7&show=day`;
 
-  const films = {};
-  for (const [name, film] of Object.entries(FILMS)) {
-    films[name] = await makeFilm(page, address, film);
-    console.log(
-      `filmed ${name}: ${films[name].frames} frames, ${(films[name].bytes.length / 1e3).toFixed(0)} kB`,
-    );
+  // The light: the stills of each time of day, and a day at the desk.
+  shots.lights = {};
+  for (const light of ["day", "dawn", "dusk", "night", "moon"]) {
+    await open(page, address, `file=report/day.json&every=0&quiet&seed=7&view=map&show=${light}`);
+    shots.lights[light] = await still(page, `light-${light}`);
   }
-  const stills = {};
-  for (const name of STILLS) {
-    await settle(
-      page,
-      address,
-      `recording=autumn&every=0&still&quiet&seed=7&view=map&show=${name}`,
-    );
-    await page.waitForTimeout(100);
-    stills[name] = png(await shoot(page, { half: true }));
-  }
-  if (errors.length > 0) throw new Error(`the scene failed: ${errors.join("; ")}`);
-
-  const office = await skies("office");
-  const end = await skies("end");
-  const units = unitTests();
-  const tests = listed();
-  const commit = git("rev-parse", "--short", "HEAD");
-  const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-  const log = git("log", "--format=%h %s", "main..HEAD").split("\n").filter(Boolean);
-  const changed = git("diff", "--stat", "main..HEAD").split("\n").pop();
-  const { NIGHT, DUSK, DAWN, SEASON_DAY, RAIN_GREY } = await lightValues();
-
-  const ACTS = [
-    ["omen", 20, "the sky reddens whatever the hour; ash starts to fall across the screen"],
-    [
-      "fire",
-      40,
-      "40 lava vents open on high land, each with lava running from it and ash rising; a quake jolts the picture every 6 s",
-    ],
-    [
-      "flood",
-      60,
-      "a risen sea, one pixel to the cell in the sea's depth bands with foam at its edge, covers the land from the lowland up; vents under it go out; the last peak goes under",
-    ],
-    [
-      "dark",
-      20,
-      "nothing but black; the next world's land and animals, held since the end, are laid out behind it",
-    ],
-    [
-      "rise",
-      40,
-      "the light comes back and the sea falls away from the new continent, peaks first; the next world's first chronicle lines are let through",
-    ],
-  ];
-  const ended = end.entries.filter((e) =>
-    ["last_creature", "world_end", "world_begin"].includes(e.kind),
+  await each("day", fileOf("day", 7200), places.day, (name) => film(page, name, 12));
+  // Glow: the fixture has no glowing animal; two are sent as the stream would.
+  await each(
+    "glow",
+    "file=report/day.json&every=0&quiet&seed=7&show=night",
+    places.day,
+    async (name) => {
+      const [x, y] = places.day;
+      await page.evaluate(([x, y]) => {
+      window.__receive?.({
+        type: "creatures", protocol: 1, t_ms: 0, ids: [900001, 900002],
+        positions: [[x, y], [x + 1.5, y + 1]], species: [1, 1],
+        born: [
+          { id: 900001, genome: Array.from({ length: 32 }, () => 0.5), slots: 128 },
+          { id: 900002, genome: Array.from({ length: 32 }, (_, i) => (i % 3 === 0 ? 0.8 : 0.4)), slots: 128 },
+        ],
+        torpid: [],
+      });
+    }, [x, y]); // prettier-ignore
+      return film(page, name, 5);
+    },
   );
-  const sampleSky =
-    office.messages.find((m) => m.type === "sky" && m.raining) ??
-    office.messages.find((m) => m.type === "sky");
-  const sampleEvents = end.messages.find((m) => m.type === "events");
+  // The rains: each from a second before it begins (it sets in over 3 s).
+  const rains = {
+    shower: ["rain", 6],
+    thunder: ["thunder", 14],
+    storm: ["storm", 8],
+    soaking: ["soaking", 6],
+  };
+  for (const [name, [rain, seconds]] of Object.entries(rains)) {
+    await each(name, fileOf(name, RAIN_SPEED), places[name],
+      event(name, RAIN_SPEED, (e) => e.kind === `rain:${rain}`, seconds)); // prettier-ignore
+  }
+  // A thunderstorm's lightning sets a fire; it spreads; what it leaves.
+  await each("strike", fileOf("fire", EVENT_SPEED), places.fire,
+    event("fire", EVENT_SPEED, kind("fire_started"), 5)); // prettier-ignore
+  await each("spread", fileOf("fire", EVENT_SPEED), places.fire,
+    event("fire", EVENT_SPEED, kind("fire_started"), 14, SPREAD_SPEED / EVENT_SPEED)); // prettier-ignore
+  // A larger fire, made up on the land (?show=): the sim's own are often small.
+  await each("bigfire", "file=report/day.json&every=0&quiet&seed=7&show=night,fire", places.fire,
+    (name) => film(page, name, 6)); // prettier-ignore
+  await each("burnt", `file=report/fire.json&${settledAt}`, places.fire, (name) =>
+    still(page, name),
+  );
+  // The terrain's events and what they leave.
+  await each("volcano", fileOf("volcano", EVENT_SPEED), places.volcano,
+    event("volcano", EVENT_SPEED, kind("volcano"), 9)); // prettier-ignore
+  await each("cone", `file=report/volcano.json&${settledAt}`, places.volcano, (name) =>
+    still(page, name),
+  );
+  await each("quake", fileOf("quake", EVENT_SPEED), places.quake,
+    event("quake", EVENT_SPEED, kind("earthquake"), 6)); // prettier-ignore
+  await each("meteor", fileOf("meteor", EVENT_SPEED), places.meteor,
+    event("meteor", EVENT_SPEED, kind("god_power"), 9)); // prettier-ignore
+  await each("crater", `file=report/meteor.json&${settledAt}`, places.meteor, (name) =>
+    still(page, name),
+  );
+  // The god powers that give.
+  await each("seed", fileOf("seed", EVENT_SPEED), places.seed,
+    event("seed", EVENT_SPEED, kind("god_power"), 9)); // prettier-ignore
+  await each("unsown", `file=report/seed.json&speed=1&quiet&seed=7&show=day`, places.seed,
+    (name) => still(page, name)); // prettier-ignore
+  await each("sown", `file=report/seed.json&${settledAt}`, places.seed, (name) =>
+    still(page, name),
+  );
+  await each("ark", fileOf("ark", EVENT_SPEED), places.ark,
+    event("ark", EVENT_SPEED, kind("god_power"), 9)); // prettier-ignore
+  // Algae and the waves on the shallows.
+  await each("algae", "file=report/day.json&every=0&quiet&seed=7&show=day", algae, (name) =>
+    film(page, name, 6),
+  );
+  // The end of a world: the committed recording, on the map, all three minutes of it.
+  await open(page, address, "recording=end&speed=1800&quiet&seed=3");
+  await skip(
+    page,
+    Math.max(
+      dueOf(
+        loadStream(fileURLToPath(new URL("../public/stream/end.json", import.meta.url))),
+        1800,
+        kind("world_ended"),
+      ) - 1,
+      0,
+    ),
+  );
+  // The acts' moments, a second in from the start of the film.
+  shots.end = await film(page, "end", 184, 1, [16, 51, 96, 131, 166]);
+} finally {
+  await browser.close();
+  await server.close();
+}
+if (errors.length > 0) throw new Error(`the scene failed: ${errors.join("; ")}`);
 
-  const html = `<!doctype html>
+// --- 3. the page ----------------------------------------------------------------------------
+const office = loadStream(new URL("../public/stream/office.json", import.meta.url));
+const officePoints = skyPoints(office);
+const officeFirst = office.messages.find((m) => m.type === "clock").date;
+const rainCounts = {};
+let lastRain = "none";
+for (const p of officePoints) {
+  if (p.rain !== "none" && p.rain !== lastRain) rainCounts[p.rain] = (rainCounts[p.rain] ?? 0) + 1;
+  lastRain = p.rain;
+}
+const units = unitTests();
+const tests = listed();
+const commit = git("rev-parse", "--short", "HEAD");
+const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+const log = git("log", "--format=%h %s", "main..HEAD").split("\n").filter(Boolean);
+const { NIGHT, DUSK, DAWN, SEASON_DAY } = lightValues();
+const at = (name) => `cell (${places[name].map((v) => Math.floor(v)).join(", ")})`;
+const endMoments = [
+  ["omen", 15],
+  ["fire", 50],
+  ["flood", 95],
+  ["dark", 130],
+  ["rise", 165],
+];
+const sizes = Object.entries(streams)
+  .map(([name, s]) => `${name} ${(s.size / 1e6).toFixed(1)} MB`)
+  .join(", ");
+
+const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>R4 Atmosphere Report</title>
 <style>
-/* Layout: one reading column of prose and tables; films break out wider, pixelated, on a night-blue mat. */
+/* Layout: a reading column of prose and tables; each effect a row of three views (map, middle, up close), pixelated on a night-blue mat. */
 :root {
   --bg: #eef1f6; --fg: #182033; --muted: #56607a; --panel: #ffffff; --line: #d3d9e4;
-  --accent: #b4475e; --mat: #1d2440; --desk: rgba(232, 176, 92, 0.22); --rain: #4f7fb8; --grid: #e2e6ee;
-  --pass: #2f7d4f;
+  --accent: #b4475e; --mat: #1d2440; --desk: rgba(232, 176, 92, 0.22); --grid: #e2e6ee; --pass: #2f7d4f;
+  --rain: #7fa6d6; --thunder: #4f7fb8; --storm: #2c3f86; --soaking: #4aa3a0;
   --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #11151f; --fg: #e3e7f0; --muted: #98a1b8; --panel: #191f2c; --line: #2c3446;
-  --accent: #f08aa0; --mat: #0a0d16; --desk: rgba(232, 176, 92, 0.16); --rain: #7aa7dc; --grid: #262d3c; --pass: #6cc493;
+  --accent: #f08aa0; --mat: #0a0d16; --desk: rgba(232, 176, 92, 0.16); --grid: #262d3c; --pass: #6cc493;
+  --rain: #9ebfe6; --thunder: #7aa7dc; --storm: #8d9eea; --soaking: #6cc7c3;
   color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #11151f; --fg: #e3e7f0; --muted: #98a1b8; --panel: #191f2c; --line: #2c3446;
-  --accent: #f08aa0; --mat: #0a0d16; --desk: rgba(232, 176, 92, 0.16); --rain: #7aa7dc; --grid: #262d3c; --pass: #6cc493;
+  --accent: #f08aa0; --mat: #0a0d16; --desk: rgba(232, 176, 92, 0.16); --grid: #262d3c; --pass: #6cc493;
+  --rain: #9ebfe6; --thunder: #7aa7dc; --storm: #8d9eea; --soaking: #6cc7c3;
   color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
-main { max-width: 1120px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
-main > p, main > ul, main > ol, section > p, section > ul { max-width: 70ch; margin: 0; }
+main { max-width: 1088px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+main > p, section > p, section > ul { max-width: 72ch; margin: 0; }
 section { display: grid; gap: 16px; }
 h1 { font-size: 2.1rem; line-height: 1.15; margin: 0; text-wrap: balance; }
 h2 { font-size: 1.45rem; margin: 12px 0 0; padding-top: 18px; border-top: 1px solid var(--line); text-wrap: balance; }
-h3 { font-size: 1.1rem; margin: 4px 0 0; }
+h3 { font-size: 1.1rem; margin: 6px 0 0; }
 .eyebrow { font: 600 0.78rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0; }
-.meta, figcaption .meta { color: var(--muted); font-size: 0.85rem; }
+.meta { color: var(--muted); font-size: 0.85rem; }
 code { font-family: var(--mono); font-size: 0.86em; overflow-wrap: anywhere; }
 dl.header { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 0.92rem; }
 dl.header dt { color: var(--muted); }
@@ -538,13 +752,12 @@ dl.header dd { margin: 0; min-width: 0; }
 table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; }
-.pass { color: var(--pass); font-weight: 700; }
 td:first-child code { white-space: nowrap; }
-.films { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
-figure.film { margin: 0; display: grid; gap: 8px; min-width: 0; }
-figure.film img, .stills img { display: block; width: 100%; height: auto; max-width: 100%; image-rendering: pixelated; background: var(--mat); border-radius: 4px; }
-figure.film.wide img { max-width: 1024px; }
-figcaption { font-size: 0.92rem; color: var(--fg); }
+.pass { color: var(--pass); font-weight: 700; }
+.views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+figure.film { margin: 0; display: grid; gap: 6px; min-width: 0; }
+figure.film img, figure.film video, .stills img { display: block; width: 100%; height: auto; max-width: 1024px; image-rendering: pixelated; background: var(--mat); border-radius: 4px; }
+figcaption { font-size: 0.88rem; }
 figcaption strong { display: block; }
 .stills { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; }
 .stills figure { margin: 0; display: grid; gap: 4px; font-size: 0.85rem; }
@@ -554,12 +767,12 @@ figcaption strong { display: block; }
 .chart .tick { font: 12px var(--mono); fill: var(--muted); }
 .tip { position: absolute; top: 4px; background: var(--fg); color: var(--bg); font: 12px var(--mono); padding: 4px 8px; border-radius: 3px; pointer-events: none; white-space: nowrap; }
 .key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--muted); }
-.key span::before { content: ""; display: inline-block; width: 14px; height: 10px; margin-right: 6px; border-radius: 2px; background: var(--k); vertical-align: 0; }
+.key span::before { content: ""; display: inline-block; width: 14px; height: 10px; margin-right: 6px; border-radius: 2px; background: var(--k); }
 pre { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; overflow-x: auto; font: 12.5px/1.45 var(--mono); }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; }
 .two > * { min-width: 0; }
 blockquote { margin: 0; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); }
-@media (prefers-reduced-motion: reduce) { figure.film img { animation: none; } }
+nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 </style>
 </head>
 <body>
@@ -567,171 +780,166 @@ blockquote { margin: 0; padding: 8px 14px; border-left: 3px solid var(--accent);
 <header style="display:grid;gap:14px">
 <p class="eyebrow">Lineage · milestone report</p>
 <h1>R4 — Atmosphere</h1>
-<p>The light of the owner's presence over the island, what glows in the dark, the weather of the island's events, and the end of a world, drawn in the scene from the state stream. Waves now break on every coast in every view, the map's too. Everything below is filmed from the real renderer at its art pixels' own size (one image pixel per art pixel; the map films at one pixel per cell). The films loop and play in any browser.</p>
+<p>The light of the owner's presence, what glows in the dark, the island's own weather and the weather of its events, what those events leave on the land, and the end of a world. Every effect is filmed from the real renderer in all three views (map, middle view, up close) at the desk screen's own size, 1024×600, and at 30 frames a second, the board's target. The scene is stepped one frame at a time on its own clock, so no frame is dropped however busy the PC is. The apocalypse is the exception to the three views: it is shown on the map only, since it holds the camera there. The events are the sim's own, recorded with <code>tools/stream.py --stage</code> from the v9 fixture two weeks on, so what each leaves is what the sim does.</p>
+<p><strong>Where the films are.</strong> They are VP9 WebM videos (4:4:4 colour, so pixel edges stay hard) in <code>films/</code> beside this page. That folder is not committed: it is about 150 MB, and <code>npm run atmosphere</code> writes it again. Without it, each film shows its poster, a still from its middle.</p>
 <dl class="header">
 <dt>Milestone</dt><dd>R4 (CLAUDE.md §8), decisions in ADR 0021</dd>
-<dt>Branch</dt><dd><code>${escape(branch)}</code> at <code>${commit}</code>, ${log.length} commits on <code>main</code> (${escape(changed)})</dd>
-<dt>Status</dt><dd>Built 2026-10-20 and tested on the PC; not merged, waiting for the owner. Device measurements are R5's.</dd>
-<dt>Recordings</dt><dd><code>office.json</code>: ${office.first.date} to ${office.last.date}, ${office.counts.sky} skies; <code>end.json</code>: ${end.first.date}, a world's end and the next (from the v9 fixture save)</dd>
+<dt>Branch</dt><dd><code>${escape(branch)}</code> at <code>${commit}</code>, ${log.length} commits on <code>main</code> (with M11's algae, cherry-picked)</dd>
+<dt>Status</dt><dd>Second round after the owner's comments (2026-10-20); not merged. Device measurements are R5's.</dd>
+<dt>Streams</dt><dd>${escape(sizes)} (recorded for this report, not committed)</dd>
 <dt>Written</dt><dd>${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by <code>cd renderer &amp;&amp; npm run atmosphere</code></dd>
 </dl>
+<nav><ol>
+<li><a href="#asked">What was asked</a></li><li><a href="#sim">The sim: weather and fire</a></li>
+<li><a href="#light">The light</a></li><li><a href="#glow">Glow</a></li>
+<li><a href="#rain">Rain, thunder, storms</a></li><li><a href="#fire">Fire</a></li>
+<li><a href="#volcano">Volcano</a></li><li><a href="#quake">Earthquake</a></li>
+<li><a href="#meteor">Meteor</a></li><li><a href="#seed">Seed</a></li>
+<li><a href="#ark">Ark</a></li><li><a href="#sea">Algae and waves</a></li>
+<li><a href="#end">The end of a world</a></li><li><a href="#wire">On the wire</a></li>
+<li><a href="#tests">Tests</a></li><li><a href="#later">Left for later</a></li>
+</ol></nav>
 </header>
 
-<section>
+<section id="asked">
 <h2>What was asked, and what was built</h2>
 <div class="table"><table>
-<thead><tr><th>Deliverable</th><th>As built</th><th>Where it is shown</th></tr></thead>
+<thead><tr><th>Asked</th><th>By</th><th>As built</th></tr></thead>
 <tbody>
-<tr><td>Day/night tint from presence</td><td>Moonlit-blue nights, rose dusks (owner away), lilac dawns (owner back), eased between the sim's 10-minute light steps</td><td><a href="#light">The light</a></td></tr>
-<tr><td>Glow pass</td><td>Additive halos over the tint: animals with the glow gene, fires, lava, sparks, beams; as strong as it is dark</td><td><a href="#glow">Glow</a></td></tr>
-<tr><td>Seasons</td><td>The day's light graded by the season, turning to the next season's over each season's second half (plants and snow were R1's)</td><td><a href="#light">The light</a></td></tr>
-<tr><td>Weather of events</td><td>Rain, fire smoke and flames, volcano lava and ash, quake shake and dust, meteor streak, flash and dust, seed and ark light, lightning flash</td><td><a href="#weather">Weather</a></td></tr>
-<tr><td>Apocalypse sequence</td><td>Three minutes on the map: omen, fire, flood, dark, rise; the button waits; the next world is held back until the dark</td><td><a href="#end">The end of a world</a></td></tr>
-<tr><td>Waves on every coast, the map too (owner, R3 demo)</td><td>The map is painted with the three surf bands and the sea brings them in</td><td><a href="#waves">Waves</a></td></tr>
-<tr><td>Tests: snapshots per lighting state</td><td>${tests.atmosphere.length} browser tests of the atmosphere, 15 of them snapshots; atmosphere unit tests run for this report: <span class="pass">${units.passed} passed</span>, ${units.failed} failed</td><td><a href="#tests">Tests</a></td></tr>
+<tr><td>Day/night tint from presence, glow pass, seasons</td><td>§8 R4</td><td>Moonlit-blue nights, rose dusks, lilac dawns, eased between the sim's 10-minute light steps; day graded by the season; additive glow over the tint</td></tr>
+<tr><td>Weather of events, apocalypse sequence</td><td>§8 R4</td><td>Rain, thunder, storms, fire, volcano, quake, meteor, seed, ark; the three-minute end of a world on the map</td></tr>
+<tr><td>Waves on every coast, the map too</td><td>owner, R3 demo</td><td>The map painted with the surf bands; the sea brings them in</td></tr>
+<tr><td>Fire up close with real flame sprites; burnt trees left behind</td><td>owner, round 2</td><td>Flames in four frames (one to a cell in the middle view, three larger up close), embers and smoke; charred tree skeletons and charcoal ground where the sim's scorch is fresh</td></tr>
+<tr><td>Fire kills the creatures in it</td><td>owner, round 2</td><td>In the sim: an hour in a burning cell kills (<code>[fauna] fire_damage_per_hour</code>); death cause <code>BURNT</code>; on the screen a puff of ash where one dies in the fire</td></tr>
+<tr><td>Thunder: a fire-starting strike only while it rains; visual-only thunder in rain; the storm bigger</td><td>owner, round 2</td><td>The island's own weather in the sim (rain, rain with thunder, thunderstorms); lightning strikes only in a thunderstorm; three sizes of lightning on the screen</td></tr>
+<tr><td>Rain that meets the water up close</td><td>owner, round 2</td><td>Rings spreading on the water, splashes on the land, in the middle and local views</td></tr>
+<tr><td>A volcano to be seen</td><td>owner, round 2</td><td>The sim raises its cone; the scene draws it (basalt cone, gullies, a mouth of lava, rivulets) and keeps it 30 sim-days; a meteor's crater likewise</td></tr>
+<tr><td>What the giving powers actually do</td><td>owner, round 2</td><td>Seed: motes over the bare land in sight, then the sprouts the sim sowed; ark: its light where the newcomers land, and them</td></tr>
+<tr><td>Algae drawn as their own plant</td><td>owner via M11</td><td>Olive fronds in clumps on the shallows, as thick as their biomass (M11's <code>Flora.algae</code> on the wire)</td></tr>
+<tr><td>Every effect in all three views, in full</td><td>owner, round 2</td><td>This report</td></tr>
 </tbody></table></div>
 </section>
 
-<section>
-<h2>The owner's choices</h2>
-<p>Asked before any code was written (2026-10-20), as the R4 brief required.</p>
-<div class="table"><table>
-<thead><tr><th>Question</th><th>Answer</th></tr></thead>
-<tbody>
-<tr><td>How dark is a night?</td><td>Moonlit blue: land, sea and animals still read, glowing things stand out</td></tr>
-<tr><td>Does the tint follow the light step by step, or ease?</td><td>It eases between the 10-minute steps</td></tr>
-<tr><td>What does the apocalypse show, and for how long?</td><td>The dramatic one, about three minutes: red sky, volcanoes and ash, quakes, the sea swallowing the land, darkness, the new continent rising</td></tr>
-<tr><td>Which events get weather?</td><td>All of them: rain, fire, volcano, quake, meteor and crater, seed and ark</td></tr>
-</tbody></table></div>
+<section id="sim">
+<h2>The sim: the island's own weather, and fire that burns animals</h2>
+<p>The owner chose these in round 2 and they were built in R4 (schema v12, ADR 0021). M11's algae took v11; this branch carries it.</p>
+<ul>
+<li><strong>Weather</strong> (<code>weather.py</code>, a new subsystem ticked hourly before the fire). Rain spells begin at random, at 5, 3, 6 and 5 a month in spring, summer, autumn and winter, and last 2 to 30 hours. Of the spells, 30 % carry thunder (seen only) and 12 % are thunderstorms, lasting 1 to 6 hours.</li>
+<li><strong>Lightning only in a thunderstorm.</strong> <code>[flora] fire_strikes_per_storm_hour = 1.6</code> strikes per storm-hour at full dryness. That gives the same expected strikes a year (about 10.7 on the default calendar) as the old 30 ignitions a year. Fires start only while it rains, and any rain slows a fire as wet land does. The rain power is a soaking rain that puts fires out and never strikes.</li>
+<li><strong>Fire burns animals</strong>: <code>[fauna] fire_damage_per_hour = 1.0</code> of an animal's capacity, so an hour in a burning land cell kills it. Swimmers are safe, and the burnt leave no carrion.</li>
+</ul>
+<p>The office fortnight below (<code>office.json</code>) holds ${
+  Object.entries(rainCounts)
+    .map(([k, n]) => `${n} ${k}`)
+    .join(", ") || "no"
+} spells.</p>
+<div class="key"><span style="--k:var(--accent)">the light (0–1)</span><span style="--k:var(--desk)">owner at the desk</span><span style="--k:var(--rain)">rain</span><span style="--k:var(--thunder)">thunder</span><span style="--k:var(--storm)">thunderstorm</span><span style="--k:var(--soaking)">the rain power</span></div>
+${lightChart(officePoints, officeFirst)}
 </section>
 
 <section id="light">
 <h2>The light</h2>
-<p>One sprite multiplied over the land, its plants and animals. The scroll and the dip between views are page elements and keep their own colours. Below, the map in each light, then a sim-day of the office recording played at 7 200 sim-seconds a second (a day in 12 s): night, the owner arriving at about 9:00 (a half-hour dawn), day, leaving at about 18:00 (a 1.5-hour dusk), night again.</p>
-<div class="stills">
-${STILLS.map((name) => `<figure><img src="${uri(stills[name])}" width="256" height="150" alt="The map at ${name}"><figcaption><strong>${name}</strong> <code>?show=${name}</code></figcaption></figure>`).join("")}
-</div>
-${filmFigure("day", films.day, "A day at the desk, on the map", "The office recording from midnight. The light eases from step to step; nothing jumps.", FILMS.day.query, true)}
-<h3>The colours</h3>
-<div class="table"><table>
-<thead><tr><th>Light</th><th>Multiplier</th><th>When</th></tr></thead>
-<tbody>
-<tr><td>Night</td><td>${swatch(NIGHT)}</td><td>The sim's light at 0.05 (<code>night_light</code>); the moonlight floor 0.15 is a little brighter on the same way to day</td></tr>
-<tr><td>Dusk</td><td>${swatch(DUSK)}</td><td>Most coloured 35 % of the way from night to day, while the owner is away</td></tr>
-<tr><td>Dawn</td><td>${swatch(DAWN)}</td><td>The same, while the owner is at the desk</td></tr>
+<p>A tint multiplied over the land, plants and animals. Night is moonlit blue, dusk (the owner away) is rose, dawn (the owner back) is lilac, and the day is graded by the season. Each of the sim's 10-minute steps is eased in over the time before the next.</p>
+<div class="stills">${["day", "dawn", "dusk", "night", "moon"].map((n) => `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`).join("")}</div>
+${threeViews(shots.day, "A day at the desk", { map: "The office stream from midnight, a sim-day in 12 s: night, the owner arriving (dawn), day, leaving (dusk), night.", middle: "", local: "" })}
+<div class="table"><table><thead><tr><th>Light</th><th>Multiplier</th></tr></thead><tbody>
+<tr><td>Night</td><td>${swatch(NIGHT)}</td></tr><tr><td>Dusk</td><td>${swatch(DUSK)}</td></tr><tr><td>Dawn</td><td>${swatch(DAWN)}</td></tr>
 ${Object.entries(SEASON_DAY)
-  .map(
-    ([season, rgb]) =>
-      `<tr><td>Day, ${season}</td><td>${swatch(rgb)}</td><td>In the middle of ${season}; turning to the next over its second half</td></tr>`,
-  )
+  .map(([s, rgb]) => `<tr><td>Day, ${s}</td><td>${swatch(rgb)}</td></tr>`)
   .join("")}
-<tr><td>Rain</td><td>${swatch(RAIN_GREY)}</td><td>Multiplied in while the rain power's rain falls, set in and cleared over 3 s</td></tr>
 </tbody></table></div>
-<h3>The light the scene is given</h3>
-<p>The <code>sky</code> messages of <code>office.json</code>, one every ten sim-minutes: the owner's office schedule from the fast-forward (<code>tools.schedules</code>), weekdays at the desk from about 9:00 to 18:00, weekends away (the Long Night). Wherever the owner has been away 72 hours or more the light rests on the moonlight floor of 0.15. The god-power button was pressed on days 2, 6 and 13. Day 2 was refused (cooling down since the save), and days 6 and 13 brought rain. Hover for the values.</p>
-<div class="key"><span style="--k:var(--accent)">the light (0–1)</span><span style="--k:var(--desk)">owner at the desk</span><span style="--k:var(--rain)">the rain power's rain</span></div>
-${lightChart(office)}
 </section>
 
 <section id="glow">
 <h2>Glow</h2>
-<p>Halos in five steps of a 48-texel disc, added over the tint so they show through the night. They are never drawn more than three times the disc's size, so each step stays a few art pixels wide. An animal with the glow gene shines at every other joint of its back as strongly as it is dark, and not at all by day. The fixture's world has no glow carrier, so two are sent as the stream would send them (the browser test does the same).</p>
-<div class="films">
-${filmFigure("glow", films.glow, "Two glowing animals at night, local view", "Their spots light the ground round them; the halos breathe slowly.", FILMS.glow.query + " + two animals with the glow gene")}
-${filmFigure("fire-middle", films["fire-middle"], "A fire at night, middle view", "A wide glow over the whole fire, then for each burning cell a flicker off its middle and flames licking up; smoke drifts with the wind.", FILMS["fire-middle"].query)}
-</div>
+<p>Light added over the tint. Here, two animals with the glow gene at night, sent to the scene as the stream would send them (the fixture's world has none). On the map they are the glowing dots.</p>
+${threeViews(shots.glow, "Glowing animals at night", {})}
 </section>
 
-<section id="weather">
-<h2>Weather of events</h2>
-<p>Every effect here comes from an <code>events</code> or <code>sky</code> message. Smoke, ash, dust, flames and rain are slots that go round cycles of their own. Where a slot is depends only on its number and the time, as with the sea's glints, so nothing is kept from frame to frame. Short things last wall seconds so that they read at any speed. A volcano lasts 12 sim-hours, and at least 30 wall seconds. In these films the events are made up on demand on the land in sight (<code>?show=</code>); the scene draws them exactly as it would draw the stream's.</p>
-<div class="films">
-${filmFigure("fire-local", films["fire-local"], "Fire, local view", "Close up, more flames to a cell.", FILMS["fire-local"].query)}
-${filmFigure("rain", films.rain, "Rain", "While the rain god power's rain falls (5 sim-days); the day greys.", FILMS.rain.query)}
-${filmFigure("volcano", films.volcano, "A volcano erupting by day", "Lava glow at the cone, lava running down its sides, a dark ash column drifting with the wind, embers.", FILMS.volcano.query)}
-${filmFigure("volcano-night", films["volcano-night"], "The same at night", "The lava's glow carries the picture.", FILMS["volcano-night"].query)}
-${filmFigure("quake", films.quake, "An earthquake", "The picture jolts for 4 s, dying away, and dust rises over the fault.", FILMS.quake.query)}
-${filmFigure("meteor", films.meteor, "A meteor (the meteor god power)", "A streak from high up, a flash over the screen as it strikes, a glow and dust where it digs its crater.", FILMS.meteor.query)}
-${filmFigure("seed", films.seed, "The seed god power", "Golden motes fall onto the place and a soft light gathers there for 8 s.", FILMS.seed.query)}
-${filmFigure("ark", films.ark, "The ark god power", "A beam of pale light from above and motes where the newcomers land.", FILMS.ark.query)}
-</div>
-<p class="meta">Not drawn: falling snow (snow lies where the sim has it, R1) and lightning bolts (a fire's start flashes the screen). The camera does not go to events; only a world's end takes it.</p>
+<section id="rain">
+<h2>Rain, thunder and thunderstorms</h2>
+<p>Each is a staged spell of the sim's own weather. Rain greys the day. Rings spread where drops hit the water, and drops splash on the land, in the middle view and up close. With thunder, a thin bolt now and then and a faint flash: it starts nothing. A thunderstorm is bigger: a darker sky, heavier rain driven slantwise, forked bolts every few seconds and brighter flashes. The rain power's soaking rain is gentler and falls straight.</p>
+<h3>Rain</h3>${threeViews(shots.shower, "Rain", {})}
+<h3>Rain with thunder</h3>${threeViews(shots.thunder, "Thunder", {})}
+<h3>A thunderstorm</h3>${threeViews(shots.storm, "Thunderstorm", {})}
+<h3>The rain power</h3>${threeViews(shots.soaking, "Soaking rain", {})}
 </section>
 
-<section id="waves">
-<h2>Waves on the map</h2>
-<p>An owner's note from the R3 demo. The map is now painted with the three surf bands of the closer views, a line far out, one nearer and the foam at the shore, and the sea shows them in turn as a crest comes in (3.6 s a swell).</p>
-${filmFigure("waves", films.waves, "A coast on the map, at its own size", "The west of the autumn recording's island.", FILMS.waves.query)}
+<section id="fire">
+<h2>Fire</h2>
+<p>A thunderstorm at 02:00 on the office schedule (night), its lightning striking ${at("fire")}: the biggest bolt, thick and forked, with the brightest flash. Flames then rise from every burning cell under a wide glow, with embers and smoke. Up close each cell has three larger flames on their own flicker. An animal that dies in the fire leaves a puff of ash. Then the fire spreads, at a sim-day in 12 s. Two sim-days later the burnt wood is charcoal ground with the skeletons of the trees that stood.</p>
+<h3>The strike</h3>${threeViews(shots.strike, "Lightning sets the land alight", {})}
+<h3>The fire spreading (time-lapse)</h3>${threeViews(shots.spread, "The fire spreads", {})}
+<h3>A larger fire, made up</h3>
+<p>The sim's fires are often small, as this one is (it burnt 4 cells in 18 hours); how far they spread is M11's to tune. To show the fire's look at a larger scale, here is a patch of 21 cells set alight on demand (<code>?show=night,fire</code>), with the thunderstorm and the strike that come with it. Only the land is the sim's.</p>${threeViews(shots.bigfire, "A larger fire (made up)", {})}
+<h3>What it leaves</h3>${threeViews(shots.burnt, "The burnt wood, two days on", { map: "", middle: "", local: "Charred trees and scorched ground; stumps, logs and snags (R1) between them." })}
+</section>
+
+<section id="volcano">
+<h2>Volcano</h2>
+<p>Staged at ${at("volcano")} with the terrain's own <code>apply_volcano</code>. The sim raises a cone in the heights and bares the land round it (1.4 times its radius, for 120 days, so no plant stands on it). The ground's gentle shading hardly shows a cone from above, so the scene draws it, after how top-down pixel-art games draw mountains (<em>Zelda: A Link to the Past</em>, the <em>Pokémon</em> GBA overworlds, <em>Stardew Valley</em>): stacked basalt ledges with lit, grainy tops and cliff faces toward the viewer, boulders, and a mouth whose back wall shows. While it erupts, its lava is a layer of its own: a crusted pool and rivers meandering down the ledges. Above it rise an ash column and embers. The cone stays drawn for 30 sim-days.</p>
+${threeViews(shots.volcano, "The eruption", {})}
+${threeViews(shots.cone, "The cone, two days on", {})}
+</section>
+
+<section id="quake">
+<h2>Earthquake</h2>
+<p>Staged at ${at("quake")} (<code>apply_earthquake</code>): the picture jolts for 4 s, dying away, and dust rises over the fault.</p>
+${threeViews(shots.quake, "An earthquake", {})}
+</section>
+
+<section id="meteor">
+<h2>Meteor</h2>
+<p>The meteor god power, pressed at 02:00; the sim aimed it at ${at("meteor")}. A streak from high up, a flash as it strikes, a glow and dust; every animal within twice its radius is killed. The bowl it digs is drawn from then on, and the sim bares the land round it: a raised rim, the far wall showing, a scorched floor with glassy cracks, rays of debris and boulders.</p>
+${threeViews(shots.meteor, "The meteor", {})}
+${threeViews(shots.crater, "The crater, two days on", {})}
+</section>
+
+<section id="seed">
+<h2>Seed</h2>
+<p>The seed god power sows 400 seeds of random genomes on bare land across the whole island; the sim does not aim it. On the screen, golden motes drift down onto the bare cells in sight. The films are at ${at("seed")}, where most seeds took. The sprouts are the sim's own, in the land it sent next.</p>
+${threeViews(shots.seed, "The seed power", {})}
+${threeViews(shots.unsown, "Before the seed", {})}
+${threeViews(shots.sown, "The sown land, a month on", {})}
+</section>
+
+<section id="ark">
+<h2>Ark</h2>
+<p>The ark god power brings 12 plant eaters, landing on a vegetated spot. The light comes down where the stream says they landed (<code>creatures_arrived</code>, at ${at("ark")}), and they are there.</p>
+${threeViews(shots.ark, "The ark", {})}
+</section>
+
+<section id="sea">
+<h2>Algae and waves</h2>
+<p>M11's algae on the shallow sea, two weeks after the save: olive fronds in clumps, as thick as their biomass. The waves break on the coast in all three views.</p>
+${threeViews(shots.algae, "Algae on the shallows", {})}
 </section>
 
 <section id="end">
 <h2>The end of a world</h2>
-<p>From <code>end.json</code>: the v9 world played for a day under the office schedule, then starved (<code>tools/stream.py --famine-day 2</code>). The sim ended the world its own way: the last creature's death, the archive, the next seed, a new continent of bare rock. The film is a time-lapse: the 180-second sequence is moved on 2.5 s a frame and shown at about 9 frames a second, so it plays in about 8 s. On the screen it plays in real time, on the map whatever view was showing. The view button waits.</p>
-${filmFigure("end", films.end, "World 1 ends and world 2 rises (time-lapse)", "Red sky and ash, lava vents and quakes, the sea rising over the land, the dark, the new continent rising from the sea at night (the office schedule says nobody is at the desk).", FILMS.end.query + " + __advance", true)}
-<div class="stills">
-${MOMENTS.map(([act, t]) => {
-  const picture =
-    films.end.pictures[
-      Math.min(Math.round(t / FILMS.end.advanceS) - 1, films.end.pictures.length - 1)
-    ];
-  return `<figure><img src="${uri(png(picture.image))}" width="${picture.image.width}" height="${picture.image.height}" alt="The end of a world: ${act}"><figcaption><strong>${act}</strong> about ${t} s in</figcaption></figure>`;
-}).join("")}
-</div>
-<div class="table"><table>
-<thead><tr><th>Act</th><th>Seconds</th><th>What it shows</th></tr></thead>
-<tbody>${ACTS.map(([act, s, what]) => `<tr><td>${act}</td><td>${s}</td><td>${what}</td></tr>`).join("")}</tbody></table></div>
-<h3>What the scroll tells</h3>
-<p>The chronicle's own lines, as the sim wrote them. The world's last lines come before its <code>world_ended</code> on the wire, so they are told as the sequence begins. The next world's are held until the rise.</p>
-${ended.map((e) => `<blockquote><span class="meta">${escape(e.kind)}, importance ${e.importance}</span><br>${escape(e.text)}</blockquote>`).join("")}
+<p>From <code>end.json</code>, where the herd starves on day 2 and the sim ends the world. The film is the whole three-minute sequence at the screen's own frame rate. It plays on the map only, since it holds the camera there.</p>
+${figure(shots.end, "World 1 ends and world 2 rises", "The whole sequence, as it plays on the screen.")}
+<div class="stills">${shots.end.kept
+  .map(
+    (m, k) =>
+      `<figure><img src="${uri(m.poster)}" width="512" height="300" alt="${endMoments[k][0]}"><figcaption><strong>${endMoments[k][0]}</strong> about ${endMoments[k][1]} s in</figcaption></figure>`,
+  )
+  .join("")}</div>
 </section>
 
 <section id="wire">
 <h2>On the wire</h2>
-<p>Two new messages, both additive, so <code>protocol</code> stays 1 (<code>schema.json</code>, <code>encode.py</code>). The sim gained one read-only property, <code>Presence.raining</code>, with no persisted field and no schema bump.</p>
-<div class="two">
-<div><h3><code>sky</code></h3><p class="meta">On connect and at every presence tick (10 sim-minutes).</p><pre>${escape(JSON.stringify(sampleSky, null, 1))}</pre></div>
-<div><h3><code>events</code></h3><p class="meta">What the scene shows of a step's outputs; after <code>world_ended</code> every message is of the next world.</p><pre>${escape(JSON.stringify(sampleEvents, null, 1))}</pre></div>
-</div>
-<p>Kinds: <code>fire_started</code>, <code>fire_ended</code>, <code>volcano</code>, <code>earthquake</code>, <code>crater</code>, <code>god_power</code>, <code>world_ended</code>, <code>world_began</code>. <code>chronicle</code> messages are now built from a step's outputs, so a world's last lines and the next world's first both travel.</p>
-<h3>The recordings</h3>
-<div class="table"><table>
-<thead><tr><th>Recording</th><th>Span</th><th>Messages by type</th><th>Size</th><th>Made with</th></tr></thead>
-<tbody>
-${[
-  [
-    "office",
-    office,
-    "--days 14 --land-every 7 --creatures --creatures-every 7200 --sky-every 600 --schedule office --press-days 2,6,13",
-  ],
-  [
-    "end",
-    end,
-    "--days 3 --land-every 3 --creatures --creatures-every 7200 --sky-every 600 --schedule office --famine-day 2",
-  ],
-]
-  .map(
-    ([name, r, args]) =>
-      `<tr><td><code>${name}.json</code></td><td>${r.first.date} → ${r.last.date}</td><td>${Object.entries(
-        r.counts,
-      )
-        .map(([t, n]) => `${t} ${n}`)
-        .join(
-          ", ",
-        )}</td><td>${(r.size / 1e6).toFixed(2)} MB</td><td><code>tools.stream v9.lzma ${args}</code></td></tr>`,
-  )
-  .join("")}
-</tbody></table></div>
-<p class="meta">Events in the office fortnight: ${office.events.map((e) => `${e.kind}${e.power ? ` (${e.power})` : ""}`).join(", ") || "none"}. No fire or volcano happened in those two weeks, so they are filmed on demand.</p>
+<p><code>sky</code>: <code>light</code>, <code>present</code>, <code>rain</code> (none, rain, thunder, storm, soaking) and <code>burning</code>, at every presence tick. <code>events</code>: <code>fire_started</code>, <code>fire_ended</code>, <code>volcano</code>, <code>earthquake</code>, <code>crater</code>, <code>god_power</code>, <code>creatures_arrived</code>, <code>world_ended</code> and <code>world_began</code>. <code>land</code> adds <code>scorch</code> and <code>algae</code>, and the stream sends it again right after an event that changes the land. All of it is additive: <code>protocol</code> stays 1.</p>
+<pre>${escape(JSON.stringify(streams.fire.events.slice(0, 4), null, 1))}</pre>
 </section>
 
 <section id="tests">
 <h2>Tests</h2>
-<p>Renderer: ${tests.units} unit tests and ${tests.browser} browser tests in all, listed while this report was written (255 and 25 before R4). The atmosphere's unit tests were also run: <span class="pass">${units.passed} passed</span>, ${units.failed} failed. Python: protocol tests for <code>sky</code> and <code>events</code>, stream tests for the office schedule, the button and a famine's world end, and a presence test of <code>raining</code>. The fast suite passed at the R4 build (660 passed, 1 skipped).</p>
+<p>Renderer: ${tests.units} unit and ${tests.browser} browser tests listed. The atmosphere's unit tests were run for this report: <span class="pass">${units.passed} passed</span>, ${units.failed} failed. Python: weather (spell rates by season, kinds and lengths, the fire told each hour, state), lightning only in storms, rain slowing a fire, fire killing animals, the v11 to v12 migration and fixture, the stream's staging and lands after events.</p>
 <div class="two">
 <div><h3>Browser (<code>tests/e2e/atmosphere.spec.ts</code>)</h3><ul>${tests.atmosphere.map((t) => `<li>${escape(t)}</li>`).join("")}</ul></div>
-<div><h3>Unit (<code>tests/atmosphere/</code>)</h3><ul>${units.names.map((t) => `<li>${escape(t.name)}</li>`).join("")}</ul></div>
+<div><h3>Unit (<code>tests/atmosphere/</code>)</h3><ul>${units.names.map((t) => `<li>${escape(t)}</li>`).join("")}</ul></div>
 </div>
-<p>The R1 scene and R3 scroll baselines were regenerated for the map's surf and the season's grade; each was already within its tolerance.</p>
 </section>
 
 <section>
@@ -739,12 +947,12 @@ ${[
 <pre>${escape(log.join("\n"))}</pre>
 </section>
 
-<section>
+<section id="later">
 <h2>Left for later</h2>
 <ul>
-<li><strong>R5</strong> measures all of it on the board. Per frame that is one multiplied sprite, up to a few hundred additive halos in a big fire and 180 raindrops; during an apocalypse, a world-sized texture is also repainted ten times a second. R5 keeps <code>Director.toMap</code>, which the apocalypse uses.</li>
-<li><strong>S1</strong> sends <code>sky</code> at every presence tick, and <code>chronicle</code> and <code>events</code> from each step's outputs in the order <code>tools/stream.py</code> uses.</li>
-<li>Events off the screen go unseen; only a world's end moves the camera.</li>
+<li><strong>R5</strong> measures all of this on the board. During a fire, up to a few hundred flames and halos are drawn; rain draws 180 drops and up to 80 ripples. R5 also tunes the look, the cone among it.</li>
+<li>A volcano's cone and a meteor's crater are drawn for 30 sim-days from their event. A renderer that connects later sees only the land's own shading, because the wire carries no "volcano" fact.</li>
+<li><strong>M11</strong> re-checks fire frequency, mortality and chronicle numbers once R4 is in <code>main</code>.</li>
 </ul>
 </section>
 </main>
@@ -752,28 +960,24 @@ ${[
 </body>
 </html>
 `;
-  const readme = [
-    "# R4 — Atmosphere",
-    "",
-    "The light of the owner's presence, the glow pass, the weather of events, the end of a",
-    "world and waves on the map, filmed from the real renderer: `report.html`, one",
-    "self-contained file (animated PNGs; open it in a browser). Decisions: ADR 0021.",
-    "",
-    `- Branch \`${branch}\` at \`${commit}\`; recordings \`office.json\`, \`end.json\` (v9 fixture)`,
-    `- Atmosphere unit tests run for the report: ${units.passed} passed, ${units.failed} failed;`,
-    `  renderer ${tests.units} unit and ${tests.browser} browser tests listed`,
-    `- ${Object.keys(films).length} films and ${STILLS.length} stills; the films are caught in wall time`,
-    "",
-    "Regenerate with `cd renderer && npm run atmosphere`; do not edit by hand. R4 has no",
-    "statistical criterion: this is a view of what was built, measured on the PC; the",
-    "board's numbers are R5's.",
-    "",
-  ].join("\n");
-  await mkdir(OUT, { recursive: true });
-  await writeFile(new URL("report.html", OUT), html);
-  await writeFile(new URL("README.md", OUT), readme);
-  console.log(`wrote ${fileURLToPath(OUT)} (${(html.length / 1e6).toFixed(1)} MB)`);
-} finally {
-  await browser.close();
-  await server.close();
-}
+const readme = [
+  "# R4 — Atmosphere",
+  "",
+  "Every effect of the atmosphere filmed from the real renderer in the three views (the",
+  "apocalypse on the map), from streams recorded for it with `tools/stream.py --stage`:",
+  "`report.html`, one self-contained file (animated PNGs; open it in a browser).",
+  "Decisions: ADR 0021.",
+  "",
+  `- Branch \`${branch}\` at \`${commit}\``,
+  `- Atmosphere unit tests run for the report: ${units.passed} passed, ${units.failed} failed;`,
+  `  renderer ${tests.units} unit and ${tests.browser} browser tests listed`,
+  "- Films are caught in wall time; the streams are recorded afresh each run",
+  "",
+  "Regenerate with `cd renderer && npm run atmosphere` (`R4_REPORT_REUSE_STREAMS=1` keeps",
+  "the streams already recorded); do not edit by hand. R4 has no statistical criterion.",
+  "",
+].join("\n");
+await mkdir(OUT, { recursive: true });
+await writeFile(new URL("report.html", OUT), html);
+await writeFile(new URL("README.md", OUT), readme);
+console.log(`wrote ${fileURLToPath(OUT)} (${(html.length / 1e6).toFixed(1)} MB)`);

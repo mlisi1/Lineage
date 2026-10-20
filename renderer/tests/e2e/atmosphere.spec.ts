@@ -36,8 +36,14 @@ const SHOTS: Record<string, { query: string; advance?: number }> = {
   "fire-night": { query: "view=middle&x=120&y=60&show=night,fire", advance: 1.3 },
   "fire-local": { query: "view=local&x=120&y=60&show=night,fire", advance: 1.3 },
   rain: { query: "view=middle&x=120&y=60&show=day,rain", advance: 1 },
+  "rain-local": { query: "view=local&x=120&y=60&show=day,rain", advance: 1 },
+  storm: { query: "view=middle&x=120&y=60&show=day,storm", advance: 1 },
+  "burnt-middle": { query: "view=middle&x=120&y=60&show=day,burnt" },
+  "burnt-local": { query: "view=local&x=120&y=60&show=day,burnt" },
+  "volcano-local": { query: "view=local&x=120&y=60&show=day,volcano", advance: 3 },
   volcano: { query: "view=middle&x=120&y=60&show=day,volcano", advance: 3 },
   meteor: { query: "view=middle&x=120&y=60&show=day,meteor", advance: 0.8 },
+  "meteor-crater": { query: "view=middle&x=120&y=60&show=day,meteor", advance: 4 },
   ark: { query: "view=middle&x=120&y=60&show=dusk,ark", advance: 2 },
   seed: { query: "view=middle&x=120&y=60&show=night,seed", advance: 2 },
   // The end of a world: the fire, the flood, and the land rising again.
@@ -97,7 +103,7 @@ test("an animal with the glow gene shines at night, not by day", async ({ page }
       t_ms: 1,
       light: 1,
       present: true,
-      raining: false,
+      rain: "none",
       burning: [],
     }),
   );
@@ -131,4 +137,37 @@ test("a world ends on the map, the button waits, and the next world rises", asyn
     timeout: 10_000,
   });
   expect(errors).toEqual([]);
+});
+
+test("a volcano raises its cone in the land, and the scene draws it", async ({ page }) => {
+  const base = "/?recording=office&every=0&still&quiet&seed=7&view=middle&x=120&y=60";
+  await page.goto(`${base}&show=day`);
+  await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
+  const flat = await page.evaluate(() => window.__landAt?.(120.5, 60.5)?.height ?? 0);
+  await page.goto(`${base}&show=day,volcano`);
+  await page.waitForFunction(() => (window.__landAt?.(120.5, 60.5)?.height ?? 0) > 0, null, {
+    timeout: 60_000,
+  });
+  await page.waitForFunction(
+    (h) => (window.__landAt?.(120.5, 60.5)?.height ?? 0) > h + 0.05,
+    flat,
+    {
+      timeout: 60_000,
+    },
+  );
+  expect(await page.evaluate(() => window.__atmosphere?.().effects)).toContain("cone");
+});
+
+test("fire up close draws flames, and a thunderstorm its bolts", async ({ page }) => {
+  await page.goto(
+    "/?recording=autumn&every=0&still&quiet&seed=7&view=local&x=120&y=60&show=night,fire",
+  );
+  await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
+  await advance(page, 0.1);
+  const fire = await page.evaluate(() => window.__atmosphere?.());
+  expect(fire?.flames).toBeGreaterThan(20);
+  expect(fire?.rain).toBe("storm");
+  // The strike that set it: the biggest bolt, drawn in its first moments.
+  expect(fire?.bolts).toBeGreaterThan(50);
+  expect(fire?.ripples).toBeGreaterThanOrEqual(0);
 });

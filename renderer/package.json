@@ -11,7 +11,7 @@
     "look": "vite build && node scripts/look-report.mjs look",
     "creatures": "vite build && node scripts/look-report.mjs creatures",
     "land": "vite build && node scripts/land-report.mjs",
-    "atmosphere": "vite build && node scripts/atmosphere-report.mjs",
+    "atmosphere": "node scripts/atmosphere-report.mjs",
     "protocol": "node scripts/protocol.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",

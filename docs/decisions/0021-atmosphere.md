@@ -101,6 +101,114 @@ dip are page elements and take none of it.
   sight, for the owner's look and the visual tests. The stream's own sky is then not
   taken. Nothing reaches the sim.
 
+## Round 2: the owner's comments on the first report (2026-10-20)
+
+The owner looked at the first report and asked for more. The answers to the questions it
+raised were:
+
+- **Fire up close** with real flame sprites and more detail, and **burnt trees left
+  behind**.
+- **Fire kills creatures** that stay in it. This is a sim change, built here (the owner's
+  choice): `[fauna] fire_damage_per_hour = 1.0` of an animal's capacity per hour in a
+  burning land cell, so an hour in a fire kills it. The death cause is `BURNT`
+  (`Tally.burnt`), the burnt leave no carrion, and swimmers are safe.
+- **Thunder.** The strike that starts a fire is the uncommon event, and it can happen
+  only while it rains. Rain may also bring thunder that is seen and starts nothing. The
+  thunderstorm must look bigger than ordinary thunder. The sim had no rain of its own,
+  so it now has weather (`weather.py`, a subsystem ticked hourly before the fire):
+  - rain spells begin at 5, 3, 6 and 5 a month in spring, summer, autumn and winter, and
+    last 2 to 30 hours;
+  - 30 % of spells bring thunder and 12 % are thunderstorms, lasting 1 to 6 hours;
+  - lightning strikes only in a thunderstorm, at `[flora] fire_strikes_per_storm_hour`
+    = 1.6 at full dryness. This replaces `fire_ignitions_per_year` and is calibrated to
+    the same expected strikes a year (about 10.7 on the default calendar);
+  - any rain slows a fire as wet land does;
+  - the rain god power stays a soaking rain that puts fires out and never strikes.
+- **Rain meets the water** up close.
+- **A volcano to be seen**, not only its effect.
+- **What the giving powers do.**
+- **Every effect in all three views** in the report. The apocalypse is the exception,
+  since it holds the map.
+
+The algae M11 added (owner's request via M11) are drawn too.
+
+**Schema.** M11's algae took v11 (commit 6f8bd1b), which this branch carries
+(cherry-picked as df1787e). R4's change is v12: `v11_to_v12` adds the weather, dry, to
+worlds with fire and `burnt = 0` to the tally, and there is a fixture `v12.lzma`. Schema
+numbers are claimed on the coordination board from now on. Golden hashes change.
+
+**On the wire.**
+
+- `sky.raining` became `sky.rain`: none, rain, thunder, storm or soaking.
+- `land` gains `scorch` (how recently each cell burnt) and `algae`.
+- `events` gains `creatures_arrived`.
+- The stream sends the land again right after an event that changes it: terrain events,
+  god powers, a fire going out.
+- `tools/stream.py --stage DAY:HOUR:WHAT[@X,Y]` stages a fire (a storm whose lightning
+  strikes there), a rain kind, a volcano or a quake (with the terrain's own
+  `apply_volcano` and `apply_earthquake`), or a god power by name. It exists for the
+  report's streams.
+
+**In the renderer.**
+
+- **Lightning in three sizes** (`lightning.ts`). Thunder brings a thin bolt every 9 s
+  or so and a faint flash. A thunderstorm brings forked bolts every 2.6 s or so,
+  brighter flashes, a darker sky and heavier, slanting rain. The fire's strike is the
+  thickest bolt, forked twice, with the brightest flash, and it falls where the fire
+  begins.
+- **Rain by kind**, with rings spreading where it hits the water and splashes on the
+  land, in the middle and local views.
+- **Fire.**
+  - Flames in four frames: one to a burning cell in the middle view, three up close
+    (2 or 3 times larger, whole multiples only), each on its own flicker.
+  - Burnt ground (`scorch`) painted as charcoal patches with ash, fading as the scorch
+    does.
+  - Charred tree skeletons on burnt cells where a tree stood (`HEIGHT` ≥ 0.6) while the
+    scorch is fresh.
+  - A puff of ash where an animal dies in a burning cell.
+- **A volcano's cone and a meteor's crater** (`marks.ts`), drawn for 30 sim-days from
+  the event. The sim does change the heights, but the ground's gentle shading hardly
+  shows a cone or a bowl from above.
+  - The cone: basalt lit from the upper left, gullies, its shadow, a mouth of lava, and
+    lava rivulets while it erupts.
+  - The crater: its far side lit, a rim, ejecta.
+- **Seed.** Golden motes over the bare land in sight: the sim sows bare land
+  island-wide, not at a point.
+- **Ark.** The beam goes where `creatures_arrived` says the newcomers landed.
+- **Algae.** Olive fronds in clumps on the shallow sea, as thick as their biomass.
+- **Glow on the map's dots** too.
+- **The demo** (`?show=`) changes the land as the stream would: a cone, a bowl, a burnt
+  wood, sprouts on bare land, and the ark's newcomers.
+
+## Round 3: the owner's comments on the second report (2026-10-20)
+
+- **Films at native resolution and frame rate.** The report's films are now taken at the
+  desk screen's own 1024×600 and at 30 fps. The page has a film mode (`?film`): the
+  ticker stops, the report steps the scene one frame at a time on its own clock (the
+  recording plays on the same clock), and ffmpeg encodes the frames as VP9 WebM with
+  4:4:4 colour. ffmpeg was approved by the owner as the report script's dependency. The
+  films go to `reports/R4-atmosphere/films/`, which is gitignored (about 150 MB); only
+  `report.html`, with a poster still for each film, is committed.
+- **The volcano and the crater were too plain.** They are now drawn after how top-down
+  pixel-art games draw mountains and craters (*Zelda: A Link to the Past*'s Death
+  Mountain, the *Pokémon* GBA overworlds' Mt. Chimney, *Stardew Valley*'s Ginger Island
+  volcano), procedurally (`marks.ts`):
+  - **The cone** is stacked basalt ledges, each with a lit, grainy top and a striated
+    cliff face toward the viewer. Its north edges catch the light in one pixel, its south
+    edges are outlined, and boulders lie on the ledges. The mouth's back wall shows above
+    a floor of crust.
+  - **The lava** is its own untinted layer while the eruption lasts: a pool with ragged
+    crust plates, and rivers meandering down the ledges and falling bright over the
+    cliffs.
+  - **The crater** is a raised rim with its face, the far wall of the bowl showing, a
+    scorched, glassy-cracked floor, rays of debris and boulders. The bared ground shows
+    through the bowl.
+- **A ring where plants cannot grow for a while** round both, so that plants do not
+  overlap them. This is in the sim (`Flora.observe`): a volcano's cone or any crater
+  destroys the plants within `[flora] barren_reach` (1.4) × its radius, and nothing grows
+  there for `barren_days` (120). The flora gains a `barren` grid in schema v12 (still
+  unreleased, so its migration and fixture were amended rather than bumped).
+
 ## Results
 
 On the PC, renderer tests went from 255 to 281 unit tests: the light's colours,

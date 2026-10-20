@@ -69,6 +69,7 @@ lineage/
 │   │   ├── species.py        # clustering, persistent ids, names, phylogeny
 │   │   ├── rare.py           # rare gene tables (creatures + plants)
 │   │   ├── presence.py       # presence/daylight model, god powers, cooldown
+│   │   ├── weather.py        # the island's own rain, thunder and thunderstorms (R4)
 │   │   ├── chronicle.py      # event detectors → entries; bestiary records (M9)
 │   │   ├── apocalypse.py     # end-of-world detection, new continent
 │   │   ├── events.py         # input events (presence, button, power) and output events
@@ -190,7 +191,8 @@ Do not create directories outside this layout without updating this file.
     `v9.lzma --out .../office.json --days 14 --land-every 7 --creatures --creatures-every
     7200 --sky-every 600 --schedule office --press-days 2,6,13` and `.../end.json --days 3
     --land-every 3 --creatures --creatures-every 7200 --sky-every 600 --schedule office
-    --famine-day 2`, R4)
+    --famine-day 2`, R4; `--stage DAY:HOUR:WHAT[@X,Y]` stages a fire, a rain kind, a
+    volcano, a quake or a god power by name, as the report's streams do)
   - `uv run python -m tools.viz.pixelmap` — write the renderer's copy of the palette
     (`renderer/src/terrain/palette.json`)
   - `cd renderer && npm run protocol` — regenerate `src/protocol.ts` from the wire schema
@@ -199,8 +201,9 @@ Do not create directories outside this layout without updating this file.
     are drawn) to `reports/R0-look-sheet/`; live at `/look.html` under `npm run dev`
   - `cd renderer && npm run land` — write the land sheet (R1: ground and plants in the
     cosy look) to `reports/R1-land-sheet/`; live at `/land.html`
-  - `cd renderer && npm run atmosphere` — write the R4 report (films of the light, glow,
-    weather of events, the end of a world and waves on the map) to `reports/R4-atmosphere/`
+  - `cd renderer && npm run atmosphere` — write the R4 report to `reports/R4-atmosphere/`:
+    it records streams of each event, films every effect in the three views at 1024×600 and
+    30 fps (needs `ffmpeg`), and writes `report.html` (committed) and `films/` (gitignored)
   - `cd renderer && npm run creatures` — write the creature sheet (phenotype port against
     the sim, creature styles side by side) to `reports/R2-creature-sheet/`; live at
     `/creatures.html`
@@ -483,7 +486,10 @@ needs a note in `docs/decisions/`.
   smoke and flames, volcano ash and lava, quake shake, meteor streak and flash, seed and
   ark light; a three-minute apocalypse on the map (omen, fire, flood, dark, rise) during
   which the button waits; `sky` and `events` messages on the wire. The owner's choices,
-  2026-10-20.)
+  2026-10-20. Round 2, the owner: the island's own weather in the sim (rain spells,
+  visual-only thunder, thunderstorms whose lightning alone starts fires), fire kills
+  animals in it, schema v12; flame sprites, charred trees, ripples, drawn volcano cones
+  and craters, the powers' real effects, algae (M11) drawn.)
 
 ### R5 — Final rendering pass and device benchmark
 - **Deliver**: the look of terrain, plants, creatures and atmosphere tuned together, as one

@@ -1,14 +1,14 @@
 # R4 — Atmosphere
 
-The light of the owner's presence, the glow pass, the weather of events, the end of a
-world and waves on the map, filmed from the real renderer: `report.html`, one
-self-contained file (animated PNGs; open it in a browser). Decisions: ADR 0021.
+Every effect of the atmosphere filmed from the real renderer in the three views (the
+apocalypse on the map), from streams recorded for it with `tools/stream.py --stage`:
+`report.html`, one self-contained file (animated PNGs; open it in a browser).
+Decisions: ADR 0021.
 
-- Branch `r4-atmosphere` at `da64bec`; recordings `office.json`, `end.json` (v9 fixture)
-- Atmosphere unit tests run for the report: 26 passed, 0 failed;
-  renderer 281 unit and 43 browser tests listed
-- 13 films and 5 stills; the films are caught in wall time
+- Branch `r4-atmosphere` at `1902672`
+- Atmosphere unit tests run for the report: 38 passed, 0 failed;
+  renderer 293 unit and 51 browser tests listed
+- Films are caught in wall time; the streams are recorded afresh each run
 
-Regenerate with `cd renderer && npm run atmosphere`; do not edit by hand. R4 has no
-statistical criterion: this is a view of what was built, measured on the PC; the
-board's numbers are R5's.
+Regenerate with `cd renderer && npm run atmosphere` (`R4_REPORT_REUSE_STREAMS=1` keeps
+the streams already recorded); do not edit by hand. R4 has no statistical criterion.

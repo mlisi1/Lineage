@@ -8,7 +8,9 @@
  *
  * Each frame after the first is stored as the box of pixels that changed since the one
  * before (a frame that changed nothing lengthens the one before), so a film where little
- * moves stays small. Pixel art is lossless: no colour is changed.
+ * moves stays small. A film of at most 256 colours is kept exactly, in a palette; one of
+ * more (a scene under a changing light) gets the 256 a median cut finds, each colour
+ * moved to the mean of those it stands for.
  */
 import { Buffer } from "node:buffer";
 import { crc32, deflateSync, inflateSync } from "node:zlib";
@@ -104,12 +106,15 @@ function chunk(type, data) {
   return Buffer.concat([head, data, crc]);
 }
 
-/** Rows of the box (x, y, w, h) of `rgb`, each with the filter that leaves the least to store. */
-function filtered(rgb, width, box) {
-  const stride = box.w * 3;
+/** Rows of the box (x, y, w, h) of `pixels` (`bpp` bytes each), each with the filter that leaves the least to store. */
+function filtered(pixels, width, box, bpp = 3) {
+  const stride = box.w * bpp;
   const out = Buffer.alloc((stride + 1) * box.h);
   const row = (y) =>
-    rgb.subarray(((box.y + y) * width + box.x) * 3, ((box.y + y) * width + box.x) * 3 + stride);
+    pixels.subarray(
+      ((box.y + y) * width + box.x) * bpp,
+      ((box.y + y) * width + box.x) * bpp + stride,
+    );
   const trial = Buffer.alloc(stride);
   for (let y = 0; y < box.h; y++) {
     const line = row(y);
@@ -118,9 +123,9 @@ function filtered(rgb, width, box) {
     for (const filter of [0, 1, 2, 4]) {
       let cost = 0;
       for (let x = 0; x < stride; x++) {
-        const a = x >= 3 ? line[x - 3] : 0;
+        const a = x >= bpp ? line[x - bpp] : 0;
         const b = above === null ? 0 : above[x];
-        const c = x >= 3 && above !== null ? above[x - 3] : 0;
+        const c = x >= bpp && above !== null ? above[x - bpp] : 0;
         const predicted = filter === 0 ? 0 : filter === 1 ? a : filter === 2 ? b : paeth(a, b, c);
         const value = (line[x] - predicted) & 255;
         trial[x] = value;
@@ -134,6 +139,75 @@ function filtered(rgb, width, box) {
     }
   }
   return deflateSync(out, { level: 9 });
+}
+
+/**
+ * At most 256 colours for `frames` (each three bytes a pixel): the palette (RGB triples)
+ * and the index of every colour that occurs, by its 0xRRGGBB.
+ */
+export function quantize(frames) {
+  const counts = new Map();
+  for (const rgb of frames) {
+    for (let i = 0; i < rgb.length; i += 3) {
+      const colour = (rgb[i] << 16) | (rgb[i + 1] << 8) | rgb[i + 2];
+      counts.set(colour, (counts.get(colour) ?? 0) + 1);
+    }
+  }
+  const colours = [...counts.keys()];
+  const channel = (colour, c) => (colour >> (16 - 8 * c)) & 255;
+  let boxes = [colours];
+  // Cut the box with the widest spread of any channel (weighted by how much of the films it
+  // holds) at its median, until there are 256.
+  while (boxes.length < 256) {
+    let best = -1;
+    let bestScore = 0;
+    let bestChannel = 0;
+    boxes.forEach((box, index) => {
+      if (box.length < 2) return;
+      for (let c = 0; c < 3; c++) {
+        let low = 255;
+        let high = 0;
+        for (const colour of box) {
+          const v = channel(colour, c);
+          if (v < low) low = v;
+          if (v > high) high = v;
+        }
+        let weight = 0;
+        for (const colour of box) weight += counts.get(colour);
+        const score = (high - low) * Math.sqrt(weight);
+        if (score > bestScore) {
+          bestScore = score;
+          best = index;
+          bestChannel = c;
+        }
+      }
+    });
+    if (best < 0) break;
+    const box = boxes[best].sort((a, b) => channel(a, bestChannel) - channel(b, bestChannel));
+    let total = 0;
+    for (const colour of box) total += counts.get(colour);
+    let seen = 0;
+    let cut = 1;
+    for (; cut < box.length - 1; cut++) {
+      seen += counts.get(box[cut - 1]);
+      if (seen >= total / 2) break;
+    }
+    boxes = [...boxes.slice(0, best), box.slice(0, cut), box.slice(cut), ...boxes.slice(best + 1)];
+  }
+  const palette = Buffer.alloc(boxes.length * 3);
+  const index = new Map();
+  boxes.forEach((box, k) => {
+    let weight = 0;
+    const sum = [0, 0, 0];
+    for (const colour of box) {
+      const n = counts.get(colour);
+      weight += n;
+      for (let c = 0; c < 3; c++) sum[c] += channel(colour, c) * n;
+      index.set(colour, k);
+    }
+    for (let c = 0; c < 3; c++) palette[k * 3 + c] = Math.round(sum[c] / weight);
+  });
+  return { palette, index };
 }
 
 export class Apng {
@@ -181,15 +255,24 @@ export class Apng {
 
   bytes() {
     const { width, height, frames } = this;
+    const { palette, index: lookup } = quantize(frames.map((frame) => frame.rgb));
+    const indexed = frames.map((frame) => {
+      const out = Buffer.alloc(width * height);
+      for (let i = 0; i < out.length; i++) {
+        const at = i * 3;
+        out[i] = lookup.get((frame.rgb[at] << 16) | (frame.rgb[at + 1] << 8) | frame.rgb[at + 2]);
+      }
+      return out;
+    });
     const ihdr = Buffer.alloc(13);
     ihdr.writeUInt32BE(width, 0);
     ihdr.writeUInt32BE(height, 4);
     ihdr[8] = 8;
-    ihdr[9] = 2;
+    ihdr[9] = 3;
     const actl = Buffer.alloc(8);
     actl.writeUInt32BE(frames.length, 0);
     actl.writeUInt32BE(0, 4);
-    const parts = [SIGNATURE, chunk("IHDR", ihdr), chunk("acTL", actl)];
+    const parts = [SIGNATURE, chunk("IHDR", ihdr), chunk("PLTE", palette), chunk("acTL", actl)];
     let sequence = 0;
     frames.forEach((frame, index) => {
       const fctl = Buffer.alloc(26);
@@ -203,7 +286,7 @@ export class Apng {
       fctl[24] = 0; // leave it
       fctl[25] = 0; // replace what is under it
       parts.push(chunk("fcTL", fctl));
-      const data = filtered(frame.rgb, width, frame.box);
+      const data = filtered(indexed[index], width, frame.box, 1);
       if (index === 0) parts.push(chunk("IDAT", data));
       else {
         const number = Buffer.alloc(4);
@@ -230,4 +313,11 @@ export function png(image) {
     chunk("IDAT", filtered(image.rgb, width, { x: 0, y: 0, w: width, h: height })),
     chunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+/** A still PNG of `image` in a palette of at most 256 colours (lossless when it has no more). */
+export function pngIndexed(image) {
+  const still = new Apng(image.width, image.height);
+  still.add(image.rgb, 1000);
+  return still.bytes();
 }

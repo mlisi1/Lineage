@@ -848,8 +848,28 @@ god powers, a world's end and the next one's beginning).
   Night, the rain power twice) and `?recording=end` (the herd starves on day 2 and the sim
   ends the world) play the real thing.
 
+**Round 2** (the owner's comments, ADR 0021):
+
+- Lightning comes in three sizes: thunder (thin, rare, faint), thunderstorm (forked,
+  every few seconds, a darker sky, slanting heavy rain) and the strike that sets a fire
+  (thickest, brightest, where the fire begins).
+- Rain rings spread on the water and drops splash on the land, in the middle and local
+  views.
+- Flames are four-frame sprites, one to a burning cell in the middle view and three larger
+  up close.
+- Burnt ground (`scorch`) is charcoal with ash, and charred tree skeletons stand where trees
+  grew.
+- A puff of ash rises where an animal dies in the fire.
+- A volcano's cone and a meteor's crater are drawn for 30 sim-days (`marks.ts`), after
+  how top-down pixel-art games draw them: stacked ledges with cliff faces, boulders,
+  crusted lava rivers falling over the ledges (its own layer, untinted), and a crater's rim,
+  far wall, scorched floor and rays of debris. The sim bares the land round both.
+- The seed power drops motes over the bare land in sight; the ark's light falls where its
+  newcomers land.
+- Algae are olive fronds on the shallows, and glow shows on the map's dots.
+
 **Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
-the particles and the shows; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
+the particles and the shows (and the land they change), lightning, flames and marks; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
 every light and event, a glowing animal at night and by day, and a real world's end
 holding the camera and the button. Its cost on the board is R5's to measure.
 
