@@ -19,6 +19,7 @@ from lineage_sim.state.migrations import (
     v6_to_v7,
     v7_to_v8,
     v8_to_v9,
+    v9_to_v10,
 )
 from lineage_sim.state.schema import SCHEMA_VERSION, StateError, Tree
 
@@ -33,6 +34,7 @@ MIGRATIONS: dict[int, Callable[[Tree], Tree]] = {
     6: v6_to_v7.migrate,
     7: v7_to_v8.migrate,
     8: v8_to_v9.migrate,
+    9: v9_to_v10.migrate,
 }
 
 

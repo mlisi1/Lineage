@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "567448dd079d0108940932e19c85a956df4a2a0ef650ee59f469275084644e6e"
+GOLDEN_FLORA_SEED_42 = "a9401eebad536b3ab6723884fa96179ae1e2375da4818b05fa4a6cead65d9ef6"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -711,7 +711,8 @@ def test_streams_are_per_subsystem(config: Config) -> None:
     world, _ = World.create(config, 42, EPOCH_UNIX_MS)
     world.step(3 * DAY_S)
     assert sorted(world.snapshot().rng) == [
-        "chronicle", "fauna", "fire", "flora", "presence", "species", "terrain",
+        "apocalypse", "chronicle", "fauna", "fire", "flora", "presence", "species",
+        "terrain",
     ]  # fmt: skip
 
 

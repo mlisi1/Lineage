@@ -48,8 +48,9 @@ class Observer(Protocol):
     """A subsystem that also sees what the others report (the chronicle, M9).
 
     The World hands it every batch of outputs as they are produced (a tick, a midnight,
-    an input event, the initialisation), at the same sim time; what it returns is added
-    to the outputs but not shown to observers again.
+    an input event, the initialisation), at the same sim time, together with what the
+    observers before it returned (the chronicle sees the apocalypse's verdict, M10); what
+    it returns is added to the outputs but not shown to it or earlier observers again.
     """
 
     def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]: ...

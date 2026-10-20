@@ -16,6 +16,7 @@ def test_default_config(config: Config) -> None:
         "fauna": 600.0,
         "species": 86_400.0,
         "chronicle": 86_400.0,
+        "apocalypse": 86_400.0,
     }
     assert config.species.min_members == 8
     assert (config.chronicle.notable_importance, config.chronicle.major_importance) == (3, 4)
@@ -23,9 +24,9 @@ def test_default_config(config: Config) -> None:
 
 
 def test_schedule_periods(default_config_text: str) -> None:
-    config = parse_config(default_config_text + "journal = 900\napocalypse = 0.25\n")
+    config = parse_config(default_config_text + "journal = 900\ncomet = 0.25\n")
     assert config.period_ms("journal") == 900_000
-    assert config.period_ms("apocalypse") == 250
+    assert config.period_ms("comet") == 250
     with pytest.raises(ConfigError, match="no \\[schedule\\] period"):
         config.period_ms("weather")
 
@@ -45,9 +46,9 @@ def test_schedule_is_read_only(config: Config) -> None:
         (('summer_start = "06-21"', 'summer_start = "02-01"'), "must be in order"),
         (('winter_start = "12-21"', ""), "missing keys in \\[calendar\\]"),
         (("config_version = 1", "config_version = 2"), "unsupported config_version"),
-        (("[schedule]", "[schedule]\napocalypse = -5"), "positive number of seconds"),
-        (("[schedule]", "[schedule]\napocalypse = true"), "positive number of seconds"),
-        (("[schedule]", "[schedule]\napocalypse = 0.0001"), "shorter than 1 ms"),
+        (("[schedule]", "[schedule]\ncomet = -5"), "positive number of seconds"),
+        (("[schedule]", "[schedule]\ncomet = true"), "positive number of seconds"),
+        (("[schedule]", "[schedule]\ncomet = 0.0001"), "shorter than 1 ms"),
         (("min_members = 8", "min_members = 0"), "min_members must be at least 1"),
         (
             ("predator_min_members = 5", "predator_min_members = 0"),
