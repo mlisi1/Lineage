@@ -21,7 +21,9 @@ FIXTURES = REPO_ROOT / "sim" / "tests" / "fixtures" / "saves"
 EPOCH_2026_03_01 = 1_772_323_200_000
 # A doomed island: founders land on the first day of summer whatever the plants, with
 # hardly any energy, and life counts as established at once; they starve within weeks.
+# No algae: grazing the shore keeps the last founder alive past the end of the run.
 DOOM = (
+    "flora.algae_capacity=0.0",
     "fauna.founder_min_plant_cover=0.0",
     "fauna.arrival_delay_days=0.0",
     "fauna.founder_energy_share=0.01",

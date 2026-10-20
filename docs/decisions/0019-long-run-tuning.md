@@ -60,9 +60,60 @@ The owner answered the M11 brief's three questions at the start (2026-10-20):
   have no closed forest by the end of the run (M3.5). The final M3 check must use a
   5-year run.
 
+## Second round with the owner (2026-10-20)
+
+The first sweep (`fauna-1`) was stopped after 15 of its 31 points, kept as a map of the
+predator levers. Looking at the island as an evolving world rather than as a list of
+numbers, the owner asked for criteria on diversity (every gene should have conditions in
+which it can thrive, eventually) and on the balance of hunters and grazers. Measured on
+today's defaults (seeds 0–19 and 20–39):
+
+- **Genes without a niche.** Swimming (`AQUATIC`) is high in no seed's final population:
+  there is no food at sea. Large size and meat-eating are high in 10–25 % of seeds; the
+  founders' descendants never become hunters.
+- **Rare genes that never establish.** Holding ≥ 5 % of their population for ≥ 30 days:
+  hibernation in 20–35 % of seeds, venom, giant, glow and toxic in 5–15 %, and four plant
+  genes (fire-pine, nitrogen-fixer, poisonous, fruiting) in none.
+- **Hunters are scarce.** Predators are about 1–2 % of creatures, and ≥ 3 of them live on
+  57 % of inhabited days after year 1.
+
+Decisions:
+
+1. **New criteria D1–D3** (`tools/tune/score.py`). D1: every gene (looks aside) has a
+   niche, meaning both ends of its range each hold ≥ 10 % of creatures at some time.
+   D2: every rare gene thrives (≥ 5 % for ≥ 30 days) somewhere. D3: predators are a
+   real share of creatures and present most of the time. Reported now. They become M11
+   pass/fail criteria once the mechanisms below are in, with bands proposed from what the
+   island then reaches. Proposed bands: D1 ≥ 30 % of seeds, D2 ≥ 20 %, D3 predators
+   3–20 % of creatures and ≥ 3 present on 80 % of inhabited days after year 1.
+2. **Photosynthesis stays.** It swept herds only in constant light (M7). In office light
+   it is held back (0.7 ‰ median, M8), so the score now watches it (a majority of
+   creatures for a month in any seed) and `photosynthesis_rate` is the fix if it ever
+   sweeps.
+3. **Five mechanisms, one at a time**, each with tests and an on/off comparison before
+   the next: food at sea; tall plants only tall bodies reach; cover for prey in dense
+   woody growth; fruit seeds carried by the grazers that eat them; dung and carcasses
+   feed the soil. Tuning resumes after them (ADR 0011: features first, tune once).
+
+### Mechanism 1: food at sea (schema v11)
+
+Algae grow on sea cells no deeper than `algae_max_depth` (0.03, about 5 % of the map)
+where no plant stands, logistically towards `algae_capacity` (0.4) with daylight, rain
+and the season. Grazers eat them where they swim, for `algae_meal_share` (0.8) of a
+plant's energy. A creature smells them in proportion to its ease in water (its `AQUATIC`
+gene, or fully if amphibious), so the food it senses is land plants + ease × algae and a
+land animal is not lured out to sea. Meals of algae teach nothing about plant forms.
+`algae_capacity` 0 turns them off. Migration `v10_to_v11` adds an empty algae grid; the
+next flora tick sows the shelf. Design: `plants.md`, "Algae"; `creatures.md`, "Life".
+
+Alternatives considered: an aquatic plant form inside the plant genome (entangled with
+temperature, fertility and dispersal; a separate grid is simpler and cheaper); a new
+brain sense for sea food (changes the brain's size and every saved brain; weighting the
+food sense by ease in water needs no new weight).
+
 ## Decision
 
-(Pending the sweeps.)
+(Pending the mechanisms and the sweeps.)
 
 ## Consequences
 

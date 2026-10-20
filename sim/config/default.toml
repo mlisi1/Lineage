@@ -314,6 +314,20 @@ defence_strength = 0.8
 # Biomass grazers cannot reach (roots and stubble): grazed plants regrow from it.
 grazing_reserve_biomass = 0.08
 
+# --- Algae (M11): food at sea for swimmers ---
+# Algae grow on sea cells down to algae_max_depth (height units) below sea level where no
+# plant stands, towards algae_capacity biomass (0 turns algae off), logistically at
+# algae_growth_per_year × daylight × season, the season factor falling to
+# algae_winter_share in midwinter. Spores are everywhere: a habitable cell never holds
+# less than algae_seed. Grazers eat them like plants (down to grazing_reserve_biomass),
+# for algae_meal_share of a plant's energy; only creatures at ease in water smell them.
+algae_max_depth = 0.03
+algae_capacity = 0.4
+algae_growth_per_year = 60.0
+algae_seed = 0.02
+algae_winter_share = 0.3
+algae_meal_share = 0.8
+
 # --- Fire ---
 # Lightning ignitions per year at full dryness, on the whole map.
 fire_ignitions_per_year = 30.0

@@ -297,3 +297,24 @@ def test_v10_fixture_values(config: Config) -> None:
     world = World.restore(config, state)
     assert world.chronicle.entries()[0].kind == "world_begin"
     assert world.fauna.count == 0  # founders wait for the plants of the new island
+
+
+def test_v10_upgrades_to_v11_with_algae_to_come(config: Config) -> None:
+    state = io.loads(_fixture(10))
+    algae = state.subsystems["flora"]["algae"]
+    assert algae.shape == state.subsystems["flora"]["biomass"].shape
+    assert float(algae.max()) == 0.0  # empty until the next flora tick sows the shelf
+    world = World.restore(config, state)
+    world.step(2 * 86_400)
+    assert float(world.flora.algae.max()) >= config.flora.algae_seed
+
+
+def test_v11_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(11))
+    assert state.world == 2
+    assert state.seed == 660476933
+    assert state.t_ms == 40 * 86_400_000
+    world = World.restore(config, state)
+    algae = world.flora.algae
+    assert float(algae.max()) > config.flora.algae_seed  # they have grown for ten days
+    assert float(algae[world.terrain.land].max()) == 0.0

@@ -14,6 +14,10 @@ a set of rare genes. Once per sim-day (`Flora.tick`):
 5. **Seed rain** — a few seeds with random genomes arrive from outside.
 6. **Feedback** — vegetation cover is handed to the terrain (erosion and leaching).
 
+Algae (M11) live beside the plants, on shallow sea cells where no plant stands: one
+biomass per cell with no genome, growing logistically with the light and the season.
+Grazers eat them where they swim (`graze`).
+
 `Wildfire` runs once per sim-hour: lightning ignites dry vegetation, fire spreads between
 neighbouring cells that carry fuel (so it stops at water and bare ground) and burns out.
 
@@ -115,6 +119,19 @@ def warmth(instant: Instant) -> float:
     """Seasonal warmth in [-1, 1]: +1 in mid-summer, -1 in mid-winter (either hemisphere)."""
     phase = (_SEASON_INDEX[instant.season] + instant.season_progress) / 4.0
     return math.cos(2.0 * math.pi * (phase - _SUMMER_PEAK_PHASE))
+
+
+def algae_habitat(cfg: FloraConfig, elevation: Grid, plants: Grid) -> Mask:
+    """Sea cells no deeper than ``algae_max_depth`` where no plant stands."""
+    return (elevation <= 0.0) & (elevation > _F(-cfg.algae_max_depth)) & (plants <= 0.0)
+
+
+def algae_growth(cfg: FloraConfig, algae: Grid, light: float, season_warmth: float) -> Grid:
+    """Logistic growth of algae per year (biomass units), before the time step."""
+    season = cfg.algae_winter_share + (1.0 - cfg.algae_winter_share) * 0.5 * (1.0 + season_warmth)
+    rate = _F(cfg.algae_growth_per_year * light * season)
+    capacity = _F(max(cfg.algae_capacity, 1e-9))
+    return (rate * algae * (_F(1.0) - algae / capacity)).astype(_F)
 
 
 def lowland_temperature(cfg: FloraConfig, season_warmth: float) -> float:
@@ -310,6 +327,7 @@ class Flora:
         self._form_masks: tuple[Mask, Mask] | None = None
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
+        self._algae: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1] and rain's growth factor (>= 1), set by the presence model
         # (M8); both scale growth.
         self._daylight = 1.0
@@ -342,6 +360,11 @@ class Flora:
     def scorch(self) -> Grid:
         """1 just after a fire, decaying to 0 over ``scorch_days``."""
         return self._scorch
+
+    @property
+    def algae(self) -> Grid:
+        """Algae biomass per cell (0 off their habitat, M11)."""
+        return self._algae
 
     def genes(self) -> Grid:
         """The genome as floats in [0, 1], shape (8, height, width)."""
@@ -406,7 +429,8 @@ class Flora:
         Defended and poisonous plants refuse part of every bite; several grazers on one
         cell share what is there in proportion to their demand. Roots are out of reach:
         biomass up to ``grazing_reserve_biomass`` is never eaten, so grazed plants regrow.
-        Only the grazed cells are touched.
+        Where no plant stands, the grazers eat the algae there (M11), down to the same
+        reserve. Only the grazed cells are touched.
         """
         cfg = self._cfg
         defence = self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
@@ -417,12 +441,15 @@ class Flora:
         cells, group = np.unique(ys * width + xs, return_inverse=True)
         cell_y, cell_x = cells // width, cells % width
         asked = np.bincount(group, weights=wanted, minlength=cells.size)
-        there = self._biomass[cell_y, cell_x].astype(np.float64)
+        plants = self._biomass[cell_y, cell_x]
+        on_algae = plants <= 0.0
+        there = np.where(on_algae, self._algae[cell_y, cell_x], plants).astype(np.float64)
         reachable = np.maximum(there - cfg.grazing_reserve_biomass, 0.0)
         share = np.minimum(1.0, reachable / np.maximum(asked, 1e-12))
         eaten = (wanted * share[group]).astype(_F)
-        left = there - np.bincount(group, weights=eaten, minlength=cells.size)
-        self._biomass[cell_y, cell_x] = np.maximum(left, 0.0).astype(_F)
+        left = np.maximum(there - np.bincount(group, weights=eaten, minlength=cells.size), 0.0)
+        self._biomass[cell_y[~on_algae], cell_x[~on_algae]] = left[~on_algae].astype(_F)
+        self._algae[cell_y[on_algae], cell_x[on_algae]] = left[on_algae].astype(_F)
         return eaten
 
     def forms(self) -> Bytes:
@@ -446,19 +473,29 @@ class Flora:
 
     def meal_factor(self, ys: Index, xs: Index) -> Grid:
         """Multiplier on the energy grazers get from the plants at cells (ys, xs), from
-        their rare genes: fruit is richer, poison costs more than it gives (negative)."""
+        their rare genes: fruit is richer, poison costs more than it gives (negative).
+        Where no plant stands, the meal is algae (``algae_meal_share``)."""
         cfg, rare = self._cfg, self._rare[ys, xs]
         fruit = np.where(has(rare, Rare.FRUITING), _F(1.0 + cfg.fruiting_meal_bonus), _F(1.0))
         poison = np.where(has(rare, Rare.POISONOUS), _F(1.0 - cfg.poisonous_toxicity), _F(1.0))
-        return (fruit * poison).astype(_F)
+        plant = (fruit * poison).astype(_F)
+        return np.where(self.on_algae(ys, xs), _F(cfg.algae_meal_share), plant).astype(_F)
+
+    def on_algae(self, ys: Index, xs: Index) -> Mask:
+        """Cells (ys, xs) where a grazer eats algae: no plant stands there."""
+        return self._biomass[ys, xs] <= 0.0
 
     def shade(self) -> Grid:
         """Share of sunlight the plants intercept on every cell, in [0, 1]."""
         return canopy(self._cfg, self._biomass, stature(self._cfg, self.genes(), self._rare))
 
     def grazeable(self) -> Grid:
-        """Biomass grazers can reach in each cell (what they see as food)."""
+        """Plant biomass grazers can reach in each cell (what they see as food on land)."""
         return np.maximum(self._biomass - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
+
+    def grazeable_algae(self) -> Grid:
+        """Algae biomass grazers can reach in each cell (food at sea, M11)."""
+        return np.maximum(self._algae - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
 
     def burn(self, ys: Index, xs: Index) -> None:
         """Cells (ys, xs) have burnt out: remove biomass, scorch the ground."""
@@ -517,6 +554,17 @@ class Flora:
         self._biomass[~habitable] = 0.0
         self._clear_dead()
 
+        # 1b. Algae on the shallow sea (M11).
+        where = algae_habitat(cfg, elevation, self._biomass)
+        algae = np.where(where, np.maximum(self._algae, _F(cfg.algae_seed)), _F(0.0)).astype(_F)
+        if cfg.algae_capacity <= 0.0:
+            algae[:] = 0.0
+        else:
+            light = self._daylight * self._rain
+            grown = algae + _F(dt_years) * algae_growth(cfg, algae, light, warmth(ctx.instant))
+            algae = np.clip(grown, 0.0, cfg.algae_capacity).astype(_F)
+        self._algae = algae
+
         # 2. Growth, mortality, winter dieback.
         biomass = self._biomass
         fit = suitability(cfg, genes, self._rare, temp, terrain.fertility)
@@ -558,6 +606,7 @@ class Flora:
             "genome": self._genome.copy(),
             "rare": self._rare.copy(),
             "scorch": self._scorch.copy(),
+            "algae": self._algae.copy(),
         }
 
     def set_state(self, tree: Tree) -> None:
@@ -571,6 +620,7 @@ class Flora:
         self._form_masks = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
+        self._algae = np.array(tree["algae"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
 
     # -- internals --

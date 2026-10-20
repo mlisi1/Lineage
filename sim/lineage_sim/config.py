@@ -238,6 +238,12 @@ class FloraConfig:
     emergent_wind_factor: float
     defence_strength: float
     grazing_reserve_biomass: float
+    algae_max_depth: float
+    algae_capacity: float
+    algae_growth_per_year: float
+    algae_seed: float
+    algae_winter_share: float
+    algae_meal_share: float
     fire_ignitions_per_year: float
     fire_dry_temperature: float
     fire_dry_span: float
@@ -298,6 +304,8 @@ class FloraConfig:
             "emergent_growth_cost",
             "defence_strength",
             "grazing_reserve_biomass",
+            "algae_capacity",
+            "algae_winter_share",
             "fire_wet_spread",
             "fire_min_fuel",
             "flammability_lichen",

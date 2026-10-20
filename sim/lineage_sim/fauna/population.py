@@ -400,6 +400,14 @@ class Fauna:
         low = np.where(is_low, biomass, np.float32(0.0)).astype(np.float32)
         woody = np.where(is_woody, biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
+        # Food at sea (M11): smelled by those at ease in water (swimmers, amphibians).
+        algae = self._flora.grazeable_algae()
+        sea, ease = None, None
+        if algae.any():
+            sea = algae
+            ease = np.where(
+                rare.waterproof(self._slots), np.float32(1.0), self._genes[:, Gene.AQUATIC]
+            ).astype(np.float32)
         senses = creature.sense(
             cfg,
             self._positions,
@@ -418,6 +426,8 @@ class Fauna:
             offsets,
             distance,
             rare.sight(cfg, self._slots, body.sense_range, self._daylight),
+            sea,
+            ease,
         )
         # Roaming: a heading that drifts slowly, so a creature with nothing to steer by
         # covers ground instead of jittering in place.
@@ -490,6 +500,8 @@ class Fauna:
                 [_LOW_GAIN, _WOODY_GAIN],
                 -1,
             ).astype(np.intp)
+            # Algae are no plant form: a meal of them teaches nothing about low or woody.
+            gain_index[self._flora.on_algae(rows, columns)] = -1
             full_bite = body.graze_rate * np.float32(hours)
             bite = np.clip(eaten / np.maximum(full_bite, 1e-9), 0.0, 1.0).astype(np.float32)
             self._learned, self._meal_value = brain.taste(
