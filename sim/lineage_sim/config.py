@@ -401,6 +401,8 @@ class FaunaConfig:
     attack_min_diet: float
     carcass_share: float
     carrion_decay_hours: float
+    dung_fertility: float
+    carrion_fertility: float
     scavenge_rate: float
     carrion_scent_cells: int
     instinct_scavenge: float

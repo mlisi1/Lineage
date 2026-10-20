@@ -145,6 +145,11 @@ networks, predator–prey coexistence): ADR 0009, "References".
   through a scent spread over `carrion_scent_cells`. It feeds young and unlucky hunters
   between kills, and gives half-meat diets a niche. Founders arrive with an instinct for
   carrion in proportion to their diet.
+- **Nutrients** (M11): what creatures eat returns to the soil. A land cell gains
+  `dung_fertility` (0.05) fertility per unit of plant biomass eaten there, and
+  `carrion_fertility` (0.2) per unit of carrion mass that rots there (not what is
+  scavenged). Herds keep their pastures fertile; a kill leaves a rich patch where
+  taller plants can take hold. Saved state is the terrain's fertility, as before.
 - **Breeding**: two adults whose genomes differ by at most `compat_distance`, close
   together, both well fed and past their cooldown, have a brood. Each parent invests
   energy; the young share it. Genes cross over and mutate. An adult that finds no mate

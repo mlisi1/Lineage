@@ -494,6 +494,12 @@ cover_protection = 0.6
 # mass^metabolic_exponent meat mass per hour, for meat_energy × their meat efficiency.
 carcass_share = 0.5
 carrion_decay_hours = 72.0
+# Nutrients return to the soil (M11): fertility added to a land cell per unit of plant
+# biomass a creature eats while standing there (dung), and per unit of carrion mass that
+# rots there (carcasses). Herds keep their pastures fertile; a kill leaves a rich patch.
+# 0 turns each off.
+dung_fertility = 0.05
+carrion_fertility = 0.2
 scavenge_rate = 0.5
 # Carrion is smelled through a scent spread over the box of this half-width (cells)
 # around it: a carcass is a single cell, which the sparse sampling of smell would miss.

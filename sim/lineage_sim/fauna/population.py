@@ -146,6 +146,8 @@ class Fauna:
         self._in_water: Flags = np.zeros(0, dtype=np.bool_)  # where each stood this tick
         self._meal = np.zeros(0, dtype=np.float32)  # energy eaten this tick
         self._leftover = np.zeros(0, dtype=np.float32)  # meat mass a kill left, per victim
+        # Fertility returned to the soil this tick (M11): rebuilt every tick, not saved.
+        self._soil = np.zeros(self._shape, dtype=np.float32)
         self._grown: list[OutputEvent] = []  # youths that ended this tick
         # Pairwise offsets and distances for the current positions; None when stale.
         self._apart: tuple[NDArray[np.float32], NDArray[np.float32]] | None = None
@@ -305,9 +307,14 @@ class Fauna:
             ctx.instant.season is Season.WINTER, self._daylight,
         )  # fmt: skip
         rot = np.float32(np.exp(-hours / self._cfg.carrion_decay_hours))
+        # Nutrients return to the soil (M11): what rots of the carrion, and below, dung.
+        self._soil = np.float32(self._cfg.carrion_fertility) * self._carrion * (1 - rot)
         self._carrion *= rot
         self._scent *= rot
         self._live(rng, hours)
+        if self._cfg.dung_fertility > 0.0 or self._cfg.carrion_fertility > 0.0:
+            land = self._terrain.land
+            self._terrain.adjust_fertility(np.where(land, self._soil, np.float32(0.0)))
         dead = self._hunt(rng, hours)
         # The tick's own balance, before any breeding: what eating and moving earned.
         self._learn(self._energy - before, hours, ctx.t_ms)
@@ -488,6 +495,8 @@ class Fauna:
         appetite = (appetite * browse.share(rows, columns)).astype(np.float32)
         appetite[torpid] = 0.0
         eaten = self._flora.graze(rows, columns, appetite)
+        if cfg.dung_fertility > 0.0:
+            np.add.at(self._soil, (rows, columns), np.float32(cfg.dung_fertility) * eaten)
         # Defended plants are not only harder to bite: what is eaten is worth less (toxins).
         # Rare plant genes change it again: fruit is richer, poison costs energy.
         toxic = np.float32(cfg.defence_toxicity) * self._flora.defence_at(rows, columns)

@@ -48,7 +48,8 @@ renderer. A tree cell with biomass ≥ 0.55 is closed forest.
 
 - **Temperature** falls with altitude and follows the seasons (warmest in mid-summer of
   the configured hemisphere). Each plant has an optimum set by its `COLD` gene.
-- **Fertility** comes from the terrain. A plant needs more of it the taller it is and
+- **Fertility** comes from the terrain, and from animals (M11: dung and rotting
+  carcasses, `creatures.md`, "Nutrients"). A plant needs more of it the taller it is and
   less the more frugal it is: trees cannot establish on infertile soil.
 - **Wind exposure** is full on the wave-swept shore and on summits, and breaks tall
   plants. It sorts the forms into belts: forest in sheltered ground, then shrub, grass,
