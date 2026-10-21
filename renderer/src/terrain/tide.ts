@@ -46,3 +46,39 @@ export function shoreSizes(tile: number): { spacing: number; reach: number; swas
   if (tile < 32) return { spacing: 5, reach: 15, swash: 4 };
   return { spacing: 9, reach: 27, swash: 10 };
 }
+
+/**
+ * The open sea's swell (round 7, the owner: the water away from the coast should move too,
+ * on the map and a little in the middle view): long, low crests lying across the screen,
+ * bent by a wide noise and broken into short dashes, drifting down the sea, after how pixel
+ * art draws open water. In a view of `tile` art pixels to the cell: the crests' spacing
+ * (art pixels) and how strongly they show (0: not at all, as up close, where the water is
+ * calm away from the shore).
+ */
+export function swellSizes(tile: number): { spacing: number; strength: number } {
+  if (tile < 8) return { spacing: 12, strength: 1 };
+  if (tile < 32) return { spacing: 20, strength: 0.7 };
+  return { spacing: 0, strength: 0 };
+}
+
+/** The way the swell runs (radians, screen y down: nearly straight down) and how far a crest bends (spacings). */
+const SWELL_ANGLE = 1.45;
+const SWELL_BEND = 1.4;
+/** How wide the noise that bends the crests is, in spacings. */
+const SWELL_BEND_SPAN = 3;
+/** The dashes a crest is broken into: how long and how tall the noise that breaks it is, in spacings. */
+const SWELL_DASH_ACROSS = 0.6;
+const SWELL_DASH_DOWN = 0.2;
+
+/**
+ * Art pixel (x, y) of a view in the swell: where it lies between two crests (a share of
+ * the spacing, 0–1; the shader moves the crests on by adding time to it), and its dash
+ * noise (0–1; the shader shows a crest where the noise, drifting, is low).
+ */
+export function swellAt(x: number, y: number, spacing: number): { phase: number; dash: number } {
+  const along = (x * Math.cos(SWELL_ANGLE) + y * Math.sin(SWELL_ANGLE)) / spacing;
+  const span = spacing * SWELL_BEND_SPAN;
+  const turn = along + SWELL_BEND * smooth(x / span, y / span, 41);
+  const dash = smooth(x / (spacing * SWELL_DASH_ACROSS), y / (spacing * SWELL_DASH_DOWN), 43);
+  return { phase: turn - Math.floor(turn), dash };
+}

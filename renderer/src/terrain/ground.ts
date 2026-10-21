@@ -26,7 +26,7 @@ import { DEFAULT_LOOK, type Look } from "../looks";
 import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
-import { BREATH_S, shoreSizes, tidePhase } from "./tide";
+import { BREATH_S, shoreSizes, swellAt, swellSizes, tidePhase } from "./tide";
 
 export type GroundStyle = "squares" | "warped" | "tiles" | "smooth" | "blended";
 export const GROUND_STYLES: readonly GroundStyle[] = [
@@ -39,6 +39,11 @@ export const GROUND_STYLES: readonly GroundStyle[] = [
 /** Art pixels per cell in the middle view and in the map view. */
 export const MID_TILE = 8;
 export const MAP_TILE = 2;
+/**
+ * How far out (art pixels) the shore's data counts the distance from the shore: the open
+ * sea's swell fades in over the pixels past the waves' reach (`sea.ts`).
+ */
+const OPEN_SEA_FROM = 250;
 
 /** From this many pixels per cell a view is close: calm patches, and detail in them. */
 export const CLOSE_FROM_TILE = 16;
@@ -1018,7 +1023,8 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   // far up as the swash runs (`tide.ts` `shoreSizes`).
   const sizes = shoreSizes(tile);
   const shoreTo = Math.max(sizes.reach, sizes.swash) + 1;
-  const away = new Uint8Array(wide * tall).fill(surfing ? shoreTo + 1 : far);
+  // With the surf, counted further out: the open sea's swell fades in past the waves.
+  const away = new Uint8Array(wide * tall).fill(surfing ? OPEN_SEA_FROM : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
@@ -1081,16 +1087,26 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   if (!surfing) return { width: wide, height: tall, rgba };
 
   // The shore's data for the sea's shader (`Pixels.shore`): how far each pixel is from the
-  // shore on its side, when the waves come there, a little noise; clear where the sea is
-  // still.
+  // shore on its side, when the waves come there, a little noise; out at sea, where it lies
+  // in the swell; clear where the sea is still.
   const shore = new Uint8ClampedArray(wide * tall * 4);
+  const swell = swellSizes(tile);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
-      const distance = away[at] ?? shoreTo + 1;
-      if (distance > shoreTo) continue;
+      const distance = away[at] ?? OPEN_SEA_FROM;
       const worldX = originX + px;
       const worldY = originY + py;
+      if (distance > shoreTo) {
+        if (isLand[at] === 1 || swell.strength <= 0) continue;
+        const { phase, dash } = swellAt(worldX, worldY, swell.spacing);
+        shore[at * 4] = distance;
+        shore[at * 4 + 1] = Math.floor(dash * 256);
+        shore[at * 4 + 2] =
+          Math.floor(phase * 63) * 4 + Math.floor(cellHash(worldX, worldY, 23) * 4);
+        shore[at * 4 + 3] = 255;
+        continue;
+      }
       const turn = tidePhase((worldX + 0.5) / tile, (worldY + 0.5) / tile) / BREATH_S;
       const when = Math.floor((((turn % 1) + 1) % 1) * 63);
       const noise = Math.floor(cellHash(worldX, worldY, 23) * 4);

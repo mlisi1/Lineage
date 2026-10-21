@@ -380,6 +380,24 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
   (8192 here). They are now packed into pages of at most 2048 × 2048.
 - The report says "seeded", not "sown" (the owner read it as snow), and films snow.
 
+## Round 7: the owner's comments (2026-10-21, evening)
+
+- **Rain and snow fell mixed** where snow lies in patches (round 6 chose per pixel). A
+  view's whole fall is now one kind: snow when at least half its land has snow lying
+  (`SNOW_VIEW_SHARE`), rain otherwise; when the share crosses it during a spell the two
+  cross-fade at the rain's own ease; with nothing falling the kind changes at once.
+- **The open sea moves**, on the map and a little in the middle view (none up close, where
+  the water away from the shore is calm): past the waves' reach, faint crests lying
+  across the screen, bent by a wide noise and broken into short dashes that come and go,
+  drift down the sea, a crest every 6 s. The painter writes, in the shore's data, where
+  each open-sea pixel lies between two crests and its dash noise (`tide.ts` `swellAt`);
+  the same shader pass as the shore draws it, fading in over 10 pixels past the waves.
+  A first try with two trains crossing at an angle read as a net or as rain.
+- **The meteor reads larger in the middle view**: its streak 1.8× and its fall from
+  further up (`METEOR_SIZE`).
+- **Dust no longer pops**: a dust cloud's texture was made anew at each size as it
+  swelled, so its dither jumped in one frame; it is painted once and stretched.
+
 ## Results
 
 On the PC, renderer tests went from 255 to 281 unit tests: the light's colours,
@@ -406,8 +424,8 @@ R5 does that.
   pointer handler and `Director.nextSubject`.
 - Events off the screen are not seen: the camera does not go to them (the owner's button
   steers it, ADR 0020). Only a world's end takes the camera.
-- Falling snow and lightning bolts are not drawn: snow lies where the sim has it (R1),
-  and lightning shows as a flash.
+- Snow falls only where the sim has snow lying (round 6–7); lightning is drawn as bolts in
+  thunder and storms (`lightning.ts`).
 
 ## References
 

@@ -691,7 +691,10 @@ distance out to sea and inland, when the waves come there, noise) and one GL fil
 view (`sea.ts`) draws it: wave lines roll in, brighten and break white; the swash runs up
 the sand with a foam edge, drains, and leaves wet sand that dries. A wave every 5 s,
 its timing varying slowly over the island (`tide.ts` `tidePhase`), the tide over a
-minute; no swash on the map. `seaAt(land)`
+minute; no swash on the map. Past the waves the **open sea's swell** (round 7): faint crests
+across the screen, bent and broken into dashes that come and go, drift down the sea, a
+crest every 6 s, from data the painter leaves in the same texture (`tide.ts` `swellAt`);
+on the map and fainter in the middle view, none up close. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -900,6 +903,10 @@ and born fade or rise); nothing is placed on a cone or crater (`Landscape.covere
 dust cloud hides the change; tides by the shore shader (above); snow falls where snow
 lies, rain elsewhere; a raindrop's streak is at least a frame's fall long; plant drawings
 are paged within 2048 × 2048.
+
+**Round 7** (ADR 0021): a view's fall is all rain or all snow (snow when half its land
+has snow lying), cross-fading as that changes; the open sea's swell (above); the meteor
+larger in the middle view; dust clouds painted once and stretched, so they do not pop.
 
 **Round 5** (ADR 0021):
 

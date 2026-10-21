@@ -9,7 +9,9 @@ export interface Pixels {
    * A ground's shore, when asked for (`GroundOptions.surf`): data for the sea's shader
    * (`terrain/sea.ts`), RGBA of the same size: R the distance out to sea from the shore,
    * G the distance inland (art pixels; 0 on the other side), B when the waves come there
-   * (six bits of a wave's turn) and two bits of noise, A opaque where the sea moves.
+   * (six bits of a wave's turn) and two bits of noise, A opaque where the sea moves. Out
+   * past the waves (R4, round 7) the open sea's swell: G its dash noise (0–255), B's top six
+   * bits where it lies between two crests.
    */
   shore?: Uint8ClampedArray<ArrayBuffer>;
 }

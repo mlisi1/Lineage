@@ -10,6 +10,10 @@
  *           tide sets how far the swash runs. After how pixel water is drawn top-down:
  *           waves from open water fading out on the beach, foam only while the water
  *           rises (ADR 0021). One filter pass a view; the map has no swash.
+ *   swell   (R4, round 7) out past the waves, faint crests lying across the screen, broken
+ *           into dashes that come and go, drift down the open sea, from what the painter
+ *           leaves in the same data (`tide.ts` `swellAt`); on the map, and fainter in the
+ *           middle view; none up close
  *   glints  short light strokes on the open water that grow, drift a little with the
  *           waves and go, each on its own clock, in new places every time; a few dozen
  *           sprites of one white texture, moved a frame
@@ -28,7 +32,7 @@ import {
 } from "pixi.js";
 import type { CellRect, Land } from "./land";
 import { cellHash } from "./pixels";
-import { BREATH_S, shoreSizes } from "./tide";
+import { BREATH_S, shoreSizes, swellSizes } from "./tide";
 
 export { BREATH_S, tidePhase } from "./tide";
 
@@ -133,9 +137,23 @@ export function glintAt(
 
 /** How much of the foam's colour the rolling wave lines take. */
 const SWELL_MIX = 0.45;
+/**
+ * The open sea's swell: seconds a crest takes to move on to the next one's place, and its
+ * dashes to come and go; how wide a crest is (share of the spacing), the share of it shown
+ * as dashes, how opaque at full strength, and over how many art pixels past the waves it
+ * fades in.
+ */
+const SWELL_S = 6;
+const SWELL_DASH_S = 23;
+const SWELL_CREST = 0.2;
+const SWELL_DASHES = 0.42;
+const SWELL_ALPHA = 0.42;
+const SWELL_FADE_PX = 10;
 
 interface ShoreUniforms {
   uTime: number;
+  uCrest: number;
+  uDash: number;
   uTide: number;
   uShallow: number[];
   uSwell: number[];
@@ -157,6 +175,10 @@ const mixRgb = (a: number[], b: number[], t: number): number[] =>
  *             turns, plus the place's own share of a turn): seen from `uReach` out, faint
  *             and broken far out, wider, brighter and whole as it nears the shore, white at
  *             the last two pixels, where it breaks
+ *   open sea  past `uReach` (R = distance out, G the dash noise, B's top six bits where
+ *             it lies between two crests): a pixel shows the swell's colour on a crest
+ *             (moved on by `uCrest`) where its dash noise, drifting by `uDash`, is low, so
+ *             a crest is a row of short dashes that come and go as it travels
  *   on land   after the break the swash runs up `uSwash` × `uTide` pixels, easing in and out,
  *             its edge white foam while it rises; it drains more slowly, and the sand it left
  *             is dark with water, drying as the next wave comes
@@ -174,8 +196,20 @@ uniform float uWet;
 uniform vec3 uShallow;
 uniform vec3 uSwell;
 uniform vec3 uFoam;
+uniform float uCrest;
+uniform float uDash;
+uniform float uSwellCrest;
+uniform float uSwellDashes;
+uniform float uSwellAlpha;
+uniform float uSwellFade;
 
 float ease(float t) { t = clamp(t, 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+
+// How much of a crest is at phase p of its train, moved on by t: 1 at its front, 0 behind it.
+float crest(float p, float t) {
+  float k = fract(p - t);
+  return k < uSwellCrest ? 1.0 - k / uSwellCrest : 0.0;
+}
 
 void main(void) {
   vec4 data = texture(uTexture, vTextureCoord);
@@ -187,7 +221,18 @@ void main(void) {
   float noise = mod(b, 4.0) / 3.0;
   float turn = fract(uTime + when);
   vec4 colour = vec4(0.0);
-  if (out_ > 0.0) {
+  // Past the waves' data (one pixel beyond their reach) lies the open sea's.
+  if (out_ > uReach + 1.0) {
+    if (uSwellAlpha > 0.0) {
+      float fade = clamp((out_ - uReach - 1.0) / uSwellFade, 0.0, 1.0);
+      float high = crest(when, uCrest);
+      float dash = fract(data.g + uDash);
+      // A dash's ends go a pixel at a time (the noise), so it shrinks and grows raggedly.
+      if (high > 0.0 && dash + (noise - 0.5) * 0.06 < uSwellDashes) {
+        colour = vec4(uSwell, uSwellAlpha * fade * (0.45 + 0.55 * high));
+      }
+    }
+  } else if (out_ > 0.0) {
     if (out_ <= uReach) {
       float near = 1.0 - (out_ - 1.0) / uReach;
       float k = fract((out_ - 1.0) / uSpacing + turn);
@@ -247,6 +292,12 @@ export class Sea {
       uShallow: { value: [0.55, 0.8, 0.9], type: "vec3<f32>" },
       uSwell: { value: [0.75, 0.9, 0.95], type: "vec3<f32>" },
       uFoam: { value: rgbOf(FOAM), type: "vec3<f32>" },
+      uCrest: { value: 0, type: "f32" },
+      uDash: { value: 0, type: "f32" },
+      uSwellCrest: { value: SWELL_CREST, type: "f32" },
+      uSwellDashes: { value: SWELL_DASHES, type: "f32" },
+      uSwellAlpha: { value: SWELL_ALPHA * swellSizes(tile).strength, type: "f32" },
+      uSwellFade: { value: SWELL_FADE_PX, type: "f32" },
     });
     this.shore = new Filter({
       glProgram: GlProgram.from({
@@ -281,6 +332,8 @@ export class Sea {
       const shallow = land.relief.seaBands[0]?.colour ?? "#8ecbe6";
       const uniforms = this.shoreUniforms.uniforms as unknown as ShoreUniforms;
       uniforms.uTime = timeS / BREATH_S;
+      uniforms.uCrest = (timeS / SWELL_S) % 1;
+      uniforms.uDash = (timeS / SWELL_DASH_S) % 1;
       uniforms.uTide = tide;
       uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
       uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
