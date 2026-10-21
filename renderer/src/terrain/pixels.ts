@@ -6,10 +6,12 @@ export interface Pixels {
   /** RGBA bytes, row by row. */
   rgba: Uint8ClampedArray<ArrayBuffer>;
   /**
-   * A ground's surf, when asked for (`GroundOptions.surf`): its bands from the shore out
-   * (foam, a line, a line further out), each RGBA of the same size, clear but for it.
+   * A ground's shore, when asked for (`GroundOptions.surf`): data for the sea's shader
+   * (`terrain/sea.ts`), RGBA of the same size: R the distance out to sea from the shore,
+   * G the distance inland (art pixels; 0 on the other side), B when the waves come there
+   * (six bits of a wave's turn) and two bits of noise, A opaque where the sea moves.
    */
-  surf?: readonly Uint8ClampedArray<ArrayBuffer>[];
+  shore?: Uint8ClampedArray<ArrayBuffer>;
 }
 
 /** "#rrggbb" → [r, g, b]. */

@@ -1,19 +1,15 @@
 /**
  * The sea moves (cosy look, after Stardew Valley's water), at almost no cost per frame:
  *
- *   surf    the three bands the painter leaves on layers of their own (`GroundOptions.surf`):
- *           a line of lighter water far out, one nearer, and the foam at the shore, shown
- *           one after another as a crest comes in
- *   swash   (R4) the water running up the beach and draining back, in `SWASH_LEVELS`
- *           steps, also painted as layers; the higher the tide the further it runs
- *
- * One wave clock drives both: a crest comes in, breaks in foam, and the swash runs up
- * the beach after it and drains, smoothly (each step fades in as the water reaches it).
- * Every band is cut into tiles `SURF_TILE` art pixels across, each on the clock of its
- * place (`tidePhase`): waves come in from one side of the sea and sweep across the island
- * as one front, so that neighbouring stretches of coast are a moment apart and far ones
- * break at their own time. Opacities a frame, a few hundred of them. The map has the surf
- * only: a coast a pixel wide does not show a swash.
+ *   shore   (R4) waves drawn by a shader from the shore's data the painter leaves
+ *           (`Pixels.shore`: each pixel's distance from the shore, when the waves come
+ *           there): lines of lighter water roll in from out at sea, narrowing and
+ *           brightening, and break in foam at the shore; the swash runs up the sand with
+ *           a foam edge, drains back, and leaves a stripe of wet sand that dries. Each
+ *           place on its own clock (`tide.ts` `tidePhase`), so a wave runs along a coast; the
+ *           tide sets how far the swash runs. After how pixel water is drawn top-down:
+ *           waves from open water fading out on the beach, foam only while the water
+ *           rises (ADR 0021). One filter pass a view; the map has no swash.
  *   glints  short light strokes on the open water that grow, drift a little with the
  *           waves and go, each on its own clock, in new places every time; a few dozen
  *           sprites of one white texture, moved a frame
@@ -21,25 +17,27 @@
  * Nothing is painted again for it. Where a glint shows is a hash of its slot and of how
  * many times it has shown, so the sea looks the same at the same moment on every run.
  */
-import { Container, Sprite, Texture } from "pixi.js";
+import {
+  Container,
+  Filter,
+  GlProgram,
+  Sprite,
+  Texture,
+  UniformGroup,
+  defaultFilterVert,
+} from "pixi.js";
 import type { CellRect, Land } from "./land";
-import { SWASH_LEVELS } from "./ground";
 import { cellHash } from "./pixels";
+import { BREATH_S, shoreSizes } from "./tide";
 
-/** Seconds of a wave: its crest coming in, breaking, the swash running up and draining. */
-export const BREATH_S = 5;
-/** Seconds of a tide, which sets how far the swash runs. */
+export { BREATH_S, tidePhase } from "./tide";
+
+/** Seconds of a tide, which sets how far the swash runs (its least and most). */
 const TIDE_S = 60;
-/** Where in the wave the swash starts up the beach (as the foam breaks), and the share of the wave it runs up for. */
-const SWASH_FROM = 0.58;
-const SWASH_UP = 0.35;
-/** Art pixels across a tile of the surf. */
-export const SURF_TILE = 8;
-/** The wave front: the way it travels (unit vector), its speed (cells a second); and how much it wanders (seconds, over cells). */
-const WAVE_HEADING = [0.8, 0.6] as const;
-const WAVE_SPEED = 5;
-const WAVE_WANDER_S = 1.2;
-const WAVE_WANDER_SPAN = 40;
+const TIDE_LOW = 0.55;
+/** The swash's colours: foam, and how dark the sand it leaves is (share of black). */
+const FOAM = 0xf2fbff;
+const WET_SAND = 0.18;
 /** Seconds between two showings of a glint (from, to), and the share of that it shows. */
 const GLINT_EVERY_S: readonly [number, number] = [2.4, 5.2];
 const GLINT_SHOWS = 0.42;
@@ -93,65 +91,6 @@ export function seaAt(land: Land): SeaAt {
   };
 }
 
-/** Where in the swell each band's crest is (share of `BREATH_S`), from the shore out, and how long it lasts. */
-const CRESTS: readonly number[] = [0.62, 0.38, 0.14];
-const CREST_WIDTH = 0.26;
-/** The foam never quite goes: this much of it stays between crests. */
-const FOAM_REST = 0.3;
-
-/**
- * The opacity of the surf's bands at `timeS`, from the shore out: a crest comes in, the
- * outer line first, then the nearer, then the foam flares at the shore and slowly fades.
- */
-export function surfAlphas(timeS: number): number[] {
-  const phase = (((timeS / BREATH_S) % 1) + 1) % 1;
-  return CRESTS.map((crest, band) => {
-    const apart = Math.min(Math.abs(phase - crest), 1 - Math.abs(phase - crest));
-    // The foam lingers after its crest: twice as long to go as to come.
-    const width = band === 0 && phase > crest ? 2 * CREST_WIDTH : CREST_WIDTH;
-    const pulse = Math.max(0, 1 - apart / width);
-    return band === 0 ? FOAM_REST + (1 - FOAM_REST) * pulse : pulse;
-  });
-}
-
-/** Smooth noise in [0, 1) over the plane. */
-function smooth(x: number, y: number, salt: number): number {
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const fx = x - x0;
-  const fy = y - y0;
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const top = cellHash(x0, y0, salt) * (1 - sx) + cellHash(x0 + 1, y0, salt) * sx;
-  const bottom = cellHash(x0, y0 + 1, salt) * (1 - sx) + cellHash(x0 + 1, y0 + 1, salt) * sx;
-  return top * (1 - sy) + bottom * sy;
-}
-
-/**
- * Where the waves are at a place of the island (x, y in cells), as seconds added to the
- * clock there: a front travelling across the sea at `WAVE_SPEED`, wandering a little, so
- * near places break a moment apart and the wave runs along a coast; the same in every view.
- */
-export function tidePhase(x: number, y: number): number {
-  const along = x * WAVE_HEADING[0] + y * WAVE_HEADING[1];
-  const wander = WAVE_WANDER_S * smooth(x / WAVE_WANDER_SPAN, y / WAVE_WANDER_SPAN, 31);
-  return -along / WAVE_SPEED + wander;
-}
-
-const ease = (t: number): number => t * t * (3 - 2 * t);
-
-/**
- * How far up the beach the water has run at `timeS` (with the place's `tidePhase` added),
- * 0 to `SWASH_LEVELS`, smoothly: after the foam breaks it runs up, easing in and out, and
- * drains more slowly; the tide, rising and falling over `TIDE_S`, sets how far it reaches.
- */
-export function swashHeight(timeS: number, levels = SWASH_LEVELS): number {
-  const wave = (((timeS / BREATH_S - SWASH_FROM) % 1) + 1) % 1;
-  const up = wave < SWASH_UP ? ease(wave / SWASH_UP) : 1 - ease((wave - SWASH_UP) / (1 - SWASH_UP));
-  const tide = 0.6 + 0.4 * Math.sin((2 * Math.PI * timeS) / TIDE_S);
-  return up * tide * levels;
-}
-
 /** Which showing of glint `slot` it is at `timeS`, and how far through it (0–1). */
 export function glintShowing(slot: number, timeS: number): { showing: number; phase: number } {
   const [shortest, longest] = GLINT_EVERY_S;
@@ -192,8 +131,89 @@ export function glintAt(
   return { x, y, length };
 }
 
-/** Each tile of surf's `tidePhase`, set as the tile is made (`grounds.ts`). */
-export const tileTimes = new WeakMap<Container, number>();
+/** How much of the foam's colour the rolling wave lines take. */
+const SWELL_MIX = 0.45;
+
+interface ShoreUniforms {
+  uTime: number;
+  uTide: number;
+  uShallow: number[];
+  uSwell: number[];
+}
+
+const rgbOf = (colour: number): number[] => [
+  ((colour >> 16) & 255) / 255,
+  ((colour >> 8) & 255) / 255,
+  (colour & 255) / 255,
+];
+const mixRgb = (a: number[], b: number[], t: number): number[] =>
+  a.map((v, i) => v + ((b[i] ?? v) - v) * t);
+
+/**
+ * The shore's shader. Its input is the painter's shore data (`Pixels.shore`), drawn whole
+ * art pixel to whole canvas pixel, so whatever it draws keeps hard pixel edges.
+ *
+ *   at sea    a wave line every `uSpacing` pixels rolls in one spacing a turn (`uTime` in
+ *             turns, plus the place's own share of a turn): seen from `uReach` out, faint
+ *             and broken far out, wider, brighter and whole as it nears the shore, white at
+ *             the last two pixels, where it breaks
+ *   on land   after the break the swash runs up `uSwash` × `uTide` pixels, easing in and out,
+ *             its edge white foam while it rises; it drains more slowly, and the sand it left
+ *             is dark with water, drying as the next wave comes
+ */
+const SHORE_FRAGMENT = `
+in vec2 vTextureCoord;
+out vec4 finalColor;
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform float uTide;
+uniform float uSpacing;
+uniform float uReach;
+uniform float uSwash;
+uniform float uWet;
+uniform vec3 uShallow;
+uniform vec3 uSwell;
+uniform vec3 uFoam;
+
+float ease(float t) { t = clamp(t, 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+
+void main(void) {
+  vec4 data = texture(uTexture, vTextureCoord);
+  if (data.a < 0.5) { finalColor = vec4(0.0); return; }
+  float out_ = floor(data.r * 255.0 + 0.5);
+  float inland = floor(data.g * 255.0 + 0.5);
+  float b = floor(data.b * 255.0 + 0.5);
+  float when = floor(b / 4.0) / 63.0;
+  float noise = mod(b, 4.0) / 3.0;
+  float turn = fract(uTime + when);
+  vec4 colour = vec4(0.0);
+  if (out_ > 0.0) {
+    if (out_ <= uReach) {
+      float near = 1.0 - (out_ - 1.0) / uReach;
+      float k = fract((out_ - 1.0) / uSpacing + turn);
+      float width = (1.0 + 1.5 * near * near) / uSpacing;
+      if (k < width) {
+        if (out_ <= 2.0) colour = vec4(uFoam, 1.0);
+        else if (noise < 0.25 + 0.9 * near) colour = vec4(mix(uSwell, uFoam, near * near * 0.6), 0.3 + 0.6 * near);
+      }
+    }
+    // Foam lingering along the water's edge.
+    if (out_ <= 1.0 && noise > 0.34) colour = vec4(uFoam, max(colour.a, 0.75));
+  } else if (uSwash > 0.0) {
+    float top = uSwash * uTide;
+    float up = 0.0;
+    bool rising = turn < 0.3;
+    if (rising) up = top * ease(turn / 0.3);
+    else if (turn < 0.8) up = top * (1.0 - ease((turn - 0.3) / 0.5));
+    if (inland <= up) {
+      colour = (rising && inland > up - 1.5) ? vec4(uFoam, 1.0) : vec4(uShallow, 0.82);
+    } else if (!rising && inland <= top) {
+      colour = vec4(0.0, 0.0, 0.0, uWet * (1.0 - (turn - 0.3) / 0.7));
+    }
+  }
+  finalColor = vec4(colour.rgb * colour.a, colour.a);
+}
+`;
 
 /** The moving sea of one view. */
 export class Sea {
@@ -203,10 +223,36 @@ export class Sea {
   /** Each slot's showing, and the view it was placed in when that showing began. */
   private readonly placed: { showing: number; view: CellRect }[] = [];
 
+  /** The shore's shader and its uniforms (`SHORE_FRAGMENT`). */
+  private readonly shore: Filter;
+  private readonly shoreUniforms: UniformGroup;
+
   constructor(
     private readonly tile: number,
     slots = GLINT_SLOTS,
   ) {
+    const sizes = shoreSizes(tile);
+    this.shoreUniforms = new UniformGroup({
+      uTime: { value: 0, type: "f32" },
+      uTide: { value: 1, type: "f32" },
+      uSpacing: { value: sizes.spacing, type: "f32" },
+      uReach: { value: sizes.reach, type: "f32" },
+      uSwash: { value: sizes.swash, type: "f32" },
+      uWet: { value: WET_SAND, type: "f32" },
+      uShallow: { value: [0.55, 0.8, 0.9], type: "vec3<f32>" },
+      uSwell: { value: [0.75, 0.9, 0.95], type: "vec3<f32>" },
+      uFoam: { value: rgbOf(FOAM), type: "vec3<f32>" },
+    });
+    this.shore = new Filter({
+      glProgram: GlProgram.from({
+        vertex: defaultFilterVert,
+        fragment: SHORE_FRAGMENT,
+        name: "shore",
+      }),
+      resources: { shoreUniforms: this.shoreUniforms },
+      resolution: 1,
+      antialias: "off",
+    });
     for (let slot = 0; slot < slots; slot++) {
       const sprite = new Sprite(Texture.WHITE);
       sprite.alpha = GLINT_ALPHA;
@@ -217,24 +263,22 @@ export class Sea {
   }
 
   /**
-   * Move the sea on to `timeS` (wall seconds) over `view`; `surf` is the ground's bands,
-   * the surf's three then the swash's, each holding its paintings, each of them its tiles.
+   * Move the sea on to `timeS` (wall seconds) over `view`; `surf` is the layer of the
+   * ground's shore data, which the shore's shader draws as waves.
    */
   tick(timeS: number, land: Land, view: CellRect, surf: readonly Container[] | null): void {
-    if (surf !== null) {
-      surf.forEach((band, index) => {
-        for (const painting of band.children) {
-          for (const piece of painting.children) {
-            const at = tileTimes.get(piece);
-            const t = timeS + (at ?? 0);
-            // The swash's steps fill in turn: each as the water reaches it, the last in part.
-            piece.alpha =
-              index < 3
-                ? (surfAlphas(t)[index] ?? 0)
-                : Math.min(Math.max(swashHeight(t) - (index - 3), 0), 1);
-          }
-        }
-      });
+    const layer = surf?.[0];
+    if (layer !== undefined) {
+      const filters = layer.filters as readonly Filter[] | null | undefined;
+      if (!(filters?.includes(this.shore) ?? false)) layer.filters = [this.shore];
+      const tide =
+        TIDE_LOW + (1 - TIDE_LOW) * (0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / TIDE_S));
+      const shallow = land.relief.seaBands[0]?.colour ?? "#8ecbe6";
+      const uniforms = this.shoreUniforms.uniforms as unknown as ShoreUniforms;
+      uniforms.uTime = timeS / BREATH_S;
+      uniforms.uTide = tide;
+      uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
+      uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
     }
     const { tile } = this;
     // Texture.WHITE is 16 texels: sized in cells, a stroke `length` art pixels long and one tall.

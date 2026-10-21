@@ -26,6 +26,7 @@ import { DEFAULT_LOOK, type Look } from "../looks";
 import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
+import { BREATH_S, shoreSizes, tidePhase } from "./tide";
 
 export type GroundStyle = "squares" | "warped" | "tiles" | "smooth" | "blended";
 export const GROUND_STYLES: readonly GroundStyle[] = [
@@ -197,13 +198,6 @@ const CHAR_ASH = 0.8;
 const CHAR_ASH_COLOUR = 0x8a827c;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
-/** The moving surf: share of the foam band's pixels that are foam, and of a line's dashes. */
-const SURF_FOAM = 0.8;
-const SURF_LINE = 0.62;
-/** The swash (R4): its steps up the beach (`terrain/sea.ts` shows one at a time). */
-export const SWASH_LEVELS = 3;
-/** The swash: how much of the shallow sea's colour the water on the beach takes. */
-const SWASH_MIX = 0.6;
 /** Ordered dither: thresholds of a 4×4 Bayer matrix. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((n) => (n + 0.5) / 16);
 
@@ -1020,20 +1014,11 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const far = 2 * surf + 1;
   // The surf that moves (`surf` option) reaches further out than the foam painted here.
   const surfing = options.surf === true;
-  // Its bands, as distances from the shore: foam up to `foamTo`, then two lines of
-  // lighter water, each `line` pixels wide, further out.
-  const foamTo = surf + 1;
-  const line = Math.max(1, Math.round(surf / 2));
-  const midFrom = foamTo + 1 + Math.floor(line / 2);
-  const farFrom = midFrom + line + surf + 1;
-  const farTo = farFrom + line - 1;
-  // The swash runs up the beach in `SWASH_LEVELS` steps of `surf` pixels (not on the map,
-  // where a coast a pixel wide flickered).
-  const swashLevels = close || tile >= 8 ? SWASH_LEVELS : 0;
-  // Each step of the swash reaches this many pixels further up the beach.
-  const swashStep = Math.max(2, Math.round(surf * 1.5));
-  const swashTo = swashLevels * swashStep + 1;
-  const away = new Uint8Array(wide * tall).fill(surfing ? Math.max(farTo, swashTo) + 1 : far);
+  // The sea's shader needs the distance from the shore as far out as waves are seen and as
+  // far up as the swash runs (`tide.ts` `shoreSizes`).
+  const sizes = shoreSizes(tile);
+  const shoreTo = Math.max(sizes.reach, sizes.swash) + 1;
+  const away = new Uint8Array(wide * tall).fill(surfing ? shoreTo + 1 : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
@@ -1095,49 +1080,25 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   }
   if (!surfing) return { width: wide, height: tall, rgba };
 
-  // The surf, in three bands to be shown one after another (`terrain/sea.ts`), a crest
-  // coming in: a line of lighter water far out, one nearer, then the foam at the shore.
-  // Clear everywhere else.
-  // Then the swash, one layer for each step of how far up the beach the water runs: the
-  // sea's shallowest colour over the sand, foam along its edge.
-  const surfBands = Array.from(
-    { length: 3 + SWASH_LEVELS },
-    () => new Uint8ClampedArray(wide * tall * 4),
-  );
-  const shallow = bands[0]?.colour ?? 0x8ecbe6;
-  const swell = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, tones.surfMix);
-  const put = (band: number, at: number, colour: Rgb): void => {
-    const into = surfBands[band];
-    if (into === undefined) return;
-    into[at * 4] = colour >> 16;
-    into[at * 4 + 1] = (colour >> 8) & 255;
-    into[at * 4 + 2] = colour & 255;
-    into[at * 4 + 3] = 255;
-  };
+  // The shore's data for the sea's shader (`Pixels.shore`): how far each pixel is from the
+  // shore on its side, when the waves come there, a little noise; clear where the sea is
+  // still.
+  const shore = new Uint8ClampedArray(wide * tall * 4);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
-      const distance = away[at] ?? farTo + 1;
+      const distance = away[at] ?? shoreTo + 1;
+      if (distance > shoreTo) continue;
       const worldX = originX + px;
       const worldY = originY + py;
-      if (isLand[at] === 1) {
-        for (let level = 1; level <= swashLevels; level++) {
-          const reach = level * swashStep + 1;
-          if (distance > reach) continue;
-          const edge = distance === reach && cellHash(worldX, worldY, 22) < SURF_FOAM;
-          put(2 + level, at, edge ? foam : mix(colours[at] ?? 0, shallow, SWASH_MIX));
-        }
-        continue;
-      }
-      const dashed = cellHash(Math.floor(worldX / dash), Math.floor(worldY / line), 21) < SURF_LINE;
-      if (distance <= foamTo) {
-        if (cellHash(worldX, worldY, 19) < SURF_FOAM) put(0, at, foam);
-      } else if (distance >= midFrom && distance < midFrom + line) {
-        if (dashed) put(1, at, swell);
-      } else if (distance >= farFrom && distance <= farTo) {
-        if (dashed) put(2, at, swell);
-      }
+      const turn = tidePhase((worldX + 0.5) / tile, (worldY + 0.5) / tile) / BREATH_S;
+      const when = Math.floor((((turn % 1) + 1) % 1) * 63);
+      const noise = Math.floor(cellHash(worldX, worldY, 23) * 4);
+      shore[at * 4] = isLand[at] === 1 ? 0 : distance;
+      shore[at * 4 + 1] = isLand[at] === 1 ? distance : 0;
+      shore[at * 4 + 2] = when * 4 + noise;
+      shore[at * 4 + 3] = 255;
     }
   }
-  return { width: wide, height: tall, rgba, surf: surfBands };
+  return { width: wide, height: tall, rgba, shore };
 }
