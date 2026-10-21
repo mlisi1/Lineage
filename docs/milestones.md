@@ -113,6 +113,24 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   (`plants/plants.ts` `aboveSea`), so a plant near the shore can stand on painted water.
   Animals in the shallows may be M11's wading.
 
+### Starting R5 (final rendering pass and device benchmark)
+
+- **Branch**: in a worktree of its own, so that M11 keeps `/home/elechim/Lineage`:
+  `git worktree add -b r5-final ../Lineage-r5 main`; announce it on the coordination board
+  (`/home/elechim/Lineage-coord/`, next free ADR 0022). Spec: CLAUDE.md §8 R5; ADR 0010
+  (views judged), ADR 0013/0014 (the cosy look), ADR 0021 (the atmosphere and what R5
+  measures), `deploy/README.md` and `deploy/board-setup.md` (the board).
+- **Ask the owner first**: what in the look to tune together (R4's atmosphere is final by the
+  owner's word, 2026-10-21); whether the board run uses the 7" screen or the 2K monitor
+  (ADR 0008); the fan in the enclosure (the board nears 80 °C at 60 fps).
+- **Known to fix**: plants that seem to stand on water (`plants/plants.ts` `aboveSea` reads
+  the cell's height while the ground paints a coast blended between cells); animals seen on
+  water (check against M11's wading first); remove the R3 demo clicks (pointer handler,
+  `Director.nextSubject`; keep `Director.toMap`).
+- **Measure**: the R0 views rebuilt on the real renderer and the state stream, with the
+  atmosphere's costs listed in "R4 closed" (big fires, rain, the apocalypse's repaint, the
+  shore shader). Tests are deferred while the owner tunes the look, as in R4.
+
 ### Starting R4 (atmosphere)
 
 - **Branch**: in a worktree of its own, so that M11 keeps `/home/elechim/Lineage`:

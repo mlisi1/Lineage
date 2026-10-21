@@ -187,7 +187,7 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
   ticker stops, the report steps the scene one frame at a time on its own clock (the
   recording plays on the same clock), and ffmpeg encodes the frames as VP9 WebM with
   4:4:4 colour. ffmpeg was approved by the owner as the report script's dependency. The
-  films go to `reports/R4-atmosphere/films/`, which is gitignored (about 150 MB); only
+  films go to `reports/R4-atmosphere/films/`, which is gitignored (about 300 MB by the close); only
   `report.html`, with a poster still for each film, is committed.
 - **The volcano and the crater were too plain.** They are now drawn after how top-down
   pixel-art games draw mountains and craters (*Zelda: A Link to the Past*'s Death
