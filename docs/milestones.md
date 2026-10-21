@@ -72,15 +72,29 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   see-through) in embers with small flames, lit at night; radial lava; a crater's land
   held until its meteor strikes; sprouts found as bare cells that grew; the ark's beam
   pooled at its foot; fainter glow closer in.
-- **Where tuning stands (end of 2026-10-20)**: the owner is still tuning the look from
-  the films. Last asked and done: slower, see-through close fire with small flames round
-  it; quicker waves (a wave every 5 s); the grey of cloud. Waiting for the owner's
-  comments on the partial report (fire, tides, rain, storm, overcast, filmed with
-  `R4_REPORT_ONLY`; not committed: the committed `report.html` is round 4's). **No tests
-  are written or run while the look is tuned (the owner)**: when the owner says the look
-  is final, add unit and browser tests for the round-5 pieces (rows and floor, grade,
-  waves, fire, embers, sowing, held crater land, overcast) and refresh every snapshot
-  baseline (`--update-snapshots=all`), then render and commit the full report.
+- **Round 6** (owner, 2026-10-21, ADR 0021 "Round 6"): a frame-by-frame hunt for pops
+  (flames, cones, craters, sprouts, plants, the dead and born now fade or rise); in the sim,
+  creatures under a new cone or crater die (`[fauna] blast_kill_reach`, `Fauna.observe`);
+  nothing placed on cones or craters (`Landscape.covered`), a dust cloud hides the change;
+  tides by a GL shader from the shore's distance field (`terrain/tide.ts`, `sea.ts`,
+  `Pixels.shore`); snow falls where snow lies; rain streaks as long as a frame's fall;
+  plant drawings paged within 2048 × 2048 (black squares in winter close views, since R1).
+- **Where tuning stands (end of 2026-10-21)**: the owner says R4 is almost there. Last
+  done (dcaa312): foam arrives pixel by pixel so small lakes do not blink. A full report
+  render with it was **stopped part-way** for a clean session: the committed report
+  (60b0757) predates snow, the rain streak fix, the crater bowl fix, the calmer tides and
+  "seeded". **Next**: run the full render (`cd renderer && R4_REPORT_REUSE_STREAMS=1
+  npm run atmosphere`, about 45 min; a render without `R4_REPORT_REUSE_FILMS` overwrites
+  every film), check it (frame-change analysis plus a look at crater, coast, snow, storm),
+  commit it, and show the owner. **No tests are written or run while the look is tuned
+  (the owner)**; when the owner calls the look final: add unit and browser tests for
+  rounds 5–6 (rows and floor, grade, shore shader and `tidePhase`, fire fades, embers,
+  sowing, held crater land, overcast, snow, streak length, plant pages, `blast_kill_reach`
+  and `Fauna.observe`, `World.witness`), fix the known stale test (the next world now
+  waits for full black, `apocalypse.test.ts`), update golden hashes (natural volcanoes and
+  craters now kill), re-record the committed streams, refresh every snapshot baseline
+  (`--update-snapshots=all`, and look at each: winter-local was accepted black before),
+  run both suites, then the full report.
 - **To look at** (`cd renderer && npm run dev`): `/?recording=office` (dusks and nights,
   rain), `/?recording=end` (a day, then the end of the world and the next),
   `/?view=middle&x=120&y=60&recording=autumn&every=0&show=night,fire` (any of day, dusk,

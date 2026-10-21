@@ -341,6 +341,45 @@ numbers are claimed on the coordination board from now on. Golden hashes change.
 - **The ark's foot.** The beam fades in steps toward its foot into a flattened pool of
   light on the ground; each newcomer's thread of light likewise.
 
+## Round 6: the owner's comments, and a hunt for pops (2026-10-21)
+
+- **Nothing popping in or out.** Every film was checked frame by frame (the change from
+  one frame to the next against the frames round it) and with sheets of six moments a
+  scene. Fixed: a cell's flames come up over 0.8 s and die down over 1.5 s; a new cone
+  rises out of the ground over 2.5 s, its glow, ash and embers swelling with it; cones
+  and craters fade over their last two sim-days; plants gone from a new day fade out;
+  sprouts fade as their plants come; the dead fade where they stood (0.8 s) and the
+  newborn fade in (0.6 s); the ark's light reaches all its newcomers (20 cells); views
+  placed by hand stay inside the world; the next world comes only once the screen is
+  black; the old surf no longer outlives a repainted ground.
+- **What a cone or crater lands on.** In the sim, the creatures under it die (creatures.md,
+  `blast_kill_reach`). On the screen, no plant, stone or boulder is placed within 1.4
+  radii of a cone or crater drawn (`Landscape.covered`); the cone is sorted at the south
+  edge of its foot, so it covers its place; a pixel-art dust cloud (`marks.ts`
+  `dustTexture`) rises over 0.8 s and hides the plants fading out, for 3.6 s. A crater's
+  bowl is always drawn whole; only its ejecta is left out over open sea.
+- **Tides, after references** (below). The six painted bands are gone. The painter leaves
+  the shore's data (`Pixels.shore`: distance out to sea, distance inland, when the waves
+  come there, noise) and one GL filter a view (`sea.ts` `SHORE_FRAGMENT`) draws from it:
+  lines of lighter water roll in from out at sea, faint and broken, wider and brighter
+  nearer, and break white at the shore; the swash runs up the sand with a foam edge while
+  it rises, drains more slowly, and leaves a stripe of wet sand that dries. A wave every
+  5 s; the tide (a minute) sets how far the swash runs; the map has the lines without a
+  swash. A wave's timing varies only slowly over the island (`tide.ts`, up to 2.5 s over
+  60 cells), so a beach breaks nearly at once (a front sweeping at 5 cells a second made
+  waves seem to run along the coast); foam arrives pixel by pixel (its noise), so a small
+  lake's rim does not blink white.
+- **Snow falls.** Precipitation falls as snow where snow lies (cold land, the sim's lying
+  snow at 40/255 or more) and as rain elsewhere: white flakes in three layers, slow,
+  swaying, larger closer in. Only seen; the sim's snow is unchanged.
+- **Rain that seemed to rise** in a storm: a streak shorter than its fall in a frame was
+  taken by the eye for the drop above it (the wagon-wheel effect); a streak is now at
+  least as long as a frame's fall (`FRAME_RATE` 30).
+- **Black squares among winter plants up close**, a bug since R1 (commit 7000b91): the
+  plants' drawings were packed into one texture 1024 × 10801, past what the GPU takes
+  (8192 here). They are now packed into pages of at most 2048 × 2048.
+- The report says "seeded", not "sown" (the owner read it as snow), and films snow.
+
 ## Results
 
 On the PC, renderer tests went from 255 to 281 unit tests: the light's colours,
@@ -401,5 +440,15 @@ R5 does that.
   dark red rim inward to brighter colours, eight to ten colours),
   <https://community.wacom.com/en-de/easy-and-quick-flame-animation-tutorial>;
   OpenGameArt, *Camp fire animation for RPGs*, <https://lpc.opengameart.org/node/14162>.
+- Top-down shore waves, for round 6: Godot forums, *Image color data to Godot shader*
+  (foam from a land/water distance field, animated stripes, noise), <https://godotforums.org/d/33008-image-color-data-to-godot-shader>;
+  GameDev.net shader lab, *Foam with flow mapping*, <https://gamedev.net/shaderlab/53-foam-with-flow-mapping/>;
+  fcidade, *Pixel Water* Godot shader (waves from open water fading out on the beach),
+  <https://store.godotengine.org/asset/fcidade/pixel-water-godot-shader/>; Planetside forums,
+  *Waves at shore* (foam only while the water rises), <https://planetside.co.uk/forums/index.php?msg=1277>;
+  Uppsala University game design, *Week 5 – Tsunami* (a white broken front seen from above),
+  <https://babel.speldesign.uu.se/2016/03/10/week-5-tsunami/>; Peli117, *Top down water waves*,
+  <https://peli117.itch.io/top-down-water-waves-pixelart>; OpenGameArt, *Animated ocean water tile*,
+  <https://opengameart.org/content/animated-ocean-water-tile>.
 - ADR 0016 (light and god powers), ADR 0018 (the world's end and the next), ADR 0020 (the
   camera and the dip).

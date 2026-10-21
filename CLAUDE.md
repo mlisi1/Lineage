@@ -496,7 +496,9 @@ needs a note in `docs/decisions/`.
   and craters, the powers' real effects, algae (M11) drawn. Rounds 3–5, the owner: films
   at the screen's resolution and frame rate; a barren ring round cones and craters;
   overcast spells (seen only); the world greyed under cloud; rain, fire, lava, crater,
-  ark, seed and tides reworked; what stands sorted among the plants. Look tuning goes on.)
+  ark, seed and tides reworked; what stands sorted among the plants. Round 6: no pops,
+  creatures under new cones and craters die, tides by a shader, falling snow. Look
+  tuning goes on.)
 
 ### R5 — Final rendering pass and device benchmark
 - **Deliver**: the look of terrain, plants, creatures and atmosphere tuned together, as one
