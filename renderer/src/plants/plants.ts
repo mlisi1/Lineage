@@ -35,6 +35,7 @@ import {
   PLANT_SCALE,
   SMALL_SIZES,
   STANDING_VARIANTS,
+  GRASS_VARIANTS,
   colourArt,
   drawSmall,
   drawStanding,
@@ -383,6 +384,12 @@ function strip(
 }
 
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
+/** Grass in the local view: tufts of a cell stand this far (cells) round its clump's middle, the clump seen from above at a slant. */
+const CLUMP_REACH = 0.32;
+const CLUMP_FLATTEN = 0.6;
+/** Grass thinner than this (biomass) leaves this share of its cells without a tuft. */
+const CLUMP_GAP_BELOW = 150;
+const CLUMP_GAP = 0.3;
 const standingKey = (form: string, growth: Growth, variant: number): string =>
   `${form}/${growth}/${variant}`;
 /** A stump or a snag where it burnt is charred. */
@@ -597,7 +604,7 @@ export function standingArts(
     }
   }
   for (const growth of ["sprout", "young", "grown"] as const) {
-    for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+    for (let variant = 0; variant < GRASS_VARIANTS; variant++) {
       arts.push({
         key: standingKey("GRASS", growth, variant),
         art: drawStanding("GRASS", growth, variant, detail, season, snow, look.shapes),
@@ -682,7 +689,7 @@ export function standingArts(
     const dried = land.palette["DORMANT"] ?? NO_RAMP;
     const rock = land.relief.highRock;
     const lichen = (land.palette["LICHEN"] ?? NO_RAMP)[2];
-    for (let variant = 0; variant < STANDING_VARIANTS; variant++) {
+    for (let variant = 0; variant < GRASS_VARIANTS; variant++) {
       // Grass that has dried: the same tufts in the dry colours.
       arts.push({
         key: `dry/${variant}`,
@@ -928,24 +935,34 @@ export function standingPlants(
       maybe("boulder", CHANCE.lichen.boulder, 4);
     } else if (look.form === "GRASS") {
       if (look.dormant) {
-        maybe("dry", CHANCE.grass.dry, STANDING_VARIANTS);
+        maybe("dry", CHANCE.grass.dry, GRASS_VARIANTS);
         return out;
       }
       // Every cell of grass is tufts to walk through: more where it grows thick.
       const growth = growthOf(biomass);
       const tufts = biomass >= 128 ? 2 + Math.floor((biomass - 128) / 64) : 1;
+      // Tufts stand in clumps that may cross into the next cell, with gaps of bare
+      // ground between (R5): thin grass leaves a cell empty now and then.
+      if (biomass < CLUMP_GAP_BELOW && cellHash(x, y, 49) < CLUMP_GAP) return out;
+      const [centreX, centreY] = within(x, y, 51);
       for (let k = 0; k < tufts; k++) {
         const key = standingKey(
           "GRASS",
           growth === "old" ? "grown" : growth,
-          variantOf(x, y, 50 + 3 * k),
+          variantOf(x, y, 50 + 3 * k, GRASS_VARIANTS),
         );
-        out.push(...put(key, ...within(x, y, 51 + 3 * k)));
+        const angle = 2 * Math.PI * cellHash(x, y, 52 + 3 * k);
+        const reach = k === 0 ? 0 : CLUMP_REACH * (0.6 + 0.4 * cellHash(x, y, 53 + 3 * k));
+        const at: [number, number] = [
+          centreX + reach * Math.cos(angle),
+          centreY + reach * CLUMP_FLATTEN * Math.sin(angle),
+        ];
+        out.push(...put(key, ...at));
         // A rare gene's look on the first tuft: a seed head, clover at its foot.
         if (k === 0) {
           for (const overlay of looksAt(x, y)) {
             if (overlay === "fruit" || overlay === "clover") {
-              out.push(...put(`${key}#${overlay}`, ...within(x, y, 51)));
+              out.push(...put(`${key}#${overlay}`, ...at));
             }
           }
         }

@@ -111,6 +111,10 @@ const SPROUT = { tree: 0.42, bush: 0.46 };
 const OLD: Readonly<Record<"tree" | "bush", Size>> = { tree: [1.12, 1], bush: [1.1, 1.06] };
 /** Drawings of each kind and age, so that neighbours differ. */
 export const STANDING_VARIANTS = 3;
+/** Grass has more drawings than other plants, many of it standing close together (R5). */
+export const GRASS_VARIANTS = 6;
+/** Each grass drawing a little larger or smaller than the scale, by variant. */
+const TUFT_SIZES = [1, 0.9, 1.1, 0.95, 1.05, 0.85] as const;
 const TRUNK = "#5a4632";
 /** What the darkest and the lightest tone of foliage are mixed with. */
 /** The middle of a flower, and pale wood or a mushroom's stem. */
@@ -1436,14 +1440,16 @@ export function drawStanding(
   if (form === "SHRUB")
     return (cosy ? cosyBush : bush)(sized(PLANT_SCALE.bush), random, salt, look);
   // Grass: short while young and in spring, in seed in autumn, pressed flat in winter.
-  const [width, height] = [PLANT_SCALE.tuft[0] * detail, PLANT_SCALE.tuft[1] * detail];
+  const sizedBy = cosy ? (TUFT_SIZES[variant % TUFT_SIZES.length] ?? 1) : 1;
+  const [width, height] = [
+    PLANT_SCALE.tuft[0] * detail * sizedBy,
+    PLANT_SCALE.tuft[1] * detail * sizedBy,
+  ];
   const short = young === 1 || season === "spring" ? (growth === "sprout" ? 0.45 : 0.65) : 1;
-  return (cosy ? cosyTuft : drawTuft)(
-    [Math.round(width), Math.max(2, Math.round(height * short))],
-    random,
-    season === "autumn" && young === 0,
-    look.season === "winter",
-  );
+  const sizes: Size = [Math.round(width), Math.max(2, Math.round(height * short))];
+  const seeding = season === "autumn" && young === 0;
+  const flat = look.season === "winter";
+  return cosy ? cosyTuft(sizes, random, seeding, flat, variant) : drawTuft(sizes, random, seeding, flat);
 }
 /** A young plant against a full-grown one, as the scale's two sizes have it. */
 const YOUNG_SHARE = PLANT_SCALE.broadleaf[1][1] / PLANT_SCALE.broadleaf[0][1];
