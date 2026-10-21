@@ -409,7 +409,10 @@ function strip(
 
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
 /** Grass in the local view: tufts of a cell stand this far (cells) round its clump's middle, the clump seen from above at a slant. */
-const CLUMP_REACH = 0.32;
+const CLUMP_REACH = 0.42;
+/** Tufts to a cell of grass (R5: small, so many): this many, and one more for each so much biomass. */
+const TUFTS_FROM = 3;
+const BIOMASS_PER_TUFT = 60;
 const CLUMP_FLATTEN = 0.6;
 /** Grass thinner than this (biomass) leaves this share of its cells without a tuft. */
 const CLUMP_GAP_BELOW = 150;
@@ -964,7 +967,7 @@ export function standingPlants(
       }
       // Every cell of grass is tufts to walk through: more where it grows thick.
       const growth = growthOf(biomass);
-      const tufts = biomass >= 128 ? 2 + Math.floor((biomass - 128) / 64) : 1;
+      const tufts = TUFTS_FROM + Math.floor(biomass / BIOMASS_PER_TUFT);
       // Tufts stand in clumps that may cross into the next cell, with gaps of bare
       // ground between (R5): thin grass leaves a cell empty now and then.
       if (biomass < CLUMP_GAP_BELOW && cellHash(x, y, 49) < CLUMP_GAP) return out;

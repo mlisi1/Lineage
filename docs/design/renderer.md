@@ -953,11 +953,12 @@ Round 1, items 1–7:
 - **The ground.** The middle view reads cover over a cell's neighbours (`calm` 1). In a
   calm view the border between two kinds wanders with noise, and growth beside bare
   ground has a lip lit from the upper left (a pixel darker below, lighter above).
-- **Grass.** Six tuft drawings (a low clump with blades along its top, a fan, a clump
-  leaning in the wind; each mirrored; ±10 % in size), blades two pixels wide below the tip,
-  dark on their shaded side only near the root, the top 40 % of a tuft not outlined;
-  tufts stand in clumps round a point of their cell, crossing into the next, and thin
-  grass leaves a cell bare now and then.
+- **Grass** is a texture of small tufts, not things standing on it (round 3, after
+  The Minish Cap's fields and the grass tutorials that follow it; ADR 0022): about a third
+  of a cell, unoutlined, three to five spikes fanning in a V from a narrow foot, `deep` at
+  the foot to `bright` at the tips. Three shapes (a W, a clump of two, bent by the wind),
+  each mirrored, ±10 % in size; three to six to a cell by biomass, in clumps round a point
+  of their cell that cross into the next; thin grass leaves a cell bare now and then.
 - **Snow** lies only where the simulation has it (above); bare heights are rock.
 - **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
   its grown length with its head 35 % larger for its body, redrawn at each sixteenth.

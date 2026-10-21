@@ -395,18 +395,21 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   return art;
 }
 
-/** Kinds of tuft, by variant: a low clump with short blades, a fan, a clump leaning in the wind. */
-const TUFT_SHAPES = ["clump", "fan", "lean"] as const;
-/** The top share of a tuft whose blades are not outlined. */
-const TUFT_TIPS = 0.4;
+/** Kinds of tuft, by variant: a W of short spikes, a fuller clump, spikes bent by the wind. */
+const TUFT_SHAPES = ["sprig", "clump", "bent"] as const;
+/** A tuft is this share of the scale's size (R5: a third of a cell up close, as in the references). */
+const TUFT_SHRINK = [0.5, 0.62] as const;
 
 /**
- * A tuft of grass, one of a few shapes by `variant` (R5, after pixel-art grass tutorials:
- * a few key shapes, blades along the upper edge, light on the tips, the inside kept
- * flat): a low clump with short blades, a fan of broad blades, or blades leaning in the
- * wind. The second half of the variants are the first mirrored. In seed its tallest
- * blades carry a head of the accent; flat, it has been pressed down by winter. Too small
- * for blades of two pixels (the middle view), it is a few strokes, unoutlined.
+ * A tuft of grass after pixel-art grass (R5, the owner: "grass blades are still not
+ * there"; references: The Minish Cap's fields and the grass tutorials that follow it).
+ * Grass is a texture of small tufts, not things standing on it: a few short spikes from
+ * a shared foot, dark at the foot and light at the tips, with no outline, scattered
+ * thickly. By `variant`: a W of three to five spikes, a fuller clump (two Ws, one behind
+ * the other), or spikes bent one way by the wind; the second half of the variants are the
+ * first mirrored. In seed the tallest tips carry the accent; flat, it has been pressed
+ * down by winter. Too small for spikes of two pixels (the middle view), it is a few
+ * strokes.
  */
 export function cosyTuft(
   size: Size,
@@ -415,10 +418,10 @@ export function cosyTuft(
   flat = false,
   variant = 0,
 ): PlantArt {
-  const [width, height] = size;
-  const art = blank(width, height);
   const mirrored = variant >= TUFT_SHAPES.length;
-  if (width < 12) {
+  if (size[0] < 12) {
+    const [width, height] = size;
+    const art = blank(width, height);
     // A small fan: a stroke up the middle, one leaning out to each side.
     const middle = Math.floor(width / 2);
     for (const [dx, tall, ink] of [
@@ -440,108 +443,51 @@ export function cosyTuft(
     if (mirrored) mirror(art);
     return art;
   }
-  const shape = TUFT_SHAPES[variant % TUFT_SHAPES.length] ?? "fan";
-  /** One blade from (root, foot row) rising `tall` pixels and drifting `lean` pixels by its tip. */
-  const blade = (root: number, tall: number, lean: number, broad: boolean): void => {
-    const head = seeding && tall > height * 0.7;
-    for (let t = 0; t < tall; t++) {
-      const along = t / tall;
-      const x = root + lean * along * along;
-      const y = height - 1 - t;
-      const ink: Ink =
-        head && along > 0.78
-          ? along > 0.9
+  const width = Math.max(5, Math.round(size[0] * TUFT_SHRINK[0]));
+  const height = Math.max(4, Math.round(size[1] * TUFT_SHRINK[1] * (flat ? 0.6 : 1)));
+  const art = blank(width, height);
+  const shape = TUFT_SHAPES[variant % TUFT_SHAPES.length] ?? "sprig";
+  /** A W of `spikes` from a foot at `foot` (row from the bottom), `wide` pixels across, rising `tall`. */
+  const sprig = (spikes: number, wide: number, tall: number, foot: number, bend: number): void => {
+    const middle = (width - 1) / 2;
+    for (let k = 0; k < spikes; k++) {
+      const share = spikes === 1 ? 0 : k / (spikes - 1) - 0.5;
+      // From a narrow foot the spikes fan out in a V, the middle ones the tallest.
+      const root = middle + share * wide * 0.3;
+      const spread = share * wide * (flat ? 0.5 : 0.75) + bend;
+      const rise = Math.max(
+        2,
+        Math.round(tall * (0.55 + 0.45 * (1 - Math.abs(share) * 2)) * (0.8 + 0.2 * random())),
+      );
+      for (let t = 0; t < rise; t++) {
+        const along = t / Math.max(rise - 1, 1);
+        const x = Math.round(root + spread * along);
+        const y = height - 1 - foot - t;
+        const tip = t === rise - 1;
+        const ink: Ink = tip
+          ? seeding && rise >= tall * 0.8
             ? INK.accent
-            : INK.accentDark
-          : along > 0.78
+            : INK.bright
+          : along >= 0.6
             ? INK.light
-            : along < 0.3
-              ? INK.dark
-              : INK.mid;
-      put(art, x, y, ink);
-      // Two pixels wide but for the tip, so that its outline is one silhouette and not
-      // a hatching along a slanted blade; the side away from the light darker near the
-      // root only, so that the upper blade is not edged in steps of dark.
-      if (broad && along < 0.8) {
-        const side: Ink = along < 0.25 ? INK.deep : along < 0.45 ? INK.dark : INK.mid;
-        put(art, x + (lean < 0 ? 1 : -1), y, side);
+            : t === 0
+              ? INK.deep
+              : INK.dark;
+        put(art, x, y, ink);
       }
     }
   };
-  if (flat) {
-    // Pressed by winter, a tuft is short stubble, a little bent, not a fan laid flat.
-    const blades = Math.max(4, Math.round(width / 4));
-    for (let k = 0; k < blades; k++) {
-      const spread = (k + 0.5) / blades - 0.5;
-      blade(
-        width / 2 + spread * width * 0.3,
-        height * (0.38 + 0.18 * random()),
-        spread * width * 0.35 + (random() - 0.5) * 2,
-        true,
-      );
-    }
-  } else if (shape === "clump") {
-    // A low mound, flat inside, dark where it meets the ground and lit to the upper left,
-    // with short blades along its upper edge, the tallest catching the light.
-    const mound = Math.max(2, Math.round(height * 0.32));
-    const half = width * 0.4;
-    const middle = width / 2;
-    for (let y = 0; y < mound; y++) {
-      const rows = (y + 0.5) / mound;
-      const reach = half * Math.sqrt(Math.max(0, 1 - (1 - rows) * (1 - rows)));
-      for (let x = Math.ceil(middle - reach); x < middle + reach; x++) {
-        const row = height - mound + y;
-        const ink: Ink =
-          y >= mound - 1 ? INK.dark : x < middle - reach * 0.2 && y < mound * 0.5 ? INK.light : INK.mid;
-        put(art, x, row, ink);
-      }
-    }
-    const blades = Math.max(4, Math.round(width / 3.4));
-    for (let k = 0; k < blades; k++) {
-      const spread = (k + 0.5) / blades - 0.5 + (random() - 0.5) * 0.08;
-      const rise =
-        (height - mound) * (0.3 + 0.7 * (1 - 1.4 * Math.abs(spread)) * (0.5 + 0.5 * random()));
-      blade(middle + spread * width * 0.6, mound + Math.max(1, rise), spread * width * 0.7, true);
-    }
-  } else if (shape === "lean") {
-    // Blades bent one way by the wind, the outer ones lower.
-    const blades = Math.max(4, Math.round(width / 3.2));
-    for (let k = 0; k < blades; k++) {
-      const spread = (k + 0.5) / blades - 0.5;
-      blade(
-        width * 0.4 + spread * width * 0.4,
-        height * (0.55 + 0.45 * (1 - 1.5 * Math.abs(spread)) * (0.7 + 0.3 * random())),
-        width * (0.12 + 0.1 * random()) + spread * width * 0.3,
-        true,
-      );
-    }
+  const tall = height - 1;
+  if (shape === "clump") {
+    // Two sprigs, the one behind higher and lighter at the tips, the one in front lower.
+    sprig(4, Math.round(width * 0.8), tall, 1, 0);
+    sprig(3, Math.round(width * 0.6), Math.max(2, Math.round(tall * 0.6)), 0, 0);
+  } else if (shape === "bent") {
+    sprig(3 + Math.floor(random() * 2), Math.round(width * 0.7), tall, 0, 1.5);
   } else {
-    // A fan of broad blades, uneven: some left out, none the same height.
-    const blades = Math.max(4, Math.round(width / 3.5));
-    for (let k = 0; k < blades; k++) {
-      const spread = (k + 0.5) / blades - 0.5;
-      if (Math.abs(spread) > 0.15 && random() < 0.2) continue;
-      blade(
-        width / 2 + spread * width * 0.3,
-        height * (0.6 + 0.4 * (1 - 2 * Math.abs(spread)) * (0.65 + 0.35 * random())),
-        spread * width * 0.9 + (random() - 0.5) * 2,
-        true,
-      );
-    }
+    sprig(3 + Math.floor(random() * 3), Math.round(width * 0.85), tall, 0, 0);
   }
   if (mirrored) mirror(art);
-  // Outlined below, the tips left in their own light: an outline along a slanted blade's
-  // one-pixel tip steps against it (R5).
-  let top = art.height;
-  let bottom = 0;
-  for (let y = 0; y < art.height; y++) {
-    for (let x = 0; x < art.width; x++) {
-      if ((art.ink[y * art.width + x] ?? 0) === INK.none) continue;
-      top = Math.min(top, y);
-      bottom = Math.max(bottom, y);
-    }
-  }
-  rimAll(art, top + Math.round((bottom - top) * TUFT_TIPS));
   return art;
 }
 

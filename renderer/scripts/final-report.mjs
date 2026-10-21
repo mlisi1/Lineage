@@ -417,14 +417,14 @@ ${zoom("coast", "A patch of grass on bare soil")}
 <hr>
 
 <section id="grass">
-<div class="head"><span class="n">5</span><h2>Grass in clumps</h2></div>
+<div class="head"><span class="n">5</span><h2>Grass as a texture of small tufts</h2></div>
 <div class="notes">
-<div><span class="label">Was</span><p>Three drawings of one symmetric fan, a dark outline round every blade, spread evenly one to four to a cell.</p></div>
-<div><span class="label">Now</span><p>Six drawings after pixel-art grass guides: a low clump with short blades along its upper edge, a fan, and a clump leaning in the wind, each also mirrored and ±10 % in size. Blades are two pixels wide below the tip, so the outline is one silhouette. Tufts stand in clumps that cross cell borders, and thin grass leaves gaps.</p></div>
+<div><span class="label">Was</span><p>Three drawings of one symmetric fan, three quarters of a cell across, a dark outline round every blade, one to four to a cell: each read as a shrub standing on the grass.</p></div>
+<div><span class="label">Now</span><p>Round 3, after references: grass in pixel art is a texture of small tufts, not things standing on it. A tuft is now about a third of a cell (12×8 art pixels), unoutlined: three to five spikes fanning out in a V from a narrow foot, darkest at the foot and brightest at the tips. Three shapes (a W, a fuller clump of two, spikes bent by the wind), each also mirrored and ±10 % in size; three to six to a cell by biomass, in clumps that cross cell borders, with gaps where the grass is thin.</p></div>
 </div>
 ${compare("grass", "Local view over upland grassland.")}
 ${zoom("grass", "Tufts")}
-<p>Round 2: the top 40 % of a tuft is no longer outlined, and the second pixel of a blade is dark only near the root, so the tips end in their own light instead of stepping against a dark edge.</p>
+<p class="meta">References: the grass of <em>The Legend of Zelda: The Minish Cap</em> as discussed in <a href="https://itch.io/t/2758242/pixel-tutorial-zelda-style-mockup-part-1-grass">imonk, "Zelda style mockup, part 1: grass"</a>; <a href="https://itch.io/t/2197445/pixel-tutorial-grass-patches">"Pixel tutorial: grass patches"</a>; <a href="https://slynyrd.com/blog/2019/8/27/pixelblog-20-top-down-tiles">Slynyrd, Pixelblog 20: top-down tiles</a>.</p>
 </section>
 <hr>
 
