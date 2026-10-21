@@ -17,7 +17,8 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "final": "node scripts/final-report.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.22.0"

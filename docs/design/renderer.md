@@ -928,6 +928,36 @@ the particles and the shows (and the land they change), lightning, flames and ma
 every light and event, a glowing animal at night and by day, and a real world's end
 holding the camera and the button. Its cost on the board is R5's to measure.
 
+## The final rendering pass (R5)
+
+The owner's checklist is in `docs/milestones.md` ("R5 checklist"); the report,
+`reports/R5-final/` (`npm run final`), films each change against the scene as R5 found it.
+Round 1, items 1–7:
+
+- **The animal followed shows through grass.** What stands in front of it goes
+  see-through, grass and the small things too (40 % opacity, trees 30 %); pebbles do not
+  hide it and stay.
+- **Colours from the genes** (`src/creatures/colours.ts`). The body's hue is `HUE`, its
+  saturation `AQUATIC`, its lightness `SIZE`; the markings' hue is the body's turned by
+  `SOCIAL`, their saturation `DIET`, their lightness `EXPLORATION`, kept at least 0.2 from
+  the body's. Each gene is read by its species' rank among the species alive, spread over
+  its range (sister species differ by hundredths), and each animal moves a little from its
+  species by its own genes. The ranks are read again when a species appears or dies out,
+  and every animal is redrawn in place (`CreatureLayer.rebuild`). `PATTERN` picks the
+  markings' shape; warning colours override.
+- **Map dots** (`src/creatures/markers.ts`): round, of whole pixels, a dark edge, three
+  sizes by mass; a swimmer's is a ring round a dark middle; the young's the smallest.
+- **The ground.** The middle view reads cover over a cell's neighbours (`calm` 1). In a
+  calm view the border between two kinds wanders with noise, and growth beside bare
+  ground has a lip lit from the upper left (a pixel darker below, lighter above).
+- **Grass.** Six tuft drawings (a low clump with blades along its top, a fan, a clump
+  leaning in the wind; each mirrored; ±10 % in size), blades two pixels wide below the tip;
+  tufts stand in clumps round a point of their cell, crossing into the next, and thin
+  grass leaves a cell bare now and then.
+- **Snow** lies only where the simulation has it (above); bare heights are rock.
+- **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
+  its grown length with its head 35 % larger for its body, redrawn at each sixteenth.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`

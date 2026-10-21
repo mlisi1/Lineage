@@ -150,17 +150,17 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it)
 
 **Seen on screen at the start**
-- [ ] 1. The animal followed can be tiny and lost under the grass tufts drawn over it
-- [ ] 2. Species are not told apart: nearly every animal red or magenta (colour is each
+- [x] 1. The animal followed can be tiny and lost under the grass tufts drawn over it
+- [x] 2. Species are not told apart: nearly every animal red or magenta (colour is each
   animal's own HUE, not its species')
-- [ ] 3. Map markers are plain squares (and large ones by mass)
-- [ ] 4. The ground is noisy: a busy brown and green patchwork in the middle view; hard,
+- [x] 3. Map markers are plain squares (and large ones by mass)
+- [x] 4. The ground is noisy: a busy brown and green patchwork in the middle view; hard,
   jagged lime grass edges beside soft dithered ones in the local view
-- [ ] 5. Grass tufts repeat visibly (few drawings, even spacing)
+- [x] 5. Grass tufts repeat visibly (few drawings, even spacing)
 - [x] 6. A snow cap on a low bare summit in August (the renderer's own snow line)
 
 **Not drawn yet**
-- [ ] 7. Young animals look like adults (age is not on the wire)
+- [x] 7. Young animals look like adults (age is not on the wire)
 - [ ] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning
 - [ ] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births
 - [ ] 10. Wading has no look (after M11 reaches main)

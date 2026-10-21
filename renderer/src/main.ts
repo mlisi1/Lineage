@@ -102,6 +102,7 @@ declare global {
     __captions?: () => { phase: string; text: string | null; waiting: number };
     /** What the atmosphere shows (tests). */
     __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
+    __colours?: () => ReturnType<Herd["colourTable"]>;
     /** The land drawn at cell (x, y): height, cover class, biomass and scorch (tests). */
     __landAt?: (
       x: number,
@@ -308,6 +309,7 @@ async function start(): Promise<void> {
   window.__camera = () => ({ ...shot, ...director.state, view: shot.view });
   let advance = 0;
   window.__atmosphere = () => ({ ...atmosphere.state, ...atmosphere.counts });
+  window.__colours = () => herd.colourTable();
   window.__landAt = (x, y) => {
     const land = landscape.current;
     if (land === null) return null;

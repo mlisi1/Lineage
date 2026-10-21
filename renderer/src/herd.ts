@@ -10,7 +10,7 @@
  */
 import type { Container } from "pixi.js";
 import type { Spot } from "./atmosphere/atmosphere";
-import { lookOf } from "./creatures/body";
+import { colour, lookOf } from "./creatures/body";
 import { ownColours, speciesColours, type SpeciesColour } from "./creatures/colours";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
@@ -304,6 +304,20 @@ export class Herd {
         layer.setTorpid(slot, this.roster.torpid.has(id));
       }
     }
+  }
+
+  /** Each living species' name, members and colours as drawn (R5's report, tests). */
+  colourTable(): { id: number; name: string; members: number; body: number; mark: number }[] {
+    const members = new Map<number, number>();
+    for (const species of this.roster.species.values())
+      members.set(species, (members.get(species) ?? 0) + 1);
+    return [...this.colours].map(([id, { colours }]) => ({
+      id,
+      name: this.names.get(id) ?? "",
+      members: members.get(id) ?? 0,
+      body: colour(colours.body.hue, colours.body.light, colours.body.saturation),
+      mark: colour(colours.mark.hue, colours.mark.light, colours.mark.saturation),
+    }));
   }
 
   /** The animals alive, where the view's layer draws them (the local view's, when hidden). */

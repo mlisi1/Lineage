@@ -1,0 +1,499 @@
+/**
+ * Write the R5 report (the final rendering pass) as one self-contained HTML file.
+ *
+ *   npm run final   builds the renderer as it is and as it was when R5 began, films the
+ *                   same places in both, then writes ../reports/R5-final/
+ *
+ * 1. "Before" is the renderer at `R5_REPORT_BEFORE` (default: the commit R5 branched from),
+ *    checked out in a temporary worktree; "after" is this checkout. Each is built and
+ *    served on its own, with its own recordings.
+ * 2. Both are filmed in headless Chromium at the screen's own size, 1024×600: stills at the
+ *    same places with the same camera seeds, and films that follow an animal (the view
+ *    button pressed twice, as on the desk). Stills and posters go inline at the art
+ *    pixels' size; films are VP9 beside the report (`films/`, small: committed).
+ * 3. The species' colours are read from the page as drawn (`window.__colours`).
+ *
+ * Films are caught frame by frame on the scene's own clock (`?film`), so two runs draw the
+ * same frames.
+ */
+import { Buffer } from "node:buffer";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { env } from "node:process";
+import { fileURLToPath } from "node:url";
+import { chromium } from "@playwright/test";
+import { build, preview } from "vite";
+import { decodePng, pngIndexed as png, shrink } from "./apng.mjs";
+
+const OUT = new URL("../../reports/R5-final/", import.meta.url);
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const RENDERER = fileURLToPath(new URL("../", import.meta.url));
+const FILMS = fileURLToPath(new URL("films/", OUT));
+/** The commit R5 branched from: the scene before any of R5. */
+const BEFORE = env.R5_REPORT_BEFORE ?? "80e4a4c";
+/** The desk's screen (CLAUDE.md §2). */
+const WIDTH = 1024;
+const HEIGHT = 600;
+const FPS = 30;
+
+/** Stills: the same place in both, as `?query` has it (cells for `x`, `y`). */
+const STILLS = {
+  map: "view=map&quiet",
+  middle: "view=middle&x=170&y=40&quiet",
+  summit: "view=middle&quiet",
+  grass: "view=local&seed=3&quiet",
+  coast: "view=local&x=60&y=40&quiet",
+  winter: "view=middle&recording=winter&every=0&quiet",
+};
+/** Films: following an animal from the camera's seed, for `seconds` after two presses. */
+const FOLLOWS = {
+  follow9: { query: "seed=9&follow=60&quiet", seconds: 6 },
+  follow4: { query: "seed=4&follow=60&quiet", seconds: 6 },
+};
+/** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
+const ZOOMS = {
+  map: [320, 40, 110, 80],
+  grass: [190, 15, 200, 150],
+  coast: [300, 75, 100, 65],
+};
+
+const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+
+/** Where the young of the creatures' recording stand thickest at its start (cells). */
+function youngPlace() {
+  const recording = JSON.parse(
+    readFileSync(new URL("../public/stream/life.json", import.meta.url), "utf8"),
+  );
+  const first = recording.messages.find((m) => m.type === "creatures" && (m.young ?? []).length);
+  if (first === undefined) return null;
+  const at = new Map(first.ids.map((id, i) => [id, first.positions[i]]));
+  const young = first.young.map(([id]) => at.get(id)).filter(Boolean);
+  let best = null;
+  let most = 0;
+  for (const [x, y] of young) {
+    const near = young.filter(([u, v]) => (u - x) ** 2 + (v - y) ** 2 < 36).length;
+    if (near > most) [best, most] = [[Math.round(x), Math.round(y)], near];
+  }
+  return best;
+}
+
+/** Open the scene at `query` in film mode and step it until its ground is painted. */
+async function open(page, address, query) {
+  await page.goto(`${address}?${query}&film`);
+  await page.waitForFunction(() => typeof window.__frame === "function", null, {
+    timeout: 120_000,
+  });
+  for (let tries = 0; tries < 2000; tries++) {
+    const settled = await page.evaluate(() => {
+      window.__frame?.(window.__painting?.() === false ? 1 / 30 : 0);
+      return window.__sceneSettled?.() === true;
+    });
+    if (settled) return;
+    await page.waitForTimeout(25);
+  }
+  throw new Error(`the scene never settled: ${query}`);
+}
+
+/** Move the scene on one frame, wait for any painting, and screenshot the whole screen. */
+async function frame(page, seconds = 1 / FPS) {
+  await page.evaluate((s) => window.__frame?.(s), seconds);
+  for (let tries = 0; tries < 400; tries++) {
+    if (!(await page.evaluate(() => window.__painting?.() === true))) break;
+    await page.waitForTimeout(10);
+  }
+  return page.screenshot({ type: "png" });
+}
+
+/** Run the scene on `seconds`, a frame at a time, without filming it. */
+async function skip(page, seconds) {
+  for (let done = 0; done < seconds; done += 1) {
+    await page.evaluate(
+      ([frames, step]) => {
+        for (let k = 0; k < frames; k++) window.__frame?.(step);
+      },
+      [FPS, 1 / FPS],
+    );
+    for (let tries = 0; tries < 400; tries++) {
+      if (!(await page.evaluate(() => window.__painting?.() === true))) break;
+      await page.waitForTimeout(10);
+    }
+  }
+}
+
+/** A still a few seconds in, at the art pixels' size. */
+async function still(page, address, query) {
+  await open(page, address, query);
+  await skip(page, 2);
+  return shrink(decodePng(await frame(page, 0)), 2);
+}
+
+/** Press the view button twice (map → middle → local) and film `seconds` of the follow. */
+async function follow(page, address, name, { query, seconds }) {
+  await open(page, address, query);
+  for (let press = 0; press < 2; press++) {
+    await page.evaluate(() => window.__press?.());
+    await skip(page, 5);
+  }
+  mkdirSync(FILMS, { recursive: true });
+  const file = `${name}.webm`;
+  const encoder = spawn(
+    "ffmpeg",
+    ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png",
+     "-i", "-", "-c:v", "libvpx-vp9", "-pix_fmt", "yuv444p", "-crf", "16", "-b:v", "0",
+     "-row-mt", "1", "-deadline", "good", "-cpu-used", "4", join(FILMS, file)],
+    { stdio: ["pipe", "ignore", "inherit"] },
+  ); // prettier-ignore
+  const done = new Promise((resolve, reject) => {
+    encoder.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
+  });
+  const frames = Math.round(seconds * FPS);
+  let poster = null;
+  for (let k = 0; k < frames; k++) {
+    const shot = await frame(page);
+    if (k === Math.floor(frames / 2)) poster = shrink(decodePng(shot), 2);
+    if (!encoder.stdin.write(shot))
+      await new Promise((resolve) => encoder.stdin.once("drain", resolve));
+  }
+  encoder.stdin.end();
+  await done;
+  return { file, poster, frames, seconds, bytes: statSync(join(FILMS, file)).size };
+}
+
+/** The box (x, y, wide, tall) of an image at the art pixels' size. */
+function crop(image, [x0, y0, wide, tall]) {
+  const rgb = Buffer.alloc(wide * tall * 3);
+  for (let y = 0; y < tall; y++) {
+    const from = ((y0 + y) * image.width + x0) * 3;
+    image.rgb.copy(rgb, y * wide * 3, from, from + wide * 3);
+  }
+  return { width: wide, height: tall, rgb };
+}
+
+/** Build the renderer at `root` and serve it; its address and the server. */
+async function serve(root, port) {
+  await build({ root, logLevel: "silent" });
+  const server = await preview({ root, logLevel: "silent", preview: { port, strictPort: false } });
+  const address = server.resolvedUrls?.local[0];
+  if (address === undefined) throw new Error(`no address for ${root}`);
+  return { server, address };
+}
+
+// The renderer before R5, in a worktree of its own with this one's packages.
+const beforeDir = mkdtempSync(join(tmpdir(), "lineage-r5-before-"));
+git("worktree", "add", "--detach", beforeDir, BEFORE);
+symlinkSync(join(RENDERER, "node_modules"), join(beforeDir, "renderer", "node_modules"));
+rmSync(FILMS, { recursive: true, force: true });
+
+const shots = { before: {}, after: {} };
+const films = { before: {}, after: {} };
+let colours = [];
+const youngAt = youngPlace();
+const browser = await chromium.launch();
+const servers = [];
+try {
+  const sides = {
+    before: await serve(join(beforeDir, "renderer"), 4311),
+    after: await serve(RENDERER, 4312),
+  };
+  servers.push(sides.before.server, sides.after.server);
+  for (const [side, { address }] of Object.entries(sides)) {
+    const page = await browser.newPage({
+      viewport: { width: WIDTH, height: HEIGHT },
+      deviceScaleFactor: 1,
+    });
+    page.setDefaultTimeout(600_000);
+    const stills = { ...STILLS };
+    if (youngAt !== null) stills.young = `view=local&x=${youngAt[0]}&y=${youngAt[1]}&quiet`;
+    for (const [name, query] of Object.entries(stills)) {
+      shots[side][name] = await still(page, address, query);
+      console.log(`${side}: ${name}`);
+    }
+    for (const [name, spec] of Object.entries(FOLLOWS)) {
+      films[side][name] = await follow(page, address, `${name}-${side}`, spec);
+      console.log(`${side}: ${name}`);
+      if (side === "after" && name === "follow4") {
+        colours = (await page.evaluate(() => window.__colours?.() ?? [])).sort(
+          (a, b) => b.members - a.members,
+        );
+      }
+    }
+    await page.close();
+  }
+} finally {
+  await browser.close();
+  for (const server of servers) await new Promise((resolve) => server.httpServer.close(resolve));
+  git("worktree", "remove", "--force", beforeDir);
+}
+
+const uri = (image) => `data:image/png;base64,${Buffer.from(png(image)).toString("base64")}`;
+const hex = (rgb) => `#${rgb.toString(16).padStart(6, "0")}`;
+const escape = (text) =>
+  String(text).replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+  );
+
+/**
+ * A still before and after, one over the other: the before left of the cut, the after
+ * right of it, where the reader drags; `cut` (%) is where it starts, on what changed.
+ */
+function compare(name, caption, cut = 50) {
+  const before = shots.before[name];
+  const after = shots.after[name];
+  if (before === undefined || after === undefined) return "";
+  return `<figure>
+<div class="compare" style="--cut:${cut}%"><img src="${uri(before)}" alt="${escape(caption)}, before"><img class="after" src="${uri(after)}" alt="${escape(caption)}, after"><span class="bar"></span><span class="tag l">Before</span><span class="tag r">After</span><input type="range" min="0" max="100" value="${cut}" aria-label="Compare before and after: ${escape(caption)}" id="cmp-${name}"></div>
+<figcaption>${caption} <span class="meta">1024×600, shown at the art pixels' 512×300</span></figcaption>
+</figure>`;
+}
+
+/** Close-ups of a still, before and after, side by side. */
+function zoom(name, caption) {
+  const box = ZOOMS[name];
+  return `<div class="pair zoom">${["before", "after"]
+    .map(
+      (side) =>
+        `<figure><img src="${uri(crop(shots[side][name], box))}" alt="${escape(caption)}, ${side}" width="${box[2]}" height="${box[3]}"><figcaption>${side === "before" ? "Before" : "After"}, close-up</figcaption></figure>`,
+    )
+    .join("")}</div>`;
+}
+
+/** A film before and after, side by side. */
+function filmPair(name, captions) {
+  return `<div class="pair">${["before", "after"]
+    .map((side, k) => {
+      const film = films[side][name];
+      return `<figure><video src="films/${film.file}" poster="${uri(film.poster)}" autoplay loop muted playsinline controls aria-label="${escape(captions[k])}"></video><figcaption>${captions[k]} <span class="meta">${film.frames} frames at ${FPS} fps, ${(film.bytes / 1e6).toFixed(1)} MB, <code>films/${film.file}</code></span></figcaption></figure>`;
+    })
+    .join("")}</div>`;
+}
+
+const colourRows = colours
+  .map(
+    (row) =>
+      `<tr><td>${escape(row.name || `#${row.id}`)}</td><td class="num">${row.members}</td><td><span class="swatch" style="background:${hex(row.body)}"></span><code>${hex(row.body)}</code></td><td><span class="swatch" style="background:${hex(row.mark)}"></span><code>${hex(row.mark)}</code></td></tr>`,
+  )
+  .join("\n");
+
+const commit = git("rev-parse", "--short", "HEAD");
+const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+const before = git("rev-parse", "--short", BEFORE);
+const date = git("log", "-1", "--format=%cs");
+const youngShot =
+  shots.after.young === undefined
+    ? ""
+    : compare(
+        "young",
+        `Where the young stand thickest at the recording's start, cell (${youngAt?.join(", ")}).`,
+      );
+
+const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5 — Final rendering pass</title>
+<style>
+/* One reading column: each change is a note, then before/after at full width. */
+:root {
+  --bg: #eef1ec; --panel: #ffffff; --ink: #1c2622; --muted: #56645d; --rule: #cfd8d1;
+  --sea: #24529c; --leaf: #4f8a2b; --chip: #e1e9e2;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131a17; --panel: #1b2420; --ink: #e3ebe5; --muted: #9aaba2; --rule: #2e3a35;
+    --sea: #8fb4ec; --leaf: #9fd36f; --chip: #24302b; color-scheme: dark; }
+}
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 var(--body); }
+main { max-width: 1100px; margin: 0 auto; padding: 40px max(16px, 3vw) 80px; display: grid; gap: 52px; }
+header { display: grid; gap: 12px; }
+.eyebrow, .label, th { font: 500 12px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+h1, h2 { margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.1; color: var(--sea); }
+h2 { font-size: clamp(22px, 3vw, 28px); line-height: 1.2; }
+p { margin: 0; max-width: 70ch; }
+.lede { font-size: 19px; color: var(--muted); }
+code { font: 14px var(--mono); background: var(--chip); padding: 1px 5px; border-radius: 3px; }
+.meta { font: 12px var(--mono); color: var(--muted); }
+nav ul { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+nav a { font-weight: 600; color: var(--ink); text-decoration: none; background: var(--chip); padding: 3px 10px; border-radius: 3px; }
+nav a:hover, nav a:focus-visible { background: var(--sea); color: var(--bg); }
+section { display: grid; gap: 18px; }
+.head { display: flex; align-items: baseline; gap: 14px; }
+.n { font: 700 28px/1 var(--mono); color: var(--leaf); }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 32px; }
+.notes > div { display: grid; gap: 6px; min-width: 0; }
+.ask { border-left: 3px solid var(--sea); padding-left: 14px; }
+figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+figcaption { font-size: 14px; color: var(--muted); }
+.compare { position: relative; width: 100%; aspect-ratio: 1024 / 600; overflow: hidden; background: #24529c; cursor: ew-resize; user-select: none; }
+.compare img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
+.compare .after { clip-path: inset(0 0 0 var(--cut, 50%)); }
+.compare .bar { position: absolute; top: 0; bottom: 0; left: var(--cut, 50%); width: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); pointer-events: none; }
+.compare .tag { position: absolute; top: 10px; font: 500 12px/1 var(--mono); text-transform: uppercase; background: rgba(16,8,28,.72); color: #fff; padding: 5px 7px; pointer-events: none; }
+.compare .tag.l { left: 10px; } .compare .tag.r { right: 10px; }
+.compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: ew-resize; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair video, .pair img { width: 100%; height: auto; display: block; image-rendering: pixelated; background: #24529c; }
+@media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 6px 16px 6px 0; border-bottom: 1px solid var(--rule); }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.swatch { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em; margin-right: 6px; border: 1px solid rgba(0,0,0,.35); }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
+ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72ch; }
+</style>
+</head>
+<body>
+<main>
+<header>
+<span class="eyebrow">Lineage · R5 final rendering pass</span>
+<h1>R5 — Final rendering pass</h1>
+<p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
+<p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
+<nav><ul>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#open">Open</a></li>
+</ul></nav>
+</header>
+
+<section id="follow">
+<div class="head"><span class="n">1</span><h2>The animal followed shows through the grass</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>A small animal in the local view vanished under the grass tufts drawn in front of it; only trees and bushes went see-through.</p></div>
+<div><span class="label">Now</span><p>Grass and the small things in front of the animal followed go see-through too, a little less than trees (40 % against 30 % opacity). Pebbles are left alone. By the owner's choice there is no minimum size.</p></div>
+</div>
+${filmPair("follow9", ["Before", "After"])}
+</section>
+<hr>
+
+<section id="colours">
+<div class="head"><span class="n">2</span><h2>Colours straight from the genes</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Colour was each animal's own HUE at one saturation and lightness. Sister species differ by a few hundredths in every gene: in the creatures' recording eight of ten species have HUE between 0.92 and 0.97, so nearly every animal was red or magenta.</p></div>
+<div><span class="label">Now</span><p>Six genes set two colours (<code>src/creatures/colours.ts</code>), each read by its species' rank among the species alive, spread evenly over its range. The order is still the genes': the redder species stays further round the wheel. Each animal moves a little from its species by its own genes. Read again when a species appears or dies out, when every animal is redrawn.</p></div>
+</div>
+<div class="tablewrap"><table>
+<thead><tr><th>Colour</th><th>Hue</th><th>Saturation</th><th>Lightness</th></tr></thead>
+<tbody>
+<tr><td>Body</td><td><code>HUE</code></td><td><code>AQUATIC</code> (water ones vivid)</td><td><code>SIZE</code> (small light, big deep)</td></tr>
+<tr><td>Markings</td><td><code>SOCIAL</code> (how far from the body's hue)</td><td><code>DIET</code> (hunters vivid)</td><td><code>EXPLORATION</code> (bold pale, shy dark)</td></tr>
+</tbody></table></div>
+<div class="tablewrap"><table>
+<thead><tr><th>Species</th><th>Alive</th><th>Body</th><th>Markings</th></tr></thead>
+<tbody>
+${colourRows}
+</tbody></table></div>
+<p class="meta">The species of the creatures' recording as drawn, read from the page (<code>window.__colours</code>). PATTERN still picks the shape of the markings; the warning-colour rare gene still overrides.</p>
+${compare("middle", "Middle view over the herd in the north-east, cell (170, 40).")}
+${filmPair("follow4", ["Local view before", "Local view after: species apart, and the young (7)"])}
+</section>
+<hr>
+
+<section id="dots">
+<div class="head"><span class="n">3</span><h2>Round dots on the map</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Every animal was a square grown with its mass; the heaviest were big blocks.</p></div>
+<div><span class="label">Now</span><p>Round dots of whole pixels with a dark edge, in three sizes by mass, in the body's colour (<code>src/creatures/markers.ts</code>). Swimmers get a ring round a dark middle, and the young the smallest dot.</p></div>
+</div>
+${compare("map", "The whole island.")}
+${zoom("map", "The herd in the north-east")}
+</section>
+<hr>
+
+<section id="ground">
+<div class="head"><span class="n">4</span><h2>A calmer ground</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>The middle view painted each cell's cover alone: a busy patchwork. In the local view, borders between kinds followed the blend's straight steps, and grass met bare soil with a hard edge while other borders were dithered.</p></div>
+<div><span class="label">Now</span><p>The middle view reads cover over the cells around each one, as the local view did, so it lies in patches. Borders wander with noise. Growth beside bare ground has a lip lit from the upper left: one pixel darker on its lower edge, one lighter on its upper.</p></div>
+</div>
+${compare("coast", "Local view at cell (60, 40).")}
+${zoom("coast", "A patch of grass on bare soil")}
+</section>
+<hr>
+
+<section id="grass">
+<div class="head"><span class="n">5</span><h2>Grass in clumps</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Three drawings of one symmetric fan, a dark outline round every blade, spread evenly one to four to a cell.</p></div>
+<div><span class="label">Now</span><p>Six drawings after pixel-art grass guides: a low clump with short blades along its upper edge, a fan, and a clump leaning in the wind, each also mirrored and ±10 % in size. Blades are two pixels wide below the tip, so the outline is one silhouette. Tufts stand in clumps that cross cell borders, and thin grass leaves gaps.</p></div>
+</div>
+${compare("grass", "Local view over upland grassland.")}
+${zoom("grass", "Tufts")}
+<p class="ask">The blade tips still step against their outline. A softer option is to outline only the base of each tuft.</p>
+</section>
+<hr>
+
+<section id="snow">
+<div class="head"><span class="n">6</span><h2>Snow only where the simulation has it</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>The renderer kept a snow line of its own, so a bare summit wore a white cap in August among green grass.</p></div>
+<div><span class="label">Now</span><p>Bare heights are rock. Snow lies where the simulation puts it, by season and height. The fixed line stays only for a land without the simulation's snow (the R0 fixture).</p></div>
+</div>
+${compare("summit", "The island's middle in August: drag to the right to see the old snow cap.", 72)}
+${compare("winter", "Winter: the simulation's snow, unchanged.")}
+</section>
+<hr>
+
+<section id="young">
+<div class="head"><span class="n">7</span><h2>The young</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Age was not on the wire: a newborn appeared at full size.</p></div>
+<div><span class="label">Now</span><p><code>creatures</code> messages carry <code>young</code>: each young animal's id and how far grown it is, in sixteenths (from <code>Population.maturity</code>; additive, no schema bump). A newborn is drawn at half length with a head 35 % larger for its body, and is redrawn at each sixteenth until it comes of age. About 80 of the ~200 animals in the recording are young at any time.</p></div>
+</div>
+${youngShot}
+</section>
+<hr>
+
+<section id="open">
+<div class="head"><h2>Open</h2></div>
+<p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
+<ul class="open">
+<li>Plants that seem to stand on water; animals seen on water</li>
+<li>Animals through bushes, bodies folding on a turn, legs stepping together, plants popping in over animals</li>
+<li>The name scroll by the animal followed</li>
+<li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
+<li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
+<li>The scene off the spike, a benchmark mode, per-frame costs, the board run on the 7" screen at a 30 fps cap</li>
+<li>Tests, once the owner calls the look final</li>
+</ul>
+</section>
+</main>
+<script>
+for (const box of document.querySelectorAll(".compare")) {
+  const range = box.querySelector("input");
+  const set = () => box.style.setProperty("--cut", range.value + "%");
+  range.addEventListener("input", set);
+  set();
+}
+</script>
+</body>
+</html>
+`;
+
+const readme = [
+  "# R5 — Final rendering pass",
+  "",
+  "The scene as R5 leaves it against the scene when R5 began, filmed from the real",
+  "renderer at 1024×600: stills at the same places (drag to compare) and films following",
+  "an animal. `report.html` is one self-contained file but for its films, in `films/`",
+  "(VP9, a few MB, committed with it).",
+  "",
+  `- Branch \`${branch}\` at \`${commit}\`; before: \`${before}\``,
+  "- Round 1 (the owner's checklist items 1–7): grass see-through round the animal",
+  "  followed, colours from six genes ranked among species, round map dots, a calmer ground,",
+  "  grass in clumps, snow only from the simulation, the young drawn small",
+  "- Tests wait until the owner calls the look final; the device benchmark comes later",
+  "",
+  "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",
+  "with another); do not edit by hand. R5 has no statistical criterion.",
+  "",
+].join("\n");
+await mkdir(OUT, { recursive: true });
+await writeFile(new URL("report.html", OUT), html);
+await writeFile(new URL("README.md", OUT), readme);
+console.log(`wrote ${fileURLToPath(OUT)} (${(html.length / 1e6).toFixed(1)} MB)`);
