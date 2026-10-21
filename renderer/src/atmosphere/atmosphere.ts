@@ -155,6 +155,12 @@ const FRAME_RATE = 30;
  * pixels), this large in each view (art pixels), in three layers far to near.
  */
 const SNOW_FALLS_FROM = 40;
+/**
+ * A view's whole fall is snow when at least this share of its land has snow lying, rain
+ * otherwise: one kind at a time (round 7, the owner: rain and snow mixed looked wrong where
+ * snow lies in patches). The two cross-fade as the share crosses it.
+ */
+const SNOW_VIEW_SHARE = 0.5;
 const SNOWFLAKES = 480;
 const SNOW_SPEED = 28;
 const SNOW_SWAY = 3;
@@ -189,6 +195,11 @@ const BLOOD_RED: Rgb = [1.0, 0.42, 0.3];
 const QUAKE_S = 4;
 const METEOR_FALL_S = 1.2;
 const METEOR_S = 7;
+/**
+ * How large a meteor's streak is drawn in each view, and how far it comes from (times its
+ * size on the map; round 7, the owner: it read too small in the middle view).
+ */
+const METEOR_SIZE: Readonly<Record<ViewName, number>> = { map: 1, middle: 1.8, local: 1 };
 const BEAM_S = 8;
 /**
  * The ark's newcomers: how long each takes to come into being (wall seconds), and how far
@@ -375,6 +386,9 @@ export class Atmosphere {
   private rain = 0;
   private storm = 0;
   private overcast = 0;
+  /** How much of the fall is snow, 0–1, eased; and the view's snowy share, kept per land and view. */
+  private snowfall = 0;
+  private snowShare: { land: Land; key: string; share: number } | null = null;
   /** When each cell's fire came up and went out (scene seconds), while it shows. */
   private readonly flameLife = new Map<number, { born: number; died: number | null }>();
   private burningSeen: readonly number[] = [];
@@ -573,6 +587,9 @@ export class Atmosphere {
     this.rain = ease(this.rain, RAIN_STRENGTH[this.rainKind] * power);
     this.storm = ease(this.storm, this.rainKind === "storm" ? 1 : 0);
     this.overcast = ease(this.overcast, OVERCAST[this.rainKind]);
+    const snowing = this.snowyShare(view) >= SNOW_VIEW_SHARE ? 1 : 0;
+    // While nothing falls the kind changes at once; while it falls, rain turns to snow slowly.
+    this.snowfall = this.rain <= 0.01 ? snowing : ease(this.snowfall, snowing);
     const wasEnding = this.sequence.active;
     this.sequence.update(dtS);
     const moment = this.sequence.active ? this.sequence.moment : null;
@@ -1098,8 +1115,9 @@ export class Atmosphere {
         if (age < METEOR_FALL_S) {
           // The streak: from high up and to the left, its head bright, its trail fading.
           const t = age / METEOR_FALL_S;
-          const fromX = x - 60 / tile;
-          const fromY = y - 90 / tile;
+          const size = METEOR_SIZE[view.view];
+          const fromX = x - (60 * Math.sqrt(size)) / tile;
+          const fromY = y - (90 * Math.sqrt(size)) / tile;
           for (let k = 0; k < 8; k++) {
             const back = Math.max(t - k * 0.04, 0);
             const hx = fromX + (x - fromX) * back;
@@ -1107,7 +1125,7 @@ export class Atmosphere {
             this.halo(
               hx,
               hy,
-              k === 0 ? 8 : 6 - k * 0.5,
+              size * (k === 0 ? 8 : 6 - k * 0.5),
               k === 0 ? 0xffffff : SPARK,
               1 - k / 8,
               tile,
@@ -1344,11 +1362,12 @@ export class Atmosphere {
         1,
       );
       const texture = streakTexture(length, lean);
-      const drops = Math.round(RAINDROPS * this.rain * depth.share * scale.count);
+      // Where it is cold enough for snow to lie, it falls as snow (`drawSnow`).
+      const drops = Math.round(
+        RAINDROPS * this.rain * (1 - this.snowfall) * depth.share * scale.count,
+      );
       for (let slot = 0; slot < drops; slot++) {
         const at = dropAt(fall, slot, this.timeS, view.width, view.height);
-        // Where it is cold enough for snow to lie, it falls as snow (`drawSnow`).
-        if (this.snowyAt(view, at.x, at.y)) continue;
         const sprite = this.weatherPool.next(texture);
         // The streak's head where the drop is; its tail up the wind.
         sprite.position.set(
@@ -1364,7 +1383,9 @@ export class Atmosphere {
     const land = view.land;
     if (land === null || view.view === "map") return;
     const { cells, tile } = view;
-    const count = Math.round(RIPPLES * this.rain * (view.view === "local" ? 1 : 2));
+    const count = Math.round(
+      RIPPLES * this.rain * (1 - this.snowfall) * (view.view === "local" ? 1 : 2),
+    );
     for (let slot = 0; slot < count; slot++) {
       const every = RIPPLE_S * (1 + cellHash(slot, 0, 409));
       const shifted = this.timeS + every * cellHash(slot, 1, 409);
@@ -1392,35 +1413,48 @@ export class Atmosphere {
     }
   }
 
-  /** Whether the land under screen art pixel (x, y) has snow lying: it is cold there. */
-  private snowyAt(view: View, x: number, y: number): boolean {
+  /** The share of the land in sight that has snow lying (kept until the land or view changes). */
+  private snowyShare(view: View): number {
     const land = view.land;
-    if (land?.snow === undefined) return false;
-    const margin = view.margin ?? 0;
-    const cx = Math.floor(view.cells.x0 + (x - margin) / view.tile);
-    const cy = Math.floor(view.cells.y0 + (y - margin) / view.tile);
-    if (cx < 0 || cy < 0 || cx >= land.width || cy >= land.height) return false;
-    return (land.snow[cy * land.width + cx] ?? 0) >= SNOW_FALLS_FROM;
+    if (land?.snow === undefined) return 0;
+    const { x0, y0, x1, y1 } = view.cells;
+    const key = `${Math.floor(x0)},${Math.floor(y0)},${Math.ceil(x1)},${Math.ceil(y1)}`;
+    const known = this.snowShare;
+    if (known !== null && known.land === land && known.key === key) return known.share;
+    let landCells = 0;
+    let snowy = 0;
+    for (let y = Math.max(Math.floor(y0), 0); y < Math.min(Math.ceil(y1), land.height); y++) {
+      for (let x = Math.max(Math.floor(x0), 0); x < Math.min(Math.ceil(x1), land.width); x++) {
+        const cell = y * land.width + x;
+        if ((land.heights[cell] ?? 0) <= land.seaLevel) continue;
+        landCells++;
+        if ((land.snow[cell] ?? 0) >= SNOW_FALLS_FROM) snowy++;
+      }
+    }
+    const share = landCells === 0 ? 0 : snowy / landCells;
+    this.snowShare = { land, key, share };
+    return share;
   }
 
   /**
-   * Snow falling where it is cold (snow lies there): flakes drifting down slowly in three
-   * layers, swaying, a pixel on the map and larger closer in; where it is warmer the same
-   * weather falls as rain.
+   * Snow falling where it is cold (snow lies on most of the land in sight): flakes drifting
+   * down slowly in three layers, swaying, a pixel on the map and larger closer in; where it
+   * is warmer the same weather falls as rain.
    */
   private drawSnow(view: View): void {
-    if (this.rain <= 0.01 || view.land?.snow === undefined) return;
+    if (this.rain <= 0.01 || this.snowfall <= 0.01) return;
     const size = SNOW_SIZE[view.view];
     for (const [layer, depth] of SNOW_LAYERS.entries()) {
       const speed = SNOW_SPEED * depth.speed * (1 + 0.5 * this.storm);
       const lean = RAIN_LEAN[this.rainKind] * 0.6 + this.storm * 0.3 * Math.sin(this.timeS * 0.7);
       const fall: Fall = { speed, slant: speed * lean, salt: 31 + layer };
-      const flakes = Math.round(SNOWFLAKES * Math.min(this.rain, 1.2) * depth.share);
+      const flakes = Math.round(
+        SNOWFLAKES * Math.min(this.rain, 1.2) * this.snowfall * depth.share,
+      );
       for (let slot = 0; slot < flakes; slot++) {
         const at = dropAt(fall, slot, this.timeS, view.width, view.height);
         const sway = SNOW_SWAY * Math.sin(this.timeS * (1 + cellHash(slot, layer, 432)) + slot);
         const x = (((at.x + sway) % view.width) + view.width) % view.width;
-        if (!this.snowyAt(view, x, at.y)) continue;
         const sprite = this.weatherPool.next(this.sprites.fleck);
         const across = Math.max(Math.round(size * depth.size), 1);
         sprite.position.set(Math.round(x), Math.round(at.y));
