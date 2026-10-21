@@ -257,7 +257,7 @@ census, so these change the counting, not the creatures), more variation among f
 (`founder_spread` 0.04–0.12) to shorten the one-species phase, and the predator and
 founding levers where D3 and M3.5 passed.
 
-**Paused at 5 of 31 points** (2026-10-21 16:35, the owner's request). So far the species
+**Stopped at 13 of 31 points** (2026-10-21; paused at 5 at 16:35, resumed at 17:10, stopped when strangers were removed, below). In its first points the species
 definition moves M6.1 and M6.2 hard: at a link distance of 0.034–0.040 with mutation
 0.027–0.029, the census finds many small species (2.8–3.8 splits a month) and M6.1 falls
 to 0.23–0.37, mostly above the band. The best point, p004 (mutation 0.030, link 0.036,
@@ -265,6 +265,51 @@ founder spread 0.10), fails only M3.5 and M6.1 (0.77) among the M criteria and p
 D1 (0.45) and both D3 (predators 9.5 % of creatures, present on 86 % of days); p001
 (mutation 0.036, link 0.031) reaches M6.1 0.89 but speciation 0.58. M3.5 failed in all
 four sampled points, despite founding at cover 0.5 or more.
+
+### Fourth round with the owner (2026-10-21): what the criteria judge, and a closed island
+
+The owner's aim, in their words: "an interesting and balanced ecosystem that keeps
+interesting over the years". Looking at why criteria fail rather than at their numbers
+(`species-1`, 13 points), three of them judged the wrong thing:
+
+- **M3.5 (no closed forest) is mostly open woodland.** In the failing seeds trees are
+  there (p001 seed 1: broadleaf and conifer on 36 % of the land at year 3) but no cell
+  holds a closed canopy (biomass ≥ 0.55). Their herds are much bigger (size gene 0.50–0.64
+  against 0.33–0.43 in the passing seeds of the same point) and tree cover is half (0.09–0.17
+  against 0.32–0.34): since the reach mechanism, big browsers keep the woods open, like a
+  wood-pasture. The criterion dates from M3, without animals. **Decision**: a tenth of the
+  seeds may stay open (`seeds_without_succession.share` ≤ 0.1); M3 is judged over 5 years.
+- **M6.1 misses by its founding months.** The founders are one species; at the defaults
+  the median seed takes 79 days to reach 3 species, 10 % of a 3-year run (about 2 % of a
+  world of a decade), and after that it stays in the band (0.90). **Decision**: M6.1
+  counts from the first day with 3 species, or a season (91 days) after founding,
+  whichever comes first (`species_alive.in_band_after_founding`); the share over every
+  inhabited day is still reported. `[species] link_distance` and `min_members` only
+  change how the census counts, so tuning them to the band would redefine a species
+  until it passes: they stay at the M6 values (0.035, 8) and are no longer swept.
+- **D2's test does not fit plant genes**: fire-pine and mangrove are niche genes and can
+  thrive in their niche without holding 5 % of all vegetation. To revisit with the plant
+  sweep (after R4).
+
+**Strangers removed** (the owner's proposal, 2026-10-21). Every predator lineage on the
+island descended from strangers: at the defaults, 135 predator species arrived and 40
+split from them, none from the founders' herd (p000, p004 of `species-1`). Six random
+groups a year kept the hunters, part of the diversity (D1 followed immigration, ρ +0.53)
+and dying herds supplied from outside. Without them every species descends from the
+founders, and a niche that fills is one evolution filled. Built:
+
+- `[fauna] immigrant_groups_per_year = 0` (the switch stays, for comparison runs).
+- **Hunters are the second wave of founders**: once the herd (every non-predator)
+  reaches `hunter_wave_herd` (120), a pack of `hunter_wave_count` (8) hunters lands, in
+  spring or summer, once per world (never where a lineage already arrived as hunters;
+  the founding record, `Fauna._ancestors`, tells, so the save is unchanged: no schema
+  bump).
+- **The ark brings hunters** when the herd has reached `hunter_wave_herd` and no predator
+  is alive; the island then needs the ark fully (need 1).
+
+To measure: whether predators persist and evolve again after dying out (3 years on 20
+seeds, then 10 years on 5), how often worlds end without the rescue of strangers (the
+owner's ceiling: about once a decade), and D1 without random genomes landing.
 
 ### R4's changes to the simulation
 

@@ -65,8 +65,8 @@ generated with a new seed. Worlds are numbered.
 
 **Collapse** (the owner, 2026-10-20; ADR 0018): once life is established (30 days after
 the first creatures land), the death of the last creature ends the world. Before that, a
-landing that dies out is followed by new founders, as on a new continent. Strangers and
-the ark help only while something lives. At M10's tuning this is rare (2 of 80
+landing that dies out is followed by new founders, as on a new continent. The ark helps
+only while something lives (no strangers come since M11, ADR 0019). At M10's tuning this is rare (2 of 80
 three-year runs emptied after first life), so a world lasts decades. The owner settled
 it in M11 (ADR 0019): worlds should end rarely, about once a decade, so the island is
 not made harsher to end them more often.

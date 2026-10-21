@@ -277,9 +277,9 @@ def _balance_section(run: Run) -> Section:
 
 ABLATION_KEYS = (
     ("M3.2 months to closed forest", "M3:closed_forest.months.median"),
-    ("M3.5 seeds without succession", "M3:seeds_without_succession"),
+    ("M3.5 seeds without succession", "M3:seeds_without_succession.share"),
     ("M4.3 both diets present", "M4:both_diets.last_year.mean_share_of_seeds"),
-    ("M6.1 species in band", "M6:species_alive.in_band.share_of_time.median"),
+    ("M6.1 species in band", "M6:species_alive.in_band_after_founding.share_of_time.median"),
     ("D1 lowest gene", "D:niche.share_of_seeds.min"),
     ("D1 size", "D:niche.size.share_of_seeds"),
     ("D1 swimming", "D:niche.aquatic.share_of_seeds"),

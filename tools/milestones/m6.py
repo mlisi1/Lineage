@@ -8,7 +8,11 @@ Readings used here (agreed with the owner at the start of M6):
 - **Sim-time** is inhabited time: from the day the founders land (the first census with a
   species) to the end of the run. Days after a total extinction count, with no species
   alive. M6.1 takes, per seed, the share of those days with 3 to 12 species alive after
-  the daily census, and passes if the median seed is at 90 % or more.
+  the daily census, and passes if the median seed is at 90 % or more. Since M11 (ADR
+  0019, the owner's OK) the founding is left out: the founders are one species and need
+  time to diverge, which a 3-year run weighs far more than a world of a decade. M6.1
+  counts from the first day with 3 species, or a season after the founders landed,
+  whichever comes first; the share over every inhabited day is still reported.
 - **Speciation** counts splits only: a species born on the island from a parent species.
   Groups of strangers landing found species too (arrivals); they are reported apart.
   M6.2 is splits per inhabited sim-month per seed, median across seeds.
@@ -34,6 +38,7 @@ ALIVE_BAND = (3, 12)
 SHARE_TARGET = 0.9
 SPLITS_PER_MONTH_TARGET = 1.0
 DAYS_PER_MONTH = DAYS_PER_YEAR / 12.0
+FOUNDING_DAYS = 91  # at most a season of founding left out of M6.1 (ADR 0019)
 TREE_SEEDS = 3  # representative seeds drawn as trees, plus the worst one
 LABELLED_PEAK = 10  # species with at least this many members at their peak are named
 PREDATOR_LABELLED_PEAK = 5  # the same for predators, whose numbers have their own cap
@@ -55,9 +60,9 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
 CRITERIA: list[Criterion] = [
     Criterion(
         "M6.1",
-        f"Median seed's share of inhabited sim-time with {ALIVE_BAND[0]}–{ALIVE_BAND[1]} "
-        "species alive",
-        "species_alive.in_band.share_of_time.median",
+        f"Median seed's share of inhabited sim-time after the founding with "
+        f"{ALIVE_BAND[0]}–{ALIVE_BAND[1]} species alive",
+        "species_alive.in_band_after_founding.share_of_time.median",
         low=SHARE_TARGET,
     ),
     Criterion(
@@ -116,10 +121,29 @@ def in_band_share(alive: np.ndarray) -> float:
     return float(np.mean((days >= low) & (days <= high)))
 
 
+def after_founding(alive: np.ndarray) -> np.ndarray:
+    """Inhabited days from the end of the founding: the first day with ``ALIVE_BAND[0]``
+    species, or ``FOUNDING_DAYS`` after the founders landed, whichever comes first."""
+    days = inhabited_days(alive)
+    reached = np.flatnonzero(days >= ALIVE_BAND[0])
+    start = min(int(reached[0]) if reached.size else days.size, FOUNDING_DAYS)
+    return days[start:]
+
+
+def in_band_after_founding(alive: np.ndarray) -> float:
+    """Share of the days after the founding with ``ALIVE_BAND`` species alive (NaN if
+    there are none)."""
+    days = after_founding(alive)
+    if days.size == 0:
+        return np.nan
+    low, high = ALIVE_BAND
+    return float(np.mean((days >= low) & (days <= high)))
+
+
 def per_seed(run: Run) -> dict[str, np.ndarray]:
     """One value per seed of each outcome, in seed order."""
     seeds = run.manifest.seeds
-    shares, splits, arrivals, losses, months, ever, below, above = ([] for _ in range(8))
+    shares, founded, splits, arrivals, losses, months, ever, below, above = ([] for _ in range(9))
     for seed in seeds:
         alive = daily(run, seed)
         days = inhabited_days(alive)
@@ -129,6 +153,7 @@ def per_seed(run: Run) -> dict[str, np.ndarray]:
         arrived = table.shape[0] - split
         extinct = int(np.count_nonzero(table[:, _P["extinct_day"]] >= 0))
         shares.append(in_band_share(alive))
+        founded.append(in_band_after_founding(alive))
         months.append(month_count)
         splits.append(split / month_count if month_count else np.nan)
         arrivals.append(arrived / month_count if month_count else np.nan)
@@ -138,6 +163,7 @@ def per_seed(run: Run) -> dict[str, np.ndarray]:
         above.append(float(np.mean(days > ALIVE_BAND[1])) if days.size else np.nan)
     return {
         "in_band": np.array(shares),
+        "in_band_after_founding": np.array(founded),
         "below": np.array(below),
         "above": np.array(above),
         "months": np.array(months),
@@ -180,6 +206,9 @@ def metrics(run: Run) -> dict[str, float]:
     lived = lifespans(run)
     out: dict[str, float] = {
         "species_alive.in_band.share_of_time.median": float(np.nanmedian(seeds["in_band"])),
+        "species_alive.in_band_after_founding.share_of_time.median": float(
+            np.nanmedian(seeds["in_band_after_founding"])
+        ),
         "species_alive.in_band.share_of_time.p10": float(np.nanpercentile(seeds["in_band"], 10)),
         "species_alive.in_band.share_of_time.min": float(np.nanmin(seeds["in_band"])),
         "species_alive.in_band.share_of_seeds_at_target": float(

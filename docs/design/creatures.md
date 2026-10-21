@@ -165,9 +165,15 @@ networks, predator–prey coexistence): ADR 0009, "References".
   half the land carries well-grown plants, in spring or summer. They come again only if
   the landing dies out within 30 days; once life is established, a total extinction ends
   the world (M10, ADR 0018) and the founders land on the next continent.
-- **Strangers**: about six groups of eight per year reach an inhabited island. Half are a
-  hunter species (land walkers, at least medium-sized, with jaw, legs and senses to
-  match); the rest have a random genome. Most fail; some stay.
+- **Hunters**, the second wave of founders (M11, ADR 0019): once the herd (every
+  creature that is not a predator) reaches 120, a pack of 8 of a hunter species (land
+  walkers, at least medium-sized, with jaw, legs and senses to match) lands in spring
+  or summer, once per world. After that predators live, evolve again from the herd, or
+  come by the ark.
+- **No strangers** since M11 (the owner, ADR 0019): the island is closed, and every
+  species descends from its founders or the ark. Strangers (`immigrant_groups_per_year`,
+  six groups of eight a year until M11, half of them hunters) remain as a switch for
+  comparison runs.
 
 Every creature remembers the genome its lineage arrived with; its distance from it is
 the measure of evolutionary drift.
@@ -184,7 +190,7 @@ Decisions, alternatives and the sweep behind the numbers: ADR 0012.
   creature keeps the species it was given. A newcomer joins the species of its nearest
   relative: the genetically closest labelled creature of its lineage (the arrival it
   descends from through its mother). A lineage the island has not seen (the founders,
-  each group of strangers) founds a new **root** species.
+  the hunters, each group the ark brings) founds a new **root** species.
 - **Splits.** When a species' members fall into separate clusters of at least
   `min_members` (8; 5 for predator species, whose numbers have their own cap) and stay apart for `split_days` (3 days), the largest group keeps the
   species and every other one becomes a **daughter** species. Smaller strays stay; a

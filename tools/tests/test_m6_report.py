@@ -70,6 +70,18 @@ def test_in_band_share_counts_inhabited_days_only() -> None:
     assert np.isnan(m6.in_band_share(np.zeros(5, dtype=np.int64)))
 
 
+def test_m6_1_leaves_out_the_founding() -> None:
+    # Founders land on day 2; 3 species from day 5; then 2 days below and 3 in the band.
+    alive = np.array([0, 0, 1, 1, 2, 3, 4, 2, 2, 5, 6])
+    assert m6.after_founding(alive).tolist() == [3, 4, 2, 2, 5, 6]
+    assert m6.in_band_after_founding(alive) == pytest.approx(4 / 6)
+    # Never 3 species: at most a season is left out.
+    slow = np.concatenate([[1] * 100, [2] * 100])
+    assert m6.after_founding(slow).size == 200 - m6.FOUNDING_DAYS
+    assert m6.in_band_after_founding(slow) == 0.0
+    assert np.isnan(m6.in_band_after_founding(np.zeros(5, dtype=np.int64)))
+
+
 def test_tree_order_puts_daughters_under_their_parents() -> None:
     table = _table([(1, 0, 0, -1, 1, 0), (2, 0, 5, -1, 1, 0), (3, 1, 9, -1, 1, 0),
                     (4, 3, 12, -1, 1, 0)])  # fmt: skip
@@ -85,6 +97,12 @@ def test_m6_report(tmp_path: Path) -> None:
     inhabited = round(YEARS * DAYS_PER_YEAR) - 100
     assert metrics["species_alive.in_band.share_of_time.median"] == pytest.approx(
         (inhabited - 10) / inhabited
+    )
+    assert (
+        metrics["species_alive.in_band_after_founding.share_of_time.median"]
+        == (
+            metrics["species_alive.in_band.share_of_time.median"]  # in the band from day one
+        )
     )
     months = inhabited / (DAYS_PER_YEAR / 12)
     assert metrics["speciation.per_month.median"] == pytest.approx(2 / months)
