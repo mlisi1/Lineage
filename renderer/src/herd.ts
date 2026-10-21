@@ -11,6 +11,7 @@
 import type { Container } from "pixi.js";
 import type { Spot } from "./atmosphere/atmosphere";
 import { lookOf } from "./creatures/body";
+import { ownColours, speciesColours, type SpeciesColour } from "./creatures/colours";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
 import {
@@ -182,6 +183,21 @@ export class Herd {
   }
 
   private genomeOrder: readonly number[] = GENE_NAMES.map((_, index) => index);
+  /** Each living species' colours, ranked against the others (`colours.ts`). */
+  private colours = new Map<number, SpeciesColour>();
+
+  private rankColours(): void {
+    const members: { species: number; genome: Genome }[] = [];
+    for (const id of this.roster.ids) {
+      const known = this.roster.genomes.get(id);
+      if (known === undefined) continue;
+      members.push({
+        species: this.roster.species.get(id) ?? 0,
+        genome: this.genomeOrder.map((index) => known.genome[index] ?? 0),
+      });
+    }
+    this.colours = speciesColours(members);
+  }
 
   private takeFauna(message: FaunaMessage): void {
     this.phenotypeConfig = parsePhenotypeConfig(message.phenotype_config);
@@ -203,12 +219,17 @@ export class Herd {
     const where = this.roster.where.get(id);
     if (config === null || known === undefined || where === undefined) return null;
     const genome: Genome = this.genomeOrder.map((index) => known.genome[index] ?? 0);
-    const look = lookOf(genome, phenotype(config, genome));
+    const species = this.roster.species.get(id) ?? 0;
+    const ranked = this.colours.get(species);
+    const look = {
+      ...lookOf(genome, phenotype(config, genome)),
+      ...(ranked === undefined ? {} : { colours: ownColours(ranked, genome) }),
+    };
     return {
       x: where.x,
       y: where.y,
       genome,
-      species: this.roster.species.get(id) ?? 0,
+      species,
       slots: known.slots,
       torpid: this.roster.torpid.has(id),
       ...withRare(look, rareLooks(known.slots, this.signatures), this.rareConfig),
@@ -229,6 +250,8 @@ export class Herd {
     const changed =
       census.size !== new Set(this.roster.species.values()).size ||
       [...this.roster.species.values()].some((species) => !census.has(species));
+    // Colours rank the species alive against each other: read again when they change.
+    if (changed || this.colours.size === 0) this.rankColours();
     if (changed || placed.length > 0) {
       const seeds = this.roster.ids
         .map((id) => this.seedOf(id))

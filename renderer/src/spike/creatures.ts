@@ -28,6 +28,8 @@ import {
 } from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
+import { dotOf, dotSize } from "../creatures/markers";
+import { MAP_TILE } from "../terrain/ground";
 import type { Random } from "../rng";
 
 /** Wandering: how fast the turn rate drifts and settles (per second). */
@@ -41,9 +43,7 @@ const STEP_RATE = 16;
 const WHITE_TEXELS = 2;
 /** How far (cells) a creature that starts where it cannot live is moved to where it can. */
 const SETTLE_REACH = 48;
-/** On the map a creature is a dot: this many cells across at mass 1, and its dark edge. */
-const MARKER_CELLS = 1;
-const MARKER_EDGE_CELLS = 0.5;
+/** On the map a creature is a dot (`creatures/markers.ts`) with this dark edge. */
 const MARKER_EDGE = 0x1b1b1b;
 /** Toward the light: up and to the left. */
 const LIGHT = Math.SQRT1_2;
@@ -532,15 +532,15 @@ export class CreatureLayer {
 
     // The dot that stands for it on the map: its colour, with a dark edge.
     const marker = new Container();
-    const size = MARKER_CELLS * Math.max(Math.cbrt(seed.mass), 1);
-    for (const [tint, across] of [
-      [MARKER_EDGE, size + 2 * MARKER_EDGE_CELLS],
-      [plan.colour, size],
+    const dot = dotOf(dotSize(seed.mass), plan.swims);
+    for (const [texture, tint] of [
+      [dot.edge, MARKER_EDGE],
+      [dot.fill, plan.colour],
     ] as const) {
-      const square = new Sprite({ texture: this.atlas.white, anchor: 0.5 });
-      square.tint = tint;
-      square.scale.set(across / WHITE_TEXELS);
-      marker.addChild(square);
+      const pixels = new Sprite({ texture, anchor: 0.5 });
+      pixels.tint = tint;
+      pixels.scale.set(1 / MAP_TILE);
+      marker.addChild(pixels);
     }
     marker.visible = false;
     this.container.addChild(marker);
