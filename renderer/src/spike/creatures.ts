@@ -133,12 +133,16 @@ interface Creature {
   arriving?: { age: number; lasts: number };
 }
 
-/** Steps of opacity an arriving creature comes into being in. */
+/** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
 const ARRIVE_STEPS = 4;
+/** Seconds a creature that died takes to fade from where it last stood. */
+const DEPART_S = 0.8;
 
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
+  /** Creatures that died, fading where they last stood. */
+  private departing: { creature: Creature; left: number }[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
   private readonly creatures: (Creature | undefined)[] = [];
   private active = 0;
@@ -192,14 +196,43 @@ export class CreatureLayer {
     this.reveal(creature, index);
   }
 
-  /** Empty slot `index`: its creature is taken off the screen for good. */
-  remove(index: number): void {
+  /**
+   * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
+   * that died, `fade`) fading away over `DEPART_S` where it last stood.
+   */
+  remove(index: number, fade = false): void {
     const creature = this.creatures[index];
     if (creature === undefined) return;
+    this.creatures[index] = undefined;
+    if (fade && (creature.container.visible || creature.marker.visible)) {
+      this.departing.push({ creature, left: DEPART_S });
+      return;
+    }
+    this.destroy(creature);
+  }
+
+  private destroy(creature: Creature): void {
     creature.container.destroy({ children: true });
     creature.marker.destroy({ children: true });
     creature.glass?.destroy();
-    this.creatures[index] = undefined;
+  }
+
+  /** The dead fading away: less of them each frame, in steps, until they are gone. */
+  private depart(dtS: number): void {
+    this.departing = this.departing.filter((leaving) => {
+      leaving.left -= dtS;
+      if (leaving.left <= 0) {
+        this.destroy(leaving.creature);
+        return false;
+      }
+      const opacity = Math.ceil((leaving.left / DEPART_S) * ARRIVE_STEPS) / (ARRIVE_STEPS + 1);
+      const { creature } = leaving;
+      creature.marker.alpha = opacity;
+      creature.glass ??= new AlphaFilter();
+      creature.glass.alpha = opacity;
+      creature.container.filters = [creature.glass];
+      return true;
+    });
   }
 
   /**
@@ -351,6 +384,7 @@ export class CreatureLayer {
    */
   update(dtS: number, view?: CellRect, posed = true): void {
     this.clock += dtS;
+    this.depart(dtS);
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;

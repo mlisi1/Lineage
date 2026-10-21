@@ -40,7 +40,11 @@ const STYLES: Readonly<Record<ViewName, GroundStyle>> = {
   local: "blended",
 };
 
-/** A plant layer coming in over the one before it, which goes when the new one is all there. */
+/**
+ * A plant layer coming in over the one before it: the new one fades in over the first half
+ * (drawn over the old, so plants in both never dim), then the old one fades out under it
+ * over the second half, so plants gone from the new one fade away instead of vanishing.
+ */
 class PlantFade {
   readonly container = new Container();
   current: PlantLayer | null = null;
@@ -65,7 +69,8 @@ class PlantFade {
 
   /** The layer drawn fully opaque: the old one while the new fades in over it. */
   get host(): PlantLayer | null {
-    return this.outgoing ?? this.current;
+    const coming = this.current !== null && this.current.container.alpha < 1;
+    return coming ? (this.outgoing ?? this.current) : this.current;
   }
 
   tick(dtS: number, view: CellRect): void {
@@ -73,8 +78,10 @@ class PlantFade {
     if (this.outgoing === null || this.current === null) return;
     this.outgoing.cull(view);
     this.age += dtS;
-    this.current.container.alpha = Math.min(this.age / this.fadeS, 1);
-    if (this.current.container.alpha >= 1) this.drop();
+    const half = this.fadeS / 2;
+    this.current.container.alpha = Math.min(this.age / half, 1);
+    this.outgoing.container.alpha = 1 - Math.min(Math.max((this.age - half) / half, 0), 1);
+    if (this.age >= this.fadeS) this.drop();
   }
 
   private drop(): void {

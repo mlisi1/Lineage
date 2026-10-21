@@ -245,8 +245,9 @@ export class Sequence {
   update(dtS: number): void {
     if (!this.running) return;
     this.timeS += dtS;
-    const { act } = this.moment;
-    if (!this.landed && (act === "dark" || act === "rise")) {
+    const { act, black } = this.moment;
+    // The next world is laid out only once the screen is black, so it is not seen arriving.
+    if (!this.landed && ((act === "dark" && black >= 0.99) || act === "rise")) {
       this.landed = true;
       this.flush(this.held);
     }

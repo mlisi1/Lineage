@@ -50,7 +50,7 @@
 import { Application, Container, WebGLRenderer } from "pixi.js";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
-import { sight, type Point } from "./camera";
+import { sight, within, type Point } from "./camera";
 import { Captions } from "./captions";
 import { Director, TIMINGS, type Scene, type Shot } from "./director";
 import { Herd } from "./herd";
@@ -386,10 +386,18 @@ async function start(): Promise<void> {
       const centre: Point =
         pinned === "map"
           ? { x: size.width / 2, y: size.height / 2 }
-          : {
-              x: Number(params.get("x") ?? size.width / 2),
-              y: Number(params.get("y") ?? size.height / 2),
-            };
+          : // Kept inside the world, as the director keeps its own views: past its edge
+            // there is nothing to draw.
+            within(
+              {
+                x: Number(params.get("x") ?? size.width / 2),
+                y: Number(params.get("y") ?? size.height / 2),
+              },
+              WIDTH / TILES[pinned],
+              HEIGHT / TILES[pinned],
+              size.width,
+              size.height,
+            );
       shot = { view: pinned, centre, dim: 0, subject: null };
     }
     const tile = TILES[shot.view];

@@ -487,3 +487,33 @@ export function markTexture(
   made.set(key, mark);
   return mark;
 }
+
+const onLand = new Map<
+  string,
+  { land: object; mark: { texture: Texture; cx: number; cy: number } }
+>();
+
+/**
+ * The crater `size` pixels across with what lies under the sea left out (`wet`, by texture
+ * pixel): a meteor that struck by a coast leaves no dry rim over the water. One for each
+ * crater (`id`) and size, painted again when `land` (the land it was painted for) changes.
+ */
+export function craterOnLand(
+  id: string,
+  size: number,
+  land: object,
+  wet: (x: number, y: number) => boolean,
+): { texture: Texture; cx: number; cy: number } {
+  const across = Math.max(Math.round(size), 5);
+  const key = `${id}:${across}`;
+  const known = onLand.get(key);
+  if (known !== undefined && known.land === land) return known.mark;
+  known?.mark.texture.destroy(true);
+  const mark = {
+    texture: paint(across, across, (x, y) => (wet(x, y) ? null : craterPixel(across, x, y))),
+    cx: across / 2,
+    cy: across / 2,
+  };
+  onLand.set(key, { land, mark });
+  return mark;
+}

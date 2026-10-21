@@ -108,6 +108,9 @@ const BODIES = {
   local: localBody(LOCAL_PIXELS, CREATURE_SCALE * LOCAL_ENLARGED),
 } as const;
 
+/** Seconds a newborn takes to fade in where it was born. */
+const BORN_S = 0.6;
+
 export class Herd {
   private readonly roster = new Roster();
   private readonly layers: Record<"middle" | "local", CreatureLayer>;
@@ -220,7 +223,8 @@ export class Herd {
     const census = new Set(this.roster.species.values());
     const { placed, removed } = this.roster.take(message);
     const layers = Object.values(this.layers);
-    for (const slot of removed) for (const layer of layers) layer.remove(slot);
+    // The dead fade away where they last stood.
+    for (const slot of removed) for (const layer of layers) layer.remove(slot, true);
     // A new species, or one gone: newcomers take the kinds of the census as it is now.
     const changed =
       census.size !== new Set(this.roster.species.values()).size ||
@@ -234,7 +238,8 @@ export class Herd {
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
-      const arriving = this.arrival?.(seed.x, seed.y) ?? 0;
+      // An ark's newcomer comes into being under its light; one born, quickly.
+      const arriving = this.arrival?.(seed.x, seed.y) || BORN_S;
       for (const layer of layers) {
         layer.place(slot, seed);
         if (arriving > 0) layer.arrive(slot, arriving);

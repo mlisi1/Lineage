@@ -41,7 +41,8 @@ import {
   type Rgb,
 } from "./light";
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
-import { CRATER_RIM, LAVA_FRAMES, coneSummit, markTexture } from "./marks";
+import { CRATER_RIM, LAVA_FRAMES, coneSummit, craterOnLand, markTexture } from "./marks";
+import { seaAt } from "../terrain/sea";
 import {
   RowPool,
   SpritePool,
@@ -63,6 +64,7 @@ import {
   type Sprites,
 } from "./sprites";
 import { VISIBLE_FROM } from "../plants/look";
+import { FADE_S } from "../terrain/grounds";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
 const LAVA = [0xff5a1e, 0xff8a2a, 0xffc04a] as const;
@@ -169,7 +171,7 @@ const BEAM_S = 8;
  * scene counts as one of them rather than as born.
  */
 const ARRIVE_S = 2.5;
-const ARK_REACH = 8;
+const ARK_REACH = 20;
 const ARK_LATE_S = BEAM_S + 4;
 /**
  * The seed's sprouts: land that had less biomass than this (0–255) and has some after the
@@ -188,6 +190,10 @@ const SOWING_WAIT_S = 60;
  */
 const MARK_DAYS = 30;
 const MARK_WALL_S = 90;
+/** Sim time over which a cone or crater fades as its days end. */
+const MARK_FADE_MS = 2 * 86_400_000;
+/** Wall seconds a new cone takes to rise out of the ground. */
+const CONE_RISE_S = 2.5;
 const MS_PER_DAY = 86_400_000;
 /** Seconds a burnt animal's ash rises; motes of the seed power over the bare land in sight. */
 const ASH_S = 3;
@@ -197,6 +203,9 @@ const LAVA_FPS = 4;
 const FLAME_FPS_CLOSE = 4;
 const FLAME_ALPHA_CLOSE = 0.72;
 const SMALL_FLAMES = 3;
+/** Wall seconds a cell's fire takes to come up as it catches, and to die down as it goes out. */
+const FLAME_IN_S = 0.8;
+const FLAME_OUT_S = 1.5;
 
 /** How much bigger a light about a place is drawn the closer the view (art pixels per map's). */
 function closeness(tile: number): number {
@@ -328,6 +337,9 @@ export class Atmosphere {
   private rain = 0;
   private storm = 0;
   private overcast = 0;
+  /** When each cell's fire came up and went out (scene seconds), while it shows. */
+  private readonly flameLife = new Map<number, { born: number; died: number | null }>();
+  private burningSeen: readonly number[] = [];
   /** The land of a meteor's crater, held until it strikes (scene seconds). */
   private heldLand: Message | null = null;
   private landHeldUntilS = -Infinity;
@@ -344,7 +356,7 @@ export class Atmosphere {
   private landBefore: Land | null = null;
   private landChangedS = -Infinity;
   /** The cells it sowed, and when (scene seconds) their sprouts begin; drawn until `sownUntilMs`. */
-  private sown: { cell: number; at: number }[] = [];
+  private sown: { cell: number; at: number; gone?: number }[] = [];
   private sownUntilMs = 0;
   private timeS = 0;
   private flashLeft = 0;
@@ -668,19 +680,52 @@ export class Atmosphere {
     }
   }
 
+  /**
+   * Note when cells catch and stop burning, so that their flames come up and die down
+   * rather than appearing and going at once; forget those long out.
+   */
+  private syncFlames(): void {
+    if (this.burning !== this.burningSeen) {
+      this.burningSeen = this.burning;
+      const now = new Set(this.burning);
+      for (const index of this.burning) {
+        const life = this.flameLife.get(index);
+        if (life === undefined || life.died !== null) {
+          this.flameLife.set(index, { born: this.timeS, died: null });
+        }
+      }
+      for (const [index, life] of this.flameLife) {
+        if (!now.has(index) && life.died === null) life.died = this.timeS;
+      }
+    }
+    for (const [index, life] of this.flameLife) {
+      if (life.died !== null && this.timeS - life.died > FLAME_OUT_S) this.flameLife.delete(index);
+    }
+  }
+
+  /** How much of cell `index`'s fire shows (0–1): rising as it catches, sinking as it goes out. */
+  private flameShare(index: number): number {
+    const life = this.flameLife.get(index);
+    if (life === undefined) return 0;
+    const rising = Math.min((this.timeS - life.born) / FLAME_IN_S, 1);
+    const sinking = life.died === null ? 1 : 1 - (this.timeS - life.died) / FLAME_OUT_S;
+    return Math.max(Math.min(rising, sinking), 0);
+  }
+
   private drawFires(view: View, dark: number): void {
     const land = view.land;
-    if (land === null || this.burning.length === 0) return;
+    this.syncFlames();
+    if (land === null || this.flameLife.size === 0) return;
     const { cells, tile } = view;
     const inSight: number[] = [];
-    for (const index of this.burning) {
+    for (const index of this.flameLife.keys()) {
       const x = (index % land.width) + 0.5;
       const y = Math.floor(index / land.width) + 0.5;
       if (x < cells.x0 - 2 || x > cells.x1 + 2 || y < cells.y0 - 2 || y > cells.y1 + 2) continue;
       inSight.push(index);
     }
     const every = Math.max(1, Math.ceil(inSight.length / MOST_FIRES));
-    const strength = 0.55 + 0.45 * dark;
+    const fullStrength = 0.55 + 0.45 * dark;
     // The whole fire lights the land round it, more so at night.
     let sumX = 0;
     let sumY = 0;
@@ -690,12 +735,18 @@ export class Atmosphere {
     }
     if (inSight.length > 0) {
       const spread = Math.sqrt(inSight.length) * tile * 2.5 + 12;
-      const glow = 0.15 + 0.3 * dark;
+      const shown =
+        inSight.reduce((sum, index) => sum + this.flameShare(index), 0) / inSight.length;
+      const glow = (0.15 + 0.3 * dark) * shown;
       this.halo(sumX / inSight.length, sumY / inSight.length, spread, FIRE[0], glow, tile);
     }
     // Each burning cell: a small flickering glow, and flames licking up from it.
     inSight.forEach((index, n) => {
       if (n % every !== 0) return;
+      // Coming up as the cell catches, dying down as it goes out.
+      const share = this.flameShare(index);
+      if (share <= 0.01) return;
+      const strength = fullStrength * share;
       const x = (index % land.width) + 0.5;
       const y = Math.floor(index / land.width) + 0.5;
       const flame = Math.floor(cellHash(index, Math.floor(this.timeS * 5), 342) * FIRE.length);
@@ -741,7 +792,7 @@ export class Atmosphere {
           close ? ember.height * 2 : ember.height / 2,
         );
         bed.tint = 0xffffff;
-        bed.alpha = 0.95;
+        bed.alpha = 0.95 * Math.min(share * 2, 1);
       }
       const count = close ? 2 : 1;
       const frames = close ? this.sprites.bigFlames : this.sprites.flames;
@@ -772,7 +823,7 @@ export class Atmosphere {
         placeCentred(sprite, fx + ox, footY - (inCrown ? crown : 0) - h / 2 / tile, tile, w, h);
         sprite.tint = 0xffffff;
         // Up close a flame is see-through, so what stands behind it shows.
-        sprite.alpha = close ? FLAME_ALPHA_CLOSE : 1;
+        sprite.alpha = (close ? FLAME_ALPHA_CLOSE : 1) * share;
         // Fire makes its own light: in the dark (and under cloud's grey) the tinted flame
         // is lit again by an added copy over it.
         const unlit = Math.max(dark, this.overcast * 0.6);
@@ -781,7 +832,7 @@ export class Atmosphere {
           lit.position.copyFrom(sprite.position);
           lit.scale.copyFrom(sprite.scale);
           lit.tint = 0xffffff;
-          lit.alpha = Math.min(unlit, 1) * (close ? 0.5 : 0.85);
+          lit.alpha = Math.min(unlit, 1) * (close ? 0.5 : 0.85) * share;
         }
         if (close) {
           const glow = FIRE[(frame + k) % FIRE.length] ?? FIRE[0];
@@ -832,7 +883,7 @@ export class Atmosphere {
           const h = flame.texture.height * 2;
           placeCentred(flame, sx, sy - h / 2 / tile, tile, w, h);
           flame.tint = 0xffffff;
-          flame.alpha = FLAME_ALPHA_CLOSE;
+          flame.alpha = FLAME_ALPHA_CLOSE * share;
         }
       }
     });
@@ -849,7 +900,7 @@ export class Atmosphere {
         life: 4,
         from: 3,
         to: 10,
-        alpha: 0.7,
+        alpha: 0.7 * this.flameShare(index),
         salt: index,
       };
       this.puffs(plume, 3, SMOKE, tile);
@@ -886,14 +937,32 @@ export class Atmosphere {
       case "crater": {
         // A crater's rim stands where the sim dug, its thrown earth beyond.
         const floor = (texture: Texture): Sprite => this.floorPool.next(texture);
+        // Drawn as long as the land keeps it, fading over its last days rather than going
+        // at once.
+        const left = effect.untilMs >= 0 ? (effect.untilMs - this.simMs) / MARK_FADE_MS : 1;
+        const shown = Math.min(Math.max(left, 0), 1);
+        if (shown <= 0) return 0;
         if (effect.kind === "crater") {
-          this.mark(floor, "crater", x, y, (radius * 2 * tile) / CRATER_RIM, tile, 1);
+          this.crater(effect, view, shown);
           return 0;
         }
-        // A cone's scree lies on the ground; the cone stands among the plants, in the row of
-        // its middle (no plant grows on it: the land round it is bare).
-        this.mark(floor, "scree", x, y, radius * 2 * tile, tile, 1);
-        this.mark(this.stand(view, y), "cone", x, y, radius * 2 * tile, tile, 1);
+        // A cone's scree lies on the ground; the cone stands among the plants, sorted at the
+        // north edge of its foot, so whatever is on it is drawn over it (no plant grows on
+        // it: the land round it is bare).
+        // A new cone rises out of the ground over its first seconds, its scree spreading.
+        const rise = Math.min(age / CONE_RISE_S, 1);
+        this.mark(floor, "scree", x, y, radius * 2 * tile, tile, shown * rise);
+        this.mark(
+          this.stand(view, y - radius),
+          "cone",
+          x,
+          y,
+          radius * 2 * tile,
+          tile,
+          shown * Math.min(rise * 3, 1),
+          0,
+          rise,
+        );
         return 0;
       }
       case "volcano": {
@@ -911,7 +980,17 @@ export class Atmosphere {
         // Its lava: the pool in the mouth and the rivers down the cone, drawn over it
         // untinted (it makes its own light), cooling to crust as the eruption ends.
         const frame = Math.floor(this.timeS * LAVA_FPS) % LAVA_FRAMES;
-        this.mark(this.stand(view, y), "lava", x, y, radius * 2 * tile, tile, fading, frame);
+        this.mark(
+          this.stand(view, y - radius),
+          "lava",
+          x,
+          y,
+          radius * 2 * tile,
+          tile,
+          fading * Math.min(age / CONE_RISE_S, 1),
+          frame,
+          Math.min(age / CONE_RISE_S, 1),
+        );
         // A column of ash, dark, rising high and spreading with the wind.
         this.puffs(
           {
@@ -1273,7 +1352,7 @@ export class Atmosphere {
     if (this.landChangedS < sowing.since || before === null || sowing.seen === land) return;
     sowing.seen = land;
     if (before.width !== land.width || before.height !== land.height) return;
-    const sown: { cell: number; at: number }[] = [];
+    const sown: { cell: number; at: number; gone?: number }[] = [];
     for (let cell = 0; cell < land.biomass.length; cell++) {
       const was = before.biomass[cell] ?? 255;
       if (was >= SOWN_BARE || (land.biomass[cell] ?? 0) <= was) continue;
@@ -1298,18 +1377,22 @@ export class Atmosphere {
     const frames = sproutTextures();
     const each = tile >= 32 ? 5 : tile >= 8 ? 1 : 0;
     const pixel = tile >= 32 ? 2 : 1;
-    for (const { cell, at } of this.sown) {
+    for (const sprout of this.sown) {
+      const { cell, at } = sprout;
       const cx = cell % land.width;
       const cy = Math.floor(cell / land.width);
       if (cx < cells.x0 - 1 || cx > cells.x1 || cy < cells.y0 - 1 || cy > cells.y1) continue;
-      if ((land.biomass[cell] ?? 0) >= VISIBLE_FROM) continue;
+      // Once its plants are drawn, the sprouts fade as the plants fade in over them.
+      if ((land.biomass[cell] ?? 0) >= VISIBLE_FROM) sprout.gone ??= this.timeS;
+      const fading = sprout.gone === undefined ? 1 : 1 - (this.timeS - sprout.gone) / FADE_S;
+      if (fading <= 0) continue;
       const age = this.timeS - at;
       if (age < 0) continue;
       if (each === 0) {
         const fleck = this.floorPool.next(this.sprites.fleck);
         placeCentred(fleck, cx + 0.5, cy + 0.5, tile, 1);
         fleck.tint = 0x7cc04a;
-        fleck.alpha = Math.min(age / SPROUT_GROW_S, 1);
+        fleck.alpha = Math.min(age / SPROUT_GROW_S, 1) * fading;
         continue;
       }
       for (let k = 0; k < each; k++) {
@@ -1334,7 +1417,7 @@ export class Atmosphere {
           texture.height * pixel,
         );
         sprite.tint = 0xffffff;
-        sprite.alpha = 1;
+        sprite.alpha = fading;
         // A glint of the seed's gold as it breaks the soil.
         if (grown < 0.4) {
           const glint = this.lightPool.next(this.sprites.fleck);
@@ -1382,6 +1465,7 @@ export class Atmosphere {
     tile: number,
     alpha: number,
     frame = 0,
+    rise = 1,
   ): void {
     if (alpha <= 0.01) return;
     // Up close its art pixels are two screen pixels, as the plants' are.
@@ -1390,6 +1474,29 @@ export class Atmosphere {
     const sprite = place(mark.texture);
     sprite.anchor.set(mark.cx / mark.texture.width, mark.cy / mark.texture.height);
     sprite.position.set(Math.round(x * tile) / tile, Math.round(y * tile) / tile);
+    // Rising (a new cone): it grows up out of its foot.
+    const grown = rise >= 1 ? 1 : 0.2 + 0.8 * rise * rise * (3 - 2 * rise);
+    sprite.scale.set(pixel / tile, (pixel / tile) * grown);
+    sprite.tint = 0xffffff;
+    sprite.alpha = alpha;
+  }
+
+  /** A crater on the ground, left out where the sea now is (`craterOnLand`). */
+  private crater(effect: Effect, view: View, alpha: number): void {
+    const { tile, land } = view;
+    if (land === null || alpha <= 0.01) return;
+    const pixel = tile >= 32 ? 2 : 1;
+    const texels = Math.max(Math.round((effect.radius * 2 * tile) / CRATER_RIM / pixel), 5);
+    const sea = seaAt(land);
+    const half = texels / 2;
+    const mark = craterOnLand(String(effect.salt), texels, land, (px, py) => {
+      const cx = effect.x + ((px + 0.5 - half) * pixel) / tile;
+      const cy = effect.y + ((py + 0.5 - half) * pixel) / tile;
+      return sea(cx, cy) !== null;
+    });
+    const sprite = this.floorPool.next(mark.texture);
+    sprite.anchor.set(0.5, 0.5);
+    sprite.position.set(Math.round(effect.x * tile) / tile, Math.round(effect.y * tile) / tile);
     sprite.scale.set(pixel / tile);
     sprite.tint = 0xffffff;
     sprite.alpha = alpha;
