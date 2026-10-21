@@ -144,7 +144,25 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **Pitfalls**: Vite's dev server does not reload the paint worker when
   `terrain/ground.ts` changes (restart it, or `?painter=inline`). The wire's `young` is
   additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
-- **Next**: the checklist from the top: animals seen on water (check M11's wading first).
+- **Next: animals seen on water**, investigated 2026-10-21, not yet fixed. Findings:
+  - Wading (`wading_depth = 0.03`) is only on `m11-tuning`, not in `main` or here, so in
+    R5's recordings no land animal should be in the sea.
+  - The sim does put some there: in `life.json`, 1.1 % of the positions of land animals
+    (`AQUATIC` < 0.5) are on the water as painted, most just off the shore (median 0.023
+    below sea level). The sim judges land by whole cells while the ground paints the coast
+    between them. One animal stands far out at sea (0.375 below).
+  - The renderer follows: `reanchor` and `drive` (`creatures/motion.ts`) send an anchored
+    animal to where the sim has it with `travel`, which never stops at water ("going to
+    where the sim has it never does"). Only strolls and `settle` at birth respect
+    `passableIn`. Only the head is tested, so a long tail can trail over the water, and the
+    swash runs over the beach at high tide.
+  - Fix to propose to the owner: move an anchor on painted water to the nearest standable
+    place (as `settle` does at birth); keep the body's joints, not only the head, off the
+    water; keep walkers beyond the swash as plants are (`PlantLayer.ashore`). Once M11's
+    wading reaches `main`, waders are drawn in the shallows on purpose (item 10).
+  - Measure again after the fix with the same count over `life.json` (sim positions
+    against `heightAt`), and look at the far-at-sea animal: a sim question for M11 if it is
+    not a swimmer.
 
 ### R5 checklist (the owner, 2026-10-21)
 
