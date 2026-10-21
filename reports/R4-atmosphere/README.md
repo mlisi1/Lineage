@@ -5,7 +5,7 @@ apocalypse on the map), from streams recorded for it with `tools/stream.py --sta
 `report.html`, one self-contained file (animated PNGs; open it in a browser).
 Decisions: ADR 0021.
 
-- Branch `r4-atmosphere` at `1d323d0`
+- Branch `r4-atmosphere` at `576b23b`
 - Atmosphere unit tests run for the report: 42 passed, 1 failed;
   renderer 296 unit and 55 browser tests listed
 - Films are caught in wall time; the streams are recorded afresh each run
