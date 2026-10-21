@@ -839,7 +839,14 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         if (detailed) matter[at] = withered ? MATTER.dry : (MATTER_OF[grows] ?? MATTER.soil);
         continue;
       }
-      const high = above >= relief.snowFrom ? 2 : above >= relief.highRockFrom ? 1 : 0;
+      // Bare heights are rock; snow lies there only where the simulation has it (above),
+      // the relief's fixed snow line standing in only for a land without its snow.
+      const high =
+        above >= relief.snowFrom && snowCells === undefined
+          ? 2
+          : above >= relief.highRockFrom
+            ? 1
+            : 0;
       const soil = high === 2 ? snow : high === 1 ? rock : bare;
       const sandy = interpolated ? above * (1 + 0.6 * dither) < BEACH : beach;
       const base = sandy ? sand : (soil[step] ?? 0);

@@ -157,7 +157,7 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [ ] 4. The ground is noisy: a busy brown and green patchwork in the middle view; hard,
   jagged lime grass edges beside soft dithered ones in the local view
 - [ ] 5. Grass tufts repeat visibly (few drawings, even spacing)
-- [ ] 6. A snow cap on a low bare summit in August (the renderer's own snow line)
+- [x] 6. A snow cap on a low bare summit in August (the renderer's own snow line)
 
 **Not drawn yet**
 - [ ] 7. Young animals look like adults (age is not on the wire)

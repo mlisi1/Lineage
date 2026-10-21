@@ -708,7 +708,8 @@ season of its own turn.
 **Snow** lies where the simulation says (`flora.snow_cover`: the temperature index by
 season and height under `snow_below_temperature`), in any season: in patches on the
 ground, thinner under trees and where it lies thin, and on the plants of cells under
-enough of it.
+enough of it. Nowhere else: bare heights are rock (R5; the report maps' fixed snow line
+only stands in for a land without the simulation's snow, as the R0 fixture).
 
 **The plant genes** where the stream carries them: `HEIGHT` picks a tree's or bush's
 build (broad and low, as the scale has it, or slender and tall); `EVERGREEN` how late it
