@@ -15,7 +15,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; five mechanisms agreed with the owner, four in (food at sea with wading, reach by height, cover for prey, nutrients back to the soil; schema v11), the fifth (seeds carried by grazers, v13) after R4; new criteria D1–D3 (reported, bands pending); step budget 600 ms, M2.5 retired; sweep `mechanisms-1` paused at 23 of 41 points (ADR 0019) | — |
+| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; five mechanisms agreed with the owner, four in (food at sea with wading, reach by height, cover for prey, nutrients back to the soil; schema v11), the fifth (seeds carried by grazers, v13) after R4; new criteria D1–D3 (reported, bands pending); step budget 600 ms, M2.5 retired; sweeps `mechanisms-1` (41 points) and `mechanisms-2` (13) done, `species-1` paused at 5 of 31; M11 report module built; see "M11 in progress" below (ADR 0019) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -32,54 +32,98 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M11 in progress (branch `m11-tuning`, paused 2026-10-20 23:05)
+### M11 in progress (branch `m11-tuning`, paused 2026-10-21 16:35)
 
-- **Where it stands**: both checkouts clean at `145efe5` (`m11-tuning`; the worktree
-  `../Lineage-m11-reach` on `m11-reach` is the same commit). No M11 process runs.
-  Sweep `runs/sweep-mechanisms-1` stopped with 23 of 41 points scored
-  (`points.json`); p023 was partial and reruns. Resume, after checking the load:
-  `env -u PYTHONPATH uv run python -m tools.tune.sweep tools/tune/sweeps/mechanisms-1.toml --jobs 10 --max-load 16`.
-  Then rank, `tools.tune.sensitivity`, propose a config and D1–D3 bands to the owner.
-  Remaining compute, estimated: about 20 hours (follow-up sweep, held-out check, M8
-  schedules, M5 fork and baseline, a 5-year M3 run, gut seeds and a re-check sweep after
-  R4, 10-year runs, slow suite).
+**Start here next session.** Read this section, then ADR 0019 (every decision and
+number), then `docs/m11-plan.md` §7.
+
+- **Where it stands**: `m11-tuning` and the worktree `../Lineage-m11-reach` (branch
+  `m11-reach`, used to write code while a run occupies the main checkout) are both at the
+  commit that adds this note, clean. **No M11 process runs.**
+- **Paused sweep `species-1`** (`tools/tune/sweeps/species-1.toml`, 31 points, started
+  at `c1d0cbc`): 5 points scored in `runs/sweep-species-1/points.json`; p005 was partial
+  and reruns. **Resume** (check `uptime` first; the PC is shared):
+  `env -u PYTHONPATH uv run python -m tools.tune.sweep tools/tune/sweeps/species-1.toml --jobs 10 --max-load 16 >> runs/sweep-species-1.log 2>&1`
+  (about 11–13 min a point, so 26 points ≈ 5–6 h). Then
+  `uv run python -m tools.tune.sensitivity runs/sweep-species-1`.
+- **What the sweeps found** (ADR 0019 has the numbers):
+  - `fauna-1` (15 points, before the mechanisms): a map of the predator levers.
+  - `mechanisms-1` (41 points, all mechanisms in): no point passes every M criterion;
+    M6.1 follows body mutation (ρ +0.84), predators (D3, M4.3) follow `meat_energy` and
+    `immigrant_groups_per_year` and fall with `predator_cap` and `defence_toxicity`;
+    later founding (`founder_min_plant_cover`) protects succession (M3.5) and prevents
+    world endings; cover, browse floor, algae value, dung, founder count do little.
+  - `mechanisms-2` (13 of 31, stopped): past a body mutation of about 0.037 the herd
+    becomes one cloud, species fall to 2 and splits stop; M6.1 peaks near 0.036 at 0.89.
+  - `species-1` so far (5 points): link distance moves M6.1 and M6.2 hard
+    (link 0.034–0.040 with mutation 0.027–0.029: M6.1 0.23–0.37 with 2.8–3.8 splits a
+    month, too many small species); the best, p004 (mutation 0.030, link 0.036, founder
+    spread 0.10, meat 2200–3000 range), fails only M3.5 and M6.1 (0.77) among M
+    criteria and passes D1 (0.45) and D3; p001 (mutation 0.036, link 0.031) has M6.1
+    0.89 but M6.2 0.58. M3.5 failed in all 4 sampled points: watch it.
+- **Next steps, in order**:
+  1. Finish `species-1`; rank; pick 2–3 candidates (fewest M failures, D1–D3, worlds
+     ended ≤ 0.1 per seed-year).
+  2. If M6.1 still misses 0.9, a short grid on `link_distance` × `mutation_sigma_body`
+     around the best (the census only watches, so it changes counting, not creatures);
+     if it still misses, ask the owner about a mechanism (assortative mating on
+     `HUE`/`PATTERN`, m11-plan §6 M6) or a band revision with an ADR.
+  3. Propose D1–D3 bands to the owner from what the island reaches (D2 cannot pass until
+     the plant rare genes can establish: see below).
+  4. Held-out check (seeds 20–39) of the candidates; then the full set for the M11 report:
+     5-year run (M3), fork and learning-off runs (M5), always / office-august /
+     conference runs (M8), one run per mechanism turned off; build with
+     `uv run python -m tools.report M11 --runs <tuned office run> --baseline <each> --sweep runs/sweep-<name>`.
+  5. After R4 reaches `main`: merge `main` (doc conflicts expected), build mechanism 4
+     (seeds carried by grazers, schema v13 on R4's v12), sweep the plant rare-gene levers
+     (`[flora] rare_gain_probability`, the genes' growth costs; fire-pine depends on R4's
+     storm fires), and a short re-check sweep of the tuned config.
+  6. 10-year runs on about 5 seeds; slow suite; measure the sim on the Orange Pi once.
+  Remaining compute, estimated: 15–20 hours.
 - **The owner's answers** (ADR 0019, three rounds on 2026-10-20): worlds end about once a
-  decade; numbers first, mechanisms only after asking (then: five mechanisms approved,
-  built one at a time with an on/off run each); keep photosynthesis, watched; D1 every
-  gene has a niche, D2 rare genes can thrive, D3 hunters a real share and present (bands
-  set after the mechanisms); wading on the shelf; tune now, gut seeds later; step budget
-  600 ms, M2.5 retired; measure the sim once on the Orange Pi before M11 closes.
+  decade; numbers first, mechanisms only after asking (five approved and built: food at
+  sea and wading, reach, cover, nutrients; seeds carried by grazers waits for v13); keep
+  photosynthesis, watched; D1 every gene has a niche, D2 rare genes can thrive, D3 hunters
+  a real share and present (bands set after the mechanisms); tune now, gut seeds later;
+  step budget 600 ms, M2.5 retired. On 2026-10-21 the owner let M11 run on its own.
 - **What exists**: `tools/tune/` (`score.py`: every single-run criterion, M11.1, D1–D3,
-  engagement measures; `sweep.py`: Latin hypercube or grid, resumable, load guard;
-  `sensitivity.py`: rank correlations); sweeps in `tools/tune/sweeps/`. Sim:
-  `Flora.algae` (schema v11, fixture `v11.lzma`), `creature.Browse` and `reach`,
-  `creature.hidden` (cover), dung and carrion fertility, wading (`[fauna]
-  wading_depth`). Each mechanism has an off switch (ADR 0019 lists them).
-- **Measured so far** (seeds 0–19, office, 3 years): the defaults with all four
-  mechanisms fail only M6.1 (0.82) among the M criteria; M3.5 passes since nutrients;
-  M4.3 is fragile under cover (0.53–0.60); in the sweep M6.1 follows
-  `mutation_sigma_body` (ρ +0.83) but larger mutations hurt M3.5 (+0.59), and M4.3
-  follows immigration (+0.62) and, inversely, the predator cap (−0.55).
-- **Coordination with R4** (`r4-atmosphere`, session `lineage-f4`): R4 draws algae and
-  owns `schema.json`, `encode.py`, `tools/stream.py`; R4's sim changes (weather, fire only
-  in storms with `fire_strikes_per_storm_hour` replacing `fire_ignitions_per_year`,
-  burnt deaths, barren land after volcanoes and craters) are schema v12; M11's gut seeds
-  are v13 (claimed). Whoever merges into `main` second regenerates the stream recordings
-  and scene snapshots. After R4 merges: merge `main`, build gut seeds, re-check sweep.
+  engagement; `sweep.py`: Latin hypercube or grid, resumable, `--max-load`;
+  `sensitivity.py`); sweeps in `tools/tune/sweeps/`; the M11 report
+  (`tools/milestones/m11.py`: runs recognised by their manifests, every criterion on both
+  seed sets, D1/D2 per gene, mechanisms on and off, engagement, a sensitivity heat map per
+  `--sweep`). Sim: `Flora.algae` (schema v11, fixture `v11.lzma`), `creature.Browse` and
+  `reach`, `creature.hidden` (cover), dung and carrion fertility, wading; each mechanism
+  has an off switch (`m11.MECHANISMS`). Raw runs kept in `runs/`: `m11-heldout-base`,
+  `m11-algae-on/off`, `m11-reach-on`, `m11-cover-on`, `m11-nutrients-on`, and the sweeps.
+- **D2 and the plants**: fire-pine and nitrogen-fixer never hold even 100 cells for 30
+  days in any run; poisonous and fruiting in 5–10 % of seeds. They pay their growth cost
+  always and gain rarely (big fires are rare in office light; soils get richer; heavy
+  grazing is local; fruit still spreads by wind). No swept lever acts on them yet.
+- **Coordination with R4** (`r4-atmosphere`, worktree `../Lineage-r4`, session
+  `lineage-f4`; board `/home/elechim/Lineage-coord/`): R4 draws algae and owns
+  `schema.json`, `encode.py`, `tools/stream.py`. R4's sim changes are schema v12: weather
+  with overcast spells (two more random draws an hour, so trajectories and golden hashes
+  shift), fire only in storms (`fire_strikes_per_storm_hour` replaces
+  `fire_ignitions_per_year`), burnt deaths, barren land after eruptions and craters,
+  newcomers landing by a coast set on the spot. M11's gut seeds are v13 (claimed).
+  Whoever merges into `main` second regenerates the stream recordings and scene
+  snapshots.
 - **Pitfalls met in M11**:
   - The run manifest stamps the commit **when the run ends**: never commit or merge in
-    the checkout a run uses while it runs. Write code in the worktree and ff-merge
-    between runs; a run started later imports the code of that moment.
-  - Every mechanism that changes behaviour moves the golden hashes of inhabited worlds
-    and the renderer's recordings (`tools/stream.py` from `v4.lzma`): re-record both
-    streams, check the scene diffs (only plants should move), then `--update-snapshots`.
-  - A fresh worktree needs `uv sync` and `cd renderer && npm ci` (the main checkout once
-    lacked `json-schema-to-typescript`; `npm ci` restored it from the lockfile).
-  - One 20-seed run cannot resolve a share criterion's change below about 0.2 (D1 swings
-    by 0.15–0.25 between runs); M3.2's median sits between two clusters of seeds (second
-    summer, about 21 months, or the autumn after, about 27) and jumps between them.
+    the checkout a run uses while it runs. Write code in the worktree; ff-merge between
+    runs. A run started later imports the code of that moment.
+  - Every behaviour change moves the golden hashes of inhabited worlds and the renderer's
+    recordings (`tools/stream.py` from `v4.lzma`): re-record both streams, check the scene
+    diffs (only plants should move), then `npx playwright test --update-snapshots`.
+  - A fresh worktree needs `uv sync` and `cd renderer && npm ci`.
+  - One 20-seed run cannot resolve a share's change below about 0.2; M3.2's median sits
+    between two clusters of seeds (about 21 and 27 months) and jumps between them.
   - Step-time criteria read the shared PC's load (365–450 ms for the same code); sweeps
     leave them out (`score.UNSWEPT`).
+  - Trends do not extrapolate past a sweep's range (mutation, `mechanisms-2`): check the
+    edge before pushing a lever further.
+  - Stop a sweep with `kill` on its parent `python -m tools.tune.sweep` process, then its
+    workers (children); finished points are kept, the running one reruns.
 
 ### Starting M11 (long-run tuning and stability; kept for reference, see above)
 

@@ -234,9 +234,18 @@ interrupted to add mechanisms first, with the owner.)
   armour and speed niches but starved hunters further (M4.3 fails at 0.53–0.56); nutrients
   made every seed's forest close in 3 years (M3.5 passes).
 - **Step budget** raised to 600 ms per sim-day on the PC; M2.5 retired.
-- **Sweep `mechanisms-1`** (12 levers, 41 points) paused at 23 points: M6.1 still fails
-  everywhere and follows the body mutation size; larger mutations hurt succession, so a
-  follow-up sweep around that trade-off is likely.
+- **Sweeps.** `mechanisms-1` (41 points): no point passes every M criterion; M6.1
+  follows body mutation, predators follow meat energy and immigration, later founding
+  protects succession and prevents world endings. `mechanisms-2` (13 points, stopped):
+  past a mutation of about 0.037 species collapse to two and splits stop, so M6.1 peaks
+  near 0.036 (0.89). `species-1` (paused at 5 of 31): the species definition
+  (`link_distance`) swings M6.1 and M6.2 hard; the best point so far fails only M3.5 and
+  M6.1 (0.77) and passes D1 and D3.
+- **The M11 report** (`tools/milestones/m11.py`) is ready: every criterion on its run and
+  on both seed sets, D1–D3, mechanisms on and off, engagement, sensitivity heat maps.
+- **D2** cannot pass until the plant rare genes can establish (fire-pine and
+  nitrogen-fixer never hold 100 cells for 30 days): their levers come after R4 (fire)
+  and mechanism 4 (fruit carried by grazers).
 - **R4 changes the sim too** (weather, fire only in storms, burnt deaths, barren land
   after eruptions; schema v12): re-check the tuned config once R4 is on `main`.
 

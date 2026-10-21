@@ -257,6 +257,15 @@ census, so these change the counting, not the creatures), more variation among f
 (`founder_spread` 0.04–0.12) to shorten the one-species phase, and the predator and
 founding levers where D3 and M3.5 passed.
 
+**Paused at 5 of 31 points** (2026-10-21 16:35, the owner's request). So far the species
+definition moves M6.1 and M6.2 hard: at a link distance of 0.034–0.040 with mutation
+0.027–0.029, the census finds many small species (2.8–3.8 splits a month) and M6.1 falls
+to 0.23–0.37, mostly above the band. The best point, p004 (mutation 0.030, link 0.036,
+founder spread 0.10), fails only M3.5 and M6.1 (0.77) among the M criteria and passes
+D1 (0.45) and both D3 (predators 9.5 % of creatures, present on 86 % of days); p001
+(mutation 0.036, link 0.031) reaches M6.1 0.89 but speciation 0.58. M3.5 failed in all
+four sampled points, despite founding at cover 0.5 or more.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
