@@ -205,8 +205,8 @@ const CONE_RISE_S = 2.5;
  * The dust over a new cone or crater: seconds it lasts, rises in and thins away (it covers
  * the plants' fade, `FADE_S`), and its puffs.
  */
-const BILLOW_S = 3.2;
-const BILLOW_IN_S = 0.35;
+const BILLOW_S = 3.6;
+const BILLOW_IN_S = 0.8;
 const BILLOW_OUT_S = 1;
 const BILLOW_PUFFS = 40;
 const BILLOW_CLOUDS = 6;
