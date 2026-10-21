@@ -112,9 +112,9 @@ const OLD: Readonly<Record<"tree" | "bush", Size>> = { tree: [1.12, 1], bush: [1
 /** Drawings of each kind and age, so that neighbours differ. */
 export const STANDING_VARIANTS = 3;
 /** Grass has more drawings than other plants, many of it standing close together (R5). */
-export const GRASS_VARIANTS = 6;
-/** Each grass drawing a little larger or smaller than the scale, by variant. */
-const TUFT_SIZES = [1, 0.9, 1.1, 0.95, 1.05, 0.85] as const;
+export const GRASS_VARIANTS = 9;
+/** Each grass drawing larger or smaller than the scale, by variant (R5, the owner: several sizes). */
+const TUFT_SIZES = [1, 0.7, 1.3, 0.85, 1.15, 0.6, 1.45, 0.9, 1.2] as const;
 const TRUNK = "#5a4632";
 /** What the darkest and the lightest tone of foliage are mixed with. */
 /** The middle of a flower, and pale wood or a mushroom's stem. */

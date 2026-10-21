@@ -96,6 +96,8 @@ export interface Placed {
   dy: number;
   /** The shadow it throws at its foot, as half its width and height in cells, if any. */
   shadow?: { rx: number; ry: number };
+  /** A tint over its colours (0xRRGGBB), if any: grass varies a little tuft to tuft. */
+  tint?: number;
 }
 
 interface Row {
@@ -301,6 +303,7 @@ export class PlantLayer {
           anchor: { x: placed.anchorX, y: placed.anchorY },
         });
         sprite.scale.set(placed.scale);
+        if (placed.tint !== undefined) sprite.tint = placed.tint;
         // The foot of a cell is the middle of its lower edge. The drawing's corner goes on a
         // whole art pixel: one left between two would be rounded one way or the other as the
         // camera moves, and the plant would flicker a pixel back and forth over its ground.
@@ -410,6 +413,11 @@ function strip(
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
 /** Grass in the local view: tufts of a cell stand this far (cells) round its clump's middle, the clump seen from above at a slant. */
 const CLUMP_REACH = 0.42;
+/**
+ * Tints a tuft may take, at random (R5, the owner: "some random change in color"): none,
+ * warmer (toward straw), cooler (toward teal), darker, and warmer and darker.
+ */
+const TUFT_TINTS = [0xffffff, 0xfff0c8, 0xd8f4ec, 0xe2e6dc, 0xf0e0b8] as const;
 /** Tufts to a cell of grass (R5: small, so many): this many, and one more for each so much biomass. */
 const TUFTS_FROM = 3;
 const BIOMASS_PER_TUFT = 60;
@@ -984,7 +992,9 @@ export function standingPlants(
           centreX + reach * Math.cos(angle),
           centreY + reach * CLUMP_FLATTEN * Math.sin(angle),
         ];
-        out.push(...put(key, ...at));
+        // Each tuft a little warmer, cooler or darker than the next, at random (the owner).
+        const tint = TUFT_TINTS[Math.floor(cellHash(x, y, 54 + 3 * k) * TUFT_TINTS.length)];
+        out.push(...put(key, ...at).map((one) => (tint === undefined ? one : { ...one, tint })));
         // A rare gene's look on the first tuft: a seed head, clover at its foot.
         if (k === 0) {
           for (const overlay of looksAt(x, y)) {

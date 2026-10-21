@@ -399,6 +399,8 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
 const TUFT_SHAPES = ["sprig", "clump", "bent"] as const;
 /** A tuft is this share of the scale's size (R5: a third of a cell up close, as in the references). */
 const TUFT_SHRINK = [0.5, 0.62] as const;
+/** A tuft is never taller than this share of its width. */
+const TUFT_TALL = 0.7;
 
 /**
  * A tuft of grass after pixel-art grass (R5, the owner: "grass blades are still not
@@ -406,8 +408,7 @@ const TUFT_SHRINK = [0.5, 0.62] as const;
  * Grass is a texture of small tufts, not things standing on it: a few short spikes from
  * a shared foot, dark at the foot and light at the tips, with no outline, scattered
  * thickly. By `variant`: a W of three to five spikes, a fuller clump (two Ws, one behind
- * the other), or spikes bent one way by the wind; the second half of the variants are the
- * first mirrored. In seed the tallest tips carry the accent; flat, it has been pressed
+ * the other), or spikes bent one way by the wind; every other three variants mirrored. In seed the tallest tips carry the accent; flat, it has been pressed
  * down by winter. Too small for spikes of two pixels (the middle view), it is a few
  * strokes.
  */
@@ -418,7 +419,7 @@ export function cosyTuft(
   flat = false,
   variant = 0,
 ): PlantArt {
-  const mirrored = variant >= TUFT_SHAPES.length;
+  const mirrored = Math.floor(variant / TUFT_SHAPES.length) % 2 === 1;
   if (size[0] < 12) {
     const [width, height] = size;
     const art = blank(width, height);
@@ -444,7 +445,14 @@ export function cosyTuft(
     return art;
   }
   const width = Math.max(5, Math.round(size[0] * TUFT_SHRINK[0]));
-  const height = Math.max(4, Math.round(size[1] * TUFT_SHRINK[1] * (flat ? 0.6 : 1)));
+  // A large tuft grows wider more than taller, so that its spikes do not turn to long lines.
+  const height = Math.max(
+    4,
+    Math.round(Math.min(size[1] * TUFT_SHRINK[1], width * TUFT_TALL) * (flat ? 0.6 : 1)),
+  );
+  /** Spikes in a W as wide as `wide`: one for about every three pixels. */
+  const spikesFor = (wide: number): number =>
+    Math.min(Math.max(Math.round(wide / 3.2 + random()), 3), 7);
   const art = blank(width, height);
   const shape = TUFT_SHAPES[variant % TUFT_SHAPES.length] ?? "sprig";
   /** A W of `spikes` from a foot at `foot` (row from the bottom), `wide` pixels across, rising `tall`. */
@@ -480,12 +488,18 @@ export function cosyTuft(
   const tall = height - 1;
   if (shape === "clump") {
     // Two sprigs, the one behind higher and lighter at the tips, the one in front lower.
-    sprig(4, Math.round(width * 0.8), tall, 1, 0);
-    sprig(3, Math.round(width * 0.6), Math.max(2, Math.round(tall * 0.6)), 0, 0);
+    sprig(spikesFor(width * 0.8) + 1, Math.round(width * 0.8), tall, 1, 0);
+    sprig(
+      spikesFor(width * 0.6),
+      Math.round(width * 0.6),
+      Math.max(2, Math.round(tall * 0.6)),
+      0,
+      0,
+    );
   } else if (shape === "bent") {
-    sprig(3 + Math.floor(random() * 2), Math.round(width * 0.7), tall, 0, 1.5);
+    sprig(spikesFor(width * 0.7), Math.round(width * 0.7), tall, 0, 1.5);
   } else {
-    sprig(3 + Math.floor(random() * 3), Math.round(width * 0.85), tall, 0, 0);
+    sprig(spikesFor(width * 0.85), Math.round(width * 0.85), tall, 0, 0);
   }
   if (mirrored) mirror(art);
   return art;

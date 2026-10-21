@@ -957,7 +957,9 @@ Round 1, items 1–7:
   The Minish Cap's fields and the grass tutorials that follow it; ADR 0022): about a third
   of a cell, unoutlined, three to five spikes fanning in a V from a narrow foot, `deep` at
   the foot to `bright` at the tips. Three shapes (a W, a clump of two, bent by the wind),
-  each mirrored, ±10 % in size; three to six to a cell by biomass, in clumps round a point
+  nine drawings from 0.6 to 1.45 times the size (wider, with more spikes, rather than
+  taller), every other three mirrored; each tuft takes one of five tints at random
+  (none, warmer, cooler, darker, warmer and darker: the owner); three to six to a cell by biomass, in clumps round a point
   of their cell that cross into the next; thin grass leaves a cell bare now and then.
 - **Snow** lies only where the simulation has it (above); bare heights are rock.
 - **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
