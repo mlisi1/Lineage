@@ -343,14 +343,15 @@ function git(...args) {
 function unitTests() {
   const folder = mkdtempSync(join(tmpdir(), "lineage-r4-"));
   const file = join(folder, "tests.json");
-  execFileSync(
-    "npx",
-    ["vitest", "run", "tests/atmosphere", "--reporter=json", `--outputFile.json=${file}`],
-    {
-      cwd: RENDERER,
-      stdio: "ignore",
-    },
-  );
+  try {
+    execFileSync(
+      "npx",
+      ["vitest", "run", "tests/atmosphere", "--reporter=json", `--outputFile.json=${file}`],
+      { cwd: RENDERER, stdio: "ignore" },
+    );
+  } catch {
+    // Failing tests are reported on the page (their count), not a reason to stop.
+  }
   const result = JSON.parse(readFileSync(file, "utf8"));
   rmSync(folder, { recursive: true, force: true });
   return {

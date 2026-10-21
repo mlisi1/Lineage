@@ -976,7 +976,9 @@ export class Atmosphere {
         const colour =
           LAVA[Math.floor(cellHash(salt, Math.floor(this.timeS * 4), 343) * LAVA.length)] ??
           LAVA[0];
-        this.halo(x, y - summit, size, colour, fading * this.flicker(salt), tile);
+        // The glow swells as the eruption begins.
+        const swell = Math.min(age / CONE_RISE_S, 1);
+        this.halo(x, y - summit, size, colour, fading * swell * this.flicker(salt), tile);
         // Its lava: the pool in the mouth and the rivers down the cone, drawn over it
         // untinted (it makes its own light), cooling to crust as the eruption ends.
         const frame = Math.floor(this.timeS * LAVA_FPS) % LAVA_FRAMES;
@@ -1504,7 +1506,9 @@ export class Atmosphere {
 
   /** A placer of sprites standing among the plants with their foot at `footY` cells. */
   private stand(view: View, footY: number): (texture: Texture) => Sprite {
-    return (texture) => this.standPool.next(texture, view.rows ?? null, footY);
+    // A row above the view is culled with its plants: such a thing goes in the top row.
+    const row = Math.max(footY, view.cells.y0);
+    return (texture) => this.standPool.next(texture, view.rows ?? null, row);
   }
 
   /** An animal died in the fire at (x, y) cells: a puff of ash rises there. */
