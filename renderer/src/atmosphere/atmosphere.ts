@@ -1840,6 +1840,7 @@ export class Atmosphere {
     effects: string[];
     act: string | null;
     graded: boolean;
+    snowfall: number;
   } {
     return {
       light: this.ease.value,
@@ -1849,6 +1850,7 @@ export class Atmosphere {
       effects: this.effects.map((effect) => effect.kind),
       act: this.sequence.active ? this.sequence.moment.act : null,
       graded: this.graded,
+      snowfall: this.snowfall,
     };
   }
 

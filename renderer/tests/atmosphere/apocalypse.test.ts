@@ -152,13 +152,15 @@ describe("the stream while a world ends", () => {
     sequence.take(news);
     sequence.update(100);
     expect(got).toHaveLength(0);
-    sequence.update(25); // into the dark
+    sequence.update(25); // into the dark, not yet black: the next world still waits
+    expect(got).toHaveLength(0);
+    sequence.update(3); // black (a third of the way into the dark)
     expect(got.map((message) => message.type)).toEqual(["events", "clock"]);
     // In the dark the next world's messages go straight on, its news still waits.
     sequence.take(clock(2));
     sequence.take(news);
     expect(got.map((message) => message.type)).toEqual(["events", "clock", "clock"]);
-    sequence.update(20); // into the rise
+    sequence.update(17); // into the rise
     expect(got.filter((message) => message.type === "chronicle")).toHaveLength(2);
     sequence.update(60);
     expect(sequence.active).toBe(false);

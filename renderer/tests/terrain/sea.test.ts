@@ -10,8 +10,6 @@ const land = {
 const view = { x0: 0, y0: 0, x1: 14, y1: 4 };
 
 describe("the moving sea", () => {
-
-
   it("puts glints on open water only, the same at the same moment", () => {
     let seen = 0;
     for (let step = 0; step < 60; step++) {
@@ -63,8 +61,6 @@ describe("the sea at a place, for creatures under water", () => {
 });
 
 describe("the surf the painter leaves for the sea", () => {
-
-
   it("leaves a glint where it is on the water while the view moves", () => {
     const open = { ...world(Array.from({ length: 40 }, () => "~".repeat(80))), ...LAND_PALETTE };
     const sea = new Sea(8);
@@ -93,4 +89,3 @@ describe("the surf the painter leaves for the sea", () => {
     expect(compared).toBeGreaterThan(100);
   });
 });
-

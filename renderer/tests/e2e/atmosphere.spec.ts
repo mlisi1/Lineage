@@ -25,7 +25,11 @@ async function advance(page: Page, seconds: number): Promise<void> {
   );
 }
 
-const SHOTS: Record<string, { query: string; advance?: number }> = {
+/**
+ * Each shot's query, how far it is moved on, and then how far again: an event's flash goes
+ * off in the frame it strikes, so a shot of what it leaves moves on past it.
+ */
+const SHOTS: Record<string, { query: string; advance?: number; then?: number }> = {
   // The light of each time of day, on the map.
   "light-day": { query: "view=map&show=day" },
   "light-dusk": { query: "view=map&show=dusk" },
@@ -43,7 +47,7 @@ const SHOTS: Record<string, { query: string; advance?: number }> = {
   "volcano-local": { query: "view=local&x=120&y=60&show=day,volcano", advance: 3 },
   volcano: { query: "view=middle&x=120&y=60&show=day,volcano", advance: 3 },
   meteor: { query: "view=middle&x=120&y=60&show=day,meteor", advance: 0.8 },
-  "meteor-crater": { query: "view=middle&x=120&y=60&show=day,meteor", advance: 4 },
+  "meteor-crater": { query: "view=middle&x=120&y=60&show=day,meteor", advance: 4, then: 1 },
   ark: { query: "view=middle&x=120&y=60&show=dusk,ark", advance: 2 },
   seed: { query: "view=middle&x=120&y=60&show=night,seed", advance: 2 },
   // The end of a world: the fire, the flood, and the land rising again.
@@ -56,6 +60,12 @@ for (const [name, shot] of Object.entries(SHOTS)) {
   test(`the atmosphere: ${name}`, async ({ page }) => {
     const errors = await open(page, shot.query);
     if (shot.advance !== undefined) await advance(page, shot.advance);
+    if (shot.then !== undefined) {
+      // The landscape's own fades (plants going, the ground's cross-fade) run on the page's
+      // clock, not the atmosphere's: let them finish.
+      await page.waitForTimeout(4000);
+      await advance(page, shot.then);
+    }
     expect(errors).toEqual([]);
     await expect(page).toHaveScreenshot(`${name}.png`, { maxDiffPixelRatio: 0.002 });
   });
@@ -234,4 +244,22 @@ test("cloud greys the world, more so rain; a clear day is not graded", async ({ 
     await advance(page, 4);
     expect(await page.evaluate(() => window.__atmosphere?.().graded)).toBe(graded);
   }
+});
+
+test("a view's fall is all snow where its land is snowy, all rain where it is not", async ({
+  page,
+}) => {
+  // Round 7 (the owner): rain and snow mixed where snow lay in patches looked wrong.
+  await page.goto(
+    "/?recording=winter&every=0&still&quiet&seed=7&view=local&x=140.5&y=60.5&show=day,rain",
+  );
+  await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
+  await advance(page, 3);
+  const winter = await page.evaluate(() => window.__atmosphere?.());
+  expect(winter?.snowfall).toBe(1);
+  expect(winter?.weather ?? 0).toBeGreaterThan(0);
+  await expect(page).toHaveScreenshot("snow-local.png", { maxDiffPixelRatio: 0.002 });
+  await open(page, "view=local&x=120&y=60&show=day,rain");
+  await advance(page, 3);
+  expect(await page.evaluate(() => window.__atmosphere?.().snowfall)).toBe(0);
 });
