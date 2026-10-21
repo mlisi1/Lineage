@@ -1240,7 +1240,9 @@ export class Atmosphere {
         for (let k = 0; k < BILLOW_CLOUDS; k++) {
           const angle = 2 * Math.PI * (k / BILLOW_CLOUDS + cellHash(salt, k, 711) * 0.3);
           const off = k === 0 ? 0 : radius * (0.55 + 0.25 * cellHash(salt, k, 712));
-          const across = ((k === 0 ? 1.5 : 1.0) * radius * tile * grow) / pixel;
+          // Painted once at its first size and stretched as it swells: a texture made anew
+          // at each size would redraw the whole cloud's dither in one frame.
+          const across = ((k === 0 ? 1.5 : 1.0) * radius * tile) / pixel;
           const texture = dustTexture(across, (salt + k) % 4);
           const sprite = this.groundPool.next(texture);
           const drift = since * 0.15;
@@ -1249,8 +1251,8 @@ export class Atmosphere {
             x + Math.cos(angle) * (off + drift),
             y + Math.sin(angle) * (off + drift) * 0.8 - since * 0.3,
             tile,
-            texture.width * pixel,
-            texture.height * pixel,
+            texture.width * pixel * grow,
+            texture.height * pixel * grow,
           );
           sprite.tint = 0xffffff;
           sprite.alpha = 0.92 * cloud;
