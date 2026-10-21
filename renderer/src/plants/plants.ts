@@ -20,6 +20,8 @@ import { mulberry32 } from "../rng";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
 import { cellHash } from "../terrain/pixels";
+import { shoreSizes } from "../terrain/tide";
+import { heightAt } from "../spike/habitat";
 import {
   SPRITE_WIDTH,
   VISIBLE_FROM,
@@ -81,6 +83,8 @@ const FADED = 0.3;
 const FADED_SMALL = 0.4;
 const SMALL_BELOW_CELLS = 0.9;
 const FADES_FROM_CELLS = 0.2;
+/** A plant's foot keeps this far (cells) beyond where the swash reaches. */
+const SHORE_KEEP_CELLS = 0.05;
 /** Seconds a plant takes to go see-through or back. */
 const FADE_S = 0.25;
 
@@ -183,6 +187,8 @@ export class PlantLayer {
       for (let x = Math.max(cells.x0 - reach, 0); x < Math.min(cells.x1 + reach, land.width); x++) {
         for (const placed of this.place(this.lookAt(x, y), x, y)) {
           if (placed.shadow === undefined) continue;
+          // No shadow of a plant left off the water (`ashore`).
+          if (!this.ashore(x + 0.5 + placed.dx, y + 1 + placed.dy, 1 / placed.scale)) continue;
           // A little to the right of the foot: the light comes from the upper left.
           out.push({
             x: x + 0.5 + placed.dx + placed.shadow.rx * 0.16,
@@ -289,6 +295,26 @@ export class PlantLayer {
     }
   }
 
+  /**
+   * Whether a plant's foot at (x, y) (cells) stands on the land as painted in a view of
+   * `tile` art pixels to the cell: above the sea there, and as far from the waterline as
+   * the swash runs up the beach at high tide.
+   */
+  private ashore(x: number, y: number, tile: number): boolean {
+    const { land } = this;
+    const reach = shoreSizes(tile).swash / tile + SHORE_KEEP_CELLS;
+    for (const [dx, dy] of [
+      [0, 0],
+      [reach, 0],
+      [-reach, 0],
+      [0, reach],
+      [0, -reach],
+    ] as const) {
+      if (heightAt(land, x + dx, y + dy) <= land.seaLevel) return false;
+    }
+    return true;
+  }
+
   /** Build the plants of the cells of row `y` from column `left` on, once. */
   private build(y: number, left: number): void {
     const key = y * 4096 + left;
@@ -311,10 +337,15 @@ export class PlantLayer {
         const whole = (at: number, foot: number): number =>
           (Math.round(at * tile - foot) + foot) / tile;
         const footY = whole(y + 1 + placed.dy, placed.anchorY * placed.texture.height);
-        sprite.position.set(
-          whole(x + 0.5 + placed.dx, placed.anchorX * placed.texture.width),
-          footY,
-        );
+        const footX = whole(x + 0.5 + placed.dx, placed.anchorX * placed.texture.width);
+        // Nothing stands on the water as it is painted (R5): the coast is drawn between the
+        // cells, and the swash runs up the beach at high tide, so a plant whose cell is land
+        // may still have its foot in the sea.
+        if (!this.ashore(footX, footY, tile)) {
+          sprite.destroy();
+          continue;
+        }
+        sprite.position.set(footX, footY);
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
         const at = Math.min(
           Math.max(Math.ceil(footY * this.rowsPerCell) - 1, 0),

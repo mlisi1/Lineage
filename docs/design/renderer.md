@@ -962,6 +962,10 @@ Round 1, items 1–7:
   (none, warmer, cooler, darker, warmer and darker: the owner); three to six to a cell by biomass, in clumps round a point
   of their cell that cross into the next; thin grass leaves a cell bare now and then.
 - **Snow** lies only where the simulation has it (above); bare heights are rock.
+- **Nothing stands on the water.** A plant's foot must be on the land as painted (heights
+  between cells, `heightAt`, as animals read them) and as far from the waterline as the
+  swash runs up the beach at high tide in that view; otherwise it, and its shadow, is left
+  out.
 - **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
   its grown length with its head 35 % larger for its body, redrawn at each sixteenth.
 

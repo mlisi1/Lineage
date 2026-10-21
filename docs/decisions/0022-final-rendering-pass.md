@@ -94,6 +94,14 @@ are now nine drawings, from 0.6 to 1.45 times the size; a large tuft grows wider
 more spikes, rather than taller. Each tuft takes one of five tints at random (none,
 warmer, cooler, darker, warmer and darker), as a sprite tint, which costs nothing.
 
+### Plants on water (2026-10-21)
+
+A plant was allowed by its cell's height, but the ground paints the coast between cells
+(bilinear) and the swash runs up the beach at high tide, so near the shore a plant could
+stand in the sea. Reeds were the worst, and since round 3 grass clumps spill into the
+next cell. A plant's foot must now be on the painted land and as far from the waterline
+as the swash reaches in its view; otherwise it and its shadow are left out.
+
 ## Consequences
 
 - The wire gains `young` (additive). S1 sends it as `tools/stream.py` does. M11's merge

@@ -144,7 +144,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **Pitfalls**: Vite's dev server does not reload the paint worker when
   `terrain/ground.ts` changes (restart it, or `?painter=inline`). The wire's `young` is
   additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
-- **Next**: the checklist from the top: plants that seem to stand on water.
+- **Next**: the checklist from the top: animals seen on water (check M11's wading first).
 
 ### R5 checklist (the owner, 2026-10-21)
 
@@ -155,7 +155,8 @@ holding the cap (median, 1 % low and frame-time headroom reported; ADR 0022). Ev
 below was taken in scope by the owner. Tests wait until the look is called final.
 
 **Known from R3 and R4**
-- [ ] Plants that seem to stand on water (`plants.ts` `aboveSea` against the blended coast)
+- [x] Plants that seem to stand on water (`plants.ts` `aboveSea` against the blended coast):
+  a plant's foot must be on the painted land and beyond the swash (`PlantLayer.ashore`)
 - [ ] Animals seen on water (check against M11's wading first)
 - [x] The R3 demo clicks out: a click or tap is the view button (`toMap` stays)
 - [ ] Animals do not walk through bushes and trees

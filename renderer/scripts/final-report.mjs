@@ -47,6 +47,7 @@ const STILLS = {
   grass: "view=local&seed=3&quiet",
   coast: "view=local&x=60&y=40&quiet",
   winter: "view=middle&recording=winter&every=0&quiet",
+  shore: "view=local&x=244&y=110&quiet",
 };
 /** Films: following an animal from the camera's seed, for `seconds` after two presses. */
 const FOLLOWS = {
@@ -357,7 +358,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -449,11 +450,21 @@ ${youngShot}
 </section>
 <hr>
 
+<section id="shore">
+<div class="head"><span class="n">·</span><h2>Nothing stands on the water</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>A plant was allowed by its cell's height, while the ground paints the coast between cells and the swash runs up the beach at high tide: near the shore a plant could stand in the sea (reeds most of all; since round 3 grass clumps spill into the next cell too).</p></div>
+<div><span class="label">Now</span><p>A plant's foot must be on the land as painted (heights between cells, as animals already read them) and as far from the waterline as the swash reaches in that view (10 art pixels up close). Its shadow goes with it.</p></div>
+</div>
+${compare("shore", "The east coast up close, cell (244, 110): reeds in the sea at the top right before.", 70)}
+</section>
+<hr>
+
 <section id="open">
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
 <ul class="open">
-<li>Plants that seem to stand on water; animals seen on water</li>
+<li>Animals seen on water</li>
 <li>Animals through bushes, bodies folding on a turn, legs stepping together, plants popping in over animals</li>
 <li>The name scroll by the animal followed</li>
 <li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
