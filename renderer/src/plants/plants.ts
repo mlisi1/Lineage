@@ -72,9 +72,15 @@ import {
 const CHUNK_CELLS = 16;
 /** A plant may stand this far (cells) outside its own cell. */
 const REACH_CELLS = 1;
-/** A plant in front of the animal the camera is on shows it through; small ones need not. */
+/**
+ * A plant in front of the animal the camera is on shows it through; grass and the small
+ * things too (R5: a small animal was lost under the tufts), a little less see-through.
+ * Smaller than `FADES_FROM_CELLS` (pebbles) nothing hides it.
+ */
 const FADED = 0.3;
-const FADES_FROM_CELLS = 0.9;
+const FADED_SMALL = 0.4;
+const SMALL_BELOW_CELLS = 0.9;
+const FADES_FROM_CELLS = 0.2;
 
 export interface Placed {
   texture: Texture;
@@ -256,7 +262,7 @@ export class PlantLayer {
           const top = sprite.y - sprite.anchor.y * high;
           if (left > subject.x1 || left + wide < subject.x0) continue;
           if (top > subject.y1 || sprite.y < subject.y1) continue;
-          sprite.alpha = FADED;
+          sprite.alpha = high < SMALL_BELOW_CELLS ? FADED_SMALL : FADED;
           this.faded.push(sprite);
         }
       }
