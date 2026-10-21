@@ -83,9 +83,33 @@ renderer. A tree cell with biomass ≥ 0.55 is closed forest.
 6. **Feedback** — vegetation cover goes to the terrain, where it slows erosion and
    leaching.
 
+## Algae (M11)
+
+Food at sea, so that swimming can be a way of life (ADR 0019). Algae have no genome:
+one biomass per cell, on sea cells no deeper than `algae_max_depth` (0.03 height units,
+about 5 % of the map) where no plant stands (a mangrove shades them out). Spores are
+everywhere, so a habitable cell never holds less than `algae_seed`; from there they grow
+logistically towards `algae_capacity` (0.4) at `algae_growth_per_year` (60) × daylight
+× rain × a season factor that falls to `algae_winter_share` (0.3) in midwinter. Daylight
+is the plants' light (a week's running mean of presence), so office weekends barely
+slow them. A cell that falls dry loses them; new shallows gain them. `algae_capacity` 0
+turns them off.
+
+Grazers eat them like plants (`Flora.graze` eats algae where no plant stands, down to
+`grazing_reserve_biomass`), for `algae_meal_share` (0.8) of a plant's energy. Only
+creatures at ease in water smell them (`creatures.md`). Saved state since schema v11.
+
 ## Fire
 
-Lightning ignites vegetation in the warm season. A burning cell burns for 8 hours and
+Lightning ignites vegetation, and lightning comes only with a thunderstorm (R4, the
+island's own weather, `weather.py`): fires start only while it rains, mostly in the warm
+season, when the land is dry (`fire_strikes_per_storm_hour` × dryness; calibrated to the
+same expected strikes a year as before R4). While any rain falls a fire spreads as on
+wet land. An overcast sky without rain (`Rain.CLOUD`, round 5) is only seen: it neither
+dims the plants' light nor slows a fire. A fire burns animals that stay in it (`creatures.md`). A volcano's cone and a
+crater (natural or the meteor's) bare the land round them: plants within `barren_reach`
+(1.4) × the event's radius are destroyed and nothing grows there for `barren_days` (120;
+`Flora.observe`, `Flora.barren`, R4). A burning cell burns for 8 hours and
 can ignite its four neighbours, depending on their fuel, their form's flammability
 (grass and conifers burn well, broadleaf forest poorly) and the dryness. Fire needs
 fuel, so it stops at water and bare ground. Low plants resprout from their roots, trees
@@ -95,13 +119,15 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 ## Hooks
 
 - `Flora.graze(ys, xs, demand)` for fauna (M4): defended plants refuse part of a bite;
-  grazers on one cell share what is there. What is eaten is also worth less to the grazer
+  grazers on one cell share what is there; where no plant stands they eat algae (M11:
+  `Flora.algae`, `grazeable_algae`, `on_algae`). What is eaten is also worth less to the grazer
   (`[fauna] defence_toxicity`, M5), and grazers see plant form, not defence:
   `Flora.forms()` (cached until the genome changes) and `Flora.defence_at`.
 - `Flora.set_daylight(level)` and `Flora.set_rain(factor)` for presence (M8).
 - God powers (M8): `Flora.clear(ys, xs)` (a meteor's bowl), `Flora.sow(rng, count,
   rare_chance, instant)` (seed), `Wildfire.extinguish(t)` and `Wildfire.set_wet(wet)`
-  (rain: no lightning, slow spread).
+  (rain: no lightning, slow spread); `Wildfire.set_weather(raining, storm)` for the
+  weather (R4).
 
 ## How it is drawn
 

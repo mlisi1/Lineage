@@ -584,13 +584,18 @@ def test_upgraded_v8_world_writes_its_history(config: Config) -> None:
     """The v8 fixture (520 days, inhabited) gains a chronicle that starts quietly and then
     writes entries that respect the filters."""
     world = World.restore(config, io.loads((FIXTURES / "v8.lzma").read_bytes()))
+    known = {record.id for record in world.species.records()}
     outputs: list[OutputEvent] = []
     for _ in range(60):
         outputs += world.step(86_400.0)
     found = entries(outputs)
     assert found == world.chronicle.entries()
     assert [e.number for e in found] == list(range(1, len(found) + 1))
-    assert not any(e.kind in ("first_life", "first") and "hunters" in e.text for e in found)
+    # What was there at the upgrade is not news: hunters known then are not the first.
+    assert not any(
+        e.kind in ("first_life", "first") and "hunters" in e.text and e.species in known
+        for e in found
+    )
     cfg = world.chronicle.config
     per_day: dict[int, int] = {}
     for e in found:

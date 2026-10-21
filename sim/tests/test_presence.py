@@ -14,6 +14,7 @@ from hypothesis import strategies as st
 from lineage_sim.clock import MS_PER_DAY
 from lineage_sim.config import Config, ConfigError, parse_config
 from lineage_sim.events import (
+    ChronicleEntry,
     CraterFormed,
     CreaturesArrived,
     FireEnded,
@@ -23,6 +24,7 @@ from lineage_sim.events import (
     GodPowerUsed,
     OutputEvent,
     PresenceChanged,
+    VolcanoErupted,
 )
 from lineage_sim.presence import (
     POWERS,
@@ -241,8 +243,10 @@ def test_rain_puts_out_fires_and_wets_the_land(config: Config) -> None:
     assert (world.terrain.fertility[land] >= fertility[land]).all()
     assert world.terrain.fertility[land].mean() > fertility[land].mean()
     assert fire.dryness(world.instant) == 0.0
+    assert world.presence.raining  # what the scene draws (R4)
     world.step(config.presence.rain_days * DAY_S + HOUR_S)
     assert not world.snapshot().subsystems["presence"]["wet"]
+    assert not world.presence.raining
 
 
 def test_rain_makes_plants_grow_faster(config: Config) -> None:
@@ -313,3 +317,20 @@ def test_presence_config_is_checked(config: Config) -> None:
     with pytest.raises(ConfigError, match="weight"):
         replace(config.presence, god_weight_meteor=0.0, god_weight_rain=0.0,
                 god_weight_seed=0.0, god_weight_ark=0.0)  # fmt: skip
+
+
+def test_witnessed_events_are_seen_as_a_steps_own(config: Config) -> None:
+    """``World.witness`` (R4): a cone staged outside a step (as ``tools/stream.py`` does) bares
+    the land round it, kills the creatures on it and is written in the chronicle."""
+    world = _ready_world(config)
+    x, y = (float(v) for v in world.fauna.positions[0])
+    radius = 3.0
+    witnessed = world.witness([VolcanoErupted(world.t_ms, x, y, radius, 0.1)])
+    assert _of(witnessed, ChronicleEntry)
+    yy, xx = np.indices(world.flora.biomass.shape)
+    bare = np.hypot(xx - x, yy - y) <= config.flora.barren_reach * radius
+    assert not world.flora.biomass[bare].any()
+    offset = world.fauna.positions - np.array([x, y], dtype=np.float32)
+    reach = config.fauna.blast_kill_reach * radius
+    assert (np.hypot(offset[:, 0], offset[:, 1]) > reach).all()
+    assert world.witness([]) == []

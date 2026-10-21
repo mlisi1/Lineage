@@ -129,11 +129,20 @@ interface Creature {
   /** The joint at its widest, which breathes; and how far into a breath it started. */
   chest: number;
   breathOffset: number;
+  /** Arriving (R4, the ark): seconds into its arrival and how long it takes, while it lasts. */
+  arriving?: { age: number; lasts: number };
 }
+
+/** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
+const ARRIVE_STEPS = 4;
+/** Seconds a creature that died takes to fade from where it last stood. */
+const DEPART_S = 0.8;
 
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
+  /** Creatures that died, fading where they last stood. */
+  private departing: { creature: Creature; left: number }[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
   private readonly creatures: (Creature | undefined)[] = [];
   private active = 0;
@@ -187,14 +196,73 @@ export class CreatureLayer {
     this.reveal(creature, index);
   }
 
-  /** Empty slot `index`: its creature is taken off the screen for good. */
-  remove(index: number): void {
+  /**
+   * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
+   * that died, `fade`) fading away over `DEPART_S` where it last stood.
+   */
+  remove(index: number, fade = false): void {
     const creature = this.creatures[index];
     if (creature === undefined) return;
+    this.creatures[index] = undefined;
+    if (fade && (creature.container.visible || creature.marker.visible)) {
+      this.departing.push({ creature, left: DEPART_S });
+      return;
+    }
+    this.destroy(creature);
+  }
+
+  private destroy(creature: Creature): void {
     creature.container.destroy({ children: true });
     creature.marker.destroy({ children: true });
     creature.glass?.destroy();
-    this.creatures[index] = undefined;
+  }
+
+  /** The dead fading away: less of them each frame, in steps, until they are gone. */
+  private depart(dtS: number): void {
+    this.departing = this.departing.filter((leaving) => {
+      leaving.left -= dtS;
+      if (leaving.left <= 0) {
+        this.destroy(leaving.creature);
+        return false;
+      }
+      const opacity = Math.ceil((leaving.left / DEPART_S) * ARRIVE_STEPS) / (ARRIVE_STEPS + 1);
+      const { creature } = leaving;
+      creature.marker.alpha = opacity;
+      creature.glass ??= new AlphaFilter();
+      creature.glass.alpha = opacity;
+      creature.container.filters = [creature.glass];
+      return true;
+    });
+  }
+
+  /**
+   * The creature in slot `index` arrives (R4, the ark's newcomers): it comes into being
+   * over `seconds`, see-through at first, in a few steps as pixel art does.
+   */
+  arrive(index: number, seconds: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    creature.arriving = { age: 0, lasts: seconds };
+    this.materialise(creature);
+  }
+
+  private materialise(creature: Creature): void {
+    const arriving = creature.arriving;
+    if (arriving === undefined) return;
+    const done = arriving.age >= arriving.lasts;
+    const opacity = done
+      ? 1
+      : (Math.floor((arriving.age / arriving.lasts) * ARRIVE_STEPS) + 1) / (ARRIVE_STEPS + 1);
+    creature.marker.alpha = opacity;
+    if (done) {
+      creature.arriving = undefined;
+      creature.container.filters = [];
+      creature.seaKey = -2; // colour it for the water it is in again
+      return;
+    }
+    creature.glass ??= new AlphaFilter();
+    creature.glass.alpha = opacity;
+    creature.container.filters = [creature.glass];
   }
 
   /** Whether slot `index` holds a creature. */
@@ -268,6 +336,12 @@ export class CreatureLayer {
     return joints[Math.floor(joints.length / 2)] ?? { x: 0, y: 0 };
   }
 
+  /** Creature `index`'s joints from the head back, and the body's radius at each (cells; R4's glow). */
+  spine(index: number): { joints: readonly Point[]; radii: readonly number[] } {
+    const creature = this.creatures[index];
+    return { joints: creature?.joints ?? [], radii: creature?.plan.radii ?? [] };
+  }
+
   /** The box creature `index`'s body fills, in cells: what must show through what covers it. */
   box(index: number): CellRect {
     const creature = this.creatures[index];
@@ -310,6 +384,7 @@ export class CreatureLayer {
    */
   update(dtS: number, view?: CellRect, posed = true): void {
     this.clock += dtS;
+    this.depart(dtS);
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
@@ -329,7 +404,11 @@ export class CreatureLayer {
           head.y <= view.y1 + reach);
       if (inView && posed) {
         this.pose(creature, dtS);
-        if (creature.plan.swims) this.wet(creature, head);
+        if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
+      }
+      if (creature.arriving !== undefined) {
+        creature.arriving.age += dtS;
+        this.materialise(creature);
       }
       if (creature.inView !== inView) {
         creature.inView = inView;

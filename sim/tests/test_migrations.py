@@ -96,7 +96,9 @@ def test_v3_fixture_values(config: Config) -> None:
     assert state.t_ms == 200 * 86_400_000
     # No fauna in v3; loading migrates to the current version, which adds presence (v8)
     # and the chronicle (v9).
-    assert sorted(state.subsystems) == ["chronicle", "fire", "flora", "presence", "terrain"]
+    assert sorted(state.subsystems) == [
+        "chronicle", "fire", "flora", "presence", "terrain", "weather",
+    ]  # fmt: skip
     world = World.restore(config, state)
     shares = world.flora.cover_shares()
     assert sum(shares.values()) == pytest.approx(1.0)
@@ -118,7 +120,7 @@ def test_v4_fixture_values(config: Config) -> None:
     # apocalypse.
     assert sorted(state.subsystems) == [
         "apocalypse", "chronicle", "fauna", "fire", "flora", "presence", "species",
-        "terrain",
+        "terrain", "weather",
     ]  # fmt: skip
     world = World.restore(config, state)
     fauna = world.fauna
@@ -297,3 +299,49 @@ def test_v10_fixture_values(config: Config) -> None:
     world = World.restore(config, state)
     assert world.chronicle.entries()[0].kind == "world_begin"
     assert world.fauna.count == 0  # founders wait for the plants of the new island
+
+
+def test_v10_upgrades_to_v11_with_algae_to_come(config: Config) -> None:
+    state = io.loads(_fixture(10))
+    algae = state.subsystems["flora"]["algae"]
+    assert algae.shape == state.subsystems["flora"]["biomass"].shape
+    assert float(algae.max()) == 0.0  # empty until the next flora tick sows the shelf
+    world = World.restore(config, state)
+    world.step(2 * 86_400)
+    assert float(world.flora.algae.max()) >= config.flora.algae_seed
+
+
+def test_v11_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(11))
+    assert state.world == 2
+    assert state.seed == 660476933
+    assert state.t_ms == 40 * 86_400_000
+    world = World.restore(config, state)
+    algae = world.flora.algae
+    assert float(algae.max()) > config.flora.algae_seed  # they have grown for ten days
+    assert float(algae[world.terrain.land].max()) == 0.0
+
+
+def test_v11_upgrades_to_v12_dry_with_no_one_burnt(config: Config) -> None:
+    upgraded = migrate(io.loads(_fixture(11)).to_tree())
+    assert upgraded["schema_version"] == 12
+    assert upgraded["subsystems"]["weather"] == {"rain": 0, "until_ms": 0}
+    world = World.restore(config, io.loads(_fixture(11)))
+    assert world.weather.rain.name == "NONE"
+    assert world.fauna.tally.burnt == 0
+    assert float(world.flora.barren.max()) == 0.0
+
+
+def test_a_world_without_fire_gets_no_weather_from_the_migration() -> None:
+    tree = migrate(io.loads(_fixture(1)).to_tree())
+    assert "weather" not in tree["subsystems"]
+
+
+def test_v12_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(12))
+    assert state.schema_version == 12
+    assert state.subsystems["weather"]["rain"] == 1  # a plain rain spell falls
+    world = World.restore(config, state)
+    assert world.instant.date.isoformat() == "2027-09-08"
+    assert world.fauna.count == 32
+    assert world.wildfire.burning.sum() == 0

@@ -51,6 +51,7 @@ from lineage_sim.rng import (
     PRESENCE,
     SPECIES,
     TERRAIN,
+    WEATHER,
     Streams,
 )
 from lineage_sim.species import Species
@@ -58,6 +59,7 @@ from lineage_sim.state import io
 from lineage_sim.state.schema import StateError, Tree, WorldState
 from lineage_sim.subsystem import Context, Observer, Subsystem
 from lineage_sim.terrain import Terrain
+from lineage_sim.weather import Weather
 
 __all__ = ["Context", "Observer", "Subsystem", "World", "default_subsystems"]
 
@@ -67,7 +69,9 @@ def default_subsystems(config: Config) -> list[Subsystem]:
     terrain = Terrain(config.terrain)
     flora = Flora(config.flora, terrain)
     fire = Wildfire(config.flora, flora, terrain)
-    fauna = Fauna(config.fauna, terrain, flora)
+    fauna = Fauna(config.fauna, terrain, flora, fire)
+    # The weather before the fire, which strikes and spreads by it (R4).
+    weather = Weather(config.weather, fire)
     species = Species(config.species, fauna, config.fauna.predator_min_diet)
     # Presence first: it hands the others the light before they tick.
     presence = Presence(config.presence, terrain, flora, fire, fauna)
@@ -85,7 +89,7 @@ def default_subsystems(config: Config) -> list[Subsystem]:
         herbivore_max_diet=config.fauna.herbivore_max_diet,
         predator_min_diet=config.fauna.predator_min_diet,
     )
-    return [presence, terrain, flora, fire, fauna, species, apocalypse, chronicle]
+    return [presence, weather, terrain, flora, fire, fauna, species, apocalypse, chronicle]
 
 
 # Makes the subsystems of a new world (the next one, after an apocalypse).
@@ -260,6 +264,13 @@ class World:
         return presence
 
     @property
+    def weather(self) -> Weather:
+        weather = self.subsystem(WEATHER)
+        if not isinstance(weather, Weather):
+            raise TypeError("the weather subsystem was replaced")
+        return weather
+
+    @property
     def wildfire(self) -> Wildfire:
         fire = self.subsystem(FIRE)
         if not isinstance(fire, Wildfire):
@@ -338,6 +349,12 @@ class World:
         if not isinstance(chronicle, Chronicle):
             raise TypeError("the chronicle subsystem was replaced")
         return chronicle
+
+    def witness(self, outputs: list[OutputEvent]) -> list[OutputEvent]:
+        """What the observers make of ``outputs`` made outside a step (a tool staging an
+        event by the subsystems' own functions), as they would of the step's own: the flora
+        bares the land round a staged cone, the chronicle writes it down."""
+        return self._observe(list(outputs))
 
     def _observe(self, outputs: list[OutputEvent]) -> list[OutputEvent]:
         """What the observers make of ``outputs`` (nothing to see: no call). Each observer

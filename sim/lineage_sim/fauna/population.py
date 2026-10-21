@@ -13,6 +13,7 @@ deterministic.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import cast
@@ -25,17 +26,19 @@ from lineage_sim import rare
 from lineage_sim.clock import MS_PER_DAY, Season
 from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
+    CraterFormed,
     CreaturesArrived,
     InputEvent,
     JuvenileGrown,
     OutputEvent,
     PopulationExtinct,
+    VolcanoErupted,
 )
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype
-from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora
+from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora, Wildfire
 from lineage_sim.rare import body_of
 from lineage_sim.rng import FAUNA
 from lineage_sim.state.schema import Tree
@@ -71,6 +74,7 @@ class Death(IntEnum):
     OLD_AGE = 1
     KILLED = 2
     DROWNED = 3
+    BURNT = 4  # caught in a burning cell on land (R4)
 
 
 @dataclass
@@ -85,19 +89,24 @@ class Tally:
     old_age: int = 0
     killed: int = 0
     drowned: int = 0
+    burnt: int = 0
 
     @property
     def deaths(self) -> int:
-        return self.starved + self.old_age + self.killed + self.drowned
+        return self.starved + self.old_age + self.killed + self.drowned + self.burnt
 
 
 class Fauna:
     """The fauna subsystem. Read the population through the properties."""
 
-    def __init__(self, cfg: FaunaConfig, terrain: Terrain, flora: Flora) -> None:
+    def __init__(
+        self, cfg: FaunaConfig, terrain: Terrain, flora: Flora, fire: Wildfire | None = None
+    ) -> None:
         self._cfg = cfg
         self._terrain = terrain
         self._flora = flora
+        # Burning cells hurt the creatures in them (R4); none in a world without fire.
+        self._fire = fire
         self._shape: tuple[int, int] = (terrain.height.shape[0], terrain.height.shape[1])
         self._positions = np.zeros((0, 2), dtype=np.float32)
         self._energy = np.zeros(0, dtype=np.float32)
@@ -311,7 +320,8 @@ class Fauna:
         dead = self._hunt(rng, hours)
         # The tick's own balance, before any breeding: what eating and moving earned.
         self._learn(self._energy - before, hours, ctx.t_ms)
-        dead = self._expire(dead)
+        in_fire = self._burn(hours)
+        dead = self._expire(dead, in_fire)
         newborn = self._breed(rng, dead)
         self._bury(dead, ctx.t_ms)
         if newborn is not None:
@@ -325,6 +335,15 @@ class Fauna:
         elif stranger_roll < self._cfg.immigrant_groups_per_year * hours / _HOURS_PER_YEAR:
             outputs += self._arrive(rng, ctx.t_ms, self._cfg.immigrant_group_size, founders=False)
         return outputs
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
+        """A volcano's cone rising or a crater striking kills the creatures on it."""
+        seen: list[OutputEvent] = []
+        for event in outputs:
+            if isinstance(event, VolcanoErupted | CraterFormed):
+                reach = self._cfg.blast_kill_reach * event.radius_cells
+                seen += self.strike(event.x, event.y, reach, ctx.t_ms)
+        return seen
 
     def handle(self, event: InputEvent, ctx: Context) -> list[OutputEvent]:
         return []
@@ -400,6 +419,14 @@ class Fauna:
         low = np.where(is_low, biomass, np.float32(0.0)).astype(np.float32)
         woody = np.where(is_woody, biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
+        # Food at sea (M11): smelled by those at ease in water (swimmers, amphibians).
+        algae = self._flora.grazeable_algae()
+        sea, ease = None, None
+        if algae.any():
+            sea = algae
+            ease = np.where(
+                rare.waterproof(self._slots), np.float32(1.0), self._genes[:, Gene.AQUATIC]
+            ).astype(np.float32)
         senses = creature.sense(
             cfg,
             self._positions,
@@ -418,6 +445,8 @@ class Fauna:
             offsets,
             distance,
             rare.sight(cfg, self._slots, body.sense_range, self._daylight),
+            sea,
+            ease,
         )
         # Roaming: a heading that drifts slowly, so a creature with nothing to steer by
         # covers ground instead of jittering in place.
@@ -490,6 +519,8 @@ class Fauna:
                 [_LOW_GAIN, _WOODY_GAIN],
                 -1,
             ).astype(np.intp)
+            # Algae are no plant form: a meal of them teaches nothing about low or woody.
+            gain_index[self._flora.on_algae(rows, columns)] = -1
             full_bite = body.graze_rate * np.float32(hours)
             bite = np.clip(eaten / np.maximum(full_bite, 1e-9), 0.0, 1.0).astype(np.float32)
             self._learned, self._meal_value = brain.taste(
@@ -595,10 +626,27 @@ class Fauna:
             for i in which.tolist()
         ]
 
-    def _expire(self, dead: NDArray[np.int8]) -> NDArray[np.int8]:
-        """Mark the starved (or drowned) and the old."""
+    def _burn(self, hours: float) -> NDArray[np.bool_]:
+        """Creatures on land in a burning cell lose ``fire_damage_per_hour`` of their
+        capacity an hour (R4): one that stays in the fire dies of it. Returns who is in it."""
+        if self._fire is None or self.count == 0:
+            return np.zeros(self.count, dtype=np.bool_)
+        rows, columns = creature.cells_of(self._positions, self._shape)
+        caught = self._fire.burning[rows, columns] & ~self._in_water
+        if caught.any():
+            damage = np.float32(self._cfg.fire_damage_per_hour * hours) * self._body.capacity
+            self._energy = np.where(caught, self._energy - damage, self._energy).astype(np.float32)
+        return caught
+
+    def _expire(
+        self, dead: NDArray[np.int8], in_fire: NDArray[np.bool_] | None = None
+    ) -> NDArray[np.int8]:
+        """Mark the burnt, the starved (or drowned) and the old."""
         alive = dead < 0
         starved = alive & (self._energy <= 0)
+        if in_fire is not None:
+            dead[starved & in_fire] = Death.BURNT
+            starved &= ~in_fire
         dead[starved & self._in_water] = Death.DROWNED
         dead[starved & ~self._in_water] = Death.STARVED
         dead[(dead < 0) & (self._age_h >= self._body.lifespan_h)] = Death.OLD_AGE
@@ -746,6 +794,7 @@ class Fauna:
         self.tally.old_age += int(causes[Death.OLD_AGE])
         self.tally.killed += int(causes[Death.KILLED])
         self.tally.drowned += int(causes[Death.DROWNED])
+        self.tally.burnt += int(causes[Death.BURNT])
         keep = ~gone
         self._positions, self._energy = self._positions[keep], self._energy[keep]
         self._age_h, self._idle_h = self._age_h[keep], self._idle_h[keep]
@@ -927,6 +976,10 @@ class Fauna:
         positions = np.array([spots_x[spot], spots_y[spot]], dtype=np.float32) + scatter
         positions[:, 0] = np.clip(positions[:, 0], 0.0, self._shape[1] - 1.0)
         positions[:, 1] = np.clip(positions[:, 1], 0.0, self._shape[0] - 1.0)
+        # Newcomers land on land: one scattered into the sea stands on the spot instead.
+        rows, columns = creature.cells_of(positions, self._shape)
+        at_sea = ~self._terrain.land[rows, columns]
+        positions[at_sea] = np.array([spots_x[spot], spots_y[spot]], dtype=np.float32)
         body = body_of(cfg, genes, np.zeros(count, dtype=np.uint16))
         energy = (cfg.founder_energy_share * body.capacity).astype(np.float32)
         # Arrive at random ages so they do not all die of old age together.

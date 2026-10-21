@@ -110,7 +110,7 @@ def test_the_schema_checker_catches_what_it_should() -> None:
 
 def test_every_message_on_connect_is_what_the_schema_says(world: World) -> None:
     messages = encode.connect_messages(world)
-    assert [message["type"] for message in messages][:3] == ["clock", "land", "fauna"]
+    assert [message["type"] for message in messages][:4] == ["clock", "sky", "land", "fauna"]
     assert messages[-1]["type"] == "creatures"
     for message in messages:
         assert errors(message, SCHEMA) == [], message["type"]
@@ -215,3 +215,84 @@ def test_the_chronicle_sends_only_entries_not_sent_before() -> None:
     assert later is not None
     assert [entry["number"] for entry in later["entries"]] == [len(entries) - 1, len(entries)]
     assert encode.chronicle_message(world, after=len(entries)) is None
+
+
+def test_the_sky_says_the_light_rain_and_fires_of_the_moment(world: World) -> None:
+    sky = encode.sky_message(world)
+    assert errors(sky, SCHEMA) == []
+    assert sky["light"] == pytest.approx(world.presence.light, abs=1e-4)
+    assert sky["present"] == world.presence.present
+    assert sky["rain"] == encode.rain_of(world)
+    assert sky["rain"] in {"none", "rain", "thunder", "storm", "soaking"}
+    burning = world.wildfire.burning
+    assert sky["burning"] == [int(i) for i in np.flatnonzero(burning)]
+    assert sky["burning"] == sorted(sky["burning"])
+
+
+def test_events_carry_what_the_scene_shows_and_nothing_else() -> None:
+    import datetime as dt
+
+    from lineage_sim.events import (
+        CraterFormed,
+        CreaturesArrived,
+        DayStarted,
+        EarthquakeStruck,
+        FireEnded,
+        FireStarted,
+        GodPowerUsed,
+        VolcanoErupted,
+        WorldBegan,
+        WorldEnded,
+    )
+    from lineage_sim.state.schema import WorldState
+
+    archive = WorldState(seed=3, epoch_unix_ms=0, t_ms=5)
+    outputs = [
+        DayStarted(0, dt.date(2027, 1, 1)),
+        FireStarted(1, 4.0, 5.0),
+        FireEnded(2, 12, 3.5),
+        VolcanoErupted(3, 10.0, 11.0, 4.0, 0.2),
+        EarthquakeStruck(4, 20.0, 21.0, 6.0, 0.01),
+        CraterFormed(5, 30.0, 31.0, 3.0, 0.1),
+        GodPowerUsed(6, "meteor", 30.0, 31.0),
+        CreaturesArrived(6, 12, False, 40.0, 41.0, 900),
+        WorldEnded(7, 1, 3, "last_creature", archive),
+        WorldBegan(0, 2, 99, 1000),
+    ]
+    message = encode.events_message(outputs)
+    assert message is not None
+    assert errors(message, SCHEMA) == []
+    assert json.loads(json.dumps(message)) == message
+    kinds = [event["kind"] for event in message["events"]]
+    assert kinds == [
+        "fire_started",
+        "fire_ended",
+        "volcano",
+        "earthquake",
+        "crater",
+        "god_power",
+        "creatures_arrived",
+        "world_ended",
+        "world_began",
+    ]
+    assert message["events"][5]["power"] == "meteor"
+    assert message["events"][6] == {"kind": "creatures_arrived", "t_ms": 6, "x": 40.0, "y": 41.0,
+                                     "count": 12}  # fmt: skip
+    assert message["events"][7] == {
+        "kind": "world_ended",
+        "t_ms": 7,
+        "world": 1,
+        "seed": 3,
+        "cause": "last_creature",
+    }
+    assert encode.events_message(outputs[:1]) is None
+    assert encode.events_message([]) is None
+
+
+def test_the_land_carries_scorch_and_algae(world: World) -> None:
+    land = encode.land_message(world)
+    cells = land["width"] * land["height"]
+    scorch = decode(land["scorch"], cells).reshape(land["height"], land["width"])
+    algae = decode(land["algae"], cells).reshape(land["height"], land["width"])
+    assert np.allclose(scorch, world.flora.scorch, atol=1 / 255)
+    assert np.allclose(algae, world.flora.algae, atol=1 / 255)

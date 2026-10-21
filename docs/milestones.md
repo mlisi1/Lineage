@@ -20,7 +20,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
-| R4 | Atmosphere | not started | — |
+| R4 | Atmosphere | **done** 2026-10-21, merged into `main` after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
 | R5 | Final rendering pass and device benchmark | not started; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
@@ -31,6 +31,87 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### R4 closed (merged into `main`, 2026-10-21; branch `r4-atmosphere` and its worktree removed)
+
+- **What it left**: `renderer/src/atmosphere/` (`light.ts`, `apocalypse.ts`,
+  `particles.ts`, `sprites.ts`, `demo.ts`, `atmosphere.ts`), wired in `src/main.ts`;
+  `Herd.glowing` and `CreatureLayer.spine`; the map painted with surf (`landscape.ts`,
+  `terrain/ground.ts`); `sky` and `events` messages (`schema.json`, `encode.sky_message`,
+  `events_message`, `entries_message`); `Presence.raining` (read-only, no schema bump);
+  `tools/stream.py --sky-every --schedule --press-days --famine-day`; the recordings
+  `office.json` and `end.json`. Design: `docs/design/renderer.md` "The atmosphere";
+  decisions: ADR 0021.
+- **Round 2** (owner's comments, 2026-10-20): in the sim, the island's own weather
+  (`weather.py`: rain spells, visual thunder, thunderstorms whose lightning alone starts
+  fires; `[flora] fire_ignitions_per_year` became `fire_strikes_per_storm_hour`) and fire
+  kills animals (`[fauna] fire_damage_per_hour`, `BURNT`), schema v12 on top of M11's
+  algae v11 (cherry-picked). Renderer: flame sprites, charred trees and ground, ripples,
+  three sizes of lightning, drawn cones and craters, the powers' real effects, algae.
+  Wire: `sky.rain`, `land.scorch` and `land.algae`, `creatures_arrived`, land after events.
+  Tool: `--stage`. All committed recordings regenerated with the new sim.
+- **Rounds 3 and 4** (owner, 2026-10-20): the report films every view at 1024×600 and
+  30 fps (ffmpeg; films gitignored). In the sim, a barren ring round cones and craters
+  (`[flora] barren_reach`, `barren_days`, `Flora.barren`) and newcomers never scattered
+  into the sea. Renderer: terraced cones with flowing lava (`marks.ts`, eight frames) in
+  a skirt of scree; a crater drawn from a lit height field; a pulsing ring glow; rain
+  sized to the view in three wind-leaning layers under grey cloud; two large flames to a
+  cell up close; the scorch cell by cell; `fireReach` for the made-up fire; the ark's
+  newcomers coming into being (`CreatureLayer.arrive`, `Herd.arrival`); the seed's
+  sprouts; tides (`terrain/sea.ts` `tidePhase`, `swashLevel`; surf and swash bands cut
+  into 16-pixel tiles in `terrain/grounds.ts`).
+- **Round 5** (owner, 2026-10-20, ADR 0021 "Round 5"): in the sim, overcast spells seen
+  only (`Rain.CLOUD`, `[weather] cloud_*`, `sky.rain = "cloud"`; golden hashes changed),
+  `World.witness` (a tool's staged events reach the observers), and `tools.stream` sends
+  an event's land after its news. Renderer: waves as one travelling front (`tidePhase`,
+  `swashHeight`, 8-pixel tiles, no swash on the map); the world colour-graded toward grey
+  under cloud (`Atmosphere.grade`, a filter on only while overcast); rain over the tint
+  in pale blue, its strength per spell; thunder at random times; `Landscape.floor` under
+  the plants for craters, scree and embers, and `RowPool` sorting flames, cones, lava and
+  sprouts among the plants' rows; a new close flame (15 × 24, six frames, slow,
+  see-through) in embers with small flames, lit at night; radial lava; a crater's land
+  held until its meteor strikes; sprouts found as bare cells that grew; the ark's beam
+  pooled at its foot; fainter glow closer in.
+- **Round 6** (owner, 2026-10-21, ADR 0021 "Round 6"): a frame-by-frame hunt for pops
+  (flames, cones, craters, sprouts, plants, the dead and born now fade or rise); in the sim,
+  creatures under a new cone or crater die (`[fauna] blast_kill_reach`, `Fauna.observe`);
+  nothing placed on cones or craters (`Landscape.covered`), a dust cloud hides the change;
+  tides by a GL shader from the shore's distance field (`terrain/tide.ts`, `sea.ts`,
+  `Pixels.shore`); snow falls where snow lies; rain streaks as long as a frame's fall;
+  plant drawings paged within 2048 × 2048 (black squares in winter close views, since R1).
+- **Round 7** (owner, 2026-10-21, ADR 0021 "Round 7"): a view's fall is all rain or all
+  snow (snow where half its land has snow lying), cross-fading; the open sea's swell on the
+  map and fainter in the middle view (`tide.ts` `swellAt`, drawn by the shore's shader);
+  the meteor 1.8× in the middle view; dust clouds painted once and stretched (they
+  popped). The owner then called the look final.
+- **Closing** (2026-10-21): tests for rounds 5–7 added (tides and swell, one kind of fall,
+  the crater past its flash, a new cone or crater killing the creatures on it,
+  `World.witness`), the stale apocalypse test fixed (the next world waits for full black),
+  every snapshot baseline refreshed and looked at (the winter close view now shows its
+  plants). Golden hashes and the five committed recordings did not change: no natural
+  volcano or crater falls in their windows. The films are kept outside git; the owner has
+  the full report as a claude.ai artifact.
+- **To look at** (`cd renderer && npm run dev`): `/?recording=office` (dusks and nights,
+  rain), `/?recording=end` (a day, then the end of the world and the next),
+  `/?view=middle&x=120&y=60&recording=autumn&every=0&show=night,fire` (any of day, dusk,
+  dawn, night, moon, rain, fire, volcano, quake, meteor, seed, ark, end).
+- **Tests at the close**: renderer 301 unit, 56 Playwright; Python fast suite 707 (weather,
+  storms, fire and blast kills, the v11→v12 migration, protocol and stream).
+- **Report**: `reports/R4-atmosphere/` (`cd renderer && npm run atmosphere`): films of
+  every light, the glow, each event's weather, the map's waves and a world's end.
+- **For S1**: send `sky` at every presence tick; `chronicle` and `events` from each step's
+  outputs, a world's last lines before its `world_ended`, then the next world as on
+  connect (as `tools/stream.py` does).
+- **For R5**: measure the atmosphere on the board (one multiplied sprite, up to a few
+  hundred additive halos in a big fire, 180 raindrops; a world-sized texture repainted
+  10 times a second during an apocalypse; the tide's surf and swash tiles, a few hundred
+  opacities a frame). Keep `Director.toMap` (the apocalypse uses it);
+  of the R3 demo clicks remove the pointer handler and `Director.nextSubject` only.
+  Seen by the owner at the close, not R4's to fix there: plants that seem to stand on the
+  water and animals that seem to walk on it. One renderer cause is known: plants are
+  allowed by their cell's height while the ground paints a coast blended between cells
+  (`plants/plants.ts` `aboveSea`), so a plant near the shore can stand on painted water.
+  Animals in the shallows may be M11's wading.
 
 ### Starting R4 (atmosphere)
 
@@ -74,7 +155,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   local view a click picks another animal and a double click the map. **Demo only** (the
   owner, 2026-10-20): the final build does not have it; R5 takes it out (the pointer
   handler in `src/main.ts`, `Director.nextSubject` and `toMap` with their tests), leaving
-  a click or tap as the view button.
+  a click or tap as the view button. (R4: the apocalypse uses `toMap`; it stays.)
 - **Shared files it changed**: `schema.json` / `encode.py` (additive), `tools/stream.py`,
   `docs/design/renderer.md`, this file and CLAUDE.md. No sim change, no schema bump: M11
   (on `m11-tuning`) merges main with conflicts in the docs only.

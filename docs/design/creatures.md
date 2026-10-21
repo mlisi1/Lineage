@@ -111,6 +111,13 @@ networks, predator–prey coexistence): ADR 0009, "References".
 
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
   in water. A creature with no energy left dies (starved, or drowned if in water).
+- **Fire** (R4): a creature on land in a burning cell loses `fire_damage_per_hour` (1.0)
+  of its capacity an hour, so an hour in a fire kills it (burnt; no carrion). Swimmers
+  are safe.
+- **New rock** (R4, round 6): a volcano's cone rising or a crater forming (natural or the
+  meteor's) kills every creature within `[fauna] blast_kill_reach` (1.0) × its radius
+  (`Fauna.observe`; nothing to scavenge). The meteor's own blast reaches further
+  (`[presence] meteor_blast_factor`).
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
   regrows; defended plants refuse part of each bite, and what is eaten is worth less:
   energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.
@@ -118,6 +125,12 @@ networks, predator–prey coexistence): ADR 0009, "References".
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Food at sea** (M11): algae grow on the shallow sea (`plants.md`). A creature eats
+  them wherever it swims and no plant stands, like a plant meal worth
+  `[flora] algae_meal_share` of one. It smells them in proportion to its ease in water:
+  its `AQUATIC` gene, or fully if it carries `AMPHIBIOUS`. The food it senses is land
+  plants + ease × algae, so a land animal is not lured out to sea. Algae are no plant
+  form: meals of them teach nothing about low or woody growth.
 - **Carrion**: the dead leave remains on land, in units of meat mass: what a hunter could
   not eat of its kill, and `carcass_share` of the body of those that starved or died of
   age (the drowned are lost). Remains rot (`carrion_decay_hours`). Creatures that digest
@@ -244,4 +257,5 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.
 - Creatures graze every plant form alike (same bite rate); forms differ only through the
   plants' genes (defence).
-- No aquatic food: swimmers must feed on land.
+- Food at sea came with M11 (algae, above); before it, swimmers had to feed on land and
+  the `AQUATIC` gene never found a niche (M11, D1).

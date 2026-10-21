@@ -14,27 +14,37 @@ from fauna_site import genes_of as _genes
 from fauna_site import with_gene as _with
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from lineage_sim import clock
 from lineage_sim.config import Config
-from lineage_sim.events import CreaturesArrived, JuvenileGrown, PopulationExtinct
+from lineage_sim.events import (
+    CraterFormed,
+    CreaturesArrived,
+    FireEnded,
+    JuvenileGrown,
+    PopulationExtinct,
+    VolcanoErupted,
+)
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
+from lineage_sim.fauna.creature import cells_of
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import CONFIG_KEYS, Phenotype, phenotype, phenotype_config
 from lineage_sim.flora import Gene as FloraGene
 from lineage_sim.state import io
+from lineage_sim.subsystem import Context
 from lineage_sim.world import World
 from numpy.random import PCG64, Generator
 
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "be237984245d07be4badb39d70b46ee5d460a3e02fd0015392c16861bd978292"
+GOLDEN_FAUNA_SEED_42 = "1bd9023cd1be8e499c86ae8d594dd527636a0346bfd70bcfd805d5471af0a6ea"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "ef5248a05d01ab6eb0ee0964a1397a97cc9f19f5eef2909038a46ae59c4a4fa3"
+GOLDEN_AFTER_THREE_DAYS = "5094a09a7ee4e03d4d390f31010eb4e66f7d9058a283d2756a76f0974ca3f2ff"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "32984808393cb33f7cf81d221828b7dab97a4a15c931d27e1dccaaa6fa2e6a0e"
+GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -413,6 +423,58 @@ def test_land_animal_drowns_and_a_swimmer_does_not(config: Config) -> None:
     assert site.alive(swimmer) == 1  # no food out here either, but it is in no hurry
 
 
+def _set_alight(site: Site, x0: int, x1: int) -> None:
+    """Every land cell in columns x0–x1 burning, as if a fire had reached them."""
+    assert site.fire is not None
+    for y in range(ROWS):
+        for x in range(x0, x1):
+            site.fire.ignite(y, x, site.t_ms)
+
+
+def test_newcomers_land_on_land_even_on_a_narrow_shore(config: Config) -> None:
+    """The ark and every group of founders (R4: the owner asked for this sanity check)."""
+    wide = replace(config.fauna, immigrant_groups_per_year=0.0, founder_radius_cells=12.0)
+    site = Site(config, water_from=6, fauna=wide)  # a strip of land six cells wide
+    outputs = site.fauna.arrive(Generator(PCG64(3)), 0, 40)
+    assert outputs
+    rows, columns = cells_of(site.fauna.positions, (ROWS, COLUMNS))
+    assert bool(site.terrain.land[rows, columns].all())
+
+
+def test_a_creature_caught_in_a_fire_dies_of_it(config: Config) -> None:
+    site = Site(config, fire=True)
+    _set_alight(site, 0, 30)
+    caught = site.add(GRAZER, [(15.0, 20.0)], energy_share=0.9)
+    away = site.add(GRAZER, [(50.0, 20.0)], energy_share=0.9)
+    site.run(1.0)
+    assert site.alive(caught) == 0  # an hour in the flames (fire_damage_per_hour 1)
+    assert site.alive(away) == 1
+    assert site.fauna.tally.burnt == 1
+    assert site.fauna.tally.starved == 0
+    assert site.fauna.tally.deaths == 1
+    assert float(site.fauna.carrion.sum()) == 0.0  # nothing left to scavenge
+
+
+def test_fire_hurts_only_while_a_creature_is_in_it(config: Config) -> None:
+    site = Site(config, fire=True)
+    _set_alight(site, 0, 30)
+    caught = site.add(GRAZER, [(15.0, 20.0)], energy_share=0.9)
+    away = site.add(GRAZER, [(50.0, 20.0)], energy_share=0.9)
+    site.run(TICK_S / 3600)
+    burnt = 0.9 - float(site.energy_share(caught)[0])
+    spent = 0.9 - float(site.energy_share(away)[0])
+    tick_damage = config.fauna.fire_damage_per_hour * TICK_S / 3600
+    assert burnt - spent == pytest.approx(tick_damage, abs=0.03)
+
+
+def test_without_a_fire_nothing_burns(config: Config) -> None:
+    site = Site(config)  # no fire on the site: the fauna of a world without one
+    ids = site.add(GRAZER, [(15.0, 20.0)])
+    site.run(2.0)
+    assert site.alive(ids) == 1
+    assert site.fauna.tally.burnt == 0
+
+
 def test_compatible_pair_breeds(config: Config) -> None:
     cfg = config.fauna
     site = Site(config)
@@ -735,3 +797,25 @@ def test_the_scent_follows_the_carrion(config: Config) -> None:
     fresh = creature.spread(fauna.carrion, config.fauna.carrion_scent_cells)
     kept = fauna.get_state()["scent"]
     np.testing.assert_allclose(kept, fresh, atol=1e-5)
+
+
+def test_a_new_cone_or_crater_kills_the_creatures_on_it(config: Config) -> None:
+    """R4 (the owner): a volcano rising or a crater striking kills what stands within
+    ``blast_kill_reach`` × its radius, leaves nothing to scavenge; other events kill nothing."""
+    reach = config.fauna.blast_kill_reach
+    site = Site(config)
+    on_cone = site.add(GRAZER, [(30.0, 20.0), (30.0 + 3.5 * reach, 20.0)])
+    beside_cone = site.add(GRAZER, [(30.0 + 4.5 * reach, 20.0)])
+    on_crater = site.add(GRAZER, [(10.0, 10.0)])
+    far = site.add(GRAZER, [(10.0, 30.0)])
+    instant = clock.instant(clock.date_to_unix_ms(dt.date(2026, 6, 1)), 0, config.calendar)
+    ctx = Context(site.t_ms, 0.0, instant, site.rng)
+    assert site.fauna.observe([FireEnded(0, 1, 1.0)], ctx) == []
+    site.fauna.observe([VolcanoErupted(0, 30.0, 20.0, 4.0, 0.1)], ctx)
+    assert site.alive(on_cone) == 0
+    assert site.alive(beside_cone) == 1
+    assert site.fauna.tally.killed == 2
+    site.fauna.observe([CraterFormed(0, 10.0, 10.0, 3.0, 0.05)], ctx)
+    assert site.alive(on_crater) == 0
+    assert site.alive(far) == 1
+    assert not site.fauna.get_state()["carrion"].any()

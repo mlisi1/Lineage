@@ -685,7 +685,16 @@ of lighter water far out, one nearer, and the foam at the shore. A crest comes i
 (three opacities a frame). Glints, short white strokes, grow on the open water, drift a
 little and go, forty slots to a view, each on its own clock and somewhere new each time
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
-it at its first moment, which the snapshots use. The land sheet films it. `seaAt(land)`
+it at its first moment, which the snapshots use. The land sheet films it. **Tides**
+(R4, round 6): the painter leaves the shore's data (`Pixels.shore`: each pixel's
+distance out to sea and inland, when the waves come there, noise) and one GL filter a
+view (`sea.ts`) draws it: wave lines roll in, brighten and break white; the swash runs up
+the sand with a foam edge, drains, and leaves wet sand that dries. A wave every 5 s,
+its timing varying slowly over the island (`tide.ts` `tidePhase`), the tide over a
+minute; no swash on the map. Past the waves the **open sea's swell** (round 7): faint crests
+across the screen, bent and broken into dashes that come and go, drift down the sea, a
+crest every 6 s, from data the painter leaves in the same texture (`tide.ts` `swellAt`);
+on the map and fainter in the middle view, none up close. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -800,6 +809,125 @@ and the scroll's painting, the font, and the roster; in the page
 (`tests/e2e/camera.spec.ts`) the button's cycle and a snapshot of the scroll. Its cost on
 the board is R5's to measure.
 
+## The atmosphere (R4)
+
+The light, what glows, the weather of events and the end of a world
+([ADR 0021](../decisions/0021-atmosphere.md)), in `src/atmosphere/`, from two messages on
+the wire: `sky` (the light of the moment, whether the owner is at the desk, rain, the
+cells on fire; at every presence tick) and `events` (fires, volcanoes, quakes, craters,
+god powers, a world's end and the next one's beginning).
+
+| Layer | Where | What |
+|---|---|---|
+| `ground` | in the world (cells), over the animals | the risen sea of a world's end, smoke, ash clouds, dust |
+| `weather` | screen art pixels | rain, falling ash |
+| `tint` | one sprite, multiplied over all of the above | the light |
+| `lights` | cells, added over the tint | glow-gene animals, fires, lava, sparks, beams |
+| `flash` | the screen | a meteor's strike, lightning |
+
+- **The light** (`light.ts`): moonlit blue at night (the owner: dark but readable), rose
+  at dusk (owner away), lilac at dawn (owner back), day graded by the season (warm
+  summer, cool winter; each season's second half turns toward the next), greyed by rain.
+  The sim's 10-minute steps are eased: each is reached over the wall time since the one
+  before (`LightEase`), so a dusk fades instead of stepping, at any playback speed.
+- **Glow**: halos in five steps (a 48-texel disc, at most three times that across so its
+  steps stay a few art pixels wide), added over the tint so they show in the dark. An
+  animal with the glow gene shines as strongly as it is dark (`Herd.glowing`): on the map
+  a small light just round its square; closer, a ring of light with a clear heart round
+  every other joint of its back, so the animal shows through it, wider up close. It
+  breathes, between 45 % and full over 3.5 s. A fire is a wide glow, then for each burning cell a small
+  flicker off its middle and flames licking up; up close (local view) more of them.
+- **Weather**: smoke, ash, dust, flames and rain are slots each going round a cycle of
+  its own; where a slot is depends only on its number and the time (as the sea's glints),
+  so a moment looks the same on every run and a `?still` picture is fixed. Rain while the
+  rain power's rain falls (sets in over 3 s); smoke over fires; a volcano's lava glow,
+  lava running down its sides and a dark ash column (12 sim-hours, at least 30 wall
+  seconds); a quake's shake and dust (4 s); a meteor's streak from high up, flash, glow
+  and dust where it digs its crater; a beam and golden or pale motes for the seed and ark
+  powers (8 s); lightning's flash and sparks where a fire starts.
+- **The end of a world** (`apocalypse.ts`), three minutes on the map, whatever the view
+  was: omen (20 s, the sky reddens, ash), fire (40 s, lava vents, quakes), flood (60 s, the
+  sea rises over the land one pixel to the cell, peaks last), dark (20 s), rise (40 s, the
+  light comes back, the sea falls from the new continent). The view button waits. What the
+  stream sends of the next world is held: its land and animals until the dark, its news
+  until the rise; the chronicle's own lines tell the end and the beginning.
+- **Waves on the map**: the map is painted with the three surf bands as the closer views
+  are, and the sea brings them in (the owner, from the R3 demo).
+- **On demand**: `?show=night,fire,meteor…` makes up the light and events on the land in
+  sight (`demo.ts`); with `?still` they move only by `window.__advance(seconds)`. The
+  recordings `?recording=office` (two weeks of office hours: dusks, nights, the Long
+  Night, the rain power twice) and `?recording=end` (the herd starves on day 2 and the sim
+  ends the world) play the real thing.
+
+**Round 2** (the owner's comments, ADR 0021):
+
+- Lightning comes in three sizes: thunder (thin, rare, faint), thunderstorm (forked,
+  every few seconds, a darker sky, slanting heavy rain) and the strike that sets a fire
+  (thickest, brightest, where the fire begins).
+- Rain rings spread on the water and drops splash on the land, in the middle and local
+  views.
+- Flames are four-frame sprites, one to a burning cell in the middle view and three larger
+  up close.
+- Burnt ground (`scorch`) is charcoal with ash, and charred tree skeletons stand where trees
+  grew.
+- A puff of ash rises where an animal dies in the fire.
+- A volcano's cone and a meteor's crater are drawn for 30 sim-days (`marks.ts`), after
+  how top-down pixel-art games draw them: stacked ledges with cliff faces, boulders,
+  crusted lava rivers falling over the ledges (its own layer, untinted), and a crater's rim,
+  far wall, scorched floor and rays of debris. The sim bares the land round both.
+- The seed power drops motes over the bare land in sight; the ark's light falls where its
+  newcomers land.
+- Algae are olive fronds on the shallows, and glow shows on the map's dots.
+
+**Round 4** (the owner's comments on the films, ADR 0021):
+
+- Rain is sized to the view (a 2-pixel streak on the map to 6 up close), falls in three
+  parallax layers, and leans with the wind (more with thunder, most in a thunderstorm,
+  whose gusts swing every layer). Cloud greys the light while it rains.
+- Up close, two large six-frame flames to a burning cell, each with its own halo and
+  embers. The made-up fire and burnt wood of `?show=` spread as the sim's fire does,
+  from cell to neighbouring cell through fuel (`fireReach`). The scorch is painted cell
+  by cell, charcoal with drifts of ash and a wandering edge.
+- The lava flows in eight looped frames; the cone stands in a skirt of ash and scree.
+- The crater is drawn from a lit height field, after simple impact craters: a scalloped
+  raised rim, the near wall in shadow, the far wall lit, a slumped floor, pale ejecta
+  with boulders thinning into clods, rays downrange.
+- The ark's light is scaled to the view, and each newcomer comes into being under a
+  thread of light, fading in over 2.5 s (`CreatureLayer.arrive`).
+- The seed's sprouts grow leaf by leaf on each cell the seed sowed (the land before and
+  after the power, diffed), until the plants show.
+- Tides (above, under the sea).
+
+**Round 6** (ADR 0021): nothing pops (fires, cones, craters, sprouts, plants, the dead
+and born fade or rise); nothing is placed on a cone or crater (`Landscape.covered`) and a
+dust cloud hides the change; tides by the shore shader (above); snow falls where snow
+lies, rain elsewhere; a raindrop's streak is at least a frame's fall long; plant drawings
+are paged within 2048 × 2048.
+
+**Round 7** (ADR 0021): a view's fall is all rain or all snow (snow when half its land
+has snow lying), cross-fading as that changes; the open sea's swell (above); the meteor
+larger in the middle view; dust clouds painted once and stretched, so they do not pop.
+
+**Round 5** (ADR 0021):
+
+- What lies on the ground (a crater, a cone's scree, a fire's embers) is drawn on
+  `Landscape.floor`, under the plants; what stands (flames, a cone and its lava, sprouts)
+  goes into the plants' rows by its foot (`RowPool`), as creatures do, so what stands in
+  front covers it.
+- Rain is drawn over the tint, faded with the light, in pale blue; each spell has its own
+  strength; thunder falls at random times. Under cloud the world is colour-graded toward grey
+  (a colour-matrix filter, on only while the sky is overcast) under a faint grey haze; `sky.rain = "cloud"` is an overcast sky.
+- The close flame is 15 × 24 in six frames after pixel-art references, flickering slowly
+  and see-through (72 %), in a bed of embers with small flames round it; burning trees
+  burn in their crowns; at night an added copy keeps the flames lit. Glow is fainter closer in.
+- The lava's crust drifts outward from the pool's middle. A crater's land waits for its
+  meteor to strike. The ark's beam fades into a pool of light at its foot.
+
+**Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
+the particles and the shows (and the land they change), lightning, flames and marks; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
+every light and event, a glowing animal at night and by day, and a real world's end
+holding the camera and the button. Its cost on the board is R5's to measure.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
@@ -822,6 +950,7 @@ the board is R5's to measure.
 ## Open
 
 - **Snow**: settled in R1 (ADR 0014): it lies where the simulation's temperature says.
+  It is not seen falling (R4).
 - **Turning from one season to the next**: done in R1, over about four weeks.
 - **Plant genes in the drawing**: `HEIGHT` picks the build, `EVERGREEN` how late a
   tree turns and how it spends the winter, and the rare genes have their looks (R1, from

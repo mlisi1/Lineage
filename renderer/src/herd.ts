@@ -9,6 +9,7 @@
  * kept near where the sim last put it (`life: "anchored"`), and lives there between ticks.
  */
 import type { Container } from "pixi.js";
+import type { Spot } from "./atmosphere/atmosphere";
 import { lookOf } from "./creatures/body";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
@@ -107,14 +108,26 @@ const BODIES = {
   local: localBody(LOCAL_PIXELS, CREATURE_SCALE * LOCAL_ENLARGED),
 } as const;
 
+/** Seconds a newborn takes to fade in where it was born. */
+const BORN_S = 0.6;
+
 export class Herd {
   private readonly roster = new Roster();
   private readonly layers: Record<"middle" | "local", CreatureLayer>;
   private phenotypeConfig: PhenotypeConfig | null = null;
   private rareConfig: RareConfig = { giant_mass_factor: 1 };
   private signatures: Signatures = new Map();
+  /** The rare-gene bits whose look is glow (R4: they shine in the dark). */
+  private glowBits = 0;
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
+  /** Told where each animal that dies was last (R4: the fire's dead leave a puff of ash). */
+  onGone: ((x: number, y: number) => void) | null = null;
+  /**
+   * Asked of each animal new to the scene where it is (R4): whether it arrives with the ark,
+   * so comes into being over this many seconds; 0 for one simply born.
+   */
+  arrival: ((x: number, y: number) => number) | null = null;
   private land: Land | null = null;
   private sea: SeaAt | null = null;
   private passable: Passable | null = null;
@@ -160,6 +173,9 @@ export class Herd {
           .filter((gene) => gene.kingdom === "creature")
           .map((gene) => [gene.bit, gene.signature]),
       );
+      this.glowBits = 0;
+      for (const [bit, signature] of this.signatures)
+        if (signature === "glow") this.glowBits |= bit;
     } else if (message.type === "species") {
       for (const species of message.species) this.names.set(species.id, species.name);
     } else if (message.type === "creatures") this.takeCreatures(message);
@@ -200,10 +216,15 @@ export class Herd {
   }
 
   private takeCreatures(message: CreaturesMessage): void {
+    if (this.onGone !== null) {
+      const alive = new Set(message.ids);
+      for (const [id, at] of this.roster.where) if (!alive.has(id)) this.onGone(at.x, at.y);
+    }
     const census = new Set(this.roster.species.values());
     const { placed, removed } = this.roster.take(message);
     const layers = Object.values(this.layers);
-    for (const slot of removed) for (const layer of layers) layer.remove(slot);
+    // The dead fade away where they last stood.
+    for (const slot of removed) for (const layer of layers) layer.remove(slot, true);
     // A new species, or one gone: newcomers take the kinds of the census as it is now.
     const changed =
       census.size !== new Set(this.roster.species.values()).size ||
@@ -217,7 +238,12 @@ export class Herd {
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
-      for (const layer of layers) layer.place(slot, seed);
+      // An ark's newcomer comes into being under its light; one born, quickly.
+      const arriving = this.arrival?.(seed.x, seed.y) || BORN_S;
+      for (const layer of layers) {
+        layer.place(slot, seed);
+        if (arriving > 0) layer.arrive(slot, arriving);
+      }
     }
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);
@@ -247,6 +273,44 @@ export class Herd {
       });
     }
     return subjects;
+  }
+
+  /**
+   * Where the animals with the glow gene shine (R4): a spot at every other joint of their
+   * backs, in the view's layer (on the map, where its dots are), those in `cells` only.
+   */
+  glowing(cells: CellRect): Spot[] {
+    if (this.view === null) return [];
+    // The map's dots are the middle view's animals.
+    const layer = this.view === "local" ? this.layers.local : this.layers.middle;
+    const spots: Spot[] = [];
+    for (const id of this.roster.ids) {
+      const slot = this.roster.slotOf(id);
+      const known = this.roster.genomes.get(id);
+      if (slot === undefined || known === undefined || !layer.has(slot)) continue;
+      if ((known.slots & this.glowBits) === 0) continue;
+      if (this.view === "map") {
+        // On the map, one light round its square.
+        const at = layer.centre(slot);
+        if (
+          at.x >= cells.x0 - 1 &&
+          at.x <= cells.x1 + 1 &&
+          at.y >= cells.y0 - 1 &&
+          at.y <= cells.y1 + 1
+        ) {
+          spots.push({ x: at.x, y: at.y, size: 0 });
+        }
+        continue;
+      }
+      const { joints, radii } = layer.spine(slot);
+      joints.forEach((joint, i) => {
+        if (i % 2 === 1 || i === joints.length - 1) return;
+        if (joint.x < cells.x0 - 1 || joint.x > cells.x1 + 1) return;
+        if (joint.y < cells.y0 - 1 || joint.y > cells.y1 + 1) return;
+        spots.push({ x: joint.x, y: joint.y, size: radii[i] ?? 0 });
+      });
+    }
+    return spots;
   }
 
   /** Species of animal `id`, 0 if none or dead. */

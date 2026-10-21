@@ -395,6 +395,9 @@ class Probes:
         row["closed_forest"] = flora.closed_forest_share()
         row["plant_species"] = float(flora.species_count())
         row["burnt_cells"] = float(self.burnt_cells)
+        # Food at sea (M11): mean algae biomass over the cells that hold any.
+        algae = flora.algae
+        row["algae"] = float(algae[algae > 0].mean()) if (algae > 0).any() else 0.0
         alive = flora.biomass > 0
         for gene in Rare:
             name = (gene.name or "").lower()

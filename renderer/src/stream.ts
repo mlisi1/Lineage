@@ -73,6 +73,8 @@ export function landOf(message: LandMessage, clock: ClockMessage | null): Land {
     snow: asBytes(message.snow, cells),
     plantRare: Uint8Array.from(gridNumbers(message.plant_rare, cells)),
     rareGenes: message.rare_genes,
+    ...(message.scorch === undefined ? {} : { scorch: asBytes(message.scorch, cells) }),
+    ...(message.algae === undefined ? {} : { algae: asBytes(message.algae, cells) }),
   };
 }
 
@@ -130,6 +132,10 @@ function timeOf(message: Message): number | null {
  */
 export class Recording implements Source {
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Played on a clock of the page's own (`pump`), not the wall's (R4's films). */
+  private manual: ((message: Message) => void) | null = null;
+  private pumped = 0;
+  private due: number[] = [];
 
   constructor(
     private readonly messages: readonly Message[],
@@ -161,7 +167,33 @@ export class Recording implements Source {
     return this.messages.length;
   }
 
+  /**
+   * Play on a clock of the page's own from now: nothing is handed over until `pump` says
+   * how far that clock has run (R4's films step the scene frame by frame).
+   */
+  playManually(): void {
+    this.manual = () => undefined;
+  }
+
+  /** With `playManually`: hand over every message due by `ms` of the page's clock. */
+  pump(ms: number): void {
+    const handler = this.manual;
+    if (handler === null) return;
+    while (this.pumped < this.messages.length && (this.due[this.pumped] ?? 0) <= ms) {
+      const message = this.messages[this.pumped];
+      if (message !== undefined) handler(message);
+      this.pumped += 1;
+    }
+  }
+
   listen(handler: (message: Message) => void): void {
+    if (this.manual !== null && (this.speed > 0 || this.everyMs > 0)) {
+      this.manual = handler;
+      this.due =
+        this.speed > 0 ? this.dueTimes() : this.messages.map((_, index) => index * this.everyMs);
+      this.pump(0);
+      return;
+    }
     if (this.speed > 0) {
       const due = this.dueTimes();
       const start = Date.now();

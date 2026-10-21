@@ -368,7 +368,7 @@ const LEAF_HUE = 0.3;
 const LEAF_HUE_SHIFT = 0.85;
 const LEAF = 0x5fa83c;
 const LEAF_MIX = 0.5;
-const GLOW_SPOT = 0xdcffb4;
+export const GLOW_SPOT = 0xdcffb4;
 
 /** The shadow on the ground: its size against the body it lies under. */
 const GROUND_SHADOW_LONG = 1.0;

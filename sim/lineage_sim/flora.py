@@ -14,6 +14,10 @@ a set of rare genes. Once per sim-day (`Flora.tick`):
 5. **Seed rain** — a few seeds with random genomes arrive from outside.
 6. **Feedback** — vegetation cover is handed to the terrain (erosion and leaching).
 
+Algae (M11) live beside the plants, on shallow sea cells where no plant stands: one
+biomass per cell with no genome, growing logistically with the light and the season.
+Grazers eat them where they swim (`graze`).
+
 `Wildfire` runs once per sim-hour: lightning ignites dry vegetation, fire spreads between
 neighbouring cells that carry fuel (so it stops at water and bare ground) and burns out.
 
@@ -24,6 +28,7 @@ gene value = byte / 255.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from enum import IntEnum, IntFlag
 from typing import Any, cast
 
@@ -33,7 +38,14 @@ from numpy.typing import NDArray
 
 from lineage_sim.clock import SECONDS_PER_YEAR, Instant, Season
 from lineage_sim.config import FloraConfig
-from lineage_sim.events import FireEnded, FireStarted, InputEvent, OutputEvent
+from lineage_sim.events import (
+    CraterFormed,
+    FireEnded,
+    FireStarted,
+    InputEvent,
+    OutputEvent,
+    VolcanoErupted,
+)
 from lineage_sim.rng import FIRE, FLORA
 from lineage_sim.state.schema import Tree
 from lineage_sim.subsystem import Context
@@ -46,7 +58,6 @@ Index = NDArray[np.intp]
 
 _F = np.float32
 _GENE_MAX = 255.0
-_HOURS_PER_YEAR = SECONDS_PER_YEAR / 3600.0
 _DAYS_PER_YEAR = SECONDS_PER_YEAR / 86_400.0
 # Share of the seedling biomass below which a population is gone.
 _DEATH_SHARE = 0.25
@@ -115,6 +126,19 @@ def warmth(instant: Instant) -> float:
     """Seasonal warmth in [-1, 1]: +1 in mid-summer, -1 in mid-winter (either hemisphere)."""
     phase = (_SEASON_INDEX[instant.season] + instant.season_progress) / 4.0
     return math.cos(2.0 * math.pi * (phase - _SUMMER_PEAK_PHASE))
+
+
+def algae_habitat(cfg: FloraConfig, elevation: Grid, plants: Grid) -> Mask:
+    """Sea cells no deeper than ``algae_max_depth`` where no plant stands."""
+    return (elevation <= 0.0) & (elevation > _F(-cfg.algae_max_depth)) & (plants <= 0.0)
+
+
+def algae_growth(cfg: FloraConfig, algae: Grid, light: float, season_warmth: float) -> Grid:
+    """Logistic growth of algae per year (biomass units), before the time step."""
+    season = cfg.algae_winter_share + (1.0 - cfg.algae_winter_share) * 0.5 * (1.0 + season_warmth)
+    rate = _F(cfg.algae_growth_per_year * light * season)
+    capacity = _F(max(cfg.algae_capacity, 1e-9))
+    return (rate * algae * (_F(1.0) - algae / capacity)).astype(_F)
 
 
 def lowland_temperature(cfg: FloraConfig, season_warmth: float) -> float:
@@ -310,6 +334,9 @@ class Flora:
         self._form_masks: tuple[Mask, Mask] | None = None
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
+        self._algae: Grid = np.zeros(shape, dtype=_F)
+        # Days each cell stays bare after a volcano or a crater (R4).
+        self._barren: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1] and rain's growth factor (>= 1), set by the presence model
         # (M8); both scale growth.
         self._daylight = 1.0
@@ -342,6 +369,11 @@ class Flora:
     def scorch(self) -> Grid:
         """1 just after a fire, decaying to 0 over ``scorch_days``."""
         return self._scorch
+
+    @property
+    def algae(self) -> Grid:
+        """Algae biomass per cell (0 off their habitat, M11)."""
+        return self._algae
 
     def genes(self) -> Grid:
         """The genome as floats in [0, 1], shape (8, height, width)."""
@@ -406,7 +438,8 @@ class Flora:
         Defended and poisonous plants refuse part of every bite; several grazers on one
         cell share what is there in proportion to their demand. Roots are out of reach:
         biomass up to ``grazing_reserve_biomass`` is never eaten, so grazed plants regrow.
-        Only the grazed cells are touched.
+        Where no plant stands, the grazers eat the algae there (M11), down to the same
+        reserve. Only the grazed cells are touched.
         """
         cfg = self._cfg
         defence = self._genome[Gene.DEFENCE, ys, xs].astype(_F) / _F(_GENE_MAX)
@@ -417,12 +450,15 @@ class Flora:
         cells, group = np.unique(ys * width + xs, return_inverse=True)
         cell_y, cell_x = cells // width, cells % width
         asked = np.bincount(group, weights=wanted, minlength=cells.size)
-        there = self._biomass[cell_y, cell_x].astype(np.float64)
+        plants = self._biomass[cell_y, cell_x]
+        on_algae = plants <= 0.0
+        there = np.where(on_algae, self._algae[cell_y, cell_x], plants).astype(np.float64)
         reachable = np.maximum(there - cfg.grazing_reserve_biomass, 0.0)
         share = np.minimum(1.0, reachable / np.maximum(asked, 1e-12))
         eaten = (wanted * share[group]).astype(_F)
-        left = there - np.bincount(group, weights=eaten, minlength=cells.size)
-        self._biomass[cell_y, cell_x] = np.maximum(left, 0.0).astype(_F)
+        left = np.maximum(there - np.bincount(group, weights=eaten, minlength=cells.size), 0.0)
+        self._biomass[cell_y[~on_algae], cell_x[~on_algae]] = left[~on_algae].astype(_F)
+        self._algae[cell_y[on_algae], cell_x[on_algae]] = left[on_algae].astype(_F)
         return eaten
 
     def forms(self) -> Bytes:
@@ -446,19 +482,29 @@ class Flora:
 
     def meal_factor(self, ys: Index, xs: Index) -> Grid:
         """Multiplier on the energy grazers get from the plants at cells (ys, xs), from
-        their rare genes: fruit is richer, poison costs more than it gives (negative)."""
+        their rare genes: fruit is richer, poison costs more than it gives (negative).
+        Where no plant stands, the meal is algae (``algae_meal_share``)."""
         cfg, rare = self._cfg, self._rare[ys, xs]
         fruit = np.where(has(rare, Rare.FRUITING), _F(1.0 + cfg.fruiting_meal_bonus), _F(1.0))
         poison = np.where(has(rare, Rare.POISONOUS), _F(1.0 - cfg.poisonous_toxicity), _F(1.0))
-        return (fruit * poison).astype(_F)
+        plant = (fruit * poison).astype(_F)
+        return np.where(self.on_algae(ys, xs), _F(cfg.algae_meal_share), plant).astype(_F)
+
+    def on_algae(self, ys: Index, xs: Index) -> Mask:
+        """Cells (ys, xs) where a grazer eats algae: no plant stands there."""
+        return self._biomass[ys, xs] <= 0.0
 
     def shade(self) -> Grid:
         """Share of sunlight the plants intercept on every cell, in [0, 1]."""
         return canopy(self._cfg, self._biomass, stature(self._cfg, self.genes(), self._rare))
 
     def grazeable(self) -> Grid:
-        """Biomass grazers can reach in each cell (what they see as food)."""
+        """Plant biomass grazers can reach in each cell (what they see as food on land)."""
         return np.maximum(self._biomass - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
+
+    def grazeable_algae(self) -> Grid:
+        """Algae biomass grazers can reach in each cell (food at sea, M11)."""
+        return np.maximum(self._algae - _F(self._cfg.grazing_reserve_biomass), _F(0.0))
 
     def burn(self, ys: Index, xs: Index) -> None:
         """Cells (ys, xs) have burnt out: remove biomass, scorch the ground."""
@@ -474,6 +520,27 @@ class Flora:
         relative[ys, xs] = _F(-cfg.fire_fertility_loss)
         self._terrain.adjust_fertility(relative * self._terrain.fertility)
         self._clear_dead()
+
+    @property
+    def barren(self) -> Grid:
+        """Days each cell stays bare after a volcano or a crater (R4)."""
+        return self._barren
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
+        """A volcano's cone and a crater leave the land round them bare for a while."""
+        cfg = self._cfg
+        for event in outputs:
+            if not isinstance(event, VolcanoErupted | CraterFormed):
+                continue
+            rows, columns = self._biomass.shape
+            yy, xx = np.ogrid[:rows, :columns]
+            reach = cfg.barren_reach * event.radius_cells
+            within = (xx - event.x) ** 2 + (yy - event.y) ** 2 <= reach * reach
+            self._biomass[within] = 0.0
+            self._barren[within] = _F(cfg.barren_days)
+            self._clear_dead()
+            self._terrain.set_vegetation_cover(self._biomass)
+        return []
 
     def clear(self, ys: Index, xs: Index) -> None:
         """Plants on cells (ys, xs) are destroyed outright (a meteor's bowl)."""
@@ -517,6 +584,17 @@ class Flora:
         self._biomass[~habitable] = 0.0
         self._clear_dead()
 
+        # 1b. Algae on the shallow sea (M11).
+        where = algae_habitat(cfg, elevation, self._biomass)
+        algae = np.where(where, np.maximum(self._algae, _F(cfg.algae_seed)), _F(0.0)).astype(_F)
+        if cfg.algae_capacity <= 0.0:
+            algae[:] = 0.0
+        else:
+            light = self._daylight * self._rain
+            grown = algae + _F(dt_years) * algae_growth(cfg, algae, light, warmth(ctx.instant))
+            algae = np.clip(grown, 0.0, cfg.algae_capacity).astype(_F)
+        self._algae = algae
+
         # 2. Growth, mortality, winter dieback.
         biomass = self._biomass
         fit = suitability(cfg, genes, self._rare, temp, terrain.fertility)
@@ -542,8 +620,13 @@ class Flora:
         self._scorch = np.maximum(
             self._scorch - _F(dt_years * _DAYS_PER_YEAR / cfg.scorch_days), _F(0.0)
         )
+        self._barren = np.maximum(self._barren - _F(dt_years * _DAYS_PER_YEAR), _F(0.0))
         self._disperse(rng, temp, elevation, dt_years)
         self._seed_rain(rng, temp, elevation, dt_years)
+        # Nothing takes on the bare land round a fresh cone or crater.
+        if (self._barren > 0).any():
+            self._biomass[self._barren > 0] = 0.0
+            self._clear_dead()
 
         # 6. Feedback to the terrain.
         terrain.set_vegetation_cover(self._biomass)
@@ -558,6 +641,8 @@ class Flora:
             "genome": self._genome.copy(),
             "rare": self._rare.copy(),
             "scorch": self._scorch.copy(),
+            "algae": self._algae.copy(),
+            "barren": self._barren.copy(),
         }
 
     def set_state(self, tree: Tree) -> None:
@@ -571,6 +656,8 @@ class Flora:
         self._form_masks = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
+        self._algae = np.array(tree["algae"], dtype=_F)
+        self._barren = np.array(tree["barren"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
 
     # -- internals --
@@ -728,6 +815,10 @@ class Wildfire:
         self._started_ms = 0
         # Wet after rain (M8, set by the presence model): no lightning, slow spread.
         self._wet = False
+        # The weather (R4, set by the weather model): rain slows spread like wet land, and
+        # lightning strikes only in a thunderstorm.
+        self._raining = False
+        self._storm = False
         self._flammability = np.zeros(len(Cover), dtype=_F)
         for cover, value in (
             (Cover.LICHEN, cfg.flammability_lichen),
@@ -758,6 +849,11 @@ class Wildfire:
         """Hook for the rain god power: wet land does not dry out until it is unset."""
         self._wet = wet
 
+    def set_weather(self, raining: bool, storm: bool) -> None:
+        """Hook for the weather: whether rain falls, and whether a thunderstorm rages."""
+        self._raining = raining
+        self._storm = storm
+
     def extinguish(self, t_ms: int) -> list[OutputEvent]:
         """Rain puts out every fire; the cells already burnt stay burnt."""
         if not self._active:
@@ -786,7 +882,9 @@ class Wildfire:
         outputs: list[OutputEvent] = []
 
         # One draw per tick whether or not lightning strikes, to keep the stream aligned.
-        strike = rng.random() < cfg.fire_ignitions_per_year * dryness * hours / _HOURS_PER_YEAR
+        # Lightning comes only with a thunderstorm (R4).
+        rate = cfg.fire_strikes_per_storm_hour * dryness * hours if self._storm else 0.0
+        strike = rng.random() < rate
         if strike:
             rows, columns = self._shape
             y, x = int(rng.integers(0, rows)), int(rng.integers(0, columns))
@@ -795,7 +893,8 @@ class Wildfire:
             return outputs
 
         ys, xs = np.nonzero(self._burning > 0)
-        self._spread(rng, ys, xs, dryness, hours)
+        # Under rain, fire spreads as on wet land.
+        self._spread(rng, ys, xs, 0.0 if self._raining else dryness, hours)
         self._burning[ys, xs] -= _F(hours)
         out = self._burning[ys, xs] <= 0
         if out.any():
