@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
 import base64
+import itertools
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from lineage_sim.config import parse_config
 from lineage_sim.state import io
@@ -40,6 +43,155 @@ def test_a_recording_is_what_a_server_sends_day_by_day() -> None:
         b["id"] for message in messages if message["type"] == "creatures" for b in message["born"]
     ]
     assert len(born) == len(set(born))
+
+
+def test_creatures_can_be_recorded_more_often_than_daily() -> None:
+    world = _world()
+    start = world.t_ms
+    messages = stream.record(world, days=1, land_every=1, creatures=True, creatures_every_s=3600)
+    types = [message["type"] for message in messages]
+    # On connect, then each hour a clock and the creatures; the land once, at the day's end.
+    assert types.count("creatures") == 1 + 24
+    assert types.count("clock") == 1 + 24
+    assert types.count("land") == 1 + 1
+    times = [message["t_ms"] for message in messages if message["type"] == "creatures"]
+    assert times == [start + hour * 3_600_000 for hour in range(25)]
+    with pytest.raises(ValueError, match="divide"):
+        stream.record(_world(), days=1, land_every=1, creatures=True, creatures_every_s=7000)
+
+
+def test_new_chronicle_entries_follow_and_none_is_sent_twice() -> None:
+    world = _world()
+    before = len(world.chronicle.entries())
+    messages = stream.record(world, days=30, land_every=30, creatures=True, creatures_every_s=21600)
+    numbers = [
+        entry["number"]
+        for message in messages
+        if message["type"] == "chronicle"
+        for entry in message["entries"]
+    ]
+    # Only what was written while recording, each once, in order.
+    assert numbers == list(range(before + 1, len(world.chronicle.entries()) + 1))
+    assert numbers, "a month of the v4 world writes some history"
+    # Species are sent again when the census changes, and only then.
+    censuses = [message for message in messages if message["type"] == "species"]
+    assert len(censuses) >= 2
+    assert all(a != b for a, b in itertools.pairwise(censuses))
+
+
+def test_the_sky_follows_the_office_schedule_and_the_button() -> None:
+    world = _world()
+    messages = stream.record(
+        world,
+        days=3,
+        land_every=3,
+        creatures=True,
+        creatures_every_s=7200,
+        sky_every_s=600,
+        schedule="office",
+        press_days=[2],
+    )
+    skies = [message for message in messages if message["type"] == "sky"]
+    # On connect, then every ten minutes.
+    assert len(skies) == 1 + 3 * 144
+    assert [sky["t_ms"] for sky in skies] == sorted(sky["t_ms"] for sky in skies)
+    lights = [sky["light"] for sky in skies]
+    # The v4 world's first days are weekdays: dark nights, full days.
+    assert min(lights) <= 0.06
+    assert max(lights) == 1.0
+    assert any(sky["present"] for sky in skies)
+    assert not all(sky["present"] for sky in skies)
+    powers = [
+        event
+        for message in messages
+        if message["type"] == "events"
+        for event in message["events"]
+        if event["kind"] == "god_power"
+    ]
+    assert len(powers) == 1
+    assert powers[0]["power"] in {"meteor", "rain", "seed", "ark"}
+
+
+def test_a_famine_ends_the_world_and_the_next_one_is_recorded() -> None:
+    world = _world()
+    messages = stream.record(
+        world, days=3, land_every=1, creatures=True, creatures_every_s=7200, sky_every_s=3600,
+        famine_day=2,
+    )  # fmt: skip
+    types = [message["type"] for message in messages]
+    events = [
+        (index, event)
+        for index, message in enumerate(messages)
+        if message["type"] == "events"
+        for event in message["events"]
+    ]
+    ended = [index for index, event in events if event["kind"] == "world_ended"]
+    began = [index for index, event in events if event["kind"] == "world_began"]
+    assert len(ended) == 1
+    assert len(began) == 1
+    assert ended[0] < began[0]
+    assert world.number == 2
+    # The old world's last lines come before its end; the next world is met as on connect.
+    assert types[ended[0] - 1] == "chronicle"
+    last_lines = [entry["kind"] for entry in messages[ended[0] - 1]["entries"]]
+    assert "world_end" in last_lines
+    assert types[ended[0] + 1 : ended[0] + 4] == ["clock", "sky", "land"]
+    lands = [message for message in messages if message["type"] == "land"]
+    seeds = [land["world"]["seed"] for land in lands]
+    assert seeds[0] != seeds[-1]
+    kinds = [
+        entry["kind"]
+        for message in messages
+        if message["type"] == "chronicle"
+        for entry in message["entries"]
+    ]
+    assert kinds.index("world_end") < kinds.index("world_begin")
+    # Nothing lives in the new world at first.
+    assert messages[-1]["type"] in {"sky", "events", "chronicle", "creatures"}
+    last = [message for message in messages if message["type"] == "creatures"][-1]
+    assert last["ids"] == []
+
+
+def test_staged_events_happen_and_the_land_follows_them() -> None:
+    world = _world()
+    x, y = stream._land_near_middle(world)
+    # The volcano away from the fire: it bares the land round it, fuel and all.
+    land = np.argwhere(world.terrain.height > world.terrain.sea_level)
+    far = land[np.argmax((land[:, 0] - y) ** 2 + (land[:, 1] - x) ** 2)]
+    stages = [
+        stream._stage(f"1:6:volcano@{far[1]},{far[0]}"),
+        stream._stage("1:9:quake"),
+        stream._stage(f"1:12:fire@{x},{y}"),
+        stream._stage("2:12:seed"),
+    ]
+    messages = stream.record(
+        world, days=2, land_every=2, creatures=True, creatures_every_s=7200, sky_every_s=600,
+        stages=stages,
+    )  # fmt: skip
+    kinds = [
+        event["kind"] for m in messages if m["type"] == "events" for event in m["events"]
+    ]  # fmt: skip
+    assert kinds[:2] == ["volcano", "earthquake"]
+    # The staged cone is seen by the world's observers: the flora bares the land round it.
+    assert world.flora.barren.max() > 0
+    # The storm's lightning set the cell alight (a fire already burning takes it in silently).
+    width = next(m for m in messages if m["type"] == "land")["width"]
+    assert any(y * width + x in m["burning"] for m in messages if m["type"] == "sky")
+    assert "god_power" in kinds
+    # A land right after each event that changes it, as well as at the day's end.
+    lands = [i for i, m in enumerate(messages) if m["type"] == "land"]
+    assert len(lands) >= 1 + 4
+    # It comes just after the event's news, so that a renderer knows what is coming.
+    for i, m in enumerate(messages):
+        changes = m["type"] == "events" and any(
+            e["kind"] in ("volcano", "earthquake") for e in m["events"]
+        )
+        if changes:
+            assert messages[i + 1]["type"] == "land"
+    skies = [m["rain"] for m in messages if m["type"] == "sky"]
+    assert "storm" in skies  # the fire came with a thunderstorm
+    with pytest.raises(argparse.ArgumentTypeError):
+        stream._stage("1:12:tsunami")
 
 
 def test_the_committed_recording_is_what_the_tool_writes(tmp_path: Path) -> None:

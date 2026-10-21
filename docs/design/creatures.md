@@ -112,6 +112,13 @@ networks, predator–prey coexistence): ADR 0009, "References".
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
   in water, except in the shallows, where anyone can wade (M11, `wading_depth` 0.03, the
   algae's shelf). A creature with no energy left dies (starved, or drowned if in water).
+- **Fire** (R4): a creature on land in a burning cell loses `fire_damage_per_hour` (1.0)
+  of its capacity an hour, so an hour in a fire kills it (burnt; no carrion). Swimmers
+  are safe.
+- **New rock** (R4, round 6): a volcano's cone rising or a crater forming (natural or the
+  meteor's) kills every creature within `[fauna] blast_kill_reach` (1.0) × its radius
+  (`Fauna.observe`; nothing to scavenge). The meteor's own blast reaches further
+  (`[presence] meteor_blast_factor`).
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
   regrows; defended plants refuse part of each bite, and what is eaten is worth less:
   energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.

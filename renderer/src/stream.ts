@@ -73,6 +73,8 @@ export function landOf(message: LandMessage, clock: ClockMessage | null): Land {
     snow: asBytes(message.snow, cells),
     plantRare: Uint8Array.from(gridNumbers(message.plant_rare, cells)),
     rareGenes: message.rare_genes,
+    ...(message.scorch === undefined ? {} : { scorch: asBytes(message.scorch, cells) }),
+    ...(message.algae === undefined ? {} : { algae: asBytes(message.algae, cells) }),
   };
 }
 
@@ -116,32 +118,100 @@ export class SocketSource implements Source {
   }
 }
 
+/** The sim time a message is of, for those that say (clock, creatures). */
+function timeOf(message: Message): number | null {
+  return "t_ms" in message ? message.t_ms : null;
+}
+
 /**
  * A recording (`tools/stream.py`): the messages a server would have sent over some
- * sim-days, handed over in order, one every `everyMs` of wall time (all at once for 0).
+ * sim-days, handed over in order, one every `everyMs` of wall time (all at once for 0);
+ * or, with `speed`, as the sim's time goes by at `speed` sim-seconds a wall second, each
+ * message without a time of its own straight after the one before it (R3: animals move
+ * as often as they were recorded, whatever else came between).
  */
 export class Recording implements Source {
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Played on a clock of the page's own (`pump`), not the wall's (R4's films). */
+  private manual: ((message: Message) => void) | null = null;
+  private pumped = 0;
+  private due: number[] = [];
 
   constructor(
     private readonly messages: readonly Message[],
     private readonly everyMs = 0,
+    private readonly speed = 0,
   ) {}
 
   /** The recording at `url`: JSON `{ "messages": [...] }`. */
-  static async load(url: string, everyMs = 0): Promise<Recording> {
+  static async load(url: string, everyMs = 0, speed = 0): Promise<Recording> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
     const document = (await response.json()) as { messages?: unknown };
     if (!Array.isArray(document.messages)) throw new Error(`${url}: no messages`);
-    return new Recording(document.messages.filter(isMessage), everyMs);
+    return new Recording(document.messages.filter(isMessage), everyMs, speed);
+  }
+
+  /** Wall milliseconds from the start at which each message is due, played at `speed`. */
+  private dueTimes(): number[] {
+    const first = this.messages.map(timeOf).find((time) => time !== null) ?? 0;
+    let due = 0;
+    return this.messages.map((message) => {
+      const time = timeOf(message);
+      if (time !== null) due = Math.max(due, (time - first) / this.speed);
+      return due;
+    });
   }
 
   get length(): number {
     return this.messages.length;
   }
 
+  /**
+   * Play on a clock of the page's own from now: nothing is handed over until `pump` says
+   * how far that clock has run (R4's films step the scene frame by frame).
+   */
+  playManually(): void {
+    this.manual = () => undefined;
+  }
+
+  /** With `playManually`: hand over every message due by `ms` of the page's clock. */
+  pump(ms: number): void {
+    const handler = this.manual;
+    if (handler === null) return;
+    while (this.pumped < this.messages.length && (this.due[this.pumped] ?? 0) <= ms) {
+      const message = this.messages[this.pumped];
+      if (message !== undefined) handler(message);
+      this.pumped += 1;
+    }
+  }
+
   listen(handler: (message: Message) => void): void {
+    if (this.manual !== null && (this.speed > 0 || this.everyMs > 0)) {
+      this.manual = handler;
+      this.due =
+        this.speed > 0 ? this.dueTimes() : this.messages.map((_, index) => index * this.everyMs);
+      this.pump(0);
+      return;
+    }
+    if (this.speed > 0) {
+      const due = this.dueTimes();
+      const start = Date.now();
+      let next = 0;
+      const play = (): void => {
+        const now = Date.now() - start;
+        while (next < this.messages.length && (due[next] ?? 0) <= now) {
+          const message = this.messages[next];
+          if (message !== undefined) handler(message);
+          next += 1;
+        }
+        if (next < this.messages.length) {
+          this.timer = setTimeout(play, Math.max((due[next] ?? 0) - now, 0));
+        }
+      };
+      play();
+      return;
+    }
     if (this.everyMs <= 0) {
       for (const message of this.messages) handler(message);
       return;

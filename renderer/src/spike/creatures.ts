@@ -129,12 +129,22 @@ interface Creature {
   /** The joint at its widest, which breathes; and how far into a breath it started. */
   chest: number;
   breathOffset: number;
+  /** Arriving (R4, the ark): seconds into its arrival and how long it takes, while it lasts. */
+  arriving?: { age: number; lasts: number };
 }
+
+/** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
+const ARRIVE_STEPS = 4;
+/** Seconds a creature that died takes to fade from where it last stood. */
+const DEPART_S = 0.8;
 
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
-  private readonly creatures: Creature[] = [];
+  /** Creatures that died, fading where they last stood. */
+  private departing: { creature: Creature; left: number }[] = [];
+  /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
+  private readonly creatures: (Creature | undefined)[] = [];
   private active = 0;
   private only: number | null = null;
   private showing: Showing = "bodies";
@@ -163,7 +173,110 @@ export class CreatureLayer {
   }
 
   /** What each species among the seeds is drawn as (one plan per species). */
-  private readonly plans: ReadonlyMap<number, SpeciesPlan>;
+  private plans: ReadonlyMap<number, SpeciesPlan>;
+
+  /**
+   * Draw the species among `members` by their plans from now on (the census changed):
+   * animals placed after this take their species' kind from them; those drawn keep theirs.
+   */
+  replan(members: readonly CreatureSeed[]): void {
+    this.plans = speciesPlans(members);
+  }
+
+  /**
+   * Put `seed` in slot `index`, in place of whoever was there: a creature of the stream's
+   * cast (R3), which comes and goes as the sim's animals are born and die. With anchored
+   * life it then lives near the place `seed` gives until `anchor` moves it.
+   */
+  place(index: number, seed: CreatureSeed): void {
+    this.remove(index);
+    const creature = this.spawnFrom(seed, false);
+    this.creatures[index] = creature;
+    this.active = Math.max(this.active, index + 1);
+    this.reveal(creature, index);
+  }
+
+  /**
+   * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
+   * that died, `fade`) fading away over `DEPART_S` where it last stood.
+   */
+  remove(index: number, fade = false): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    this.creatures[index] = undefined;
+    if (fade && (creature.container.visible || creature.marker.visible)) {
+      this.departing.push({ creature, left: DEPART_S });
+      return;
+    }
+    this.destroy(creature);
+  }
+
+  private destroy(creature: Creature): void {
+    creature.container.destroy({ children: true });
+    creature.marker.destroy({ children: true });
+    creature.glass?.destroy();
+  }
+
+  /** The dead fading away: less of them each frame, in steps, until they are gone. */
+  private depart(dtS: number): void {
+    this.departing = this.departing.filter((leaving) => {
+      leaving.left -= dtS;
+      if (leaving.left <= 0) {
+        this.destroy(leaving.creature);
+        return false;
+      }
+      const opacity = Math.ceil((leaving.left / DEPART_S) * ARRIVE_STEPS) / (ARRIVE_STEPS + 1);
+      const { creature } = leaving;
+      creature.marker.alpha = opacity;
+      creature.glass ??= new AlphaFilter();
+      creature.glass.alpha = opacity;
+      creature.container.filters = [creature.glass];
+      return true;
+    });
+  }
+
+  /**
+   * The creature in slot `index` arrives (R4, the ark's newcomers): it comes into being
+   * over `seconds`, see-through at first, in a few steps as pixel art does.
+   */
+  arrive(index: number, seconds: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    creature.arriving = { age: 0, lasts: seconds };
+    this.materialise(creature);
+  }
+
+  private materialise(creature: Creature): void {
+    const arriving = creature.arriving;
+    if (arriving === undefined) return;
+    const done = arriving.age >= arriving.lasts;
+    const opacity = done
+      ? 1
+      : (Math.floor((arriving.age / arriving.lasts) * ARRIVE_STEPS) + 1) / (ARRIVE_STEPS + 1);
+    creature.marker.alpha = opacity;
+    if (done) {
+      creature.arriving = undefined;
+      creature.container.filters = [];
+      creature.seaKey = -2; // colour it for the water it is in again
+      return;
+    }
+    creature.glass ??= new AlphaFilter();
+    creature.glass.alpha = opacity;
+    creature.container.filters = [creature.glass];
+  }
+
+  /** Whether slot `index` holds a creature. */
+  has(index: number): boolean {
+    return this.creatures[index] !== undefined;
+  }
+
+  /** Creature `index` lies torpid (curled up, still) or wakes. */
+  setTorpid(index: number, torpid: boolean): void {
+    const creature = this.creatures[index];
+    if (creature === undefined || creature.torpid === torpid) return;
+    creature.torpid = torpid;
+    if (torpid) curl(creature.joints, creature.plan.spacing, creature.heading);
+  }
 
   /**
    * Where the sim now has creature `index`, in cells. An anchored creature walks there
@@ -197,7 +310,7 @@ export class CreatureLayer {
   get spriteCount(): number {
     let total = 0;
     for (const creature of this.creatures.slice(0, this.active)) {
-      total += creature.container.children.length;
+      total += creature?.container.children.length ?? 0;
     }
     return total;
   }
@@ -221,6 +334,12 @@ export class CreatureLayer {
   centre(index: number): Point {
     const joints = this.creatures[index]?.joints ?? [];
     return joints[Math.floor(joints.length / 2)] ?? { x: 0, y: 0 };
+  }
+
+  /** Creature `index`'s joints from the head back, and the body's radius at each (cells; R4's glow). */
+  spine(index: number): { joints: readonly Point[]; radii: readonly number[] } {
+    const creature = this.creatures[index];
+    return { joints: creature?.joints ?? [], radii: creature?.plan.radii ?? [] };
   }
 
   /** The box creature `index`'s body fills, in cells: what must show through what covers it. */
@@ -265,6 +384,7 @@ export class CreatureLayer {
    */
   update(dtS: number, view?: CellRect, posed = true): void {
     this.clock += dtS;
+    this.depart(dtS);
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
@@ -284,7 +404,11 @@ export class CreatureLayer {
           head.y <= view.y1 + reach);
       if (inView && posed) {
         this.pose(creature, dtS);
-        if (creature.plan.swims) this.wet(creature, head);
+        if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
+      }
+      if (creature.arriving !== undefined) {
+        creature.arriving.age += dtS;
+        this.materialise(creature);
       }
       if (creature.inView !== inView) {
         creature.inView = inView;
@@ -294,7 +418,9 @@ export class CreatureLayer {
   }
 
   private refresh(): void {
-    this.creatures.forEach((creature, index) => this.reveal(creature, index));
+    this.creatures.forEach((creature, index) => {
+      if (creature !== undefined) this.reveal(creature, index);
+    });
   }
 
   /** Show a creature or not: by the count, the choice of one, the way of showing, the view. */
@@ -321,10 +447,13 @@ export class CreatureLayer {
   private spawn(index: number): Creature {
     const seed = this.seeds[index % this.seeds.length];
     if (seed === undefined) throw new Error("the fixture has no creatures");
+    // Past the fixture's creatures, reuse them a few cells away.
+    return this.spawnFrom(seed, index >= this.seeds.length);
+  }
+
+  private spawnFrom(seed: CreatureSeed, clone: boolean): Creature {
     const random = this.random;
     const plan = bodyPlan(seed, this.body, kindFor(seed, this.plans));
-    // Past the fixture's creatures, reuse them a few cells away.
-    const clone = index >= this.seeds.length;
     const { x, y } = this.settle(
       seed.x + (clone ? (random() - 0.5) * 8 : 0),
       seed.y + (clone ? (random() - 0.5) * 8 : 0),
@@ -602,12 +731,13 @@ export class CreatureLayer {
 
     const bone = length * 0.6;
     solveKnee(hip, leg.foot, bone, bone, side, this.knee);
-    this.place(leg.upper, hip, this.knee, thickness);
-    this.place(leg.lower, this.knee, leg.foot, thickness * 0.8);
+    this.stretch(leg.upper, hip, this.knee, thickness);
+    this.stretch(leg.lower, this.knee, leg.foot, thickness * 0.8);
     const [upperEdge, lowerEdge, soleEdge] = leg.edges;
     const edge = 2 * leg.plan.edge;
-    if (upperEdge !== undefined) this.place(upperEdge, hip, this.knee, thickness + edge);
-    if (lowerEdge !== undefined) this.place(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
+    if (upperEdge !== undefined) this.stretch(upperEdge, hip, this.knee, thickness + edge);
+    if (lowerEdge !== undefined)
+      this.stretch(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
     // A webbed foot lies ahead of the leg's end, across the way the shin points.
     const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
     const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
@@ -619,7 +749,7 @@ export class CreatureLayer {
   }
 
   /** Stretch a white square from `from` to `to`. */
-  private place(sprite: Sprite, from: Point, to: Point, thickness: number): void {
+  private stretch(sprite: Sprite, from: Point, to: Point, thickness: number): void {
     sprite.position.set(from.x, from.y);
     sprite.rotation = Math.atan2(to.y - from.y, to.x - from.x);
     sprite.scale.set(

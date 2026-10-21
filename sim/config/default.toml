@@ -329,8 +329,12 @@ algae_winter_share = 0.3
 algae_meal_share = 0.8
 
 # --- Fire ---
-# Lightning ignitions per year at full dryness, on the whole map.
-fire_ignitions_per_year = 30.0
+# Lightning only strikes in a thunderstorm ([weather], R4; the owner, 2026-10-20): strikes
+# per hour of storm on the whole map at full dryness (a strike on a cell without fuel does
+# nothing). While any rain falls fire spreads as on wet land (fire_wet_spread). At 1.6,
+# with [weather]'s defaults, the expected strikes a year (about 10.7 on the default
+# calendar) are those of the pre-R4 30 ignitions a year at full dryness.
+fire_strikes_per_storm_hour = 1.6
 # Dryness is 0 below this lowland temperature and 1 at fire_dry_span above it: fires are
 # a warm-season event.
 fire_dry_temperature = 0.68
@@ -356,6 +360,11 @@ fire_loss_tree = 0.97
 # again; shown as burnt ground while bare).
 fire_fertility_loss = 0.15
 scorch_days = 60.0
+# A volcano's cone and a crater (natural or the meteor's) leave the land round them bare
+# (R4; the owner, 2026-10-20): plants within barren_reach × the event's radius are
+# destroyed, and nothing grows there for barren_days.
+barren_reach = 1.4
+barren_days = 120.0
 
 # --- Bookkeeping ---
 # Cells a genome cluster must occupy to count as a plant species.
@@ -513,6 +522,15 @@ carrion_decay_hours = 72.0
 # 0 turns each off.
 dung_fertility = 0.05
 carrion_fertility = 0.2
+# A creature on land in a burning cell loses this share of its energy capacity per hour
+# (R4; the owner, 2026-10-20): at 1.0 one that stays in a fire for an hour dies of it
+# (cause: burnt; the burnt leave no carrion). Swimmers in water are safe.
+fire_damage_per_hour = 1.0
+# A volcano's cone or a crater (any, the meteor's too) kills every creature within
+# blast_kill_reach × its radius (cells) where it rises or strikes (R4; the owner,
+# 2026-10-21): none is left standing on new rock. The meteor's own blast reaches further
+# ([presence] meteor_blast_factor).
+blast_kill_reach = 1.0
 scavenge_rate = 0.5
 # Carrion is smelled through a scent spread over the box of this half-width (cells)
 # around it: a carcass is a single cell, which the sparse sampling of smell would miss.
@@ -733,6 +751,31 @@ seed_rare_chance = 0.1
 # instead when the herd has reached [fauna] hunter_wave_herd with no predators alive.
 ark_count = 12
 
+[weather]
+# Rain of the island's own (R4; the owner, 2026-10-20). Spells of rain begin at random,
+# at these rates per month (30 days) in each season, and last rain_hours_min–max hours
+# (uniform). Of the spells, thunder_share bring thunder (seen and heard only: it starts
+# nothing) and storm_share are thunderstorms, storm_hours_min–max long, whose lightning
+# is the only thing that sets the land alight ([flora] fire_strikes_per_storm_hour). The
+# rain god power ([presence] rain_days) is a soaking rain of its own: it puts fires out
+# and never strikes.
+rain_spells_per_month_spring = 5.0
+rain_spells_per_month_summer = 3.0
+rain_spells_per_month_autumn = 6.0
+rain_spells_per_month_winter = 5.0
+rain_hours_min = 2.0
+rain_hours_max = 30.0
+thunder_share = 0.3
+storm_share = 0.12
+storm_hours_min = 1.0
+storm_hours_max = 6.0
+# Overcast (round 5, the owner): between spells of rain the sky clouds over at this rate
+# per month, for cloud_hours_min–max hours (uniform). It is only seen (a greyer day on the
+# screen): plants and animals live under the same light, and fire is not slowed.
+cloud_spells_per_month = 8.0
+cloud_hours_min = 3.0
+cloud_hours_max = 36.0
+
 [chronicle]
 # The chronicle (M9): detectors turn what happens into dated entries with English text and
 # an importance from 1 to 5: 1 background, 2 minor, 3 notable, 4 major, 5 historic
@@ -823,6 +866,8 @@ established_days = 30.0
 # Presence: light follows the owner every 10 sim-minutes, before the creatures that see by
 # it (registered first, it also runs first when ticks coincide).
 presence = 600
+# Weather: whether rain falls, and what kind, checked once per sim-hour before fire.
+weather = 3600
 # Terrain: once per sim-day (tectonics, erosion, sea level, landmass count).
 terrain = 86400
 # Flora: growth, dispersal, succession, soil building, once per sim-day.

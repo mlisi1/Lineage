@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ClockMessage, LandMessage, Message } from "../src/protocol";
 import { Recording, gridNumbers, gridValues, isMessage, landOf, yearOf } from "../src/stream";
 import { LAND_PALETTE } from "../src/terrain/palette";
@@ -80,5 +80,29 @@ describe("the stream", () => {
     new Recording(recording.messages).listen((message) => played.push(message.type));
     expect(played).toEqual(recording.messages.map((message) => message.type));
     expect(played.filter((type) => type === "land")).toHaveLength(3);
+  });
+
+  it("plays at a speed by the sim's time, the untimed straight after the timed", () => {
+    vi.useFakeTimers();
+    try {
+      const clock = (t_ms: number): Message => ({ ...(clocks[0] as ClockMessage), t_ms });
+      // A message without a time of its own, as the fauna, species, rare and chronicle are.
+      const species: Message = { type: "species", protocol: 1, species: [] };
+      // 0 s, then the species, then 60 sim-seconds on, then 120: at 60 sim-s a wall second.
+      const messages = [clock(1_000), species, clock(61_000), clock(121_000)];
+      const played: number[] = [];
+      new Recording(messages, 0, 60).listen((message) =>
+        played.push(message.type === "clock" ? message.t_ms : -1),
+      );
+      expect(played).toEqual([1_000, -1]);
+      vi.advanceTimersByTime(999);
+      expect(played).toEqual([1_000, -1]);
+      vi.advanceTimersByTime(1);
+      expect(played).toEqual([1_000, -1, 61_000]);
+      vi.advanceTimersByTime(1_000);
+      expect(played).toEqual([1_000, -1, 61_000, 121_000]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

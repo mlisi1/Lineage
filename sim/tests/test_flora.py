@@ -14,7 +14,7 @@ from hypothesis import strategies as st
 from lineage_sim import clock
 from lineage_sim import flora as fl
 from lineage_sim.config import Config, FloraConfig, Hemisphere
-from lineage_sim.events import FireEnded, FireStarted, OutputEvent
+from lineage_sim.events import CraterFormed, FireEnded, FireStarted, OutputEvent, VolcanoErupted
 from lineage_sim.flora import Cover, Flora, Gene, Rare, Wildfire
 from lineage_sim.state import io
 from lineage_sim.subsystem import Context
@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "1b6c440109ec84466abc5b84bfdcb1af0b6ad8492301a3f1f8051227e322f53f"
+GOLDEN_FLORA_SEED_42 = "ac1dabd2aa9a6175ae1b243f39c5b2b1692ccb052ac5fba44464a23539c71f79"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -69,7 +69,7 @@ class Site:
         self.config = config
         # No seeds from outside and no lightning unless a test asks for them.
         self.cfg = flora or replace(
-            config.flora, seed_rain_per_year=0.0, fire_ignitions_per_year=0.0
+            config.flora, seed_rain_per_year=0.0, fire_strikes_per_storm_hour=0.0
         )
         terrain_cfg = replace(config.terrain, grid_height=rows, grid_width=columns)
         self.terrain = Terrain(terrain_cfg)
@@ -455,7 +455,7 @@ def test_exposure_sorts_forms_into_belts(config: Config) -> None:
         config,
         height,
         0.6,
-        flora=replace(cfg, seed_rain_per_year=30_000.0, fire_ignitions_per_year=0.0),
+        flora=replace(cfg, seed_rain_per_year=30_000.0, fire_strikes_per_storm_hour=0.0),
     )
     for _ in range(3):
         site.grow(180)
@@ -718,7 +718,7 @@ def test_fire_pines_survive_a_fire_that_kills_other_trees(config: Config) -> Non
         config.flora,
         flammability_conifer=1.0,
         seed_rain_per_year=0.0,
-        fire_ignitions_per_year=0.0,
+        fire_strikes_per_storm_hour=0.0,
     )
     site = Site(config, _plain(), 0.6, flora=cfg)
     site.plant(_all(), CONIFER, 0.9)
@@ -758,6 +758,58 @@ def test_fires_are_a_warm_season_event(config: Config) -> None:
     assert dryness(8, 5) == 1.0
 
 
+def test_lightning_strikes_only_in_a_thunderstorm(config: Config) -> None:
+    """R4: lightning comes with thunderstorms only, so fires start only while it rains."""
+    stormy = replace(config.flora, seed_rain_per_year=0.0, fire_strikes_per_storm_hour=200.0)
+
+    def fires(raining: bool, storm: bool) -> int:
+        site = Site(config, _plain(), 0.5, flora=stormy)
+        site.plant(_all(), GRASS, 0.9)
+        site.fire.set_weather(raining, storm)
+        return sum(isinstance(o, FireStarted) for o in site.burn(48))
+
+    assert fires(raining=False, storm=False) == 0  # a dry summer day, the most flammable
+    assert fires(raining=True, storm=False) == 0  # rain, even with thunder
+    assert fires(raining=True, storm=True) >= 1
+
+
+def test_rain_slows_a_fire(config: Config) -> None:
+    def scorched(raining: bool) -> int:
+        site = _meadow_with_channel(config)
+        site.fire.set_weather(raining, False)
+        site.fire.ignite(20, 10, site.t_ms)
+        site.burn(12)
+        return int(np.count_nonzero((site.flora.scorch > 0) | site.fire.burning))
+
+    dry, wet = scorched(False), scorched(True)
+    assert wet < dry / 2
+
+
+def test_a_volcano_or_a_crater_leaves_the_land_round_it_bare_for_a_while(config: Config) -> None:
+    """R4 (the owner): plants within barren_reach × the radius go, and stay gone."""
+    cfg = config.flora
+    site = Site(config, _plain(), 0.5)
+    site.plant(_all(), GRASS, 0.6)
+    ctx = site._context(dt.date(2026, 5, 1), 0.0)  # pyright: ignore[reportPrivateUsage]
+    site.flora.observe([VolcanoErupted(0, 30.0, 20.0, 4.0, 0.1)], ctx)
+    reach = cfg.barren_reach * 4.0
+    yy, xx = np.indices((ROWS, COLUMNS))
+    d = np.hypot(xx - 30.0, yy - 20.0)
+    assert float(site.flora.biomass[d <= reach].max()) == 0.0
+    assert float(site.flora.biomass[d > reach + 1].min()) > 0.0
+    assert float(site.flora.barren[d <= reach].min()) == pytest.approx(cfg.barren_days)
+    # It stays bare while the ground is barren, though grass grows all round it.
+    site.grow(int(cfg.barren_days) - 5)
+    assert float(site.flora.biomass[d <= reach].max()) == 0.0
+    # And plants come back after.
+    site.grow(120, start=dt.date(2026, 9, 1))
+    assert float(site.flora.barren.max()) == 0.0
+    assert float(site.flora.biomass[d <= reach].max()) > 0.0
+    # A crater does the same; other events nothing.
+    site.flora.observe([CraterFormed(0, 10.0, 10.0, 3.0, 0.05), FireEnded(0, 1, 1.0)], ctx)
+    assert float(site.flora.biomass[np.hypot(xx - 10.0, yy - 10.0) <= 3.0].max()) == 0.0
+
+
 # --- The world as a whole ---------------------------------------------------------------
 
 
@@ -783,7 +835,7 @@ def test_streams_are_per_subsystem(config: Config) -> None:
     world.step(3 * DAY_S)
     assert sorted(world.snapshot().rng) == [
         "apocalypse", "chronicle", "fauna", "fire", "flora", "presence", "species",
-        "terrain",
+        "terrain", "weather",
     ]  # fmt: skip
 
 
@@ -816,7 +868,16 @@ def test_a_year_keeps_every_invariant(config: Config, seed: int) -> None:
             relax_blur_cells=3,
             landmass_min_cells=8,
         ),
-        flora=replace(config.flora, seed_rain_per_year=4000.0, fire_ignitions_per_year=400.0),
+        flora=replace(config.flora, seed_rain_per_year=4000.0, fire_strikes_per_storm_hour=40.0),
+        # Thunderstorms often, so that lightning sets many fires (R4: it strikes only in them).
+        weather=replace(
+            config.weather,
+            storm_share=1.0,
+            thunder_share=0.0,
+            rain_spells_per_month_spring=20.0,
+            rain_spells_per_month_summer=20.0,
+            rain_spells_per_month_autumn=20.0,
+        ),
     )
     world, _ = World.create(small, seed, EPOCH_UNIX_MS)
     fires = 0

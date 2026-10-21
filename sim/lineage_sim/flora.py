@@ -28,6 +28,7 @@ gene value = byte / 255.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from enum import IntEnum, IntFlag
 from typing import Any, cast
 
@@ -37,7 +38,14 @@ from numpy.typing import NDArray
 
 from lineage_sim.clock import SECONDS_PER_YEAR, Instant, Season
 from lineage_sim.config import FloraConfig
-from lineage_sim.events import FireEnded, FireStarted, InputEvent, OutputEvent
+from lineage_sim.events import (
+    CraterFormed,
+    FireEnded,
+    FireStarted,
+    InputEvent,
+    OutputEvent,
+    VolcanoErupted,
+)
 from lineage_sim.rng import FIRE, FLORA
 from lineage_sim.state.schema import Tree
 from lineage_sim.subsystem import Context
@@ -50,7 +58,6 @@ Index = NDArray[np.intp]
 
 _F = np.float32
 _GENE_MAX = 255.0
-_HOURS_PER_YEAR = SECONDS_PER_YEAR / 3600.0
 _DAYS_PER_YEAR = SECONDS_PER_YEAR / 86_400.0
 # Share of the seedling biomass below which a population is gone.
 _DEATH_SHARE = 0.25
@@ -329,6 +336,8 @@ class Flora:
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         self._algae: Grid = np.zeros(shape, dtype=_F)
+        # Days each cell stays bare after a volcano or a crater (R4).
+        self._barren: Grid = np.zeros(shape, dtype=_F)
         # Daylight in [0, 1] and rain's growth factor (>= 1), set by the presence model
         # (M8); both scale growth.
         self._daylight = 1.0
@@ -520,6 +529,27 @@ class Flora:
         self._terrain.adjust_fertility(relative * self._terrain.fertility)
         self._clear_dead()
 
+    @property
+    def barren(self) -> Grid:
+        """Days each cell stays bare after a volcano or a crater (R4)."""
+        return self._barren
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
+        """A volcano's cone and a crater leave the land round them bare for a while."""
+        cfg = self._cfg
+        for event in outputs:
+            if not isinstance(event, VolcanoErupted | CraterFormed):
+                continue
+            rows, columns = self._biomass.shape
+            yy, xx = np.ogrid[:rows, :columns]
+            reach = cfg.barren_reach * event.radius_cells
+            within = (xx - event.x) ** 2 + (yy - event.y) ** 2 <= reach * reach
+            self._biomass[within] = 0.0
+            self._barren[within] = _F(cfg.barren_days)
+            self._clear_dead()
+            self._terrain.set_vegetation_cover(self._biomass)
+        return []
+
     def clear(self, ys: Index, xs: Index) -> None:
         """Plants on cells (ys, xs) are destroyed outright (a meteor's bowl)."""
         self._biomass[ys, xs] = 0.0
@@ -598,8 +628,13 @@ class Flora:
         self._scorch = np.maximum(
             self._scorch - _F(dt_years * _DAYS_PER_YEAR / cfg.scorch_days), _F(0.0)
         )
+        self._barren = np.maximum(self._barren - _F(dt_years * _DAYS_PER_YEAR), _F(0.0))
         self._disperse(rng, temp, elevation, dt_years)
         self._seed_rain(rng, temp, elevation, dt_years)
+        # Nothing takes on the bare land round a fresh cone or crater.
+        if (self._barren > 0).any():
+            self._biomass[self._barren > 0] = 0.0
+            self._clear_dead()
 
         # 6. Feedback to the terrain.
         terrain.set_vegetation_cover(self._biomass)
@@ -615,6 +650,7 @@ class Flora:
             "rare": self._rare.copy(),
             "scorch": self._scorch.copy(),
             "algae": self._algae.copy(),
+            "barren": self._barren.copy(),
         }
 
     def set_state(self, tree: Tree) -> None:
@@ -630,6 +666,7 @@ class Flora:
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._algae = np.array(tree["algae"], dtype=_F)
+        self._barren = np.array(tree["barren"], dtype=_F)
         self._terrain.set_vegetation_cover(self._biomass)
 
     # -- internals --
@@ -789,6 +826,10 @@ class Wildfire:
         self._started_ms = 0
         # Wet after rain (M8, set by the presence model): no lightning, slow spread.
         self._wet = False
+        # The weather (R4, set by the weather model): rain slows spread like wet land, and
+        # lightning strikes only in a thunderstorm.
+        self._raining = False
+        self._storm = False
         self._flammability = np.zeros(len(Cover), dtype=_F)
         for cover, value in (
             (Cover.LICHEN, cfg.flammability_lichen),
@@ -819,6 +860,11 @@ class Wildfire:
         """Hook for the rain god power: wet land does not dry out until it is unset."""
         self._wet = wet
 
+    def set_weather(self, raining: bool, storm: bool) -> None:
+        """Hook for the weather: whether rain falls, and whether a thunderstorm rages."""
+        self._raining = raining
+        self._storm = storm
+
     def extinguish(self, t_ms: int) -> list[OutputEvent]:
         """Rain puts out every fire; the cells already burnt stay burnt."""
         if not self._active:
@@ -847,7 +893,9 @@ class Wildfire:
         outputs: list[OutputEvent] = []
 
         # One draw per tick whether or not lightning strikes, to keep the stream aligned.
-        strike = rng.random() < cfg.fire_ignitions_per_year * dryness * hours / _HOURS_PER_YEAR
+        # Lightning comes only with a thunderstorm (R4).
+        rate = cfg.fire_strikes_per_storm_hour * dryness * hours if self._storm else 0.0
+        strike = rng.random() < rate
         if strike:
             rows, columns = self._shape
             y, x = int(rng.integers(0, rows)), int(rng.integers(0, columns))
@@ -856,7 +904,8 @@ class Wildfire:
             return outputs
 
         ys, xs = np.nonzero(self._burning > 0)
-        self._spread(rng, ys, xs, dryness, hours)
+        # Under rain, fire spreads as on wet land.
+        self._spread(rng, ys, xs, 0.0 if self._raining else dryness, hours)
         self._burning[ys, xs] -= _F(hours)
         out = self._burning[ys, xs] <= 0
         if out.any():

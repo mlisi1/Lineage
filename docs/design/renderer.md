@@ -4,7 +4,8 @@ One renderer draws the scene for the desk screen and for the phone (CLAUDE.md §
 TypeScript and PixiJS in a browser, which on the device is Chromium in kiosk mode at
 1024×600. The R0 spike (`renderer/src/spike/`) settled the approach; R1 draws the land
 and its plants from the state stream (`renderer/src/`, see "The land from the state
-stream" below); R2–R4 add creatures, the camera and the atmosphere.
+stream" below); R2 the creatures, R3 the camera, its captions and the animals in the
+scene ("The camera and captions" below); R4 the atmosphere.
 
 ## Pixel art
 
@@ -13,7 +14,10 @@ hard edges, no smoothing.
 
 - **Art pixels are 2 screen pixels.** The scene is drawn into a canvas of 512×300 and
   stretched to the screen by CSS with `image-rendering: pixelated`. No antialiasing,
-  nearest-neighbour textures, positions rounded to whole art pixels.
+  nearest-neighbour textures, positions rounded to whole art pixels. The camera alone moves
+  by less: the canvas is drawn an art pixel larger all round and slid by the camera's
+  fraction of a pixel, in whole screen pixels (R3), so that a slow pan glides. Plants are
+  laid out with their corners on whole art pixels, so that none flickers as it moves.
 - **One palette.** Land and plant colours come from `tools/viz/pixelmap.py`, the same
   ramps the report maps use, so a forest is the same green in a report and on the desk.
   Since ADR 0014 it is the cosy palette, after Stardew Valley; the renderer reads a copy
@@ -30,7 +34,7 @@ The world is a continent, and the screen shows it from three distances
 |---|---|---|---|---|
 | **map** | 2 | all 256 × 150 cells | the continent | a dot |
 | **middle** | 8 | 64 × 37½ | a region: its woods and shores, who is about | 4½ art pixels long |
-| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 |
+| **local** | 32 | 16 × 9 | one animal, and what it walks through | 11 (13 in the scene, R3) |
 
 The land and its plants are not rescaled between the views: a grown tree is three cells
 tall in the middle view and in the local one, drawn by the same rule, and the plants of
@@ -334,7 +338,9 @@ How long an animal is drawn is the renderer's choice (the simulation knows mass,
 length): a number times 1.1 cells at mass 1. **The local view draws at 0.35**, chosen
 against a line-up of full-grown trees and bushes: mass 1 is 11 art pixels long, an
 eighth as long as a grown tree is tall, and the heaviest a genome allows (mass 16) two
-thirds of a bush's height. **The middle view draws at 0.5**, larger than life: at 0.35
+thirds of a bush's height. The scene (R3) draws its local view's animals 1.2 times that,
+0.42 (13 art pixels at mass 1), the owner's choice: at 0.35 markings and eyes were lost.
+The creature sheet keeps 0.35. **The middle view draws at 0.5**, larger than life: at 0.35
 its animals would be 3 pixels long, dots with an outline, and it was found good at 4½.
 So the views are in proportion for the land and its plants and not for the animals,
 each view exaggerating them as much as it needs to show them: not at all from close,
@@ -350,8 +356,10 @@ it lives where its species does (in the water or on land), so that a fish is nev
 on the shore; an animal of no species yet (0) is drawn as its own genes make it. In the
 fixture's world (v7, day 520) 10 of the 186 members of species 1 would be hoppers on their
 own genes (the leg gene rounding to one pair) and are drawn as beasts. A layer works the
-plans out from its creatures; when the census changes them, the creatures are drawn again
-with the new plans (R3, with the state stream).
+plans out from its creatures. In the scene (R3, `herd.ts`) the plans are worked out again
+when the census changes (a species born or gone); animals placed after that take their
+species' kind from the new plans, and those already drawn keep theirs, so that no animal
+changes kind under the camera.
 
 **Creatures are drawn in `cosy`** ([ADR 0013](../decisions/0013-cosy-creature-style.md)),
 after Stardew Valley's animals with the camera kept straight above: the plans and layers
@@ -565,21 +573,25 @@ image draws WebGL with the GPU.
 ## The land from the state stream (R1)
 
 The scene (`renderer/index.html`, `src/main.ts`) draws the land and its plants from the
-state stream in one of the three views. Creatures (R2) and the camera's choices (R3)
-come on top. Page parameters:
+state stream in one of the three views; its animals and the camera's choices are R3's
+(below). Page parameters:
 
 | Parameter | What |
 |---|---|
-| `view=map\|middle\|local`, `x=…&y=…` | the view, and where it looks (cells) |
-| `recording=winter` | play the winter recording instead of the August–September one |
-| `every=1000` | wall milliseconds between the recording's messages; 0: all at once, the last day |
+| `view=map\|middle\|local`, `x=…&y=…` | pin the camera to a view (no director), and where it looks (cells) |
+| `recording=autumn\|winter` | R1's land recordings (August–September, or deep winter) instead of the creatures' (`life`, the default) |
+| `speed=1800` | sim-seconds to a wall second (the default for `life`) |
+| `every=1000` | instead, wall milliseconds between the recording's messages; 0: all at once, the last day (the default for `autumn` and `winter`, 1000) |
+| `follow=…`, `idle=…`, `seed=…` | seconds on one animal and before the map comes back, and the camera's random draws (tests) |
+| `quiet` | no captions of the stream's own entries |
 | `source=ws://…` | the server's stream instead of a recording (S1; not tried yet: there is no server) |
 | `still` | the sea does not move: for pictures that must not change |
 | `painter=inline` | paint the ground on the page's thread, to compare with the worker |
 
 For tests and measurements the page offers `window.__sceneSettled()` (the view shows the
-latest day, fully painted), `window.__receive(message)` and `window.__textures()` (live
-textures on the GPU).
+latest day, fully painted), `window.__receive(message)`, `window.__textures()` (live
+textures on the GPU), `window.__press()` (the view button), `window.__camera()` and
+`window.__captions()` (what the camera and the scroll are doing).
 
 **The stream.** One JSON message per frame, defined once in
 `server/lineage_server/protocol/schema.json`; the TypeScript types (`src/protocol.ts`)
@@ -594,16 +606,20 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
+| `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
 
 The palette is not sent: the renderer has the report maps' own. `tools/stream.py`
-records the stream from a save, and `src/stream.ts` decodes it. Two recordings are
-committed in `renderer/public/stream/`, both from the v4 fixture:
+records the stream from a save, and `src/stream.ts` decodes it. Three recordings are
+committed in `renderer/public/stream/`, two from the v4 fixture (land only):
 
 - `recording.json`: 56 days from 3 August, a land every 28, ending on 28 September in
   the middle of the autumn turn;
 - `winter.json`: 165 days on unrecorded, then 15 January to 5 February 2028, a land every
   10; snow lies on about 10 600 of the 38 400 cells (checking it is what the tool writes
-  takes 186 sim-days, so that test is nightly).
+  takes 186 sim-days, so that test is nightly);
+
+and `life.json` from the v9 fixture, with the creatures every two sim-hours and the
+chronicle (R3, see "The camera and captions"), the page's default.
 
 **Painting off the frame.** Grounds are painted in a Web Worker (`terrain/painter.ts`,
 `paint.worker.ts`) so that the page keeps drawing frames: the map's and the middle view's
@@ -669,7 +685,16 @@ of lighter water far out, one nearer, and the foam at the shore. A crest comes i
 (three opacities a frame). Glints, short white strokes, grow on the open water, drift a
 little and go, forty slots to a view, each on its own clock and somewhere new each time
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
-it at its first moment, which the snapshots use. The land sheet films it. `seaAt(land)`
+it at its first moment, which the snapshots use. The land sheet films it. **Tides**
+(R4, round 6): the painter leaves the shore's data (`Pixels.shore`: each pixel's
+distance out to sea and inland, when the waves come there, noise) and one GL filter a
+view (`sea.ts`) draws it: wave lines roll in, brighten and break white; the swash runs up
+the sand with a foam edge, drains, and leaves wet sand that dries. A wave every 5 s,
+its timing varying slowly over the island (`tide.ts` `tidePhase`), the tide over a
+minute; no swash on the map. Past the waves the **open sea's swell** (round 7): faint crests
+across the screen, bent and broken into dashes that come and go, drift down the sea, a
+crest every 6 s, from data the painter leaves in the same texture (`tide.ts` `swellAt`);
+on the map and fainter in the middle view, none up close. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -724,6 +749,185 @@ plant, the turn of the year around three changes of season, and the four seasons
 **Snapshots** (`tests/e2e/scene.spec.ts`): seven fixed states of the scene, five from the
 autumn recording and two on the winter recording's snow line, taken with `still`.
 
+## The camera and captions (R3)
+
+The camera is the owner's to steer ([ADR 0020](../decisions/0020-the-camera-view-button-and-captions.md)):
+a **view button**, beside the god-power button, steps the screen map → middle → local →
+map. The map is where it rests, and it goes back there fifteen minutes after the last
+press. On the page the button is V, space or Enter, a tap on a phone, or
+`window.__press()`. For the demo (the owner, 2026-10-20) a click or tap in the local view
+goes on to another animal instead, and a double click back to the map; the button itself
+keeps the cycle. `src/director.ts` decides what is shown; it is pure and seeded.
+
+| View | The camera |
+|---|---|
+| map | the whole continent, still; the animals as dots |
+| middle | drifts at 1.2 cells a second to a place on land 20–70 cells away, lingers 8–20 s, goes on; on a critically damped spring, so it eases in and out |
+| local | follows an animal of a species drawn at random (then one of its animals, awake if one is), for 4–6 minutes, then another; within a view's width it glides there, further it cuts |
+
+- **Smooth pans**: the world is placed in whole art pixels in a canvas one art pixel larger
+  all round, and the canvas is slid by the rest of the camera's position in whole device
+  pixels (CSS), so the picture moves a screen pixel at a time, half an art pixel, at no cost
+  to the GPU; the dip and the scroll are laid over it in the page and keep still. Before,
+  a drift moved the picture on one frame in six; now on one in three, as fine as a
+  1024-pixel screen goes without blurring. Plants' corners are put on whole art pixels:
+  one at half a pixel was rounded either way as the world moved, and 3 % of the middle
+  view flickered a pixel back and forth.
+- **Glints stay on the water**: each is placed in the view as it was when that glint began
+  to show, and kept there in the world while the camera pans (they had moved with it).
+- **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
+  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
+- **Following** (`src/camera.ts`): a spring a little under critical damping (period
+  3 s, damping 0.9), so that the camera eases after an animal that turns and settles with
+  hardly a swing; it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within
+  a cell of where the camera is before it moves. Fixed sub-steps (1/240 s) make it the
+  same at any frame rate. The view never looks off the world's edge.
+- **The animals** (`src/herd.ts`): R2's creature layers fed from the stream. A roster
+  gives each id a slot and frees the slots of the dead; the middle view's bodies (and the
+  map's dots) and the local view's are two layers (the local view's drawn 1.2 times R2's
+  true-to-the-trees size, the owner's choice: an animal of mass 1 about 13 art pixels
+  long, so that its eyes and markings show), each anchored to the sim's positions,
+  and only the shown one moves. They stand among the plants of the view (the plant layer
+  drawn opaque, the old one while a new day fades in); what grows in front of the animal
+  followed is shown through.
+- **Captions** (`src/captions.ts`): the notable entries (importance ≥ 3) on a parchment
+  scroll at the foot of the screen, one at a time and above the dip. It unrolls from its
+  middle, stays open 4 s plus 0.07 s a character, rolls up and waits 1.5 s for the next;
+  at most four wait (the least important dropped). The date in words above the entry; at
+  most four lines, cut with an ellipsis. The text is in the caption font
+  (`src/pixelfont.ts`), drawn a pixel at a time so it keeps the hard edges and looks the
+  same in every browser.
+- **The creatures' recording** (`public/stream/life.json`): 28 days from the v9 fixture,
+  creatures every two sim-hours, a land every 14 days, six notable entries; played by sim
+  time (`Recording` with a speed, 1 800 sim-seconds a wall second: a day in 48 s).
+
+**Tests**: unit tests of the spring and framing, of the director's rules on synthetic
+worlds (the button's cycle, the dip waits for paint, idle return, drift stays on land and
+in the world, following, the species drawn fairly, awake preferred, glide or cut, death
+of the subject, seeded determinism), the caption queue (one at a time, never overlapping)
+and the scroll's painting, the font, and the roster; in the page
+(`tests/e2e/camera.spec.ts`) the button's cycle and a snapshot of the scroll. Its cost on
+the board is R5's to measure.
+
+## The atmosphere (R4)
+
+The light, what glows, the weather of events and the end of a world
+([ADR 0021](../decisions/0021-atmosphere.md)), in `src/atmosphere/`, from two messages on
+the wire: `sky` (the light of the moment, whether the owner is at the desk, rain, the
+cells on fire; at every presence tick) and `events` (fires, volcanoes, quakes, craters,
+god powers, a world's end and the next one's beginning).
+
+| Layer | Where | What |
+|---|---|---|
+| `ground` | in the world (cells), over the animals | the risen sea of a world's end, smoke, ash clouds, dust |
+| `weather` | screen art pixels | rain, falling ash |
+| `tint` | one sprite, multiplied over all of the above | the light |
+| `lights` | cells, added over the tint | glow-gene animals, fires, lava, sparks, beams |
+| `flash` | the screen | a meteor's strike, lightning |
+
+- **The light** (`light.ts`): moonlit blue at night (the owner: dark but readable), rose
+  at dusk (owner away), lilac at dawn (owner back), day graded by the season (warm
+  summer, cool winter; each season's second half turns toward the next), greyed by rain.
+  The sim's 10-minute steps are eased: each is reached over the wall time since the one
+  before (`LightEase`), so a dusk fades instead of stepping, at any playback speed.
+- **Glow**: halos in five steps (a 48-texel disc, at most three times that across so its
+  steps stay a few art pixels wide), added over the tint so they show in the dark. An
+  animal with the glow gene shines as strongly as it is dark (`Herd.glowing`): on the map
+  a small light just round its square; closer, a ring of light with a clear heart round
+  every other joint of its back, so the animal shows through it, wider up close. It
+  breathes, between 45 % and full over 3.5 s. A fire is a wide glow, then for each burning cell a small
+  flicker off its middle and flames licking up; up close (local view) more of them.
+- **Weather**: smoke, ash, dust, flames and rain are slots each going round a cycle of
+  its own; where a slot is depends only on its number and the time (as the sea's glints),
+  so a moment looks the same on every run and a `?still` picture is fixed. Rain while the
+  rain power's rain falls (sets in over 3 s); smoke over fires; a volcano's lava glow,
+  lava running down its sides and a dark ash column (12 sim-hours, at least 30 wall
+  seconds); a quake's shake and dust (4 s); a meteor's streak from high up, flash, glow
+  and dust where it digs its crater; a beam and golden or pale motes for the seed and ark
+  powers (8 s); lightning's flash and sparks where a fire starts.
+- **The end of a world** (`apocalypse.ts`), three minutes on the map, whatever the view
+  was: omen (20 s, the sky reddens, ash), fire (40 s, lava vents, quakes), flood (60 s, the
+  sea rises over the land one pixel to the cell, peaks last), dark (20 s), rise (40 s, the
+  light comes back, the sea falls from the new continent). The view button waits. What the
+  stream sends of the next world is held: its land and animals until the dark, its news
+  until the rise; the chronicle's own lines tell the end and the beginning.
+- **Waves on the map**: the map is painted with the three surf bands as the closer views
+  are, and the sea brings them in (the owner, from the R3 demo).
+- **On demand**: `?show=night,fire,meteor…` makes up the light and events on the land in
+  sight (`demo.ts`); with `?still` they move only by `window.__advance(seconds)`. The
+  recordings `?recording=office` (two weeks of office hours: dusks, nights, the Long
+  Night, the rain power twice) and `?recording=end` (the herd starves on day 2 and the sim
+  ends the world) play the real thing.
+
+**Round 2** (the owner's comments, ADR 0021):
+
+- Lightning comes in three sizes: thunder (thin, rare, faint), thunderstorm (forked,
+  every few seconds, a darker sky, slanting heavy rain) and the strike that sets a fire
+  (thickest, brightest, where the fire begins).
+- Rain rings spread on the water and drops splash on the land, in the middle and local
+  views.
+- Flames are four-frame sprites, one to a burning cell in the middle view and three larger
+  up close.
+- Burnt ground (`scorch`) is charcoal with ash, and charred tree skeletons stand where trees
+  grew.
+- A puff of ash rises where an animal dies in the fire.
+- A volcano's cone and a meteor's crater are drawn for 30 sim-days (`marks.ts`), after
+  how top-down pixel-art games draw them: stacked ledges with cliff faces, boulders,
+  crusted lava rivers falling over the ledges (its own layer, untinted), and a crater's rim,
+  far wall, scorched floor and rays of debris. The sim bares the land round both.
+- The seed power drops motes over the bare land in sight; the ark's light falls where its
+  newcomers land.
+- Algae are olive fronds on the shallows, and glow shows on the map's dots.
+
+**Round 4** (the owner's comments on the films, ADR 0021):
+
+- Rain is sized to the view (a 2-pixel streak on the map to 6 up close), falls in three
+  parallax layers, and leans with the wind (more with thunder, most in a thunderstorm,
+  whose gusts swing every layer). Cloud greys the light while it rains.
+- Up close, two large six-frame flames to a burning cell, each with its own halo and
+  embers. The made-up fire and burnt wood of `?show=` spread as the sim's fire does,
+  from cell to neighbouring cell through fuel (`fireReach`). The scorch is painted cell
+  by cell, charcoal with drifts of ash and a wandering edge.
+- The lava flows in eight looped frames; the cone stands in a skirt of ash and scree.
+- The crater is drawn from a lit height field, after simple impact craters: a scalloped
+  raised rim, the near wall in shadow, the far wall lit, a slumped floor, pale ejecta
+  with boulders thinning into clods, rays downrange.
+- The ark's light is scaled to the view, and each newcomer comes into being under a
+  thread of light, fading in over 2.5 s (`CreatureLayer.arrive`).
+- The seed's sprouts grow leaf by leaf on each cell the seed sowed (the land before and
+  after the power, diffed), until the plants show.
+- Tides (above, under the sea).
+
+**Round 6** (ADR 0021): nothing pops (fires, cones, craters, sprouts, plants, the dead
+and born fade or rise); nothing is placed on a cone or crater (`Landscape.covered`) and a
+dust cloud hides the change; tides by the shore shader (above); snow falls where snow
+lies, rain elsewhere; a raindrop's streak is at least a frame's fall long; plant drawings
+are paged within 2048 × 2048.
+
+**Round 7** (ADR 0021): a view's fall is all rain or all snow (snow when half its land
+has snow lying), cross-fading as that changes; the open sea's swell (above); the meteor
+larger in the middle view; dust clouds painted once and stretched, so they do not pop.
+
+**Round 5** (ADR 0021):
+
+- What lies on the ground (a crater, a cone's scree, a fire's embers) is drawn on
+  `Landscape.floor`, under the plants; what stands (flames, a cone and its lava, sprouts)
+  goes into the plants' rows by its foot (`RowPool`), as creatures do, so what stands in
+  front covers it.
+- Rain is drawn over the tint, faded with the light, in pale blue; each spell has its own
+  strength; thunder falls at random times. Under cloud the world is colour-graded toward grey
+  (a colour-matrix filter, on only while the sky is overcast) under a faint grey haze; `sky.rain = "cloud"` is an overcast sky.
+- The close flame is 15 × 24 in six frames after pixel-art references, flickering slowly
+  and see-through (72 %), in a bed of embers with small flames round it; burning trees
+  burn in their crowns; at night an added copy keeps the flames lit. Glow is fainter closer in.
+- The lava's crust drifts outward from the pool's middle. A crater's land waits for its
+  meteor to strike. The ark's beam fades into a pool of light at its foot.
+
+**Tests**: unit tests of the light, the ease, the acts and the held stream, the flood,
+the particles and the shows (and the land they change), lightning, flames and marks; in the page (`tests/e2e/atmosphere.spec.ts`) snapshots of
+every light and event, a glowing animal at night and by day, and a real world's end
+holding the camera and the button. Its cost on the board is R5's to measure.
+
 ## What the spike stands in for
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
@@ -741,18 +945,19 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   the simulation's plant genome does not yet reach the renderer. The season is the
   fixture's (`source.season`).
 - **The camera.** The benchmark's local view follows the first creature of the save;
-  choosing whom to follow, and moving between the views, is R3.
+  the scene's camera (whom it follows, the moves between the views) is R3's director.
 
 ## Open
 
 - **Snow**: settled in R1 (ADR 0014): it lies where the simulation's temperature says.
+  It is not seen falling (R4).
 - **Turning from one season to the next**: done in R1, over about four weeks.
 - **Plant genes in the drawing**: `HEIGHT` picks the build, `EVERGREEN` how late a
   tree turns and how it spends the winter, and the rare genes have their looks (R1, from
   M7's signatures). Which broadleaf flowers or turns gold, and the kinds of flower, are
   still the renderer's own variety.
-- **Moving between the views.** The painted pixels shimmer at zooms in between, so the
-  camera would cut or cross-fade from one view to the next rather than glide.
+- **Moving between the views**: settled in R3 (ADR 0020): a dip to dark and back, never a
+  zoom.
 - **Painting ground off the frame**: done in R1 (a worker); its effect on the local
   view's pauses is to be measured on the board in R5 (the owner moved every device
   benchmark there, once R1–R4 are in), and so is the GPU memory the middle view's surf
@@ -763,6 +968,10 @@ autumn recording and two on the winter recording's snow line, taken with `still`
   Both could go to the worker if R5 shows a stutter on the board.
 - **The server's stream** has not been tried: there is no server until S1.
 - **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
-  what remains is R3's: which animal the camera follows, and when it cuts.
+  whom the camera follows and when it cuts, R3 (ADR 0020).
 - **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the
   turn and the snow forward.
+- **From the R3 demo** (the owner, 2026-10-20; CLAUDE.md §8, docs/milestones.md "R3
+  closed"): waves on every coast in all three views (R4); animals that keep out of
+  plants, never fold through themselves, and step their legs in turn, no plant popping in
+  over them, and a name scroll by the animal followed (R5).

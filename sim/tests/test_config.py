@@ -13,6 +13,7 @@ def test_default_config(config: Config) -> None:
         "terrain": 86_400.0,
         "flora": 86_400.0,
         "fire": 3600.0,
+        "weather": 3600.0,
         "fauna": 600.0,
         "species": 86_400.0,
         "chronicle": 86_400.0,
@@ -28,7 +29,7 @@ def test_schedule_periods(default_config_text: str) -> None:
     assert config.period_ms("journal") == 900_000
     assert config.period_ms("comet") == 250
     with pytest.raises(ConfigError, match="no \\[schedule\\] period"):
-        config.period_ms("weather")
+        config.period_ms("rainbow")
 
 
 def test_schedule_is_read_only(config: Config) -> None:

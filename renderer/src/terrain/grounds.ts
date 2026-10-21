@@ -11,8 +11,8 @@
  * it, so that the day's growth, a fire's scar or the turn of the season comes over the
  * land gently, and the old one goes when the new one is fully there.
  *
- * Asked for the surf (`PaintRequest.surf`), a painting comes with its three bands, which
- * go in layers of their own (`surf`, from the shore out) for the sea to show in turn.
+ * Asked for the surf (`PaintRequest.surf`), a painting comes with its shore's data, which
+ * goes in a layer of its own (`surf`) for the sea's shader to draw the waves from.
  */
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
@@ -72,12 +72,15 @@ export function pixelSprite(pixels: Pixels, tile: number, x = 0, y = 0): Sprite 
   return rgbaSprite(pixels.rgba, pixels, tile, { x, y });
 }
 
-/** A painting on the screen: the ground, and its surf if it was asked for. */
+/** A painting on the screen: the ground, and its shore's data if it was asked for. */
 interface Painting {
-  sprites: Sprite[];
+  /** What fades in: the ground's sprite. */
+  sprites: Container[];
+  /** The shore's data (`Pixels.shore`), shown only once the ground is all there: blended, it would mean nothing to the sea's shader. */
+  shore: Sprite | null;
 }
 
-/** The sprites of `pixels`: the ground into `layers.ground`, each band of surf into its own layer. */
+/** The sprites of `pixels`: the ground into `layers.ground`, its shore's data into `layers.surf[0]`. */
 function show(
   pixels: Pixels,
   tile: number,
@@ -86,19 +89,20 @@ function show(
 ): Painting {
   const ground = rgbaSprite(pixels.rgba, pixels, tile, at);
   layers.ground.addChild(ground);
-  const sprites = [ground];
-  (pixels.surf ?? []).forEach((band, index) => {
-    const sprite = rgbaSprite(band, pixels, tile, at);
-    layers.surf[index]?.addChild(sprite);
-    sprites.push(sprite);
-  });
-  return { sprites };
+  let shore: Sprite | null = null;
+  if (pixels.shore !== undefined) {
+    shore = rgbaSprite(pixels.shore, pixels, tile, at);
+    shore.visible = false;
+    layers.surf[0]?.addChild(shore);
+  }
+  return { sprites: [ground], shore };
 }
 
 const destroy = (painting: Painting | null): void => {
   for (const sprite of painting?.sprites ?? []) {
-    sprite.destroy({ texture: true, textureSource: true });
+    sprite.destroy({ children: true, texture: true, textureSource: true });
   }
+  painting?.shore?.destroy({ texture: true, textureSource: true });
 };
 
 /** A painting fading in over another, which goes once the new one is all there. */
@@ -129,18 +133,19 @@ class Fade {
     return this.done;
   }
 
-  /** Done at once. */
+  /** Done at once: the new shore takes the old one's place. */
   finish(): void {
     for (const sprite of this.incoming.sprites) sprite.alpha = 1;
+    if (this.incoming.shore !== null) this.incoming.shore.visible = true;
     destroy(this.outgoing);
   }
 }
 
-/** Where a ground's sprites go: the ground itself, and the three bands of its surf. */
+/** Where a ground's sprites go: the ground itself, and its shore's data (for the sea's shader). */
 class Layers {
   /** Add these to the world: the ground, then the surf's bands (the foam first, then the lines). */
   readonly container = new Container();
-  readonly surf: readonly Container[] = [new Container(), new Container(), new Container()];
+  readonly surf: readonly Container[] = [new Container()];
   protected readonly layers = { ground: this.container, surf: this.surf };
 }
 

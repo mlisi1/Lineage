@@ -26,6 +26,7 @@ import { DEFAULT_LOOK, type Look } from "../looks";
 import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
+import { BREATH_S, shoreSizes, swellAt, swellSizes, tidePhase } from "./tide";
 
 export type GroundStyle = "squares" | "warped" | "tiles" | "smooth" | "blended";
 export const GROUND_STYLES: readonly GroundStyle[] = [
@@ -38,6 +39,11 @@ export const GROUND_STYLES: readonly GroundStyle[] = [
 /** Art pixels per cell in the middle view and in the map view. */
 export const MID_TILE = 8;
 export const MAP_TILE = 2;
+/**
+ * How far out (art pixels) the shore's data counts the distance from the shore: the open
+ * sea's swell fades in over the pixels past the waves' reach (`sea.ts`).
+ */
+const OPEN_SEA_FROM = 250;
 
 /** From this many pixels per cell a view is close: calm patches, and detail in them. */
 export const CLOSE_FROM_TILE = 16;
@@ -170,11 +176,33 @@ const SHADOW_RIM = 0.18;
 /** Share of the pixels of bare ground that are a grain darker or lighter. */
 const GRIT = 0.012;
 const WAVES = 0.006;
+/**
+ * Algae on the shallow sea (M11): biomass at which they are thickest (the sim's
+ * algae_capacity), the share of the water they cover then, the clumps' size (pixels), and
+ * their two olive tones, mixed into the water's colour this much.
+ */
+const ALGAE_FULL = 0.4;
+const ALGAE_COVER = 0.7;
+const ALGAE_CLUMP = 3;
+const ALGAE: readonly number[] = [0x4f7a3a, 0x86a24a];
+const ALGAE_MIX = 0.7;
+/**
+ * Burnt ground (R4): charcoal mixed in (more where the fire was recent), and a share of
+ * pixels that are pale ash.
+ */
+const CHARRED = 0x241c1c;
+const CHAR_MIX = 0.62;
+/**
+ * Scorch (0–1) from which a cell is drawn burnt; how far its edge wanders (cells) and over
+ * how many cells the wander turns; ash lies in drifts where a noise passes this.
+ */
+const CHAR_FROM = 0.04;
+const CHAR_RAGGED = 0.55;
+const CHAR_RAGGED_SPAN = 0.7;
+const CHAR_ASH = 0.8;
+const CHAR_ASH_COLOUR = 0x8a827c;
 const FOAM_NEAR = 0.85;
 const FOAM_FAR = 0.3;
-/** The moving surf: share of the foam band's pixels that are foam, and of a line's dashes. */
-const SURF_FOAM = 0.8;
-const SURF_LINE = 0.62;
 /** Ordered dither: thresholds of a 4×4 Bayer matrix. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((n) => (n + 0.5) / 16);
 
@@ -447,6 +475,24 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
             (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
           );
         };
+  // The sim's other grids, read between cells as the snow is (R4: burnt ground; M11: algae).
+  const between4 = (cells: Uint8Array | undefined): ((u: number, v: number) => number) | null =>
+    cells === undefined
+      ? null
+      : (u, v) => {
+          const x0 = Math.floor(u);
+          const y0 = Math.floor(v);
+          const fx = u - x0;
+          const fy = v - y0;
+          const at = (x: number, y: number): number =>
+            (cells[clampY(y) * width + clampX(x)] ?? 0) / 255;
+          return (
+            (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+            (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy
+          );
+        };
+  const scorchCells = world.scorch;
+  const algaeAt = between4(world.algae);
   // The season of the pixel being painted.
   let now = seasonalOf(options.season ?? "summer");
   const dries = FORMS.map((form) => world.dormantClasses.includes(form));
@@ -753,6 +799,15 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
           grain && cellHash(Math.floor(worldX / dash), worldY, 7) < WAVES
             ? mix(base, foam, 0.35)
             : base;
+        // Algae (M11): clumps of olive fronds on the shallows, as thick as they grow.
+        const algae = algaeAt === null ? 0 : algaeAt(u, v) / ALGAE_FULL;
+        if (algae > 0.02) {
+          const clump = valueNoise(worldX / ALGAE_CLUMP, worldY / ALGAE_CLUMP, 51);
+          if (clump + 0.15 * dither < Math.min(algae, 1) * ALGAE_COVER) {
+            const tone = cellHash(worldX, worldY, 52) < 0.3 ? 1 : 0;
+            colours[at] = mix(base, ALGAE[tone] ?? 0, ALGAE_MIX);
+          }
+        }
         continue;
       }
       isLand[at] = 1;
@@ -931,20 +986,45 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
+  // Burnt ground (R4): every cell that burnt is charcoal, darker the more recent the fire,
+  // with drifts of pale ash; its edge follows the cells, wandering by half a cell or so.
+  if (scorchCells !== undefined) {
+    for (let py = 0; py < tall; py++) {
+      for (let px = 0; px < wide; px++) {
+        const at = py * wide + px;
+        if (isLand[at] !== 1) continue;
+        const worldX = originX + px;
+        const worldY = originY + py;
+        const bayer = (BAYER[(worldY & 3) * 4 + (worldX & 3)] ?? 0.5) - 0.5;
+        const u = (worldX + 0.5) / tile;
+        const v = (worldY + 0.5) / tile;
+        const wanderX = valueNoise(u / CHAR_RAGGED_SPAN, v / CHAR_RAGGED_SPAN, 55) - 0.5;
+        const wanderY = valueNoise(u / CHAR_RAGGED_SPAN, v / CHAR_RAGGED_SPAN, 56) - 0.5;
+        const cx = clampX(Math.floor(u + 2 * wanderX * CHAR_RAGGED + bayer * 0.15));
+        const cy = clampY(Math.floor(v + 2 * wanderY * CHAR_RAGGED - bayer * 0.15));
+        const scorch = (scorchCells[cy * width + cx] ?? 0) / 255;
+        if (scorch <= CHAR_FROM) continue;
+        const drift = valueNoise(u * 3, v * 3, 54) + 0.25 * bayer;
+        const ash = drift > CHAR_ASH && cellHash(worldX, worldY, 57) < 0.6;
+        colours[at] = ash
+          ? CHAR_ASH_COLOUR
+          : mix(colours[at] ?? 0, CHARRED, CHAR_MIX + (1 - CHAR_MIX) * 0.8 * scorch);
+      }
+    }
+  }
+
   // The shore: the map's outline on the last pixel of land, then foam on the water and
   // wet sand on the land, as far out as the view is close. `away` is how many pixels a
   // pixel is from the other side of the shore, counted up to twice that reach.
   const far = 2 * surf + 1;
   // The surf that moves (`surf` option) reaches further out than the foam painted here.
-  const surfing = options.surf === true && grain;
-  // Its bands, as distances from the shore: foam up to `foamTo`, then two lines of
-  // lighter water, each `line` pixels wide, further out.
-  const foamTo = surf + 1;
-  const line = Math.max(1, Math.round(surf / 2));
-  const midFrom = foamTo + 1 + Math.floor(line / 2);
-  const farFrom = midFrom + line + surf + 1;
-  const farTo = farFrom + line - 1;
-  const away = new Uint8Array(wide * tall).fill(surfing ? farTo + 1 : far);
+  const surfing = options.surf === true;
+  // The sea's shader needs the distance from the shore as far out as waves are seen and as
+  // far up as the swash runs (`tide.ts` `shoreSizes`).
+  const sizes = shoreSizes(tile);
+  const shoreTo = Math.max(sizes.reach, sizes.swash) + 1;
+  // With the surf, counted further out: the open sea's swell fades in past the waves.
+  const away = new Uint8Array(wide * tall).fill(surfing ? OPEN_SEA_FROM : far);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
@@ -1006,35 +1086,35 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   }
   if (!surfing) return { width: wide, height: tall, rgba };
 
-  // The surf, in three bands to be shown one after another (`terrain/sea.ts`), a crest
-  // coming in: a line of lighter water far out, one nearer, then the foam at the shore.
-  // Clear everywhere else.
-  const surfBands = [0, 1, 2].map(() => new Uint8ClampedArray(wide * tall * 4));
-  const swell = mix(bands[0]?.colour ?? 0x8ecbe6, 0xffffff, tones.surfMix);
-  const put = (band: number, at: number, colour: Rgb): void => {
-    const into = surfBands[band];
-    if (into === undefined) return;
-    into[at * 4] = colour >> 16;
-    into[at * 4 + 1] = (colour >> 8) & 255;
-    into[at * 4 + 2] = colour & 255;
-    into[at * 4 + 3] = 255;
-  };
+  // The shore's data for the sea's shader (`Pixels.shore`): how far each pixel is from the
+  // shore on its side, when the waves come there, a little noise; out at sea, where it lies
+  // in the swell; clear where the sea is still.
+  const shore = new Uint8ClampedArray(wide * tall * 4);
+  const swell = swellSizes(tile);
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
-      if (isLand[at] === 1) continue;
-      const distance = away[at] ?? farTo + 1;
+      const distance = away[at] ?? OPEN_SEA_FROM;
       const worldX = originX + px;
       const worldY = originY + py;
-      const dashed = cellHash(Math.floor(worldX / dash), Math.floor(worldY / line), 21) < SURF_LINE;
-      if (distance <= foamTo) {
-        if (cellHash(worldX, worldY, 19) < SURF_FOAM) put(0, at, foam);
-      } else if (distance >= midFrom && distance < midFrom + line) {
-        if (dashed) put(1, at, swell);
-      } else if (distance >= farFrom && distance <= farTo) {
-        if (dashed) put(2, at, swell);
+      if (distance > shoreTo) {
+        if (isLand[at] === 1 || swell.strength <= 0) continue;
+        const { phase, dash } = swellAt(worldX, worldY, swell.spacing);
+        shore[at * 4] = distance;
+        shore[at * 4 + 1] = Math.floor(dash * 256);
+        shore[at * 4 + 2] =
+          Math.floor(phase * 63) * 4 + Math.floor(cellHash(worldX, worldY, 23) * 4);
+        shore[at * 4 + 3] = 255;
+        continue;
       }
+      const turn = tidePhase((worldX + 0.5) / tile, (worldY + 0.5) / tile) / BREATH_S;
+      const when = Math.floor((((turn % 1) + 1) % 1) * 63);
+      const noise = Math.floor(cellHash(worldX, worldY, 23) * 4);
+      shore[at * 4] = isLand[at] === 1 ? 0 : distance;
+      shore[at * 4 + 1] = isLand[at] === 1 ? distance : 0;
+      shore[at * 4 + 2] = when * 4 + noise;
+      shore[at * 4 + 3] = 255;
     }
   }
-  return { width: wide, height: tall, rgba, surf: surfBands };
+  return { width: wide, height: tall, rgba, shore };
 }

@@ -81,8 +81,12 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
   const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
   const plants = new Map<string, Texture>();
   for (const [key, frame] of frames) plants.set(key, new Texture({ source, frame }));
+  return { plants, ...shapes(source, below, wedgeLeft) };
+}
+
+/** The disc, the white square and the wedge, which start `below` in `source`. */
+function shapes(source: CanvasSource, below: number, wedgeLeft: number): Omit<Atlas, "plants"> {
   return {
-    plants,
     disc: new Texture({ source, frame: new Rectangle(1, below, DISC_SIZE, DISC_SIZE) }),
     // The inner pixels only, so stretching never samples the transparent surround.
     white: new Texture({
@@ -91,4 +95,20 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
     }),
     wedge: new Texture({ source, frame: new Rectangle(wedgeLeft, below, DISC_SIZE, DISC_SIZE) }),
   };
+}
+
+/** The atlas of the creatures alone (the scene draws its plants otherwise, R1). */
+export function creatureAtlas(): Atlas {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2 * DISC_SIZE + WHITE_SIZE + 8;
+  canvas.height = DISC_SIZE + 2;
+  const context = canvas.getContext("2d");
+  if (context === null) throw new Error("no 2D canvas for the atlas");
+  put(context, disc(DISC_SIZE), 1, 1);
+  context.fillStyle = "#ffffff";
+  context.fillRect(DISC_SIZE + 3, 1, WHITE_SIZE, WHITE_SIZE);
+  const wedgeLeft = DISC_SIZE + WHITE_SIZE + 5;
+  put(context, wedge(DISC_SIZE), wedgeLeft, 1);
+  const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
+  return { plants: new Map(), ...shapes(source, 1, wedgeLeft) };
 }

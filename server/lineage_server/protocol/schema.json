@@ -21,6 +21,15 @@
     },
     {
       "$ref": "#/$defs/RareMessage"
+    },
+    {
+      "$ref": "#/$defs/ChronicleMessage"
+    },
+    {
+      "$ref": "#/$defs/SkyMessage"
+    },
+    {
+      "$ref": "#/$defs/EventsMessage"
     }
   ],
   "$defs": {
@@ -214,6 +223,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "scorch": {
+          "description": "How recently each cell burnt (R4): 1 just burnt, fading to 0 over [flora] scorch_days. Absent in recordings made before R4.",
+          "$ref": "#/$defs/Grid"
+        },
+        "algae": {
+          "description": "Algae on the shallow sea (M11): biomass 0 to [flora] algae_capacity per cell. Absent before M11.",
+          "$ref": "#/$defs/Grid"
         }
       }
     },
@@ -447,6 +464,240 @@
               "look": {
                 "description": "What the signature looks like, in words.",
                 "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ChronicleMessage": {
+      "description": "New lines of the island's history (M9, R3): the chronicle's entries written since the last chronicle message, oldest first. Not sent on connect; a renderer captions the notable ones as they come. The full history is the API's (S3).",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "notable_importance",
+        "major_importance",
+        "entries"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "chronicle"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "notable_importance": {
+          "description": "Entries at this importance and above are notable ([chronicle] notable_importance): the desk captions them.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "major_importance": {
+          "description": "Entries at this importance and above are major ([chronicle] major_importance): pushed to the phone (S4).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "t_ms",
+              "kind",
+              "importance",
+              "text",
+              "species",
+              "x",
+              "y"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "number": {
+                "description": "The entry's number in the chronicle, from 1.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "t_ms": {
+                "$ref": "#/$defs/SimTime"
+              },
+              "kind": {
+                "description": "What kind of event it tells of (lineage_sim.chronicle Kind values: speciation, extinction, fire…).",
+                "type": "string"
+              },
+              "importance": {
+                "description": "1 (background) to 5 (historic).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "text": {
+                "description": "The entry, in English.",
+                "type": "string"
+              },
+              "species": {
+                "description": "The species it is about; 0 for none.",
+                "type": "integer",
+                "minimum": 0
+              },
+              "x": {
+                "description": "The cell where it happened; -1 when it has no one place.",
+                "type": "number"
+              },
+              "y": {
+                "description": "The cell where it happened; -1 when it has no one place.",
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SkyMessage": {
+      "description": "The island's weather of the moment (R4): the light, whether the owner is at the desk, what rain falls, and the cells on fire. Sent on connect and then at every presence tick (10 sim-minutes): the renderer eases the scene's light between them.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "t_ms",
+        "light",
+        "present",
+        "rain",
+        "burning"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "sky"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "t_ms": {
+          "$ref": "#/$defs/SimTime"
+        },
+        "light": {
+          "description": "The light of the moment ([presence]: 1 by day, night_light at night, the moonlight floor after a long absence), 0–1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "present": {
+          "description": "Whether the owner is at the desk (the light is rising toward day, or day).",
+          "type": "boolean"
+        },
+        "rain": {
+          "description": "What falls now: none; rain, thunder (rain with thunder, seen and heard only) or storm (a thunderstorm, whose lightning sets fires), the island's own weather; or soaking, the rain god power's rain, which puts fires out; or cloud, an overcast sky with nothing falling (seen only).",
+          "enum": [
+            "none",
+            "rain",
+            "thunder",
+            "storm",
+            "soaking",
+            "cloud"
+          ]
+        },
+        "burning": {
+          "description": "The cells on fire, as indices y × width + x of the land's grid, in increasing order.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "EventsMessage": {
+      "description": "What just happened on the island that the scene shows as weather or a sequence (R4), oldest first: fires, volcanoes, earthquakes, craters, god powers, and the end of a world and the beginning of the next. Not sent on connect. After world_ended, every message is of the next world until the next world_ended.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "events"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "events"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "t_ms"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "description": "fire_started (lightning in a thunderstorm) and fire_ended, volcano, earthquake and crater (the terrain's events), god_power (a power fired), creatures_arrived (newcomers landed: the ark, or strangers), world_ended and world_began (M10).",
+                "enum": [
+                  "fire_started",
+                  "fire_ended",
+                  "volcano",
+                  "earthquake",
+                  "crater",
+                  "god_power",
+                  "creatures_arrived",
+                  "world_ended",
+                  "world_began"
+                ]
+              },
+              "t_ms": {
+                "$ref": "#/$defs/SimTime"
+              },
+              "x": {
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).",
+                "type": "number"
+              },
+              "y": {
+                "description": "The cell where it happened (fire_started, volcano, earthquake, crater, god_power, creatures_arrived).",
+                "type": "number"
+              },
+              "radius_cells": {
+                "description": "How far it reached, in cells (volcano, earthquake, crater).",
+                "type": "number",
+                "minimum": 0
+              },
+              "power": {
+                "description": "Which power fired (god_power): meteor, rain, seed or ark.",
+                "type": "string"
+              },
+              "cells": {
+                "description": "Cells burnt (fire_ended).",
+                "type": "integer",
+                "minimum": 0
+              },
+              "hours": {
+                "description": "Sim-hours it burnt (fire_ended).",
+                "type": "number",
+                "minimum": 0
+              },
+              "world": {
+                "description": "The world's number, from 1 (world_ended: the one that ended; world_began: the new one).",
+                "type": "integer",
+                "minimum": 1
+              },
+              "seed": {
+                "description": "The world's seed (world_ended, world_began).",
+                "type": "integer",
+                "minimum": 0
+              },
+              "cause": {
+                "description": "Why the world ended (world_ended).",
+                "type": "string"
+              },
+              "count": {
+                "description": "How many landed (creatures_arrived).",
+                "type": "integer",
+                "minimum": 0
               }
             }
           }

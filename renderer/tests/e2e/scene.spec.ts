@@ -22,7 +22,9 @@ for (const [name, query] of Object.entries(SHOTS)) {
   test(`the scene: ${name}`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`/?every=0&still&${query}`);
+    // The autumn recording unless the shot names another.
+    const recording = query.includes("recording=") ? "" : "recording=autumn&";
+    await page.goto(`/?${recording}every=0&still&quiet&${query}`);
     await page.waitForFunction(() => window.__sceneSettled?.() === true, null, {
       timeout: 60_000,
     });
@@ -34,7 +36,7 @@ for (const [name, query] of Object.entries(SHOTS)) {
 test("the scene plays the recording day by day and fades each day in", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/?every=150&view=middle&x=60&y=60");
+  await page.goto("/?recording=autumn&every=150&quiet&view=middle&x=60&y=60");
   // While days come in, the scene is never settled for long; once they stop, it settles.
   await page.waitForFunction(() => window.__sceneSettled?.() === false, null, { timeout: 20_000 });
   await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });

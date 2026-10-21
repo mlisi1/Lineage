@@ -10,8 +10,8 @@
  * Once a sim-day, or when the land changes, the plants are laid out again for the day
  * (each in the season of its own turn, with snow where the simulation has it) and the
  * grounds repainted off the frame; the new day fades in over the old. Only the views
- * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`). Creatures (R2) and the camera's moves (R3)
- * come on top of this.
+ * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`).
+ * Creatures (`herd.ts`) stand among the plants; the camera (`director.ts`) chooses the view.
  */
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
@@ -40,7 +40,11 @@ const STYLES: Readonly<Record<ViewName, GroundStyle>> = {
   local: "blended",
 };
 
-/** A plant layer coming in over the one before it, which goes when the new one is all there. */
+/**
+ * A plant layer coming in over the one before it: the new one fades in over the first half
+ * (drawn over the old, so plants in both never dim), then the old one fades out under it
+ * over the second half, so plants gone from the new one fade away instead of vanishing.
+ */
 class PlantFade {
   readonly container = new Container();
   current: PlantLayer | null = null;
@@ -63,13 +67,21 @@ class PlantFade {
     return this.outgoing !== null;
   }
 
+  /** The layer drawn fully opaque: the old one while the new fades in over it. */
+  get host(): PlantLayer | null {
+    const coming = this.current !== null && this.current.container.alpha < 1;
+    return coming ? (this.outgoing ?? this.current) : this.current;
+  }
+
   tick(dtS: number, view: CellRect): void {
     this.current?.cull(view);
     if (this.outgoing === null || this.current === null) return;
     this.outgoing.cull(view);
     this.age += dtS;
-    this.current.container.alpha = Math.min(this.age / this.fadeS, 1);
-    if (this.current.container.alpha >= 1) this.drop();
+    const half = this.fadeS / 2;
+    this.current.container.alpha = Math.min(this.age / half, 1);
+    this.outgoing.container.alpha = 1 - Math.min(Math.max((this.age - half) / half, 0), 1);
+    if (this.age >= this.fadeS) this.drop();
   }
 
   private drop(): void {
@@ -98,6 +110,13 @@ export class Landscape {
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly built: Built = { map: null, middle: null, local: null };
+  /**
+   * What lies on the ground (R4: a crater, a cone's scree, a fire's embers): under the
+   * plants of the view shown, over its ground and sea, so that what stands is drawn over it.
+   */
+  readonly floor = new Container();
+  /** Cells a cone or crater covers (R4): no plant, stone or boulder is placed there. */
+  covered: ((x: number, y: number) => boolean) | null = null;
   private readonly layers: Record<ViewName, Container> = {
     map: new Container(),
     middle: new Container(),
@@ -130,6 +149,16 @@ export class Landscape {
     return this.land === null ? null : { width: this.land.width, height: this.land.height };
   }
 
+  /** Whether ground is being painted now. */
+  get painting(): boolean {
+    return this.painter.busy > 0;
+  }
+
+  /** The land as the stream last sent it (R4's demos change it and send it again). */
+  get lastMessage(): LandMessage | null {
+    return this.landMessage;
+  }
+
   /** The current land, once one has come. */
   get current(): Land | null {
     return this.land;
@@ -140,6 +169,22 @@ export class Landscape {
     if (this.view === "middle") return this.built.middle?.plants.current ?? null;
     if (this.view === "local") return this.built.local?.plants.current ?? null;
     return null;
+  }
+
+  /**
+   * Where the creatures of the view being shown stand (R3): among the plants of the view
+   * drawn opaque, so that they do not fade in with the next day's plants. The layer may
+   * change from one frame to the next; its guests are let go before it is destroyed.
+   */
+  get hosts(): PlantLayer | null {
+    if (this.view === "middle") return this.built.middle?.plants.host ?? null;
+    if (this.view === "local") return this.built.local?.plants.host ?? null;
+    return null;
+  }
+
+  /** The view being shown. */
+  get shown(): ViewName {
+    return this.view;
   }
 
   /** Take a message from the stream; what it changes is laid out on the next `update`. */
@@ -161,11 +206,36 @@ export class Landscape {
     this.cells = cells;
     for (const view of VIEWS) this.layers[view].visible = view === name;
     if (this.land !== null && this.built[name] === null) this.build(name);
+    this.placeFloor();
+  }
+
+  /** Put the floor in the view shown, just under its plants (on top of the map's ground). */
+  private placeFloor(): void {
+    const layer = this.layers[this.view];
+    const standing =
+      this.view === "middle"
+        ? this.built.middle?.plants.container
+        : this.view === "local"
+          ? this.built.local?.plants.container
+          : undefined;
+    if (standing === undefined || standing.parent !== layer) {
+      if (
+        this.floor.parent !== layer ||
+        layer.getChildIndex(this.floor) !== layer.children.length - 1
+      ) {
+        layer.addChild(this.floor);
+      }
+      return;
+    }
+    const under = layer.getChildIndex(standing);
+    if (this.floor.parent === layer && layer.getChildIndex(this.floor) === under - 1) return;
+    layer.addChildAt(this.floor, layer.getChildIndex(standing));
   }
 
   /** Lay out what is stale, move the fades on, and ask for the ground the view needs. */
   update(dtS: number): void {
     if (this.stale && this.landMessage !== null) this.layOut();
+    this.placeFloor();
     const { built, cells } = this;
     built.map?.tick(dtS);
     if (!this.still) this.seaTime += dtS;
@@ -175,7 +245,7 @@ export class Landscape {
           ? built.middle?.ground
           : this.view === "local"
             ? built.local?.ground
-            : undefined;
+            : (built.map ?? undefined);
       this.seas[this.view].tick(
         this.seaTime,
         this.land,
@@ -233,17 +303,20 @@ export class Landscape {
     if (land === null) return;
     const time = this.time();
     const close = name !== "map";
-    const request = { style: STYLES[name], grain: close, surf: close, look: look.name, time };
+    // Waves break on every coast in every view, the map's too (the owner, 2026-10-20).
+    const request = { style: STYLES[name], grain: close, surf: true, look: look.name, time };
     if (name === "map") {
       if (this.built.map === null) {
         this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
-        this.layers.map.addChild(this.built.map.container, this.seas.map.glints);
+        const { container, surf } = this.built.map;
+        this.layers.map.addChild(container, ...[...surf].reverse(), this.seas.map.glints);
       }
       void this.built.map.repaint(request, 5);
       return;
     }
     performance.mark(`lineage:plants:${name}`);
     const plants = standingPlants(land, TILES[name], {
+      covered: this.covered ?? undefined,
       look,
       time,
       close: name === "local",

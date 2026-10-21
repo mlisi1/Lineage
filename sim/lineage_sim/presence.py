@@ -148,6 +148,11 @@ class Presence:
         return self._light
 
     @property
+    def raining(self) -> bool:
+        """Whether the rain god power's rain still falls (the land is wet; R4 draws it)."""
+        return self._wet
+
+    @property
     def absent_hours(self) -> float:
         """Sim-hours since the owner left (0 while present)."""
         return 0.0 if self._present else self._absent_h

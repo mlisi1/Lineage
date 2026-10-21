@@ -14,7 +14,7 @@ from lineage_sim.events import OutputEvent
 from lineage_sim.fauna import brain
 from lineage_sim.fauna.genome import Gene
 from lineage_sim.fauna.population import Fauna
-from lineage_sim.flora import Flora
+from lineage_sim.flora import Flora, Wildfire
 from lineage_sim.rare import body_of
 from lineage_sim.subsystem import Context
 from lineage_sim.terrain import Terrain
@@ -54,6 +54,7 @@ class Site:
         biomass: float = 0.8,
         water_from: int | None = None,
         fauna: FaunaConfig | None = None,
+        fire: bool = False,
         seed: int = 1,
     ) -> None:
         self.config = config
@@ -79,7 +80,9 @@ class Site:
         state["biomass"][height > SEA] = biomass
         state["genome"][:, height > SEA] = 60
         self.flora.set_state(state)
-        self.fauna = Fauna(self.cfg, self.terrain, self.flora)
+        # A fire on the site when a test asks for one (R4: it burns the creatures in it).
+        self.fire = Wildfire(config.flora, self.flora, self.terrain) if fire else None
+        self.fauna = Fauna(self.cfg, self.terrain, self.flora, self.fire)
         self.rng = Generator(PCG64(seed))
         self.t_ms = 0
 

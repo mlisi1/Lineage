@@ -5,6 +5,9 @@ import type { WorldFixture } from "./fixture";
 /** Can a creature be at this place (in cells)? `swims` asks for water instead of land. */
 export type Passable = (x: number, y: number, swims: boolean) => boolean;
 
+/** What `heightAt` and `passableIn` read of a world: the spike's fixture or the stream's land. */
+export type Relief = Pick<WorldFixture, "width" | "height" | "heights" | "seaLevel">;
+
 /** How far above the sea a walker stays, to keep off the waterline. */
 const SHORE_CLEARANCE = 0.004;
 /**
@@ -17,7 +20,7 @@ const SWIM_CLEARANCE = 0.012;
  * Height at a place between cells: interpolated between the four nearest cells' middles,
  * as the painted ground does, so that the shore an animal respects is the shore drawn.
  */
-export function heightAt(fixture: WorldFixture, x: number, y: number): number {
+export function heightAt(fixture: Relief, x: number, y: number): number {
   const { width, height, heights } = fixture;
   // A cell's height is the height of its middle.
   const u = x - 0.5;
@@ -37,7 +40,7 @@ export function heightAt(fixture: WorldFixture, x: number, y: number): number {
 }
 
 /** Land for walkers, water for swimmers, and nobody on the outermost ring of cells. */
-export function passableIn(fixture: WorldFixture): Passable {
+export function passableIn(fixture: Relief): Passable {
   return (x, y, swims) => {
     if (x < 1 || y < 1 || x >= fixture.width - 1 || y >= fixture.height - 1) return false;
     const above = heightAt(fixture, x, y) - fixture.seaLevel;
