@@ -175,6 +175,9 @@ class Fade {
     this.age += dtS;
     const alpha = Math.min(this.age / this.seconds, 1);
     for (const sprite of this.incoming.sprites) sprite.alpha = alpha;
+    // The old surf goes as the new comes (the old ground is covered by the new; its surf,
+    // drawn over both, would otherwise stay until the end and vanish at once).
+    for (const sprite of this.outgoing?.sprites.slice(1) ?? []) sprite.alpha = 1 - alpha;
     if (this.done) this.finish();
     return this.done;
   }
