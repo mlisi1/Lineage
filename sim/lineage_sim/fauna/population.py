@@ -257,6 +257,12 @@ class Fauna:
         return self._age_h >= self._body.maturity_h
 
     @property
+    def maturity(self) -> Values:
+        """How grown each creature is: age over the age it comes of age at, in [0, 1]."""
+        grown = self._age_h / np.maximum(self._body.maturity_h, np.float32(1e-6))
+        return np.clip(grown, 0.0, 1.0).astype(np.float32)
+
+    @property
     def ready(self) -> Flags:
         """Adults with the energy to breed whose last brood is long enough ago."""
         cfg = self._cfg

@@ -48,6 +48,8 @@ export interface Look {
    * the body is its HUE at the style's saturation and the markings follow PATTERN.
    */
   colours?: Colours;
+  /** How far grown toward coming of age, 0–1 (R5); left out, grown. */
+  growth?: number;
 }
 
 /** The look of a creature with this genome and the body the phenotype derives from it. */
@@ -380,6 +382,10 @@ export const GLOW_SPOT = 0xdcffb4;
 const GROUND_SHADOW_LONG = 1.0;
 const GROUND_SHADOW_WIDE = 2.0;
 
+/** A newborn is this share of its grown length, its head this much larger for it. */
+const YOUNG_SIZE = 0.5;
+const YOUNG_HEAD = 0.35;
+
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 const clamp01 = (value: number): number => Math.min(Math.max(value, 0), 1);
 /** 0 at `from`, 1 at full gene value. */
@@ -586,7 +592,10 @@ export function bodyPlan(
       }
     : own;
   const genes = seed.colours;
-  const base = options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass);
+  // A young one is smaller, its head larger for its body (R5).
+  const young = 1 - clamp01(seed.growth ?? 1);
+  const base =
+    options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass) * (1 - (1 - YOUNG_SIZE) * young);
   const swims = seed.aquatic >= SWIMS_FROM;
   const pace =
     options.pace * (PACE_BASE + PACE_PER_SPEED * (swims ? seed.swimSpeed : seed.landSpeed));
@@ -773,7 +782,7 @@ export function bodyPlan(
   const shares = widths(kind, base);
   const joints = shares.length;
   const spacing = length / (joints - 1);
-  const radii = shares.map((share) => share * reference);
+  const radii = shares.map((share, i) => share * reference * (i === 0 ? 1 + YOUNG_HEAD * young : 1));
   const last = joints - 1;
   const light = bodyTone(0.15);
   const mark = tone(seed.hue + 0.08, 0.38);

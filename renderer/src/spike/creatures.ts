@@ -197,6 +197,43 @@ export class CreatureLayer {
   }
 
   /**
+   * Draw slot `index`'s creature again from `seed` where it is, going on as it was (R5:
+   * its colours change when the species alive do, a young one grows): the same place,
+   * heading and motion, a new body.
+   */
+  rebuild(index: number, seed: CreatureSeed): void {
+    const old = this.creatures[index];
+    if (old === undefined) {
+      this.place(index, seed);
+      return;
+    }
+    const creature = this.spawnFrom(seed, false);
+    const head = old.joints[0] ?? { x: seed.x, y: seed.y };
+    creature.joints.forEach((joint, i) => {
+      joint.x = head.x - Math.cos(old.heading) * creature.plan.spacing * i;
+      joint.y = head.y - Math.sin(old.heading) * creature.plan.spacing * i;
+    });
+    if (seed.torpid) curl(creature.joints, creature.plan.spacing, old.heading);
+    creature.heading = old.heading;
+    creature.turn = old.turn;
+    creature.avoid = old.avoid;
+    creature.motion = old.motion;
+    creature.inView = old.inView;
+    if (old.arriving !== undefined) creature.arriving = old.arriving;
+    // Where the old one stood among the plants, the new one stands.
+    const host = old.container.parent;
+    if (host !== null && host !== creature.container.parent) {
+      host.addChildAt(creature.container, host.getChildIndex(old.container));
+    }
+    creature.container.visible = old.container.visible;
+    creature.marker.visible = old.marker.visible;
+    creature.container.alpha = old.container.alpha;
+    creature.marker.alpha = old.marker.alpha;
+    this.creatures[index] = creature;
+    this.destroy(old);
+  }
+
+  /**
    * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
    * that died, `fade`) fading away over `DEPART_S` where it last stood.
    */
@@ -532,7 +569,9 @@ export class CreatureLayer {
 
     // The dot that stands for it on the map: its colour, with a dark edge.
     const marker = new Container();
-    const dot = dotOf(dotSize(seed.mass), plan.swims);
+    // The young are the smallest dots, whatever they will grow to.
+    const young = seed.growth !== undefined && seed.growth < 1;
+    const dot = dotOf(young ? "small" : dotSize(seed.mass), plan.swims);
     for (const [texture, tint] of [
       [dot.edge, MARKER_EDGE],
       [dot.fill, plan.colour],

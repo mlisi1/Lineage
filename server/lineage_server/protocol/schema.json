@@ -361,6 +361,19 @@
           "items": {
             "type": "integer"
           }
+        },
+        "young": {
+          "description": "The creatures not yet of age (R5): id and how far grown toward coming of age, in sixteenths (0 newborn, 15 nearly grown). Those absent are grown. Absent from streams recorded before R5.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
         }
       }
     },

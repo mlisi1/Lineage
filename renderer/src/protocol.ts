@@ -187,6 +187,10 @@ export interface CreaturesMessage {
    * Ids of the creatures that are torpid now (hibernating, lying still: M7). Absent before rare genes exist.
    */
   torpid?: number[];
+  /**
+   * The creatures not yet of age (R5): id and how far grown toward coming of age, in sixteenths (0 newborn, 15 nearly grown). Those absent are grown. Absent from streams recorded before R5.
+   */
+  young?: [number, number][];
 }
 /**
  * Every species that has lived (M6). Sent on connect and when a species is born or dies out.

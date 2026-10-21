@@ -114,6 +114,10 @@ def fauna_message(world: World) -> Message:
     }
 
 
+# How finely a young creature's growth is sent: sixteenths of the way to coming of age.
+YOUNG_STEPS = 16
+
+
 def creatures_message(world: World, sent: set[int] | None = None) -> Message:
     """Where every creature is; genomes of those not in ``sent``, which is then updated."""
     fauna = world.fauna
@@ -148,6 +152,13 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
         message["species"] = [int(label) for label in species.labels_now()]
     if torpid is not None:
         message["torpid"] = [ident for row, ident in enumerate(ids) if bool(torpid[row])]
+    # The young (R5): how far each has grown toward coming of age, in sixteenths.
+    maturity = getattr(fauna, "maturity", None)
+    if maturity is not None:
+        steps = np.floor(np.asarray(maturity, dtype=np.float64) * YOUNG_STEPS).astype(int)
+        message["young"] = [
+            [ident, int(steps[row])] for row, ident in enumerate(ids) if steps[row] < YOUNG_STEPS
+        ]
     return message
 
 

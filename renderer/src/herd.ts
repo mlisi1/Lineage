@@ -54,6 +54,8 @@ export class Roster {
   readonly where = new Map<number, { x: number; y: number }>();
   readonly species = new Map<number, number>();
   readonly torpid = new Set<number>();
+  /** The young by id: how far grown toward coming of age, in sixteenths (R5); the rest are grown. */
+  readonly young = new Map<number, number>();
 
   /** The slot of animal `id`, if it lives. */
   slotOf(id: number): number | undefined {
@@ -83,6 +85,10 @@ export class Roster {
     this.species.clear();
     this.torpid.clear();
     for (const id of message.torpid ?? []) this.torpid.add(id);
+    this.young.clear();
+    for (const [id, steps] of message.young ?? []) {
+      if (id !== undefined && steps !== undefined) this.young.set(id, steps);
+    }
     const placed: { slot: number; id: number }[] = [];
     message.ids.forEach((id, index) => {
       const [x, y] = message.positions[index] ?? [0, 0];
@@ -108,6 +114,9 @@ const BODIES = {
   middle: MID_BODY,
   local: localBody(LOCAL_PIXELS, CREATURE_SCALE * LOCAL_ENLARGED),
 } as const;
+
+/** Growth comes in sixteenths of the way to coming of age (`young` on the wire). */
+const YOUNG_STEPS = 16;
 
 /** Seconds a newborn takes to fade in where it was born. */
 const BORN_S = 0.6;
@@ -183,6 +192,8 @@ export class Herd {
   }
 
   private genomeOrder: readonly number[] = GENE_NAMES.map((_, index) => index);
+  /** The growth step each young animal was last drawn at. */
+  private readonly drawnGrowth = new Map<number, number>();
   /** Each living species' colours, ranked against the others (`colours.ts`). */
   private colours = new Map<number, SpeciesColour>();
 
@@ -221,9 +232,11 @@ export class Herd {
     const genome: Genome = this.genomeOrder.map((index) => known.genome[index] ?? 0);
     const species = this.roster.species.get(id) ?? 0;
     const ranked = this.colours.get(species);
+    const steps = this.roster.young.get(id);
     const look = {
       ...lookOf(genome, phenotype(config, genome)),
       ...(ranked === undefined ? {} : { colours: ownColours(ranked, genome) }),
+      ...(steps === undefined ? {} : { growth: steps / YOUNG_STEPS }),
     };
     return {
       x: where.x,
@@ -258,6 +271,20 @@ export class Herd {
         .filter((seed): seed is CreatureSeed => seed !== null);
       if (changed) for (const layer of layers) layer.replan(seeds);
     }
+    // Drawn again: everyone when the colours were ranked anew, else the young that grew a step.
+    const placedIds = new Set(placed.map(({ id }) => id));
+    for (const id of this.roster.ids) {
+      const steps = this.roster.young.get(id);
+      const grew = steps !== this.drawnGrowth.get(id);
+      if (steps === undefined) this.drawnGrowth.delete(id);
+      else this.drawnGrowth.set(id, steps);
+      if (placedIds.has(id) || !(changed || grew)) continue;
+      const slot = this.roster.slotOf(id);
+      const seed = slot === undefined ? null : this.seedOf(id);
+      if (slot === undefined || seed === null) continue;
+      for (const layer of layers) layer.rebuild(slot, seed);
+    }
+    for (const id of this.drawnGrowth.keys()) if (!this.roster.where.has(id)) this.drawnGrowth.delete(id);
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
