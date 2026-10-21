@@ -7,11 +7,13 @@ import { cellHash } from "./pixels";
 
 /** Seconds of a wave: lines rolling in, the break, the swash running up and draining. */
 export const BREATH_S = 5;
-/** The wave front: the way it travels (unit vector), its speed (cells a second); how much it wanders (seconds, over cells). */
-const WAVE_HEADING = [0.8, 0.6] as const;
-const WAVE_SPEED = 5;
-const WAVE_WANDER_S = 1.2;
-const WAVE_WANDER_SPAN = 40;
+/**
+ * How far apart in time the waves break along the coasts: up to this many seconds, turning
+ * over this many cells, so a stretch of beach breaks almost at once (as waves meet a beach
+ * nearly parallel) and far coasts at their own time.
+ */
+const WAVE_SPREAD_S = 2.5;
+const WAVE_SPREAD_SPAN = 60;
 
 /** Smooth noise in [0, 1) over the plane. */
 function smooth(x: number, y: number, salt: number): number {
@@ -27,14 +29,11 @@ function smooth(x: number, y: number, salt: number): number {
 }
 
 /**
- * Where the waves are at a place of the island (x, y in cells), as seconds added to the
- * clock there: a front travelling across the sea at `WAVE_SPEED`, wandering a little, so
- * near places break a moment apart and the wave runs along a coast; the same in every view.
+ * When the waves come to a place of the island (x, y in cells), as seconds added to the
+ * clock there: a slow, wide noise, the same in every view.
  */
 export function tidePhase(x: number, y: number): number {
-  const along = x * WAVE_HEADING[0] + y * WAVE_HEADING[1];
-  const wander = WAVE_WANDER_S * smooth(x / WAVE_WANDER_SPAN, y / WAVE_WANDER_SPAN, 31);
-  return -along / WAVE_SPEED + wander;
+  return WAVE_SPREAD_S * smooth(x / WAVE_SPREAD_SPAN, y / WAVE_SPREAD_SPAN, 31);
 }
 
 /**

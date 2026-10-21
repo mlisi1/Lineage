@@ -688,12 +688,12 @@ try {
   // The god powers that give.
   await each("seed", fileOf("seed", EVENT_SPEED), places.seed,
     event("seed", EVENT_SPEED, kind("god_power"), 14)); // prettier-ignore
-  await each("unsown", `file=report/seed.json&speed=1&quiet&seed=7&show=day`, places.seed,
+  await each("beforeSeed", `file=report/seed.json&speed=1&quiet&seed=7&show=day`, places.seed,
     (name) => still(page, name)); // prettier-ignore
-  await each("sown", `file=report/seed.json&${settledAt}`, places.seed, (name) =>
+  await each("seeded", `file=report/seed.json&${settledAt}`, places.seed, (name) =>
     still(page, name),
   );
-  await each("sownBurnt", "file=report/day.json&every=0&quiet&seed=7&show=day,burnt,seed",
+  await each("seededBurnt", "file=report/day.json&every=0&quiet&seed=7&show=day,burnt,seed",
     places.fire, (name) => film(page, name, 12)); // prettier-ignore
   await each("ark", fileOf("ark", EVENT_SPEED), places.ark,
     event("ark", EVENT_SPEED, kind("god_power"), 12)); // prettier-ignore
@@ -965,11 +965,11 @@ ${threeViews(shots.crater, "The crater, two days on", {})}
 <h2>Seed</h2>
 <p>The seed god power sows 400 seeds of random genomes on bare land across the whole island; the sim does not aim it. On the screen, golden motes drift down onto the bare cells in sight. In the land the sim sends with the power, every cell it sowed sprouts: each sprout breaks the soil with a glint of gold and grows leaf by leaf over three seconds, and stays until the cell's plants are big enough to be drawn. The films are at ${at("seed")}, where most seeds took.</p>
 ${threeViews(shots.seed, "The seed power", {})}
-${threeViews(shots.unsown, "Before the seed", {})}
-${threeViews(shots.sown, "The sown land, a month on", {})}
-<h3>Sown on burnt ground, made up</h3>
+${threeViews(shots.beforeSeed, "Before the seed power", {})}
+${threeViews(shots.seeded, "The seeded land, a month on", {})}
+<h3>Seeded on burnt ground, made up</h3>
 <p>The island in this save has little bare land, so the sim's seeds took on a few scattered cells. Here, made up on the land (<code>?show=day,burnt,seed</code>), the seed falls on ground a fire has just bared: every bare cell in reach sprouts, as the sim sows them, and the sprouts grow leaf by leaf.</p>
-${threeViews(shots.sownBurnt, "Seed on burnt ground (made up)", {})}
+${threeViews(shots.seededBurnt, "Seeds on burnt ground (made up)", {})}
 </section>
 
 <section id="ark">

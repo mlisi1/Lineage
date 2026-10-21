@@ -510,7 +510,10 @@ export function craterOnLand(
   if (known !== undefined && known.land === land) return known.mark;
   known?.mark.texture.destroy(true);
   const mark = {
-    texture: paint(across, across, (x, y) => (wet(x, y) ? null : craterPixel(across, x, y))),
+    texture: paint(across, across, (x, y) =>
+      // Only the thrown earth is left out over the sea: the bowl is always drawn whole.
+      !craterInside(across, x, y) && wet(x, y) ? null : craterPixel(across, x, y),
+    ),
     cx: across / 2,
     cy: across / 2,
   };
@@ -573,4 +576,14 @@ export function dustTexture(size: number, variant: number): Texture {
   const texture = paint(across, across, (x, y) => dustPixel(across, variant, x, y));
   dusts.set(key, texture);
   return texture;
+}
+
+/** Whether pixel (x, y) of a crater `size` pixels across is within its rim. */
+export function craterInside(size: number, x: number, y: number): boolean {
+  const half = size / 2;
+  const rim = half * CRATER_RIM;
+  const u = (x + 0.5 - half) / rim;
+  const v = (y + 0.5 - half) / rim;
+  const angle = (Math.atan2(v, u) / (2 * Math.PI) + 1) % 1;
+  return Math.hypot(u, v) / rimReach(angle) < 1.05;
 }
