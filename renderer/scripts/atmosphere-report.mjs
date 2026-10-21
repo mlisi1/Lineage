@@ -828,11 +828,11 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 <p class="eyebrow">Lineage · milestone report</p>
 <h1>R4 — Atmosphere</h1>
 <p>The light of the owner's presence, what glows in the dark, the island's own weather and the weather of its events, what those events leave on the land, and the end of a world. Every effect is filmed from the real renderer in all three views (map, middle view, up close) at the desk screen's own size, 1024×600, and at 30 frames a second, the board's target. The scene is stepped one frame at a time on its own clock, so no frame is dropped however busy the PC is. The apocalypse is the exception to the three views: it is shown on the map only, since it holds the camera there. The events are the sim's own, recorded with <code>tools/stream.py --stage</code> from the v9 fixture two weeks on, so what each leaves is what the sim does.</p>
-<p><strong>Where the films are.</strong> They are VP9 WebM videos (4:4:4 colour, so pixel edges stay hard) in <code>films/</code> beside this page. That folder is not committed: it is about 150 MB, and <code>npm run atmosphere</code> writes it again. Without it, each film shows its poster, a still from its middle.</p>
+<p><strong>Where the films are.</strong> They are VP9 WebM videos (4:4:4 colour, so pixel edges stay hard) in <code>films/</code> beside this page. That folder is not committed: it is about 300 MB, and <code>npm run atmosphere</code> writes it again. Without it, each film shows its poster, a still from its middle.</p>
 <dl class="header">
 <dt>Milestone</dt><dd>R4 (CLAUDE.md §8), decisions in ADR 0021</dd>
 <dt>Branch</dt><dd><code>${escape(branch)}</code> at <code>${commit}</code>, ${log.length} commits on <code>main</code> (with M11's algae, cherry-picked)</dd>
-<dt>Status</dt><dd>Second round after the owner's comments (2026-10-20); not merged. Device measurements are R5's.</dd>
+<dt>Status</dt><dd>Closed on 2026-10-21 after seven rounds of the owner's comments, who called the look final; merged into <code>main</code>. Device measurements are R5's.</dd>
 <dt>Streams</dt><dd>${escape(sizes)} (recorded for this report, not committed)</dd>
 <dt>Written</dt><dd>${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by <code>cd renderer &amp;&amp; npm run atmosphere</code></dd>
 </dl>

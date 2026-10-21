@@ -70,13 +70,13 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 <p class="eyebrow">Lineage · milestone report</p>
 <h1>R4 — Atmosphere</h1>
 <p>The light of the owner's presence, what glows in the dark, the island's own weather and the weather of its events, what those events leave on the land, and the end of a world. Every effect is filmed from the real renderer in all three views (map, middle view, up close) at the desk screen's own size, 1024×600, and at 30 frames a second, the board's target. The scene is stepped one frame at a time on its own clock, so no frame is dropped however busy the PC is. The apocalypse is the exception to the three views: it is shown on the map only, since it holds the camera there. The events are the sim's own, recorded with <code>tools/stream.py --stage</code> from the v9 fixture two weeks on, so what each leaves is what the sim does.</p>
-<p><strong>Where the films are.</strong> They are VP9 WebM videos (4:4:4 colour, so pixel edges stay hard) in <code>films/</code> beside this page. That folder is not committed: it is about 150 MB, and <code>npm run atmosphere</code> writes it again. Without it, each film shows its poster, a still from its middle.</p>
+<p><strong>Where the films are.</strong> They are VP9 WebM videos (4:4:4 colour, so pixel edges stay hard) in <code>films/</code> beside this page. That folder is not committed: it is about 300 MB, and <code>npm run atmosphere</code> writes it again. Without it, each film shows its poster, a still from its middle.</p>
 <dl class="header">
 <dt>Milestone</dt><dd>R4 (CLAUDE.md §8), decisions in ADR 0021</dd>
-<dt>Branch</dt><dd><code>r4-atmosphere</code> at <code>59414dc</code>, 62 commits on <code>main</code> (with M11's algae, cherry-picked)</dd>
-<dt>Status</dt><dd>Second round after the owner's comments (2026-10-20); not merged. Device measurements are R5's.</dd>
+<dt>Branch</dt><dd><code>r4-atmosphere</code> at <code>50d4972</code>, 63 commits on <code>main</code> (with M11's algae, cherry-picked)</dd>
+<dt>Status</dt><dd>Closed on 2026-10-21 after seven rounds of the owner's comments, who called the look final; merged into <code>main</code>. Device measurements are R5's.</dd>
 <dt>Streams</dt><dd>day 1.8 MB, fire 2.3 MB, shower 1.8 MB, thunder 1.8 MB, storm 1.8 MB, soaking 2.3 MB, cloud 1.8 MB, volcano 2.3 MB, quake 2.3 MB, meteor 2.3 MB, seed 20.7 MB, ark 2.3 MB (recorded for this report, not committed)</dd>
-<dt>Written</dt><dd>2026-10-21 18:01 UTC by <code>cd renderer &amp;&amp; npm run atmosphere</code></dd>
+<dt>Written</dt><dd>2026-10-21 18:04 UTC by <code>cd renderer &amp;&amp; npm run atmosphere</code></dd>
 </dl>
 <nav><ol>
 <li><a href="#asked">What was asked</a></li><li><a href="#sim">The sim: weather and fire</a></li>
@@ -415,7 +415,8 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 
 <section>
 <h2>Commits</h2>
-<pre>59414dc docs: R4 closed: round 7, the tests at the close, notes for R5 [R4]
+<pre>50d4972 reports: R4 report at the close: round 7 and the tests [R4]
+59414dc docs: R4 closed: round 7, the tests at the close, notes for R5 [R4]
 827fc1b reports: R4 report text for round 7 and its tests [R4]
 722b512 renderer: tests for rounds 5-7 (tides, the open sea's swell, one kind of fall, the crater past its flash), the stale apocalypse timing fixed, snapshot baselines refreshed and looked at [R4]
 dfc8be7 sim: tests for a new cone or crater killing the creatures on it and for World.witness [R4]
