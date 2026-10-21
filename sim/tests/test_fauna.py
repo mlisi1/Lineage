@@ -14,8 +14,16 @@ from fauna_site import genes_of as _genes
 from fauna_site import with_gene as _with
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from lineage_sim import clock
 from lineage_sim.config import Config
-from lineage_sim.events import CreaturesArrived, JuvenileGrown, PopulationExtinct
+from lineage_sim.events import (
+    CraterFormed,
+    CreaturesArrived,
+    FireEnded,
+    JuvenileGrown,
+    PopulationExtinct,
+    VolcanoErupted,
+)
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
@@ -24,6 +32,7 @@ from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import CONFIG_KEYS, Phenotype, phenotype, phenotype_config
 from lineage_sim.flora import Gene as FloraGene
 from lineage_sim.state import io
+from lineage_sim.subsystem import Context
 from lineage_sim.world import World
 from numpy.random import PCG64, Generator
 
@@ -788,3 +797,25 @@ def test_the_scent_follows_the_carrion(config: Config) -> None:
     fresh = creature.spread(fauna.carrion, config.fauna.carrion_scent_cells)
     kept = fauna.get_state()["scent"]
     np.testing.assert_allclose(kept, fresh, atol=1e-5)
+
+
+def test_a_new_cone_or_crater_kills_the_creatures_on_it(config: Config) -> None:
+    """R4 (the owner): a volcano rising or a crater striking kills what stands within
+    ``blast_kill_reach`` × its radius, leaves nothing to scavenge; other events kill nothing."""
+    reach = config.fauna.blast_kill_reach
+    site = Site(config)
+    on_cone = site.add(GRAZER, [(30.0, 20.0), (30.0 + 3.5 * reach, 20.0)])
+    beside_cone = site.add(GRAZER, [(30.0 + 4.5 * reach, 20.0)])
+    on_crater = site.add(GRAZER, [(10.0, 10.0)])
+    far = site.add(GRAZER, [(10.0, 30.0)])
+    instant = clock.instant(clock.date_to_unix_ms(dt.date(2026, 6, 1)), 0, config.calendar)
+    ctx = Context(site.t_ms, 0.0, instant, site.rng)
+    assert site.fauna.observe([FireEnded(0, 1, 1.0)], ctx) == []
+    site.fauna.observe([VolcanoErupted(0, 30.0, 20.0, 4.0, 0.1)], ctx)
+    assert site.alive(on_cone) == 0
+    assert site.alive(beside_cone) == 1
+    assert site.fauna.tally.killed == 2
+    site.fauna.observe([CraterFormed(0, 10.0, 10.0, 3.0, 0.05)], ctx)
+    assert site.alive(on_crater) == 0
+    assert site.alive(far) == 1
+    assert not site.fauna.get_state()["carrion"].any()
