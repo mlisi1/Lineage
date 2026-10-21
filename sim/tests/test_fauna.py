@@ -34,7 +34,7 @@ GOLDEN_FAUNA_SEED_42 = "02357c8ca6cf2b9280d7e2764fe250a5176c0f93ac63a334997db8a9
 GOLDEN_AFTER_THREE_DAYS = "c5221a723a3be98be29a69d0c37451d5cf2c81783b647ccfe269bfde3ce0bc82"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "d104f632cc990af43d8292d2032a614479a34fa8e7745028c3e551fca93df39f"
+GOLDEN_BARE_ROCK_520_DAYS = "edbc6ebe781e608ed8d3a3bb4fcf49416bf98d532921ab49ccca442df46bd3b0"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -552,6 +552,49 @@ def test_strangers_join_an_inhabited_world(config: Config) -> None:
     hunters = site.fauna.genes[:, Gene.DIET] >= busy.predator_min_diet
     assert hunters.any()
     assert not hunters.all()
+
+
+def test_the_island_is_closed_to_strangers(config: Config) -> None:
+    assert config.fauna.immigrant_groups_per_year == 0.0
+
+
+def _waiting_for_hunters(config: Config, herd: int = 10, count: int = 4) -> Site:
+    cfg = replace(config.fauna, hunter_wave_herd=herd, hunter_wave_count=count)
+    return Site(config, fauna=cfg)
+
+
+def test_hunters_follow_a_grown_herd(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    outputs = site.run(24.0 * 2)
+    arrivals = [o for o in outputs if isinstance(o, CreaturesArrived)]
+    assert len(arrivals) == 1
+    assert arrivals[0].founders
+    assert arrivals[0].count == 4
+    hunters = site.fauna.genes[:, Gene.DIET] >= site.cfg.predator_min_diet
+    assert np.count_nonzero(hunters) == 4
+    assert not site.fauna.lacks_hunters()
+
+
+def test_hunters_wait_for_the_herd_and_for_spring(config: Config) -> None:
+    small = _waiting_for_hunters(config)
+    small.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(5)])
+    assert not [o for o in small.run(24.0 * 2) if isinstance(o, CreaturesArrived)]
+
+    winter = _waiting_for_hunters(config)
+    winter.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    outputs = winter.run(24.0 * 2, when=dt.date(2026, 12, 25))
+    assert not [o for o in outputs if isinstance(o, CreaturesArrived)]
+
+
+def test_hunters_land_once_per_world(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    site.add(HUNTER, [(50.0, 50.0)])  # a lineage that arrived as hunters, then died out
+    site.fauna.strike(50.0, 50.0, 2.0, site.t_ms)
+    assert site.fauna.lacks_hunters()
+    outputs = site.run(24.0 * 2)
+    assert not [o for o in outputs if isinstance(o, CreaturesArrived)]
 
 
 # --- The world as a whole ---------------------------------------------------------------

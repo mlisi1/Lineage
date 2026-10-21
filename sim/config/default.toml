@@ -385,11 +385,20 @@ founder_size_max = 0.5
 founder_spread = 0.04
 founder_radius_cells = 16.0
 # Strangers: small groups of a new species that reach an inhabited island, all year.
-immigrant_groups_per_year = 6.0
+# 0 since M11 (the owner, ADR 0019): the island is closed, and every species descends
+# from its founders or the ark. Kept as a switch for comparison runs.
+immigrant_groups_per_year = 0.0
 immigrant_group_size = 8
 # Share of stranger groups that are a hunter species (diet gene in the predator range);
 # the others have a fully random genome.
 immigrant_hunter_share = 0.5
+# Hunters, the second wave of founders (M11): once the herd (every creature that is not
+# a predator) reaches hunter_wave_herd, a pack of hunter_wave_count hunters lands, in
+# spring or summer, once per world (never where a lineage already arrived as hunters).
+# After that, predators must live or evolve on their own, or come by the ark. 0 count, or
+# a herd above population_cap: off.
+hunter_wave_herd = 120
+hunter_wave_count = 8
 
 # --- Body (phenotype) ---
 # Mass grows geometrically with the size gene, from mass_min to mass_max.
@@ -694,7 +703,8 @@ plant_light_days = 7.0
 # God powers: a button fires one, at most once per god_cooldown_days (sim-days). The
 # island draws which: power p has weight god_weight_p × (1 + god_need_gain × need_p),
 # needs in [0, 1]: rain, a fire burning (1) or the season's dryness; seed, the share of
-# land without plants; ark, how far creatures are below ark_need_creatures; meteor, none.
+# land without plants; ark, how far creatures are below ark_need_creatures, or 1 when the
+# herd has reached [fauna] hunter_wave_herd with no predators alive; meteor, none.
 god_cooldown_days = 7.0
 god_need_gain = 4.0
 god_weight_meteor = 1.0
@@ -719,7 +729,8 @@ rain_fertility = 0.05
 # probability seed_rare_chance.
 seed_count = 400
 seed_rare_chance = 0.1
-# Ark: a group of ark_count plant eaters lands on a vegetated spot, as founders do.
+# Ark: a group of ark_count plant eaters lands on a vegetated spot, as founders do; hunters
+# instead when the herd has reached [fauna] hunter_wave_herd with no predators alive.
 ark_count = 12
 
 [chronicle]

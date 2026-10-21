@@ -360,6 +360,8 @@ class FaunaConfig:
     immigrant_groups_per_year: float
     immigrant_group_size: int
     immigrant_hunter_share: float
+    hunter_wave_herd: int
+    hunter_wave_count: int
     mass_min: float
     mass_max: float
     limb_pairs_max: int
@@ -567,6 +569,7 @@ class FaunaConfig:
             "breeding would starve the parent",
         )
         check(self.founder_count <= self.population_cap, "more founders than the cap")
+        check(self.hunter_wave_count <= self.predator_cap, "more hunters than their cap")
 
 
 @dataclass(frozen=True)

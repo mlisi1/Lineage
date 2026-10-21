@@ -159,7 +159,7 @@ class Presence:
 
     def needs(self, instant: Instant) -> dict[Power, float]:
         """What the island needs, each in [0, 1]: rain against fire and dry weather, seed
-        on bare land, the ark when creatures are few."""
+        on bare land, the ark when creatures are few or a large herd has no hunters."""
         cfg, land = self._cfg, self._terrain.land
         land_cells = int(np.count_nonzero(land))
         bare = int(np.count_nonzero(land & (self._flora.biomass <= 0)))
@@ -168,7 +168,7 @@ class Presence:
         return {
             Power.RAIN: fire,
             Power.SEED: bare / land_cells if land_cells else 0.0,
-            Power.ARK: few,
+            Power.ARK: 1.0 if self._fauna.lacks_hunters() else few,
         }
 
     def initialize(self, ctx: Context) -> list[OutputEvent]:
@@ -266,7 +266,8 @@ class Presence:
         elif power is Power.SEED:
             self._flora.sow(rng, cfg.seed_count, cfg.seed_rare_chance, ctx.instant)
         else:
-            outputs += self._fauna.arrive(rng, t_ms, cfg.ark_count)
+            hunters = self._fauna.lacks_hunters()
+            outputs += self._fauna.arrive(rng, t_ms, cfg.ark_count, hunters=hunters)
         return outputs
 
     def _site(self, rng: Generator) -> tuple[float, float]:

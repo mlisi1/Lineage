@@ -66,6 +66,14 @@ _LOW_GAIN = brain.FOLLOWED.index(brain.Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(brain.Sense.WOODY_X)
 
 
+class Landing(IntEnum):
+    """Who a group of newcomers is."""
+
+    PLANT_EATERS = 0  # founders and the ark's plant eaters
+    HUNTERS = 1  # the hunter pack that follows the founders, or the ark's hunters
+    STRANGERS = 2  # strangers (off by default since M11): plant eaters or hunters
+
+
 class Death(IntEnum):
     STARVED = 0
     OLD_AGE = 1
@@ -330,7 +338,11 @@ class Fauna:
             self._arrival_at_h = -1.0
             outputs.append(PopulationExtinct(ctx.t_ms))
         elif stranger_roll < self._cfg.immigrant_groups_per_year * hours / _HOURS_PER_YEAR:
-            outputs += self._arrive(rng, ctx.t_ms, self._cfg.immigrant_group_size, founders=False)
+            outputs += self._arrive(
+                rng, ctx.t_ms, self._cfg.immigrant_group_size, Landing.STRANGERS
+            )
+        if self.count > 0 and ctx.instant.season in _FOUNDING_SEASONS:
+            outputs += self._await_hunters(rng, ctx.t_ms)
         return outputs
 
     def handle(self, event: InputEvent, ctx: Context) -> list[OutputEvent]:
@@ -912,9 +924,17 @@ class Fauna:
             outputs.append(PopulationExtinct(t_ms))
         return outputs
 
-    def arrive(self, rng: Generator, t_ms: int, count: int) -> list[OutputEvent]:
-        """The ark: ``count`` plant eaters land on a vegetated spot, as founders do."""
-        return self._arrive(rng, t_ms, count, founders=True)
+    def arrive(
+        self, rng: Generator, t_ms: int, count: int, *, hunters: bool = False
+    ) -> list[OutputEvent]:
+        """The ark: ``count`` plant eaters (or hunters) land on a vegetated spot, as
+        founders do."""
+        return self._arrive(rng, t_ms, count, Landing.HUNTERS if hunters else Landing.PLANT_EATERS)
+
+    def lacks_hunters(self) -> bool:
+        """Whether the herd is large enough for hunters and none live here."""
+        herbivores, omnivores, predators = self.diet_counts()
+        return predators == 0 and herbivores + omnivores >= self._cfg.hunter_wave_herd
 
     # -- arrivals --
 
@@ -933,11 +953,21 @@ class Fauna:
         if now_h < self._arrival_at_h:
             return []
         self._arrival_at_h = -1.0
-        return self._arrive(rng, t_ms, cfg.founder_count, founders=True)
+        return self._arrive(rng, t_ms, cfg.founder_count, Landing.PLANT_EATERS)
 
-    def _arrive(
-        self, rng: Generator, t_ms: int, count: int, *, founders: bool
-    ) -> list[OutputEvent]:
+    def _await_hunters(self, rng: Generator, t_ms: int) -> list[OutputEvent]:
+        """The second wave of founders: once the herd has grown, a pack of hunters lands.
+        Once per world: never where a lineage already arrived as hunters."""
+        cfg = self._cfg
+        if cfg.hunter_wave_count == 0 or t_ms % MS_PER_DAY != 0:
+            return []  # the herd is surveyed once a day, at midnight
+        if (self._ancestors[:, Gene.DIET] >= cfg.predator_min_diet).any():
+            return []
+        if not self.lacks_hunters():
+            return []
+        return self._arrive(rng, t_ms, cfg.hunter_wave_count, Landing.HUNTERS)
+
+    def _arrive(self, rng: Generator, t_ms: int, count: int, landing: Landing) -> list[OutputEvent]:
         """A group of one new species lands on a vegetated spot."""
         cfg = self._cfg
         spots_y, spots_x = np.nonzero(
@@ -948,13 +978,16 @@ class Fauna:
         spot = int(rng.integers(0, spots_y.size))
         base = gn.random_genes(rng, 1)
         low, high = _WALKER_LIMBS
-        if founders:
+        hunters = landing is Landing.HUNTERS or (
+            landing is Landing.STRANGERS and rng.random() < cfg.immigrant_hunter_share
+        )
+        if landing is Landing.PLANT_EATERS:
             # Small to medium land-walking plant eaters.
             base[0, Gene.DIET] *= cfg.founder_diet_max
             base[0, Gene.SIZE] *= cfg.founder_size_max
             base[0, Gene.AQUATIC] *= _WALKER_AQUATIC_MAX
             base[0, Gene.LIMBS] = low + (high - low) * base[0, Gene.LIMBS]
-        elif rng.random() < cfg.immigrant_hunter_share:
+        elif hunters:
             # A hunter species, built for it: a land walker in the predator diet range,
             # at least medium-sized, with a real jaw, legs and senses.
             base[0, Gene.DIET] = (
@@ -992,8 +1025,6 @@ class Fauna:
         )  # fmt: skip
         self._age_h[-count:] = ages
         self.tally.arrivals += count
-        return [
-            CreaturesArrived(
-                t_ms, count, founders, float(spots_x[spot]), float(spots_y[spot]), first_id
-            )
-        ]
+        founders = landing is not Landing.STRANGERS
+        x, y = float(spots_x[spot]), float(spots_y[spot])
+        return [CreaturesArrived(t_ms, count, founders, x, y, first_id)]

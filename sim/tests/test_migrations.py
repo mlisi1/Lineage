@@ -1,6 +1,7 @@
 """Every frozen fixture save upgrades to the current schema and passes invariants."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -239,7 +240,9 @@ def test_v8_world_gains_an_unprimed_chronicle(config: Config) -> None:
     assert chronicle["primed"] is False
     assert chronicle["birth"] == "2026-03-01"
     assert chronicle["entry_text"] == []
-    world = World.restore(config, state)
+    # Without the hunters' landing, a real first that would fall on this day.
+    quiet = replace(config, fauna=replace(config.fauna, hunter_wave_count=0))
+    world = World.restore(quiet, state)
     assert len(world.chronicle) == 0
     world.step(86_400.0)  # it takes stock in silence, then writes as things happen
     assert all(e.kind not in ("first_life", "first") for e in world.chronicle.entries())
