@@ -201,18 +201,42 @@ where it goes. That is per-creature saved state, so a schema bump: v13, after R4
 (weather, burnt deaths) reaches `main`. Until then fruiting plants keep their stand-in,
 far seeds as if wind-borne.
 
-### Sweep `mechanisms-1` (paused)
+### Sweep `mechanisms-1`
 
 Every mechanism in (with wading), 12 levers, 41 Latin-hypercube points, seeds 0–19,
-office, 3 years (`tools/tune/sweeps/mechanisms-1.toml`, at `145efe5`). Paused by the
-owner at 23 points (2026-10-20 23:05), to resume. So far no point passes every M
-criterion: M6.1 fails in all 23 (best 0.82, the defaults), M3.5 in 16, M4.3 in 9, M6.2
-in 7. Rank correlations over the first 19 sampled points (|ρ| < 0.46 is noise): M6.1
-follows `mutation_sigma_body` (+0.83), as M6 found (more genetic spread, more
-clusters), but larger mutations also leave seeds without succession (+0.59), where
-waiting for more plant cover before founders land helps (−0.57); M4.3 follows the
-stranger groups a year (+0.62) and meat energy (+0.44), and falls with a larger
-predator cap (−0.55, not yet understood).
+office, 3 years (`tools/tune/sweeps/mechanisms-1.toml`; points 0–22 at `145efe5`, the
+rest at `7c32dfb` after a pause, same code). **No point passes every M criterion.**
+Failing, out of 41 points: M6.1 in all (best 0.87), M3.5 in 30, M4.3 in 19, M6.2 in 13;
+of the proposed criteria, D2 in all, D3b in 39, D1 in 35, D3a in 17. The defaults rank
+first (only M6.1 fails, at 0.82); p021 passes D3 (predators 10 % of creatures, present
+on 90 % of days) and M4.3 (0.87) but has M6.1 at 0.72; p023 reaches M6.1 0.87 but fails
+M6.2.
+
+Rank correlations over the 40 sampled points (|ρ| < 0.32 is noise):
+
+- **M6.1** follows `mutation_sigma_body` (+0.84) and nothing else: more genetic spread,
+  more clusters (as M6 found). Omnivores follow it too (+0.75). Speciation falls with it
+  (−0.37).
+- **Succession and world endings** pull the other way: seeds without closed forest
+  (M3.5) rise with mutation (+0.35) and fall when founders wait for more plant cover
+  (`founder_min_plant_cover`, −0.59); worlds end less often with later founding (−0.64)
+  and a smaller predator cap (+0.33). Worlds ended in 17 of the first 23 points, up to
+  0.1 per seed-year (the owner's ceiling); none in the defaults.
+- **Predators** (D3, M4.3) follow `meat_energy` (+0.60 to +0.74) and
+  `immigrant_groups_per_year` (+0.62 to +0.66), and fall with `predator_cap` (−0.28 to
+  −0.38) and `defence_toxicity` (−0.30 to −0.33).
+- **D1** (the lowest gene's niche) follows immigration (+0.53) and falls with the hunter
+  share among strangers (−0.56).
+- `cover_protection`, `browse_floor`, `algae_meal_share`, `dung_fertility` and
+  `founder_count` move nothing beyond noise within their ranges.
+- **D2 is held back by the plants.** Holding ≥ 5 % of the vegetated cells for 30 days,
+  fire-pine and nitrogen-fixer thrive in no seed at any point; poisonous and fruiting in
+  at most 5–10 %. Creature genes reach 0.15–0.45 at their best points. No swept lever
+  acts on plant rare genes (`[flora] rare_gain_probability` and the genes' growth costs
+  would), and "5 % of every vegetated cell" may be the wrong test for a plant gene.
+
+The next sweep (`mechanisms-2`) narrows on these: higher mutation (0.035–0.055) with
+later founding (cover 0.5–0.7), and the predator levers where D3 passes.
 
 ### R4's changes to the simulation
 
