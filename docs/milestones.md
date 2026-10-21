@@ -41,8 +41,8 @@ number; "Fourth round" and "The closed island, first run" are today's), then
 - **Where it stands**: `m11-tuning` at the commit that adds this note, clean; R4 is merged
   in (`4d41ec4`). The worktree `../Lineage-m11-reach` (branch `m11-reach`) is still at
   `373a371`: fast-forward it (`git -C ../Lineage-m11-reach merge --ff-only m11-tuning`)
-  before writing code there. **No M11 run is going**; a rerun of six slow tests may still
-  be finishing (see the last bullet of "Next steps").
+  before writing code there. **Nothing of M11 is running.** The slow tests are to be rerun
+  first thing (step 7 of "Next steps"; the owner, 2026-10-22).
 - **The mechanism set is complete** (the owner, 2026-10-21: tune only once it is):
   food at sea and wading, reach, cover, nutrients, **seeds in guts** (schema v13,
   `a7ab1d5`), R4's weather, storm fires, burnt deaths, barren land and blast kills
@@ -87,8 +87,9 @@ number; "Fourth round" and "The closed island, first run" are today's), then
   7. **Slow tests**: after the merge, `test_fauna_acceptance_over_three_years`,
      `test_rare_genes_appear_and_none_takes_over`, `test_learning_tracks_the_local_plants`
      and `test_life_survives_the_holidays` failed (and the bare-rock golden hash and the
-     winter recording, both expected and re-made since). They were rerun at `a7ab1d5`;
-     if the session's log is gone, rerun them:
+     winter recording, both expected and re-made since). A rerun at `a7ab1d5` was
+     stopped unfinished at the owner's request (three failures by then); **rerun them
+     before the other steps**:
      `env -u PYTHONPATH uv run pytest -m slow -q --tb=short sim/tests/test_fauna.py
      sim/tests/test_fauna_statistical.py sim/tests/test_rare_statistical.py
      tools/tests/test_m5_statistical.py tools/tests/test_m8_statistical.py` (~35 min).
