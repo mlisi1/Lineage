@@ -8,8 +8,8 @@
  *
  * The camera starts on the map. The view button (V, space or Enter on a keyboard, a tap
  * on a phone; on the desk the hardware button, S2) steps map → middle → local → map;
- * fifteen minutes after the last press it goes back to the map. In the local view a click
- * or tap goes on to another animal instead, and a double click back to the map.
+ * fifteen minutes after the last press it goes back to the map. A click or tap on the
+ * screen is the button too.
  *
  *   /                          the creatures' recording (`public/stream/life.json`, 28
  *                              days from the v9 fixture) played at `speed`
@@ -71,8 +71,6 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
 const DARK = "#10081c";
-/** A second click within this many milliseconds makes a double click. */
-const DOUBLE_CLICK_MS = 300;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
 /** The committed recordings (`tools/stream.py`). */
@@ -300,26 +298,8 @@ async function start(): Promise<void> {
     if (event.repeat) return;
     if (event.key === "v" || event.key === " " || event.key === "Enter") press();
   });
-  // A click or tap is the button too; in the local view (for the demo, the owner
-  // 2026-10-20) a click goes on to another animal and a double click back to the map.
-  let pendingClick: ReturnType<typeof setTimeout> | null = null;
-  frame.addEventListener("pointerdown", () => {
-    if (pinned !== null || atmosphere.ending) return;
-    if (pendingClick !== null) {
-      clearTimeout(pendingClick);
-      pendingClick = null;
-      director.toMap();
-      return;
-    }
-    if (director.state.view !== "local" || director.state.dipping) {
-      press();
-      return;
-    }
-    pendingClick = setTimeout(() => {
-      pendingClick = null;
-      director.nextSubject();
-    }, DOUBLE_CLICK_MS);
-  });
+  // A click or tap is the button too.
+  frame.addEventListener("pointerdown", press);
 
   let shot: Shot = { view: pinned ?? "map", centre: { x: 0, y: 0 }, dim: 0, subject: null };
   window.__sceneSettled = () => landscape.settled;

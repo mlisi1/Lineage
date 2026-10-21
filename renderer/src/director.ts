@@ -141,12 +141,6 @@ export class Director {
     this.go(NEXT[this.going ?? this.view]);
   }
 
-  /** In the local view, on to another animal now (glided or cut to, as when its time is up). */
-  nextSubject(): void {
-    this.idle = 0;
-    if (this.view === "local" && this.going === null) this.follow = 0;
-  }
-
   /** Straight back to the map. */
   toMap(): void {
     this.idle = 0;
