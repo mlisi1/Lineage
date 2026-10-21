@@ -686,13 +686,12 @@ of lighter water far out, one nearer, and the foam at the shore. A crest comes i
 little and go, forty slots to a view, each on its own clock and somewhere new each time
 (a hash of the slot and the showing). Nothing is painted again for it; `?still` keeps
 it at its first moment, which the snapshots use. The land sheet films it. **Tides**
-(R4): the painter also leaves the swash, three layers of water running further up the
-beach (the shallowest sea over the sand, foam at its edge; not on the map). Every surf
-and swash layer is cut into tiles 8 art pixels across, each on the clock of its place
-(`tidePhase`): a wave front travelling across the sea at 5 cells a second, so waves run
-along a coast and far coasts break at their own time. One wave every 5 s: the far line,
-the near one, the foam breaking, then the swash running up the beach and draining,
-smoothly (`swashHeight`), as far as a tide turning over a minute lets it. `seaAt(land)`
+(R4, round 6): the painter leaves the shore's data (`Pixels.shore`: each pixel's
+distance out to sea and inland, when the waves come there, noise) and one GL filter a
+view (`sea.ts`) draws it: wave lines roll in, brighten and break white; the swash runs up
+the sand with a foam edge, drains, and leaves wet sand that dries. A wave every 5 s,
+its timing varying slowly over the island (`tide.ts` `tidePhase`), the tide over a
+minute; no swash on the map. `seaAt(land)`
 gives the sea's colour and depth at a place, from the same bands, for creatures under
 water to take its colour (R2).
 
@@ -895,6 +894,12 @@ god powers, a world's end and the next one's beginning).
 - The seed's sprouts grow leaf by leaf on each cell the seed sowed (the land before and
   after the power, diffed), until the plants show.
 - Tides (above, under the sea).
+
+**Round 6** (ADR 0021): nothing pops (fires, cones, craters, sprouts, plants, the dead
+and born fade or rise); nothing is placed on a cone or crater (`Landscape.covered`) and a
+dust cloud hides the change; tides by the shore shader (above); snow falls where snow
+lies, rain elsewhere; a raindrop's streak is at least a frame's fall long; plant drawings
+are paged within 2048 × 2048.
 
 **Round 5** (ADR 0021):
 
