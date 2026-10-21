@@ -517,3 +517,60 @@ export function craterOnLand(
   onLand.set(key, { land, mark });
   return mark;
 }
+
+/** Dust: its tones, darkest to lightest (a warm grey-brown, as the meteor's dust). */
+const DUST_TONES = [0x8c7660, 0xa88f76, 0xc2aa8e, 0xd8c4a8] as const;
+
+/**
+ * A billowing cloud of dust `size` art pixels across, in the look of the rest: a lumpy
+ * outline from noise, shaded in four tones lit from the upper left, its edge dithered.
+ * `variant` gives another cloud of the same size.
+ */
+export function dustPixel(size: number, variant: number, x: number, y: number): MarkPixel {
+  const r = size / 2;
+  const dx = (x + 0.5 - r) / r;
+  const dy = (y + 0.5 - r) / r;
+  const d = Math.hypot(dx, dy);
+  const n = (sx: number, sy: number, salt: number): number => {
+    const ix = Math.floor(sx);
+    const iy = Math.floor(sy);
+    const fx = sx - ix;
+    const fy = sy - iy;
+    const ex = fx * fx * (3 - 2 * fx);
+    const ey = fy * fy * (3 - 2 * fy);
+    const h = (a: number, b: number): number => cellHash(a, b, salt);
+    return (
+      (h(ix, iy) * (1 - ex) + h(ix + 1, iy) * ex) * (1 - ey) +
+      (h(ix, iy + 1) * (1 - ex) + h(ix + 1, iy + 1) * ex) * ey
+    );
+  };
+  const bumps =
+    n((x / size) * 7 + variant * 13, (y / size) * 7, 701) * 0.45 +
+    n((x / size) * 16, (y / size) * 16 + variant * 7, 702) * 0.2;
+  const edge = 0.62 + bumps;
+  if (d > edge) return null;
+  // Lit from the upper left: lighter there, darker low right, puffy inside.
+  const light =
+    1.6 -
+    1.1 * (dx + dy) * 0.5 +
+    (n((x / size) * 12, (y / size) * 12, 703 + variant) - 0.5) * 1.6 -
+    d * 0.6;
+  const tone = Math.min(Math.max(Math.round(light + dither(x, y) - 0.5), 0), 3);
+  // The thin rim is dithered into the air.
+  const rim = (edge - d) / 0.12;
+  if (rim < 1 && dither(x, y) > rim) return null;
+  return [DUST_TONES[tone] ?? DUST_TONES[1], 255];
+}
+
+const dusts = new Map<string, Texture>();
+
+/** A dust cloud's texture (`dustPixel`), made once for each size and variant. */
+export function dustTexture(size: number, variant: number): Texture {
+  const across = Math.max(Math.round(size / 4) * 4, 8);
+  const key = `${across}:${variant}`;
+  const known = dusts.get(key);
+  if (known !== undefined) return known;
+  const texture = paint(across, across, (x, y) => dustPixel(across, variant, x, y));
+  dusts.set(key, texture);
+  return texture;
+}

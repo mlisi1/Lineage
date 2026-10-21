@@ -13,6 +13,7 @@ deterministic.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import cast
@@ -25,11 +26,13 @@ from lineage_sim import rare
 from lineage_sim.clock import MS_PER_DAY, Season
 from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
+    CraterFormed,
     CreaturesArrived,
     InputEvent,
     JuvenileGrown,
     OutputEvent,
     PopulationExtinct,
+    VolcanoErupted,
 )
 from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
@@ -332,6 +335,15 @@ class Fauna:
         elif stranger_roll < self._cfg.immigrant_groups_per_year * hours / _HOURS_PER_YEAR:
             outputs += self._arrive(rng, ctx.t_ms, self._cfg.immigrant_group_size, founders=False)
         return outputs
+
+    def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
+        """A volcano's cone rising or a crater striking kills the creatures on it."""
+        seen: list[OutputEvent] = []
+        for event in outputs:
+            if isinstance(event, VolcanoErupted | CraterFormed):
+                reach = self._cfg.blast_kill_reach * event.radius_cells
+                seen += self.strike(event.x, event.y, reach, ctx.t_ms)
+        return seen
 
     def handle(self, event: InputEvent, ctx: Context) -> list[OutputEvent]:
         return []

@@ -495,6 +495,11 @@ carrion_decay_hours = 72.0
 # (R4; the owner, 2026-10-20): at 1.0 one that stays in a fire for an hour dies of it
 # (cause: burnt; the burnt leave no carrion). Swimmers in water are safe.
 fire_damage_per_hour = 1.0
+# A volcano's cone or a crater (any, the meteor's too) kills every creature within
+# blast_kill_reach × its radius (cells) where it rises or strikes (R4; the owner,
+# 2026-10-21): none is left standing on new rock. The meteor's own blast reaches further
+# ([presence] meteor_blast_factor).
+blast_kill_reach = 1.0
 scavenge_rate = 0.5
 # Carrion is smelled through a scent spread over the box of this half-width (cells)
 # around it: a carcass is a single cell, which the sparse sampling of smell would miss.

@@ -222,6 +222,8 @@ async function start(): Promise<void> {
   });
   world.addChild(atmosphere.ground);
   landscape.floor.addChild(atmosphere.floor);
+  // Nothing stands on a cone or in a crater the scene draws.
+  landscape.covered = (x, y) => atmosphere.covers(x, y);
   app.stage.addChild(
     atmosphere.veil,
     atmosphere.tint,

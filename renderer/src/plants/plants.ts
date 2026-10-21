@@ -482,6 +482,8 @@ export interface StandingOptions {
    * season of its own turn (`turning.ts`), instead of every plant showing `season`.
    */
   time?: YearTime;
+  /** Cells something else covers (R4: a volcano's cone, a crater): nothing stands there. */
+  covered?: (x: number, y: number) => boolean;
 }
 
 /** A drawing the layer uses, by the name it is placed under, with what it is coloured in. */
@@ -992,6 +994,7 @@ export function standingPlants(
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
+      if (options.covered?.(x, y) === true) return [];
       const out = close ? among(look, x, y) : [];
       const cell = y * land.width + x;
       const biomass = land.biomass[cell] ?? 0;

@@ -404,6 +404,7 @@ class FaunaConfig:
     carcass_share: float
     carrion_decay_hours: float
     fire_damage_per_hour: float
+    blast_kill_reach: float
     scavenge_rate: float
     carrion_scent_cells: int
     instinct_scavenge: float
@@ -510,6 +511,7 @@ class FaunaConfig:
             "exploration_fade_hours",
             "carrion_decay_hours",
             "fire_damage_per_hour",
+            "blast_kill_reach",
             "baseline_hours",
             "learned_max",
             "forget_hours",

@@ -115,6 +115,8 @@ export class Landscape {
    * plants of the view shown, over its ground and sea, so that what stands is drawn over it.
    */
   readonly floor = new Container();
+  /** Cells a cone or crater covers (R4): no plant, stone or boulder is placed there. */
+  covered: ((x: number, y: number) => boolean) | null = null;
   private readonly layers: Record<ViewName, Container> = {
     map: new Container(),
     middle: new Container(),
@@ -314,6 +316,7 @@ export class Landscape {
     }
     performance.mark(`lineage:plants:${name}`);
     const plants = standingPlants(land, TILES[name], {
+      covered: this.covered ?? undefined,
       look,
       time,
       close: name === "local",

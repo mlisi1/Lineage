@@ -41,7 +41,14 @@ import {
   type Rgb,
 } from "./light";
 import { BOLTS, boltAt, boltPath, strikePoint } from "./lightning";
-import { CRATER_RIM, LAVA_FRAMES, coneSummit, craterOnLand, markTexture } from "./marks";
+import {
+  CRATER_RIM,
+  LAVA_FRAMES,
+  coneSummit,
+  craterOnLand,
+  dustTexture,
+  markTexture,
+} from "./marks";
 import { seaAt } from "../terrain/sea";
 import {
   RowPool,
@@ -194,6 +201,18 @@ const MARK_WALL_S = 90;
 const MARK_FADE_MS = 2 * 86_400_000;
 /** Wall seconds a new cone takes to rise out of the ground. */
 const CONE_RISE_S = 2.5;
+/**
+ * The dust over a new cone or crater: seconds it lasts, rises in and thins away (it covers
+ * the plants' fade, `FADE_S`), and its puffs.
+ */
+const BILLOW_S = 3.2;
+const BILLOW_IN_S = 0.35;
+const BILLOW_OUT_S = 1;
+const BILLOW_PUFFS = 40;
+const BILLOW_CLOUDS = 6;
+/** How far (radii) a cone and a crater clear what stands round them. */
+const COVER_CONE = 1.4;
+const COVER_CRATER = 1.4;
 const MS_PER_DAY = 86_400_000;
 /** Seconds a burnt animal's ash rises; motes of the seed power over the bare land in sight. */
 const ASH_S = 3;
@@ -269,7 +288,8 @@ type Kind =
   | "strike"
   | "ash"
   | "cone"
-  | "crater";
+  | "crater"
+  | "billow";
 /** What falls from the sky (the `sky` message's `rain`). */
 export type RainKind = SkyMessage["rain"];
 
@@ -472,6 +492,7 @@ export class Atmosphere {
         case "volcano":
           add("cone", MARK_WALL_S, event.t_ms + MARK_DAYS * MS_PER_DAY);
           add("volcano", VOLCANO_WALL_S, event.t_ms + VOLCANO_HOURS * MS_PER_HOUR);
+          add("billow", BILLOW_S);
           break;
         case "earthquake":
           add("quake", QUAKE_S);
@@ -480,6 +501,7 @@ export class Atmosphere {
           // A meteor's god power digs it: its fall is drawn here, where it lands, and the
           // bowl it leaves once it has struck.
           add("crater", MARK_WALL_S, event.t_ms + MARK_DAYS * MS_PER_DAY, METEOR_FALL_S);
+          add("billow", BILLOW_S + METEOR_FALL_S, -1, METEOR_FALL_S);
           add("meteor", METEOR_S);
           break;
         case "god_power":
@@ -947,13 +969,13 @@ export class Atmosphere {
           return 0;
         }
         // A cone's scree lies on the ground; the cone stands among the plants, sorted at the
-        // north edge of its foot, so whatever is on it is drawn over it (no plant grows on
-        // it: the land round it is bare).
+        // south edge of its foot: nothing stands on it (its plants are not placed, the
+        // creatures on it died), so it covers the place, and what is south of it is in front.
         // A new cone rises out of the ground over its first seconds, its scree spreading.
         const rise = Math.min(age / CONE_RISE_S, 1);
         this.mark(floor, "scree", x, y, radius * 2 * tile, tile, shown * rise);
         this.mark(
-          this.stand(view, y - radius),
+          this.stand(view, y + radius),
           "cone",
           x,
           y,
@@ -983,7 +1005,7 @@ export class Atmosphere {
         // untinted (it makes its own light), cooling to crust as the eruption ends.
         const frame = Math.floor(this.timeS * LAVA_FPS) % LAVA_FRAMES;
         this.mark(
-          this.stand(view, y - radius),
+          this.stand(view, y + radius),
           "lava",
           x,
           y,
@@ -1182,6 +1204,55 @@ export class Atmosphere {
           ARK_LIGHT,
           tile,
           true,
+        );
+        return 0;
+      }
+      case "billow": {
+        // A cloud of dust over the place as the ground heaves or is struck: it hides what
+        // stood there while it goes (the plants fade out under it), then thins away.
+        const since = age - (effect.delayS ?? 0);
+        const cloud =
+          Math.min(since / BILLOW_IN_S, 1) *
+          Math.min(Math.max((BILLOW_S - since) / BILLOW_OUT_S, 0), 1);
+        if (cloud <= 0.01) return 0;
+        const pixel = tile >= 32 ? 2 : 1;
+        // A few lumpy clouds over the place, swelling and drifting apart as they thin.
+        const grow = 1 + 0.25 * Math.min(since / BILLOW_S, 1);
+        for (let k = 0; k < BILLOW_CLOUDS; k++) {
+          const angle = 2 * Math.PI * (k / BILLOW_CLOUDS + cellHash(salt, k, 711) * 0.3);
+          const off = k === 0 ? 0 : radius * (0.55 + 0.25 * cellHash(salt, k, 712));
+          const across = ((k === 0 ? 1.5 : 1.0) * radius * tile * grow) / pixel;
+          const texture = dustTexture(across, (salt + k) % 4);
+          const sprite = this.groundPool.next(texture);
+          const drift = since * 0.15;
+          placeCentred(
+            sprite,
+            x + Math.cos(angle) * (off + drift),
+            y + Math.sin(angle) * (off + drift) * 0.8 - since * 0.3,
+            tile,
+            texture.width * pixel,
+            texture.height * pixel,
+          );
+          sprite.tint = 0xffffff;
+          sprite.alpha = 0.92 * cloud;
+        }
+        // Small puffs round its edge, for the motion.
+        this.puffs(
+          {
+            x,
+            y,
+            spread: radius * 1.3,
+            rise: 6,
+            drift: 3,
+            life: 1.4,
+            from: 3,
+            to: 9,
+            alpha: 0.9 * cloud,
+            salt,
+          },
+          BILLOW_PUFFS,
+          DUST,
+          tile,
         );
         return 0;
       }
@@ -1506,8 +1577,8 @@ export class Atmosphere {
 
   /** A placer of sprites standing among the plants with their foot at `footY` cells. */
   private stand(view: View, footY: number): (texture: Texture) => Sprite {
-    // A row above the view is culled with its plants: such a thing goes in the top row.
-    const row = Math.max(footY, view.cells.y0);
+    // A row beyond the view is culled with its plants: such a thing goes in the nearest row.
+    const row = Math.min(Math.max(footY, view.cells.y0), view.cells.y1);
     return (texture) => this.standPool.next(texture, view.rows ?? null, row);
   }
 
@@ -1551,6 +1622,17 @@ export class Atmosphere {
       struck: false,
     });
     return ARRIVE_S;
+  }
+
+  /** Whether cell (x, y) (its middle) is under a cone or a crater drawn now. */
+  covers(x: number, y: number): boolean {
+    for (const effect of this.effects) {
+      if (effect.kind !== "cone" && effect.kind !== "crater") continue;
+      // The cone with its scree; the crater with its rim and thickest ejecta.
+      const reach = effect.radius * (effect.kind === "cone" ? COVER_CONE : COVER_CRATER);
+      if (Math.hypot(x + 0.5 - effect.x, y + 0.5 - effect.y) <= reach) return true;
+    }
+    return false;
   }
 
   /** Whether cell (x, y) is burning now. */
