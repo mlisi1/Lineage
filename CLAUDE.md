@@ -94,7 +94,9 @@ lineage/
 │   │   │                     #   (generated), stream.ts, landscape.ts, looks.ts, director.ts (R3:
 │   │   │                     #   the view button's camera), herd.ts (the stream's animals),
 │   │   │                     #   pixelfont.ts (the captions' font), atmosphere/ (R4: light,
-│   │   │                     #   glow, weather of events, the apocalypse sequence)
+│   │   │                     #   glow, weather of events, the apocalypse sequence),
+│   │   │                     #   creatures/colours.ts and markers.ts (R5: colours from the
+│   │   │                     #   genes, the map's dots)
 │   │   ├── sheets/           # look sheets of the real scene (land.html, R1)
 │   │   └── spike/            # R0 spike: the scene, its in-page benchmark (spike.html),
 │   │                         #   the look sheet (look.html) and the creature sheet (R2)
@@ -519,6 +521,13 @@ needs a note in `docs/decisions/`.
   same). The R3 demo's clicks (local view: a click for another animal, a double click for
   the map) come out here: the final build has only the view button's cycle
   (`Director.toMap` stays: R4's apocalypse uses it).
+  (In progress, ADR 0022: the owner's answers, 2026-10-21: the known fixes plus tuning
+  rounds on creatures and on ground and plants; the board run on the 7" screen; the kiosk
+  capped at 30 fps for want of a fan, "≥ 30 fps" read as holding the cap. Rounds 1–4:
+  colours from six genes ranked among the living species, no olive; round map dots; a
+  calmer ground; grass as small unoutlined tufts after references, nine sizes, random
+  tints; snow only from the sim; the young drawn small, `young` on the wire. Checklist and
+  handoff in `docs/milestones.md`; report `reports/R5-final/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
