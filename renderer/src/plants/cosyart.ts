@@ -57,11 +57,11 @@ const isWood = (ink: number): boolean =>
  * Outline everything drawn, on its outside: every clear pixel next to a drawn one takes
  * the outline of what it is next to (wood's if any wood, else the leaves').
  */
-export function rimAll(art: PlantArt): void {
+export function rimAll(art: PlantArt, fromRow = 0): void {
   const rim: [number, Ink][] = [];
   const at = (x: number, y: number): number =>
     x >= 0 && y >= 0 && x < art.width && y < art.height ? (art.ink[y * art.width + x] ?? 0) : 0;
-  for (let y = 0; y < art.height; y++) {
+  for (let y = fromRow; y < art.height; y++) {
     for (let x = 0; x < art.width; x++) {
       if (at(x, y) !== INK.none) continue;
       const near = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)].filter(
@@ -397,6 +397,8 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
 
 /** Kinds of tuft, by variant: a low clump with short blades, a fan, a clump leaning in the wind. */
 const TUFT_SHAPES = ["clump", "fan", "lean"] as const;
+/** The top share of a tuft whose blades are not outlined. */
+const TUFT_TIPS = 0.4;
 
 /**
  * A tuft of grass, one of a few shapes by `variant` (R5, after pixel-art grass tutorials:
@@ -458,8 +460,12 @@ export function cosyTuft(
               : INK.mid;
       put(art, x, y, ink);
       // Two pixels wide but for the tip, so that its outline is one silhouette and not
-      // a hatching along a slanted blade; the side away from the light darker.
-      if (broad && along < 0.8) put(art, x + (lean < 0 ? 1 : -1), y, along < 0.25 ? INK.deep : INK.dark);
+      // a hatching along a slanted blade; the side away from the light darker near the
+      // root only, so that the upper blade is not edged in steps of dark.
+      if (broad && along < 0.8) {
+        const side: Ink = along < 0.25 ? INK.deep : along < 0.45 ? INK.dark : INK.mid;
+        put(art, x + (lean < 0 ? 1 : -1), y, side);
+      }
     }
   };
   if (flat) {
@@ -524,7 +530,18 @@ export function cosyTuft(
     }
   }
   if (mirrored) mirror(art);
-  rimAll(art);
+  // Outlined below, the tips left in their own light: an outline along a slanted blade's
+  // one-pixel tip steps against it (R5).
+  let top = art.height;
+  let bottom = 0;
+  for (let y = 0; y < art.height; y++) {
+    for (let x = 0; x < art.width; x++) {
+      if ((art.ink[y * art.width + x] ?? 0) === INK.none) continue;
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+  rimAll(art, top + Math.round((bottom - top) * TUFT_TIPS));
   return art;
 }
 

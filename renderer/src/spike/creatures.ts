@@ -399,6 +399,13 @@ export class CreatureLayer {
    * point, so that what grows in front of it covers it. With null they go back to the
    * layer's own container.
    */
+  /** The lowest point of slot `index`'s body (cells): the row `hostIn` stands it in. */
+  footOf(index: number): number {
+    let lowest = -Infinity;
+    for (const joint of this.creatures[index]?.joints ?? []) lowest = Math.max(lowest, joint.y);
+    return lowest;
+  }
+
   hostIn(guests: readonly Container[] | null, rowsPerCell = 1): void {
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];

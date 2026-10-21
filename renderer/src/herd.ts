@@ -404,6 +404,10 @@ export class Herd {
     if (view === "map") return;
     layer.hostIn(plants?.guests ?? null, plants?.rowsPerCell);
     const slot = subject === null ? undefined : this.roster.slotOf(subject);
-    plants?.fade(slot === undefined ? null : layer.box(slot));
+    plants?.fade(
+      slot === undefined ? null : layer.box(slot),
+      slot === undefined ? 0 : layer.footOf(slot),
+      dtS,
+    );
   }
 }

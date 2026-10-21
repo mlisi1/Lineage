@@ -81,6 +81,8 @@ const FADED = 0.3;
 const FADED_SMALL = 0.4;
 const SMALL_BELOW_CELLS = 0.9;
 const FADES_FROM_CELLS = 0.2;
+/** Seconds a plant takes to go see-through or back. */
+const FADE_S = 0.25;
 
 export interface Placed {
   texture: Texture;
@@ -123,7 +125,8 @@ export class PlantLayer {
   private readonly built = new Set<number>();
   private readonly tall: number;
   private sprites = 0;
-  private faded: Sprite[] = [];
+  /** Plants see-through, or on their way there or back. */
+  private readonly faded = new Set<Sprite>();
   /** What else goes with the layer when it is destroyed: the texture its drawings are in. */
   private readonly owned: { destroy: () => void }[] = [];
 
@@ -238,34 +241,49 @@ export class PlantLayer {
   }
 
   /**
-   * Let an animal show through what stands in front of it: plants whose drawing covers
-   * `subject` (in cells) and whose foot is below it go see-through; the rest go back.
+   * Let an animal show through what stands in front of it: plants drawn over it (in a row
+   * after the one it stands in, its lowest point `foot`, as `CreatureLayer.hostIn` puts it)
+   * whose drawing covers `subject` (in cells) go see-through; the rest go back. They ease
+   * there over `FADE_S` as `dtS` passes (R5: a tuft that snapped from see-through to whole
+   * as the animal walked past it was seen to pop), at once when `dtS` is left out.
    */
-  fade(subject: CellRect | null): void {
-    for (const sprite of this.faded) sprite.alpha = 1;
-    this.faded = [];
-    if (subject === null) return;
-    const first = Math.floor(subject.y1 * this.rowsPerCell);
-    const last = Math.min(
-      Math.ceil((subject.y1 + this.tall) * this.rowsPerCell),
-      this.rows.length - 1,
-    );
-    for (let index = Math.max(first, 0); index <= last; index++) {
-      for (const [x, chunk] of this.rows[index]?.chunks ?? []) {
-        if (x + CHUNK_CELLS + REACH_CELLS < subject.x0 || x - REACH_CELLS > subject.x1) continue;
-        for (const child of chunk.children) {
-          const sprite = child as Sprite;
-          const wide = sprite.texture.width * sprite.scale.x;
-          const high = sprite.texture.height * sprite.scale.y;
-          if (high < FADES_FROM_CELLS) continue;
-          const left = sprite.x - sprite.anchor.x * wide;
-          const top = sprite.y - sprite.anchor.y * high;
-          if (left > subject.x1 || left + wide < subject.x0) continue;
-          if (top > subject.y1 || sprite.y < subject.y1) continue;
-          sprite.alpha = high < SMALL_BELOW_CELLS ? FADED_SMALL : FADED;
-          this.faded.push(sprite);
+  fade(subject: CellRect | null, foot = subject?.y1 ?? 0, dtS = Infinity): void {
+    const wanted = new Map<Sprite, number>();
+    if (subject !== null) {
+      const last = this.rows.length - 1;
+      const own = Math.min(Math.max(Math.floor(foot * this.rowsPerCell), 0), last);
+      const bottom = Math.min(Math.ceil((subject.y1 + this.tall) * this.rowsPerCell), last);
+      for (let index = own + 1; index <= bottom; index++) {
+        for (const [x, chunk] of this.rows[index]?.chunks ?? []) {
+          if (x + CHUNK_CELLS + REACH_CELLS < subject.x0 || x - REACH_CELLS > subject.x1) continue;
+          for (const child of chunk.children) {
+            const sprite = child as Sprite;
+            const wide = sprite.texture.width * sprite.scale.x;
+            const high = sprite.texture.height * sprite.scale.y;
+            if (high < FADES_FROM_CELLS) continue;
+            const left = sprite.x - sprite.anchor.x * wide;
+            const top = sprite.y - sprite.anchor.y * high;
+            if (left > subject.x1 || left + wide < subject.x0) continue;
+            if (top > subject.y1 || sprite.y < subject.y0) continue;
+            wanted.set(sprite, high < SMALL_BELOW_CELLS ? FADED_SMALL : FADED);
+          }
         }
       }
+    }
+    const step = (1 - FADED) * Math.min(dtS / FADE_S, 1e6);
+    for (const sprite of new Set([...this.faded, ...wanted.keys()])) {
+      if (sprite.destroyed) {
+        this.faded.delete(sprite);
+        continue;
+      }
+      const target = wanted.get(sprite) ?? 1;
+      const alpha =
+        sprite.alpha < target
+          ? Math.min(sprite.alpha + step, target)
+          : Math.max(sprite.alpha - step, target);
+      sprite.alpha = alpha;
+      if (alpha >= 1 && !wanted.has(sprite)) this.faded.delete(sprite);
+      else this.faded.add(sprite);
     }
   }
 

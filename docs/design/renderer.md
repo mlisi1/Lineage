@@ -936,11 +936,14 @@ Round 1, items 1–7:
 
 - **The animal followed shows through grass.** What stands in front of it goes
   see-through, grass and the small things too (40 % opacity, trees 30 %); pebbles do not
-  hide it and stay.
+  hide it and stay. "In front" is a row after the one the animal stands in (its lowest
+  point, as `hostIn` has it), and plants ease there and back over 0.25 s: judged by its
+  box instead, a tuft between the two covered it whole and snapped as it walked by.
 - **Colours from the genes** (`src/creatures/colours.ts`). The body's hue is `HUE`, its
   saturation `AQUATIC`, its lightness `SIZE`; the markings' hue is the body's turned by
   `SOCIAL`, their saturation `DIET`, their lightness `EXPLORATION`, kept at least 0.2 from
-  the body's. Each gene is read by its species' rank among the species alive, spread over
+  the body's. No animal is olive (the owner): hues keep off the ground's yellow-greens
+  (0.11–0.42), and saturation starts at 0.5. Each gene is read by its species' rank among the species alive, spread over
   its range (sister species differ by hundredths), and each animal moves a little from its
   species by its own genes. The ranks are read again when a species appears or dies out,
   and every animal is redrawn in place (`CreatureLayer.rebuild`). `PATTERN` picks the
@@ -951,7 +954,8 @@ Round 1, items 1–7:
   calm view the border between two kinds wanders with noise, and growth beside bare
   ground has a lip lit from the upper left (a pixel darker below, lighter above).
 - **Grass.** Six tuft drawings (a low clump with blades along its top, a fan, a clump
-  leaning in the wind; each mirrored; ±10 % in size), blades two pixels wide below the tip;
+  leaning in the wind; each mirrored; ±10 % in size), blades two pixels wide below the tip,
+  dark on their shaded side only near the root, the top 40 % of a tuft not outlined;
   tufts stand in clumps round a point of their cell, crossing into the next, and thin
   grass leaves a cell bare now and then.
 - **Snow** lies only where the simulation has it (above); bare heights are rock.

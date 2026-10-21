@@ -2,7 +2,7 @@
  * An animal's colours from its genes (R5, the owner: colours straight from the genes, some
  * for the body, others for the markings).
  *
- *   body      hue HUE, saturation AQUATIC (the water's more vivid), lightness SIZE (the
+ *   body      hue HUE (off the ground's yellow-greens), saturation AQUATIC (the water's more vivid), lightness SIZE (the
  *             small light, the big deep)
  *   markings  hue away from the body's by SOCIAL (loners near it, the social in signal
  *             colours across the wheel), lightness EXPLORATION (the bold pale, the shy
@@ -35,14 +35,31 @@ const COLOUR_GENES = ["HUE", "AQUATIC", "SIZE", "SOCIAL", "EXPLORATION", "DIET"]
 type ColourGene = (typeof COLOUR_GENES)[number];
 
 /** Body: saturation from the land's to the water's, lightness from the small to the big. */
-const BODY_SATURATION = [0.32, 0.62] as const;
+const BODY_SATURATION = [0.5, 0.78] as const;
 const BODY_LIGHT = [0.66, 0.36] as const;
 /** Markings: hue this far round from the body's, from loners to the most social. */
 const MARK_HUE = [0.06, 0.5] as const;
 const MARK_LIGHT = [0.22, 0.8] as const;
-const MARK_SATURATION = [0.22, 0.66] as const;
+const MARK_SATURATION = [0.4, 0.76] as const;
 /** The markings stay at least this much lighter or darker than the body, to be seen. */
 const MARK_CONTRAST = 0.2;
+/**
+ * Hues kept off animals: yellow-green to green, the ground's and the grass's own, where a
+ * body turned olive and was lost on the land (the owner, 2026-10-21: "avoid olive").
+ */
+const GROUND_HUES = [0.11, 0.42] as const;
+const SPARE = 1 - (GROUND_HUES[1] - GROUND_HUES[0]);
+
+/** A share (0–1) of the way round the wheel's hues an animal may have, from the ground's end on. */
+const offGround = (share: number): number => (GROUND_HUES[1] + share * SPARE) % 1;
+
+/** A hue moved out of the ground's band to its nearer edge. */
+function awayFromGround(hue: number): number {
+  const [from, to] = GROUND_HUES;
+  if (hue <= from || hue >= to) return hue;
+  return hue - from < to - hue ? from : to;
+}
+
 /** How far an animal's own genes move its colours from its species' (per unit of gene). */
 const OWN_HUE = 0.4;
 const OWN_LIGHT = 0.6;
@@ -100,8 +117,8 @@ export function speciesColours(
   };
   const out = new Map<number, SpeciesColour>();
   for (const id of ids) {
-    // Hues spread round the whole wheel, the last a step short of the first.
-    const hue = (rank(id, "HUE") * (ids.length - 1)) / ids.length;
+    // Hues spread round the wheel but for the ground's, the last a step short of the first.
+    const hue = offGround((rank(id, "HUE") * (ids.length - 1)) / ids.length);
     const body: Hsl = {
       hue,
       saturation: lerp(BODY_SATURATION, rank(id, "AQUATIC")),
@@ -112,7 +129,7 @@ export function speciesColours(
       markLight = body.light < 0.5 ? body.light + MARK_CONTRAST : body.light - MARK_CONTRAST;
     }
     const mark: Hsl = {
-      hue: (hue + lerp(MARK_HUE, rank(id, "SOCIAL"))) % 1,
+      hue: awayFromGround((hue + lerp(MARK_HUE, rank(id, "SOCIAL"))) % 1),
       saturation: lerp(MARK_SATURATION, rank(id, "DIET")),
       light: markLight,
     };
@@ -135,12 +152,12 @@ export function ownColours(species: SpeciesColour, genome: Genome): Colours {
   return {
     body: {
       ...body,
-      hue: (body.hue + hue + 1) % 1,
+      hue: awayFromGround((body.hue + hue + 1) % 1),
       light: clamp(body.light + light, 0.2, 0.8),
     },
     mark: {
       ...mark,
-      hue: (mark.hue + hue + 1) % 1,
+      hue: awayFromGround((mark.hue + hue + 1) % 1),
       light: clamp(mark.light + own("EXPLORATION", OWN_LIGHT), 0.15, 0.88),
     },
   };

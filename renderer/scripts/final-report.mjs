@@ -365,7 +365,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <div class="head"><span class="n">1</span><h2>The animal followed shows through the grass</h2></div>
 <div class="notes">
 <div><span class="label">Was</span><p>A small animal in the local view vanished under the grass tufts drawn in front of it; only trees and bushes went see-through.</p></div>
-<div><span class="label">Now</span><p>Grass and the small things in front of the animal followed go see-through too, a little less than trees (40 % against 30 % opacity). Pebbles are left alone. By the owner's choice there is no minimum size.</p></div>
+<div><span class="label">Now</span><p>Grass and the small things in front of the animal followed go see-through too, a little less than trees (40 % against 30 % opacity). Pebbles are left alone. By the owner's choice there is no minimum size.</p><p>Round 2, after the owner saw a tuft pop as an animal walked through it: "in front" is now judged by the same rows the animal is drawn in (its lowest point), not by the bottom of its box, so no tuft covers it whole any more; and plants ease to see-through and back over a quarter of a second instead of in one frame.</p></div>
 </div>
 ${filmPair("follow9", ["Before", "After"])}
 </section>
@@ -375,7 +375,7 @@ ${filmPair("follow9", ["Before", "After"])}
 <div class="head"><span class="n">2</span><h2>Colours straight from the genes</h2></div>
 <div class="notes">
 <div><span class="label">Was</span><p>Colour was each animal's own HUE at one saturation and lightness. Sister species differ by a few hundredths in every gene: in the creatures' recording eight of ten species have HUE between 0.92 and 0.97, so nearly every animal was red or magenta.</p></div>
-<div><span class="label">Now</span><p>Six genes set two colours (<code>src/creatures/colours.ts</code>), each read by its species' rank among the species alive, spread evenly over its range. The order is still the genes': the redder species stays further round the wheel. Each animal moves a little from its species by its own genes. Read again when a species appears or dies out, when every animal is redrawn.</p></div>
+<div><span class="label">Now</span><p>Six genes set two colours (<code>src/creatures/colours.ts</code>), each read by its species' rank among the species alive, spread evenly over its range. The order is still the genes': the redder species stays further round the wheel. Each animal moves a little from its species by its own genes. Read again when a species appears or dies out, when every animal is redrawn.</p><p>Round 2 (the owner: "avoid olive"): body hues keep off the ground's yellow-greens (0.11–0.42 of the wheel), markings that fall there go to its nearer edge, and saturation starts at 0.5 instead of 0.32.</p></div>
 </div>
 <div class="tablewrap"><table>
 <thead><tr><th>Colour</th><th>Hue</th><th>Saturation</th><th>Lightness</th></tr></thead>
@@ -424,7 +424,7 @@ ${zoom("coast", "A patch of grass on bare soil")}
 </div>
 ${compare("grass", "Local view over upland grassland.")}
 ${zoom("grass", "Tufts")}
-<p class="ask">The blade tips still step against their outline. A softer option is to outline only the base of each tuft.</p>
+<p>Round 2: the top 40 % of a tuft is no longer outlined, and the second pixel of a blade is dark only near the root, so the tips end in their own light instead of stepping against a dark edge.</p>
 </section>
 <hr>
 
@@ -484,9 +484,10 @@ const readme = [
   "(VP9, a few MB, committed with it).",
   "",
   `- Branch \`${branch}\` at \`${commit}\`; before: \`${before}\``,
-  "- Round 1 (the owner's checklist items 1–7): grass see-through round the animal",
+  "- Rounds 1–2 (the owner's checklist items 1–7): grass see-through round the animal",
   "  followed, colours from six genes ranked among species, round map dots, a calmer ground,",
-  "  grass in clumps, snow only from the simulation, the young drawn small",
+  "  grass in clumps, snow only from the simulation, the young drawn small; no olive,",
+  "  softer tufts, no pop of a tuft as an animal walks through it",
   "- Tests wait until the owner calls the look final; the device benchmark comes later",
   "",
   "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",
