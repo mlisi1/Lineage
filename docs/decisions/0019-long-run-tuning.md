@@ -238,6 +238,25 @@ Rank correlations over the 40 sampled points (|ρ| < 0.32 is noise):
 The next sweep (`mechanisms-2`) narrows on these: higher mutation (0.035–0.055) with
 later founding (cover 0.5–0.7), and the predator levers where D3 passes.
 
+### Sweep `mechanisms-2` (stopped at 13 of 31 points)
+
+Narrowed by `mechanisms-1`: body mutation 0.035–0.055, later founding (cover 0.5–0.7),
+predator levers where D3 passed. **The mutation trend did not extrapolate.** Past about
+0.037 the herd becomes one continuous cloud: species alive fall from a median of 9 (at
+0.025) through 6 (0.037) to 2 (0.055), splits stop (M6.2 1.17 → 0.80 → 0), and M6.1
+falls with them (0.89 at 0.037, 0.32 at 0.053) as the island spends more time below the
+band. M6.1 peaks near a mutation of 0.036; what it misses there is mostly the months after
+founding with one or two species. The sweep was stopped, the rest of its points lying in
+the collapsed range.
+
+### Sweep `species-1`
+
+Mutation kept in its sweet spot (0.025–0.038), and the species definition swept with it
+(`[species] link_distance` 0.025–0.045, `min_members` 5–10; nothing in the sim reads the
+census, so these change the counting, not the creatures), more variation among founders
+(`founder_spread` 0.04–0.12) to shorten the one-species phase, and the predator and
+founding levers where D3 and M3.5 passed.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
