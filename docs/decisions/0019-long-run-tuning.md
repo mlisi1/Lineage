@@ -315,6 +315,50 @@ To measure: whether predators persist and evolve again after dying out (3 years 
 seeds, then 10 years on 5), how often worlds end without the rescue of strangers (the
 owner's ceiling: about once a decade), and D1 without random genomes landing.
 
+### Seeds in guts, R4 merged, the button: the mechanism set complete (2026-10-21)
+
+The owner asked whether every mechanic was in before tuning ("I'm afraid we're leaving
+something out"). An audit against what a run exercises found three gaps, all closed
+before any further sweep: R4's sim changes were not yet in `m11-tuning` (merged,
+`4d41ec4`); seeds in guts were not built (mechanism 4 above, `a7ab1d5`); and no run ever
+pressed the god-power button, while the owner expects to press about once a week
+(`fastforward --press-every-days 7`; tuning runs press nothing, so the island must stand
+alone, and the tuned island is checked with weekly presses). Power cuts only test exact
+resume; the species census and chronicle only watch.
+
+### The closed island, first run (`m11-closed-office`, 2026-10-21)
+
+3 years × 20 seeds (0–19), office, defaults at `a7ab1d5`, against `sweep-species-1/p000`
+(the defaults with strangers, before R4 and gut seeds; so the difference is all three).
+
+| | with strangers | closed |
+|---|---|---|
+| M4.3 both diets present in year 3 | 0.60 PASS | 0.08 FAIL |
+| M6.1 species in band (after founding) | 0.88 | 0.94 PASS |
+| M6.2 splits a month | 1.17 | 1.07 PASS |
+| M7.2 no long fixation | 0.90 PASS | 0.80 FAIL |
+| M3.5 seeds without succession | 0 | 0 PASS |
+| D1 lowest gene's niche | 0.20 | 0.00 |
+| D3a predators' share | 0.020 | 0.000 |
+| D3b predators present after year 1 | 0.53 | 0.17 |
+| worlds ended per seed-year | 0 | 0 |
+
+Every other M criterion passes in both. **Predators do not last**: the hunter pack lands
+in all 20 seeds, a few days after the herd reaches 120, grows to the cap of 16 within
+weeks and dies out after a median of about 75 days; only seed 10 keeps hunters to the end
+(seed 14 to day 950). Hunter species split only from the pack; none evolved from the
+herd. One pack capped at 16 booms and busts on a herd that has never met a hunter, and at
+that size a bad season ends it; strangers used to land a new pack every few months.
+**Diversity came partly from strangers**: D1 falls to 0 (armour and swimming never reach
+their extremes within 3 years from one founding genome), and longevity sweeps the herd
+in 4 seeds (M7.2), with no newcomers competing.
+
+To try next: weekly presses (the ark is drawn about half the time when a herd of 120 has
+no hunters), 10 years on 5 seeds (does D1 come with time), and a sweep including the
+predator levers (`predator_cap`, `hunter_wave_count`, `hunter_wave_herd`, `meat_energy`,
+`defence_toxicity`). If hunters still cannot persist without the god, a mechanism by which
+they arise from the herd (scavenging into omnivory) goes to the owner first.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of

@@ -215,7 +215,7 @@ interrupted to add mechanisms first, with the owner.)
   seed-years, M6.1 inhabited time) must treat a new world as a new start; check
   `worlds_ended` in each run before reading them.
 
-## 7. M11 so far (2026-10-20; details and numbers in ADR 0019)
+## 7. M11 so far (2026-10-20 and 21; details and numbers in ADR 0019)
 
 - **Held-out check of the M10 defaults** (seeds 20–39): the same two criteria fail as on
   0–19 (M6.1, and M3.5 in 3-year runs), so M2–M10 did not overfit their seeds.
@@ -249,3 +249,20 @@ interrupted to add mechanisms first, with the owner.)
 - **R4 changes the sim too** (weather, fire only in storms, burnt deaths, barren land
   after eruptions; schema v12): re-check the tuned config once R4 is on `main`.
 
+
+**2026-10-21** (ADR 0019, "Fourth round" onward):
+
+- **Why criteria fail, not only by how much.** M3.5's failing seeds were open woodland
+  kept by big browsers (reach), not broken succession: a tenth of the seeds may now stay
+  open. M6.1 missed by its founding months, which a 3-year run weighs five times more
+  than a decade: it now starts after the founding. Tuning `link_distance` would redefine
+  a species until the band passed, so the species definition is fixed. D2's test does not
+  fit niche plant genes.
+- **A closed island** (the owner): no strangers; every species descends from the
+  founders, a pack of hunters that lands once, or the ark (which brings hunters to a herd
+  without them). R4 merged; seeds in guts built (v13); runs can press the button weekly,
+  as the owner will.
+- **First closed run**: predators die out within months in 19 of 20 seeds and never
+  evolve from the herd (M4.3 0.08); D1 falls to 0 without strangers' random genomes;
+  longevity sweeps in 4 seeds. Next: weekly presses, 10 years, predator levers in the
+  sweep, then (only if needed, with the owner) hunters that arise from the herd.

@@ -453,7 +453,11 @@ needs a note in `docs/decisions/`.
   rising at year 3 (no stagnation). (In progress, ADR 0019: the owner added criteria on
   diversity and balance, D1–D3, bands set after five new mechanisms: food at sea and
   wading, reach by height, cover for prey, nutrients back to the soil, seeds carried by
-  grazers; M2.5 retired and the whole-world step budget raised to 600 ms.)
+  grazers; M2.5 retired and the whole-world step budget raised to 600 ms. 2026-10-21, the
+  owner: the island is closed, no strangers (hunters land once as a second wave of
+  founders, the ark brings them back); M3.5 tolerates a tenth of the seeds in open
+  woodland; M6.1 leaves out the founding; the species definition is not tuned; the
+  tuned island is checked with a weekly press of the button.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,
