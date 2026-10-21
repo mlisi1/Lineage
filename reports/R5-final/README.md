@@ -5,7 +5,7 @@ renderer at 1024×600: stills at the same places (drag to compare) and films fol
 an animal. `report.html` is one self-contained file but for its films, in `films/`
 (VP9, a few MB, committed with it).
 
-- Branch `r5-final` at `7cf120f`; before: `80e4a4c`
+- Branch `r5-final` at `de62727`; before: `80e4a4c`
 - Rounds 1–2 (the owner's checklist items 1–7): grass see-through round the animal
   followed, colours from six genes ranked among species, round map dots, a calmer ground,
   grass in clumps, snow only from the simulation, the young drawn small; no olive,
