@@ -274,7 +274,8 @@ export class Sea {
   private readonly placed: { showing: number; view: CellRect }[] = [];
 
   /** The shore's shader and its uniforms (`SHORE_FRAGMENT`). */
-  private readonly shore: Filter;
+  /** Made when a surf layer first needs it (it needs a browser; the glints do not). */
+  private shore: Filter | null = null;
   private readonly shoreUniforms: UniformGroup;
 
   constructor(
@@ -299,16 +300,6 @@ export class Sea {
       uSwellAlpha: { value: SWELL_ALPHA * swellSizes(tile).strength, type: "f32" },
       uSwellFade: { value: SWELL_FADE_PX, type: "f32" },
     });
-    this.shore = new Filter({
-      glProgram: GlProgram.from({
-        vertex: defaultFilterVert,
-        fragment: SHORE_FRAGMENT,
-        name: "shore",
-      }),
-      resources: { shoreUniforms: this.shoreUniforms },
-      resolution: 1,
-      antialias: "off",
-    });
     for (let slot = 0; slot < slots; slot++) {
       const sprite = new Sprite(Texture.WHITE);
       sprite.alpha = GLINT_ALPHA;
@@ -326,6 +317,16 @@ export class Sea {
     const layer = surf?.[0];
     if (layer !== undefined) {
       const filters = layer.filters as readonly Filter[] | null | undefined;
+      this.shore ??= new Filter({
+        glProgram: GlProgram.from({
+          vertex: defaultFilterVert,
+          fragment: SHORE_FRAGMENT,
+          name: "shore",
+        }),
+        resources: { shoreUniforms: this.shoreUniforms },
+        resolution: 1,
+        antialias: "off",
+      });
       if (!(filters?.includes(this.shore) ?? false)) layer.filters = [this.shore];
       const tide =
         TIDE_LOW + (1 - TIDE_LOW) * (0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / TIDE_S));
