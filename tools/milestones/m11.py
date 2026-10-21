@@ -50,9 +50,14 @@ MECHANISMS: dict[str, tuple[str, ...]] = {
     "reach": ("fauna.browse_floor=1.0",),
     "cover": ("fauna.cover_protection=0.0",),
     "nutrients": ("fauna.dung_fertility=0.0", "fauna.carrion_fertility=0.0"),
+    # Off, fruit goes far by the stand-in it had before (as if wind-borne).
+    "gut seeds": ("fauna.gut_seeds_per_hour=0.0", "flora.fruit_by_wind=true"),
 }
+# The tuned island with the owner pressing the god-power button weekly (2026-10-21).
+PRESSES = "weekly presses"
 ROLES = (
     "held-out",
+    PRESSES,
     "five-year",
     "fork",
     "learning-off",
@@ -110,6 +115,8 @@ CRITERIA: list[Criterion] = _criteria()
 def role_of(run: Run, main: Run) -> str:
     """Which part of the dashboard a compared run feeds (see the module docstring)."""
     notes = run.manifest.notes
+    if "presses every" in notes:
+        return PRESSES
     if "forks every" in notes:
         return "fork"
     if "fauna.learning=false" in notes:
@@ -155,6 +162,8 @@ def _metrics(run: Run, *others: Run, sweeps: tuple[Path, ...] = ()) -> dict[str,
     out |= {f"{TUNING}/{k}": v for k, v in sc.score(run).metrics.items()}
     if HELD_OUT in roles:
         out |= {f"{HELD_OUT}/{k}": v for k, v in sc.score(roles[HELD_OUT]).metrics.items()}
+    if PRESSES in roles:
+        out |= {f"{PRESSES}/{k}": v for k, v in sc.score(roles[PRESSES]).metrics.items()}
     if "five-year" in roles:
         out |= {f"five-year/{k}": v for k, v in m3.metrics(roles["five-year"]).items()}
     if "fork" in roles and "learning-off" in roles:

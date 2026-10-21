@@ -327,7 +327,7 @@ def test_v11_fixture_values(config: Config) -> None:
 
 def test_v11_upgrades_to_v12_dry_with_no_one_burnt(config: Config) -> None:
     upgraded = migrate(io.loads(_fixture(11)).to_tree())
-    assert upgraded["schema_version"] == 12
+    assert upgraded["schema_version"] == SCHEMA_VERSION
     assert upgraded["subsystems"]["weather"] == {"rain": 0, "until_ms": 0}
     world = World.restore(config, io.loads(_fixture(11)))
     assert world.weather.rain.name == "NONE"
@@ -342,9 +342,31 @@ def test_a_world_without_fire_gets_no_weather_from_the_migration() -> None:
 
 def test_v12_fixture_values(config: Config) -> None:
     state = io.loads(_fixture(12))
-    assert state.schema_version == 12
+    assert state.schema_version == SCHEMA_VERSION  # loading upgrades it
     assert state.subsystems["weather"]["rain"] == 1  # a plain rain spell falls
     world = World.restore(config, state)
     assert world.instant.date.isoformat() == "2027-09-08"
     assert world.fauna.count == 32
     assert world.wildfire.burning.sum() == 0
+
+
+def test_v12_upgrades_to_v13_with_empty_guts(config: Config) -> None:
+    before = io.loads(_fixture(12)).to_tree()
+    upgraded = migrate(before)
+    assert upgraded["schema_version"] == 13
+    fauna = upgraded["subsystems"]["fauna"]
+    count = len(fauna["energy"])
+    assert fauna["gut_genome"].shape == (count, 8)
+    assert (fauna["gut_h"] < 0).all()
+    world = World.restore(config, io.loads(_fixture(12)))
+    world.step(86_400.0)  # guts fill and empty as the herd grazes
+    assert world.fauna.count > 0
+
+
+def test_v13_fixture_values(config: Config) -> None:
+    state = io.loads(_fixture(13))
+    assert state.schema_version == SCHEMA_VERSION
+    world = World.restore(config, state)
+    assert world.instant.date.isoformat() == "2027-09-11"
+    assert world.fauna.count == 24
+    assert (world.fauna.get_state()["gut_h"] < 0).all()

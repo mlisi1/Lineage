@@ -122,6 +122,11 @@ networks, predator–prey coexistence): ADR 0009, "References".
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
   regrows; defended plants refuse part of each bite, and what is eaten is worth less:
   energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.
+- **Seeds in guts** (M11, schema v13): a grazer eating a fruiting plant swallows one of
+  its seeds at `gut_seeds_per_hour` (0.5 an hour of full bites; one at a time) and drops
+  it where it is `gut_passage_hours` later (12 h, 0.5–1.5× at random). The seed takes as
+  any plant's does (`Flora.drop_seeds`): it must suit the site and win against what grows
+  there. Herds carry fruiting plants along their routes; a seed dies with its carrier.
 - **Hunting**: a creature with diet ≥ 0.15 attacks the nearest creature of another kind
   in reach that it is strong enough for, but only while hungry. A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
@@ -286,6 +291,7 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 - Food at sea came with M11 (algae, above); before it, swimmers had to feed on land and
   the `AQUATIC` gene never found a niche. Algae alone did not change that (D1 for
   swimming at 1 seed in 20 with or without them), hence wading on the shelf (ADR 0019).
-- M11 open: seeds carried by the grazers that eat fruit (schema v13, after R4); whether
-  the founders' descendants ever become omnivores or hunters now that cover, reach and
-  carrion shape the niches (D1 for diet rose to 0.45–0.60 of seeds with them).
+- Seeds carried by the grazers that eat fruit came with M11 (schema v13), after R4.
+- M11 open: whether the founders' descendants ever become omnivores or hunters now that
+  cover, reach and carrion shape the niches and no strangers bring hunters (D1 for diet
+  rose to 0.45–0.60 of seeds with them, strangers still landing).

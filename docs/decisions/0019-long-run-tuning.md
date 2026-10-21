@@ -194,12 +194,16 @@ and the D1–D3 bands need more seeds.
   slow tests). Raised to **600 ms**; **M2.5 retired**. The sim is to be measured once on
   the Orange Pi before M11 closes, to replace the 10× estimate.
 
-### Mechanism 4: seeds carried by grazers (waits for schema v13)
+### Mechanism 4: seeds carried by grazers (schema v13, built 2026-10-21 after R4)
 
 Seeds of fruiting plants travel in the gut of the grazer that ate them and are dropped
-where it goes. That is per-creature saved state, so a schema bump: v13, after R4's v12
-(weather, burnt deaths) reaches `main`. Until then fruiting plants keep their stand-in,
-far seeds as if wind-borne.
+where it goes. A grazer on a fruiting plant swallows one seed at `[fauna]
+gut_seeds_per_hour` (0.5 per hour of full bites; one at a time) and drops it
+`gut_passage_hours` later (12 h, × 0.5–1.5 at random) on its cell, where it establishes
+as any seed does (`Flora.drop_seeds`). Each creature's gut is saved (`gut_genome`,
+`gut_rare`, `gut_h`): schema v13 on R4's v12, `v12_to_v13.py`, fixture `v13.lzma`. The
+stand-in it replaces (fruit's far seeds as if wind-borne) is `[flora] fruit_by_wind`,
+false now; the M11 report's "gut seeds" off run turns gut seeds off and the stand-in on.
 
 ### Sweep `mechanisms-1`
 

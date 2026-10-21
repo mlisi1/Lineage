@@ -83,7 +83,7 @@ def test_bench_fauna_tick_at_150_creatures(benchmark: Any, config: Config) -> No
     for key in ("positions", "energy", "age_h", "idle_h", "heading", "genes", "weights",
                 "slots", "ids", "origin", "generation", "learned", "trace", "noise",
                 "baseline", "meal_value", "balance", "competent_h", "young_eaten",
-                "young_burnt"):  # fmt: skip
+                "young_burnt", "gut_genome", "gut_rare", "gut_h"):  # fmt: skip
         state[key] = state[key][:150]
     fauna.set_state(state)
     assert fauna.count == 150

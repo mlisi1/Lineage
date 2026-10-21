@@ -295,10 +295,13 @@ mangrove_growth_cost = 0.30
 poisonous_toxicity = 1.5
 poisonous_refusal = 0.5
 poisonous_growth_cost = 0.15
-# Fruiting: animals carry its fruit far, so its far seeds go out as if it had the lightest
-# seed (on top of its near seeds); grazers get this much more energy from it; costs growth.
+# Fruiting: grazers get this much more energy from it; costs growth. Its seeds travel in
+# the guts of the grazers that eat it ([fauna] gut_*, M11). With fruit_by_wind (the
+# stand-in before M11, for runs with gut seeds off) its far seeds go out instead as if it
+# had the lightest seed.
 fruiting_meal_bonus = 0.5
 fruiting_growth_cost = 0.15
+fruit_by_wind = false
 # Emergent: a crown above the canopy: its height counts × (1 + emergent_height_bonus) for
 # light (shade cast and competition), so it matters most in trees; needs this much more
 # fertility (× 1 + factor), catches this many times more wind where the site is exposed,
@@ -522,6 +525,12 @@ carrion_decay_hours = 72.0
 # 0 turns each off.
 dung_fertility = 0.05
 carrion_fertility = 0.2
+# Seeds in guts (M11): a creature grazing a fruiting plant swallows one of its seeds at
+# gut_seeds_per_hour (per hour of full bites; it holds one at a time) and drops it where
+# it is gut_passage_hours later (0.5–1.5 × that, at random), where it takes as any seed
+# does. 0 turns it off (then set [flora] fruit_by_wind, the stand-in, for a fair compare).
+gut_seeds_per_hour = 0.5
+gut_passage_hours = 12.0
 # A creature on land in a burning cell loses this share of its energy capacity per hour
 # (R4; the owner, 2026-10-20): at 1.0 one that stays in a fire for an hour dies of it
 # (cause: burnt; the burnt leave no carrion). Swimmers in water are safe.

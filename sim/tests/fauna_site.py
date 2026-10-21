@@ -126,6 +126,9 @@ class Site:
             "competent_h": np.full(count, -1.0, dtype=np.float32),
             "young_eaten": np.zeros(count, dtype=np.float32),
             "young_burnt": np.zeros(count, dtype=np.float32),
+            "gut_genome": np.zeros((count, 8), dtype=np.uint8),
+            "gut_rare": np.zeros(count, dtype=np.uint8),
+            "gut_h": np.full(count, -1.0, dtype=np.float32),
         }
         for key, value in extra.items():
             state[key] = np.concatenate([state[key], value])

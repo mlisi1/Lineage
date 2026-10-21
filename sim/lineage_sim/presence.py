@@ -158,6 +158,10 @@ class Presence:
         return 0.0 if self._present else self._absent_h
 
     @property
+    def config(self) -> PresenceConfig:
+        return self._cfg
+
+    @property
     def ready_t_ms(self) -> int:
         """Sim time from which the button works (the LED is lit before it)."""
         return self._ready_ms

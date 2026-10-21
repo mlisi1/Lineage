@@ -4,11 +4,13 @@ schedule following the desk, and a power cut after an ending."""
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 from pathlib import Path
 
 import numpy as np
 import pytest
 from lineage_sim.config import Config, parse_config
+from lineage_sim.events import GodPowerRefused, GodPowerUsed
 from lineage_sim.state import io
 from lineage_sim.world import World
 
@@ -93,3 +95,24 @@ def test_the_owner_keeps_the_desk_schedule_in_a_later_world() -> None:
 
 def run_config(run_dir: Path) -> Config:
     return parse_config((run_dir / "config.toml").read_text(encoding="utf-8"))
+
+
+def test_the_owner_presses_the_button_once_a_week_at_the_desk() -> None:
+    config = parse_config(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    world = World.restore(config, io.loads((FIXTURES / "v13.lzma").read_bytes()))
+    world.advance_to_unix((world.unix_ms // DAY_MS + 1) * DAY_MS)  # days start at midnight
+    days: list[int] = []
+    for day in range(29):
+        date = world.instant.date
+        outputs, _ = live_day(world, "office", press_every_days=7)
+        if any(isinstance(o, GodPowerUsed) for o in outputs):
+            days.append(day)
+            assert date.weekday() < 5  # pressed on a working day, at the desk
+        assert not any(isinstance(o, GodPowerRefused) for o in outputs)  # never while cooling
+    assert 3 <= len(days) <= 5  # about once a week over four weeks
+    assert all(b - a >= 7 for a, b in itertools.pairwise(days))
+    quiet = World.restore(config, io.loads((FIXTURES / "v13.lzma").read_bytes()))
+    quiet.advance_to_unix((quiet.unix_ms // DAY_MS + 1) * DAY_MS)
+    for _ in range(8):
+        outputs, _ = live_day(quiet, "office")
+        assert not any(isinstance(o, GodPowerUsed) for o in outputs)

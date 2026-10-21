@@ -30,7 +30,7 @@ probability `rare_gain_probability` (0.0002) and is lost with `rare_loss_probabi
 | `NITROGEN_FIXER` | needs 60 % less fertility, builds soil 3× faster | growth | `clover` |
 | `MANGROVE` | lives in shallow water, ignores shore wind | growth | `stilts` |
 | `POISONOUS` | grazers refuse half of each bite, and what they eat costs them energy (× 1 − 1.5) | growth | `berries` |
-| `FRUITING` | animals carry its fruit far: far seeds go out as from the lightest seed (a stand-in until M11's seeds carried by grazers, ADR 0019) | growth; grazers get 1.5× the energy from it | `fruit` |
+| `FRUITING` | grazers that eat it carry its seeds in their guts and drop them where they go (M11, ADR 0019; `[flora] fruit_by_wind` brings back the stand-in before it: far seeds as from the lightest seed) | growth; grazers get 1.5× the energy from it | `fruit` |
 | `EMERGENT` | a crown above the canopy: height × 1.5 for light (shade and competition) | 30 % more fertility needed, 2× wind exposure, growth | `crown` |
 
 Poison makes the diet learning of M5 matter: a grazer's meal value from a poisonous

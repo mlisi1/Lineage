@@ -491,6 +491,22 @@ class Flora:
         plant = (fruit * poison).astype(_F)
         return np.where(self.on_algae(ys, xs), _F(cfg.algae_meal_share), plant).astype(_F)
 
+    def fruiting_at(self, ys: Index, xs: Index) -> Mask:
+        """Cells (ys, xs) where a fruiting plant stands (M11: its seeds go in guts)."""
+        return (self._biomass[ys, xs] > 0.0) & has(self._rare[ys, xs], Rare.FRUITING)
+
+    def drop_seeds(
+        self, rng: Generator, ys: Index, xs: Index, genome: Bytes, rare: Bytes, instant: Instant
+    ) -> int:
+        """Seeds an animal carried (``genome``/``rare``, one column per seed) are dropped
+        on cells (ys, xs) and take as any plant's seeds do (M11). Returns how many took."""
+        if ys.size == 0:
+            return 0
+        terrain = self._terrain
+        elevation = terrain.height - _F(terrain.sea_level)
+        temp = temperature(self._cfg, warmth(instant), elevation)
+        return self._establish(rng, ys, xs, genome, rare, temp, elevation)
+
     def on_algae(self, ys: Index, xs: Index) -> Mask:
         """Cells (ys, xs) where a grazer eats algae: no plant stands there."""
         return self._biomass[ys, xs] <= 0.0
@@ -700,10 +716,12 @@ class Flora:
             # Seed production is read before this offset's establishments are written.
             ready = np.clip((self._biomass - _F(cfg.seed_min_biomass)) / span, 0.0, 1.0)
             seed_gene = self._genome[Gene.SEED].astype(_F) / _F(_GENE_MAX)
-            if far:
-                # Animals carry fruit far whatever the seed is like.
+            if far and cfg.fruit_by_wind:
+                # The stand-in for gut seeds: fruit goes far whatever the seed is like.
                 fruit = has(self._rare, Rare.FRUITING)
                 weight = np.where(fruit, _F(1.0), _F(1.0) - seed_gene).astype(_F)
+            elif far:
+                weight = _F(1.0) - seed_gene
             else:
                 weight = _F(cfg.near_weight_wind) + _F(1.0 - cfg.near_weight_wind) * seed_gene
             chance = attempts * ready * weight

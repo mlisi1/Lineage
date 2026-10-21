@@ -177,7 +177,8 @@ Do not create directories outside this layout without updating this file.
     `--set fauna.learning=false` to change one config key for an ablation;
     `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5;
     `--schedule office` to play the owner's presence: `always`, `office`, `office-august`,
-    `conference`, M8; worlds that end go to `runs/<id>/archives/<seed>/`, M10)
+    `conference`, M8; worlds that end go to `runs/<id>/archives/<seed>/`, M10;
+    `--press-every-days 7` presses the god-power button weekly at the desk, M11)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
     (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
     M8 takes the office run and `--baseline` once per other schedule; M11 takes the tuned

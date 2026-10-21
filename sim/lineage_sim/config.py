@@ -232,6 +232,7 @@ class FloraConfig:
     poisonous_growth_cost: float
     fruiting_meal_bonus: float
     fruiting_growth_cost: float
+    fruit_by_wind: bool
     emergent_height_bonus: float
     emergent_need_factor: float
     emergent_growth_cost: float
@@ -410,6 +411,8 @@ class FaunaConfig:
     carrion_decay_hours: float
     dung_fertility: float
     carrion_fertility: float
+    gut_seeds_per_hour: float
+    gut_passage_hours: float
     fire_damage_per_hour: float
     blast_kill_reach: float
     scavenge_rate: float
@@ -525,6 +528,7 @@ class FaunaConfig:
             "forget_hours",
             "meal_memory_hours",
             "competence_hours",
+            "gut_passage_hours",
         )
         for key in positive:
             check(getattr(self, key) > 0, f"{key} must be positive")

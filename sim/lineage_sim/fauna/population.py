@@ -23,7 +23,7 @@ from numpy.random import Generator
 from numpy.typing import NDArray
 
 from lineage_sim import rare
-from lineage_sim.clock import MS_PER_DAY, Season
+from lineage_sim.clock import MS_PER_DAY, Instant, Season
 from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
     CraterFormed,
@@ -38,6 +38,7 @@ from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype
+from lineage_sim.flora import GENE_COUNT as PLANT_GENE_COUNT
 from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora, Wildfire
 from lineage_sim.rare import body_of
 from lineage_sim.rng import FAUNA
@@ -148,6 +149,11 @@ class Fauna:
         self._competent_h = np.zeros(0, dtype=np.float32)
         self._young_eaten = np.zeros(0, dtype=np.float32)
         self._young_burnt = np.zeros(0, dtype=np.float32)
+        # Seeds in the gut (M11): the plant genome and rare genes of the one seed each
+        # creature carries, and the hours until it drops it (negative: none).
+        self._gut_genome = np.zeros((0, PLANT_GENE_COUNT), dtype=np.uint8)
+        self._gut_rare = np.zeros(0, dtype=np.uint8)
+        self._gut_h = np.zeros(0, dtype=np.float32)
         # Remains of the dead, in units of meat mass per cell; they rot away.
         self._carrion = np.zeros(self._shape, dtype=np.float32)
         # Its scent: carrion spread over carrion_scent_cells (creature.spread), kept up to
@@ -328,6 +334,7 @@ class Fauna:
         self._soil = np.float32(self._cfg.carrion_fertility) * self._carrion * (1 - rot)
         self._carrion *= rot
         self._scent *= rot
+        self._pass_seeds(rng, hours, ctx.instant)
         self._live(rng, hours)
         if self._cfg.dung_fertility > 0.0 or self._cfg.carrion_fertility > 0.0:
             land = self._terrain.land
@@ -390,6 +397,9 @@ class Fauna:
             "competent_h": self._competent_h.copy(),
             "young_eaten": self._young_eaten.copy(),
             "young_burnt": self._young_burnt.copy(),
+            "gut_genome": self._gut_genome.copy(),
+            "gut_rare": self._gut_rare.copy(),
+            "gut_h": self._gut_h.copy(),
             "carrion": self._carrion.copy(),
             "scent": self._scent.copy(),
             "next_id": self._next_id,
@@ -420,6 +430,10 @@ class Fauna:
         self._competent_h = np.array(tree["competent_h"], dtype=np.float32)
         self._young_eaten = np.array(tree["young_eaten"], dtype=np.float32)
         self._young_burnt = np.array(tree["young_burnt"], dtype=np.float32)
+        gut = (-1, PLANT_GENE_COUNT)
+        self._gut_genome = np.array(tree["gut_genome"], dtype=np.uint8).reshape(gut)
+        self._gut_rare = np.array(tree["gut_rare"], dtype=np.uint8)
+        self._gut_h = np.array(tree["gut_h"], dtype=np.float32)
         self._carrion = np.array(tree["carrion"], dtype=np.float32).reshape(self._shape)
         self._scent = np.array(tree["scent"], dtype=np.float32).reshape(self._shape)
         self._next_id = int(tree["next_id"])
@@ -532,6 +546,9 @@ class Fauna:
         appetite = (appetite * browse.share(rows, columns)).astype(np.float32)
         appetite[torpid] = 0.0
         eaten = self._flora.graze(rows, columns, appetite)
+        full_bite = body.graze_rate * np.float32(hours)
+        if cfg.gut_seeds_per_hour > 0.0:
+            self._swallow(rng, rows, columns, eaten, full_bite, hours)
         if cfg.dung_fertility > 0.0:
             np.add.at(self._soil, (rows, columns), np.float32(cfg.dung_fertility) * eaten)
         # Defended plants are not only harder to bite: what is eaten is worth less (toxins).
@@ -554,7 +571,6 @@ class Fauna:
             ).astype(np.intp)
             # Algae are no plant form: a meal of them teaches nothing about low or woody.
             gain_index[self._flora.on_algae(rows, columns)] = -1
-            full_bite = body.graze_rate * np.float32(hours)
             bite = np.clip(eaten / np.maximum(full_bite, 1e-9), 0.0, 1.0).astype(np.float32)
             self._learned, self._meal_value = brain.taste(
                 self._learned, gain_index, bite, quality,
@@ -565,6 +581,50 @@ class Fauna:
         ageing = np.where(torpid, np.float32(cfg.hibernation_ageing_share), np.float32(1.0))
         self._age_h = (self._age_h + np.float32(hours) * ageing).astype(np.float32)
         self._idle_h = self._idle_h + np.float32(hours)
+
+    def _swallow(
+        self,
+        rng: Generator,
+        rows: NDArray[np.intp],
+        columns: NDArray[np.intp],
+        eaten: Values,
+        full_bite: Values,
+        hours: float,
+    ) -> None:
+        """Seeds in guts (M11): a grazer eating a fruiting plant swallows one of its seeds
+        now and then, and carries it (one at a time) for about gut_passage_hours."""
+        cfg = self._cfg
+        # Only those eating fruit with an empty gut draw, so the stream is untouched
+        # where no fruit grows.
+        eating = np.flatnonzero(
+            (self._gut_h < 0) & (eaten > 0) & self._flora.fruiting_at(rows, columns)
+        )
+        if eating.size == 0:
+            return
+        bite = np.clip(eaten[eating] / np.maximum(full_bite[eating], 1e-9), 0.0, 1.0)
+        chance = -np.expm1(-cfg.gut_seeds_per_hour * hours * bite)
+        which = eating[rng.random(eating.size) < chance]
+        if which.size == 0:
+            return
+        y, x = rows[which], columns[which]
+        self._gut_genome[which] = self._flora.genome[:, y, x].T
+        self._gut_rare[which] = self._flora.rare[y, x]
+        passage = cfg.gut_passage_hours * rng.uniform(0.5, 1.5, which.size)
+        self._gut_h[which] = passage.astype(np.float32)
+
+    def _pass_seeds(self, rng: Generator, hours: float, instant: Instant) -> None:
+        """Seeds whose time in the gut is up are dropped where their carrier stands."""
+        carried = self._gut_h >= 0
+        if not carried.any():
+            return
+        self._gut_h[carried] -= np.float32(hours)
+        due = np.flatnonzero(carried & (self._gut_h < 0))
+        if due.size == 0:
+            return
+        self._gut_h[due] = -1.0
+        rows, columns = creature.cells_of(self._positions[due], self._shape)
+        genome = np.ascontiguousarray(self._gut_genome[due].T)
+        self._flora.drop_seeds(rng, rows, columns, genome, self._gut_rare[due], instant)
 
     def _scavenge(self, rows: NDArray[np.intp], columns: NDArray[np.intp], hours: float) -> None:
         """Creatures that digest meat eat the carrion where they stand."""
@@ -866,6 +926,8 @@ class Fauna:
         self._meal_value = self._meal_value[keep]
         self._competent_h = self._competent_h[keep]
         self._young_eaten, self._young_burnt = self._young_eaten[keep], self._young_burnt[keep]
+        self._gut_genome, self._gut_rare = self._gut_genome[keep], self._gut_rare[keep]
+        self._gut_h = self._gut_h[keep]
         self._body = body_of(self._cfg, self._genes, self._slots)
         self._compatible = self._compatible[keep][:, keep]
         self._kills = self._kills[keep][:, keep]
@@ -917,6 +979,10 @@ class Fauna:
         zeros = np.zeros(count, dtype=np.float32)
         self._young_eaten = np.concatenate([self._young_eaten, zeros])
         self._young_burnt = np.concatenate([self._young_burnt, zeros])
+        empty = np.zeros((count, PLANT_GENE_COUNT), dtype=np.uint8)
+        self._gut_genome = np.concatenate([self._gut_genome, empty])
+        self._gut_rare = np.concatenate([self._gut_rare, np.zeros(count, dtype=np.uint8)])
+        self._gut_h = np.concatenate([self._gut_h, np.full(count, -1.0, np.float32)])
         # Extend the pair matrices with the newcomers' rows and columns only.
         near = gn.distance(self._genes[old:, None, :], self._genes[None, :, :])
         compatible = np.zeros((old + count, old + count), dtype=np.bool_)
