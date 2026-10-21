@@ -192,7 +192,10 @@ void main(void) {
       float near = 1.0 - (out_ - 1.0) / uReach;
       float k = fract((out_ - 1.0) / uSpacing + turn);
       float width = (1.0 + 1.5 * near * near) / uSpacing;
-      if (k < width) {
+      // Each pixel takes its foam a little before or after its neighbours (its noise), so
+      // a line comes and goes raggedly, over a few frames, never along a coast at once.
+      float jitter = (noise - 0.5) * 0.6 * width;
+      if (k + jitter < width && k + jitter > -0.5 * width) {
         if (out_ <= 2.0) colour = vec4(uFoam, 1.0);
         else if (noise < 0.25 + 0.9 * near) colour = vec4(mix(uSwell, uFoam, near * near * 0.6), 0.3 + 0.6 * near);
       }
@@ -205,8 +208,10 @@ void main(void) {
     bool rising = turn < 0.3;
     if (rising) up = top * ease(turn / 0.3);
     else if (turn < 0.8) up = top * (1.0 - ease((turn - 0.3) / 0.5));
-    if (inland <= up) {
-      colour = (rising && inland > up - 1.5) ? vec4(uFoam, 1.0) : vec4(uShallow, 0.82);
+    // The water's edge is ragged by a pixel (the noise), so it creeps up the sand.
+    float edge = up + (noise - 0.5) * 1.2;
+    if (inland <= edge) {
+      colour = (rising && inland > edge - 1.5) ? vec4(uFoam, 1.0) : vec4(uShallow, 0.82);
     } else if (!rising && inland <= top) {
       colour = vec4(0.0, 0.0, 0.0, uWet * (1.0 - (turn - 0.3) / 0.7));
     }
