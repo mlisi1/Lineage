@@ -145,6 +145,12 @@ const PATCH = 3.6;
 /** In a calm view growth thins in patches this many cells across, with a ragged edge. */
 const CALM_PATCH = 1.6;
 const CALM_RAGGED = 0.07;
+/** A close view's patch of growth: its lower lip this much darker, its upper lip lighter. */
+const LIP_SHADOW = 0.78;
+const LIP_LIGHT = 1.12;
+/** How far (in shares) and how finely (per cell) the border of two kinds wanders in a calm view. */
+const KIND_WANDER = 0.35;
+const KIND_WANDER_FREQUENCY = 1.4;
 /** How much narrower a calm view's dithered transitions are. */
 const CALM_MIX = 0.4;
 /** How far, in biomass, the line between dried and green growth wanders in a calm view. */
@@ -814,7 +820,17 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const felt = rise + mixSlope * relief.slope * dither;
       const step = felt > relief.slope ? 2 : felt < -relief.slope ? 0 : 1;
       // Two kinds side by side: nearer the border, more pixels go to the other.
-      const grows = dithered && dither + 1 < 1 - lead / mixClass ? second : first;
+      // In a calm view the border wanders, as the line between dry and green does, so
+      // that it is not the straight steps of the blend between cells (R5).
+      const wander =
+        calm > 0
+          ? KIND_WANDER *
+            (valueNoise(u * KIND_WANDER_FREQUENCY, v * KIND_WANDER_FREQUENCY, 14) - 0.5 +
+              0.35 * (valueNoise(worldX / PATCH, worldY / PATCH, 15) - 0.5))
+          : 0;
+      const leads = lead + wander;
+      const grows =
+        leads < 0 ? second : dithered && dither + 1 < 1 - leads / mixClass ? second : first;
       if (detailed) {
         toned[at] = step;
         thick[at] = Math.round(grown * 255);
@@ -866,6 +882,26 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const grainHere = grain ? cellHash(worldX, worldY, 8) : 0.5;
       colours[at] =
         grainHere < GRIT ? shade(base, 0.86) : grainHere > 1 - GRIT / 2 ? shade(base, 1.08) : base;
+    }
+  }
+
+  // Growth has a lip where bare ground shows beside it, lit from the upper left as
+  // everything is (R5): a pixel of shadow on its lower edge, one of light on its upper.
+  if (detailed) {
+    const bare = (matterAt: number | undefined): boolean =>
+      matterAt === MATTER.soil || matterAt === MATTER.sand || matterAt === MATTER.rock;
+    const growing = (matterAt: number | undefined): boolean =>
+      matterAt !== undefined && matterAt >= MATTER.grass && matterAt !== MATTER.burnt;
+    for (let py = 0; py < tall; py++) {
+      for (let px = 0; px < wide; px++) {
+        const at = py * wide + px;
+        if (!growing(matter[at])) continue;
+        if (py + 1 < tall && bare(matter[at + wide])) {
+          colours[at] = shade(colours[at] ?? 0, LIP_SHADOW);
+        } else if (py > 0 && bare(matter[at - wide])) {
+          colours[at] = shade(colours[at] ?? 0, LIP_LIGHT);
+        }
+      }
     }
   }
 

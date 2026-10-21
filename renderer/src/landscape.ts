@@ -33,6 +33,11 @@ export const TILES: Readonly<Record<ViewName, number>> = {
   middle: MID_TILE,
   local: 32,
 };
+/**
+ * The middle view reads what grows over the cells around each one (`calm`, as the local
+ * view does), so that cover lies in patches instead of a patchwork cell by cell (R5).
+ */
+const MIDDLE_CALM = 1;
 /** How each view's ground reads the cells (ADR 0007): the map cut, the closer views dithered. */
 const STYLES: Readonly<Record<ViewName, GroundStyle>> = {
   map: "smooth",
@@ -338,7 +343,10 @@ export class Landscape {
         );
       }
       const island = { x0: 0, y0: 0, x1: land.width, y1: land.height };
-      void this.built.middle.ground.repaint({ ...request, shadows: plants.shadows(island) }, 10);
+      void this.built.middle.ground.repaint(
+        { ...request, calm: MIDDLE_CALM, shadows: plants.shadows(island) },
+        10,
+      );
       this.built.middle.plants.show(plants);
       return;
     }
