@@ -147,6 +147,24 @@ const RAIN_LAYERS = [
  */
 const RAIN_POWER: readonly [number, number] = [0.45, 1.35];
 const RAIN_SWELL_S = 18;
+/** Frames a second the screen shows (the board's, R0): what a raindrop falls in one. */
+const FRAME_RATE = 30;
+/**
+ * Snow (round 6): it falls where snow lies at least this deep (0–255, as the sim has it),
+ * this many flakes at full fall, this fast (art pixels a second), swaying this far (art
+ * pixels), this large in each view (art pixels), in three layers far to near.
+ */
+const SNOW_FALLS_FROM = 40;
+const SNOWFLAKES = 480;
+const SNOW_SPEED = 28;
+const SNOW_SWAY = 3;
+const SNOW_SIZE: Readonly<Record<ViewName, number>> = { map: 1, middle: 1.5, local: 2.5 };
+const SNOW_LAYERS = [
+  { share: 0.45, speed: 0.6, size: 0.7, alpha: 0.6 },
+  { share: 0.35, speed: 1, size: 1, alpha: 0.85 },
+  { share: 0.2, speed: 1.5, size: 1.5, alpha: 1 },
+] as const;
+const SNOW_TONES = [0xc8d4e4, 0xe4ecf6, 0xffffff] as const;
 /** Glow: seconds a pulse takes, and the glow round an animal's square on the map (art pixels). */
 const GLOW_PULSE_S = 3.5;
 const GLOW_MAP_PX = 8;
@@ -583,6 +601,7 @@ export class Atmosphere {
     this.drawFires(view, dark);
     for (const effect of this.effects) shake = Math.max(shake, this.drawEffect(effect, view));
     this.drawRain(view);
+    this.drawSnow(view);
     const lightning = this.drawLightning(view);
     if (moment !== null) shake = Math.max(shake, this.drawEnd(moment, view, dtS));
     else this.flood.visible = false;
@@ -1314,11 +1333,20 @@ export class Atmosphere {
     for (const [layer, depth] of RAIN_LAYERS.entries()) {
       const speed = scale.speed * depth.speed * (1 + 0.6 * this.storm);
       const fall: Fall = { speed, slant: speed * lean, salt: 7 + layer };
-      const length = Math.max(Math.round(scale.length * depth.length * (1 + 0.3 * this.storm)), 1);
+      // At least as long as it falls in a frame, as a blur would be: a drop that jumps further
+      // than its own length is taken by the eye for the one above it, and rain seems to rise.
+      const blur = Math.ceil(speed / FRAME_RATE);
+      const length = Math.max(
+        Math.round(scale.length * depth.length * (1 + 0.3 * this.storm)),
+        blur,
+        1,
+      );
       const texture = streakTexture(length, lean);
       const drops = Math.round(RAINDROPS * this.rain * depth.share * scale.count);
       for (let slot = 0; slot < drops; slot++) {
         const at = dropAt(fall, slot, this.timeS, view.width, view.height);
+        // Where it is cold enough for snow to lie, it falls as snow (`drawSnow`).
+        if (this.snowyAt(view, at.x, at.y)) continue;
         const sprite = this.weatherPool.next(texture);
         // The streak's head where the drop is; its tail up the wind.
         sprite.position.set(
@@ -1358,6 +1386,45 @@ export class Atmosphere {
         placeCentred(sprite, x, y, tile, 2, 1);
         sprite.tint = RIPPLE;
         sprite.alpha = 0.6;
+      }
+    }
+  }
+
+  /** Whether the land under screen art pixel (x, y) has snow lying: it is cold there. */
+  private snowyAt(view: View, x: number, y: number): boolean {
+    const land = view.land;
+    if (land?.snow === undefined) return false;
+    const margin = view.margin ?? 0;
+    const cx = Math.floor(view.cells.x0 + (x - margin) / view.tile);
+    const cy = Math.floor(view.cells.y0 + (y - margin) / view.tile);
+    if (cx < 0 || cy < 0 || cx >= land.width || cy >= land.height) return false;
+    return (land.snow[cy * land.width + cx] ?? 0) >= SNOW_FALLS_FROM;
+  }
+
+  /**
+   * Snow falling where it is cold (snow lies there): flakes drifting down slowly in three
+   * layers, swaying, a pixel on the map and larger closer in; where it is warmer the same
+   * weather falls as rain.
+   */
+  private drawSnow(view: View): void {
+    if (this.rain <= 0.01 || view.land?.snow === undefined) return;
+    const size = SNOW_SIZE[view.view];
+    for (const [layer, depth] of SNOW_LAYERS.entries()) {
+      const speed = SNOW_SPEED * depth.speed * (1 + 0.5 * this.storm);
+      const lean = RAIN_LEAN[this.rainKind] * 0.6 + this.storm * 0.3 * Math.sin(this.timeS * 0.7);
+      const fall: Fall = { speed, slant: speed * lean, salt: 31 + layer };
+      const flakes = Math.round(SNOWFLAKES * Math.min(this.rain, 1.2) * depth.share);
+      for (let slot = 0; slot < flakes; slot++) {
+        const at = dropAt(fall, slot, this.timeS, view.width, view.height);
+        const sway = SNOW_SWAY * Math.sin(this.timeS * (1 + cellHash(slot, layer, 432)) + slot);
+        const x = (((at.x + sway) % view.width) + view.width) % view.width;
+        if (!this.snowyAt(view, x, at.y)) continue;
+        const sprite = this.weatherPool.next(this.sprites.fleck);
+        const across = Math.max(Math.round(size * depth.size), 1);
+        sprite.position.set(Math.round(x), Math.round(at.y));
+        sprite.scale.set(across, across);
+        sprite.tint = SNOW_TONES[layer] ?? 0xffffff;
+        sprite.alpha = depth.alpha;
       }
     }
   }

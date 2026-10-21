@@ -661,6 +661,10 @@ try {
     await each(name, fileOf(name, RAIN_SPEED), places[name],
       event(name, RAIN_SPEED, (e) => e.kind === `rain:${rain}`, seconds)); // prettier-ignore
   }
+  // Snow: the winter recording, where snow lies on the high ground, with rain asked for: it
+  // falls as snow where it is cold and as rain where it is not.
+  await each("snow", "recording=winter&every=0&quiet&seed=7&show=day,rain", [140.5, 60.5],
+    (name) => film(page, name, 8)); // prettier-ignore
   // A thunderstorm's lightning sets a fire; it spreads; what it leaves.
   await each("strike", fileOf("fire", EVENT_SPEED), places.fire,
     event("fire", EVENT_SPEED, kind("fire_started"), 5)); // prettier-ignore
@@ -880,6 +884,8 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 <tr><td>The seed's growth seen; the ark's foot blended</td><td>owner, round 5</td><td>Sprouts on burnt ground, made up; the ark's beam fades into a pool of light on the ground</td></tr>
 <tr><td>Nothing popping in or out, nothing in the wrong place</td><td>owner, round 6</td><td>Every film checked frame by frame: flames, cones, craters, sprouts, plants, the dead and the born fade; cones rise; craters leave out the sea; views stay inside the world; the next world comes in the black</td></tr>
 <tr><td>Rocks and creatures drawn over a volcano; what a cone or crater lands on</td><td>owner, round 6</td><td>In the sim, creatures under a new cone or crater die (<code>[fauna] blast_kill_reach</code>); no plant, stone or boulder is drawn on a cone or crater or its bare ring; the cone covers its place; a pixel-art dust cloud hides the change</td></tr>
+<tr><td>Snow falling; rain seeming to rise in a storm</td><td>owner, round 6</td><td>Precipitation falls as snow where snow lies (cold), as rain elsewhere; a raindrop's streak is at least as long as it falls in a frame, so the eye no longer takes it for the drop above it</td></tr>
+<tr><td>Black squares among winter plants up close (a bug since R1)</td><td>found in round 6</td><td>The plants' drawings are packed into textures of at most 2048 × 2048: the winter close view's one sheet was 1024 × 10801, past what the GPU takes</td></tr>
 <tr><td>Tides, after references</td><td>owner, round 6</td><td>A shader draws the waves from each pixel's distance to the shore: lines roll in and break white, the swash runs up the sand with a foam edge, drains, and leaves wet sand that dries</td></tr>
 </tbody></table></div>
 </section>
@@ -927,6 +933,8 @@ ${threeViews(shots.glow, "Glowing animals at night", {})}
 <h3>Rain with thunder</h3>${threeViews(shots.thunder, "Thunder", {})}
 <h3>A thunderstorm</h3>${threeViews(shots.storm, "Thunderstorm", {})}
 <h3>The rain power</h3>${threeViews(shots.soaking, "Soaking rain", {})}
+<h3>Snow</h3>
+<p>Where it is cold enough for snow to lie (the sim's lying snow, from the season and the height of the land), what falls is snow: white flakes drifting down slowly in three layers, swaying, a pixel on the map and larger closer in. Where it is warmer the same spell falls as rain. Here, the winter recording with a spell of rain asked for: it snows on the snowy high ground and rains on the sea and the low land.</p>${threeViews(shots.snow, "Snow", {})}
 <h3>An overcast sky</h3>
 <p>Between rains the sky clouds over now and then (8 spells a month, 3 to 36 hours): the day greys a little less than under rain, and nothing falls. It is only seen: plants and animals live under the same light, and fire is not slowed.</p>${threeViews(shots.cloud, "Overcast", {})}
 </section>

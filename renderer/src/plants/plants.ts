@@ -313,47 +313,73 @@ interface Drawing {
   art: PlantArt;
 }
 
-/** How wide the texture the drawings are packed into may grow, in pixels. */
-const SHEET_WIDTH = 1024;
+/**
+ * How wide and how tall a texture the drawings are packed into may grow, in pixels: within
+ * what every GPU takes (a texture too large draws black). Past the height, a new page.
+ */
+const SHEET_WIDTH = 2048;
+const SHEET_HEIGHT = 2048;
 
-/** Draw `arts` into one texture, in rows, a clear pixel between them. */
+/** Draw `arts` into textures (pages), in rows, a clear pixel between them. */
 function strip(
   arts: readonly StandingArt[],
   inks: PlantInks,
-): { drawings: Map<string, Drawing>; source: CanvasSource } {
-  // Where each goes: along a row until it is full, then on the next.
-  const places: { left: number; top: number }[] = [];
+): { drawings: Map<string, Drawing>; sources: CanvasSource[] } {
+  // Where each goes: along a row until it is full, then on the next; a new page when full.
+  const places: { page: number; left: number; top: number }[] = [];
+  const pages: { wide: number; tall: number }[] = [];
+  let page = 0;
   let left = 1;
   let top = 1;
   let rowTall = 0;
   let wide = 1;
+  const close = (): void => {
+    pages[page] = { wide, tall: top + rowTall + 1 };
+  };
   for (const { art } of arts) {
     if (left + art.width + 1 > SHEET_WIDTH && left > 1) {
       left = 1;
       top += rowTall + 1;
       rowTall = 0;
     }
-    places.push({ left, top });
+    if (top + art.height + 1 > SHEET_HEIGHT && top > 1) {
+      close();
+      page += 1;
+      left = 1;
+      top = 1;
+      rowTall = 0;
+      wide = 1;
+    }
+    places.push({ page, left, top });
     left += art.width + 1;
     rowTall = Math.max(rowTall, art.height);
     wide = Math.max(wide, left);
   }
-  const canvas = document.createElement("canvas");
-  canvas.width = wide;
-  canvas.height = top + rowTall + 1;
-  const context = canvas.getContext("2d");
-  if (context === null) throw new Error("no 2D canvas for the plants");
-  const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
+  close();
+  const contexts = pages.map(({ wide: width, tall: height }) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (context === null) throw new Error("no 2D canvas for the plants");
+    return { context, source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) };
+  });
   const drawings = new Map<string, Drawing>();
   arts.forEach(({ key, art, ramp, accent, wood }, index) => {
-    const at = places[index] ?? { left: 1, top: 1 };
+    const at = places[index] ?? { page: 0, left: 1, top: 1 };
+    const sheet = contexts[at.page];
+    if (sheet === undefined) return;
     const pixels = colourArt(art, ramp, accent, wood, inks);
-    context.putImageData(new ImageData(pixels.rgba, pixels.width, pixels.height), at.left, at.top);
+    sheet.context.putImageData(
+      new ImageData(pixels.rgba, pixels.width, pixels.height),
+      at.left,
+      at.top,
+    );
     const frame = new Rectangle(at.left, at.top, art.width, art.height);
-    drawings.set(key, { texture: new Texture({ source, frame }), art });
+    drawings.set(key, { texture: new Texture({ source: sheet.source, frame }), art });
   });
-  source.update();
-  return { drawings, source };
+  for (const { source } of contexts) source.update();
+  return { drawings, sources: contexts.map(({ source }) => source) };
 }
 
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
@@ -700,7 +726,7 @@ interface Sheet {
 }
 interface SharedSheet {
   drawings: Map<string, Drawing>;
-  source: CanvasSource;
+  sources: CanvasSource[];
   tall: number;
   users: number;
 }
@@ -751,7 +777,7 @@ function sheetOf(
       released = true;
       mine.users -= 1;
       if (mine.users > 0) return;
-      mine.source.destroy();
+      for (const source of mine.sources) source.destroy();
       sheets.delete(key);
     },
   };
