@@ -497,8 +497,9 @@ needs a note in `docs/decisions/`.
   at the screen's resolution and frame rate; a barren ring round cones and craters;
   overcast spells (seen only); the world greyed under cloud; rain, fire, lava, crater,
   ark, seed and tides reworked; what stands sorted among the plants. Round 6: no pops,
-  creatures under new cones and craters die, tides by a shader, falling snow. Look
-  tuning goes on.)
+  creatures under new cones and craters die, tides by a shader, falling snow. Round 7:
+  one kind of fall per view, the open sea's swell, a larger meteor in the middle view.
+  The owner called the look final on 2026-10-21; merged into `main`.)
 
 ### R5 — Final rendering pass and device benchmark
 - **Deliver**: the look of terrain, plants, creatures and atmosphere tuned together, as one
