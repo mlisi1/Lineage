@@ -707,20 +707,20 @@ try {
   );
   // The end of a world: the committed recording, on the map, all three minutes of it.
   if (wanted("end")) {
-  await open(page, address, "recording=end&speed=1800&quiet&seed=3");
-  await skip(
-    page,
-    Math.max(
-      dueOf(
-        loadStream(fileURLToPath(new URL("../public/stream/end.json", import.meta.url))),
-        1800,
-        kind("world_ended"),
-      ) - 1,
-      0,
-    ),
-  );
-  // The acts' moments, a second in from the start of the film.
-  shots.end = await film(page, "end", 184, 1, [16, 51, 96, 131, 166]);
+    await open(page, address, "recording=end&speed=1800&quiet&seed=3");
+    await skip(
+      page,
+      Math.max(
+        dueOf(
+          loadStream(fileURLToPath(new URL("../public/stream/end.json", import.meta.url))),
+          1800,
+          kind("world_ended"),
+        ) - 1,
+        0,
+      ),
+    );
+    // The acts' moments, a second in from the start of the film.
+    shots.end = await film(page, "end", 184, 1, [16, 51, 96, 131, 166]);
   }
 } finally {
   await browser.close();
@@ -887,6 +887,10 @@ nav ol { margin: 0; padding-left: 1.2em; columns: 2; font-size: 0.92rem; }
 <tr><td>Snow falling; rain seeming to rise in a storm</td><td>owner, round 6</td><td>Precipitation falls as snow where snow lies (cold), as rain elsewhere; a raindrop's streak is at least as long as it falls in a frame, so the eye no longer takes it for the drop above it</td></tr>
 <tr><td>Black squares among winter plants up close (a bug since R1)</td><td>found in round 6</td><td>The plants' drawings are packed into textures of at most 2048 × 2048: the winter close view's one sheet was 1024 × 10801, past what the GPU takes</td></tr>
 <tr><td>Tides, after references</td><td>owner, round 6</td><td>A shader draws the waves from each pixel's distance to the shore: lines roll in and break white, the swash runs up the sand with a foam edge, drains, and leaves wet sand that dries</td></tr>
+<tr><td>Rain and snow falling mixed</td><td>owner, round 7</td><td>A view's whole fall is one kind: snow when at least half its land has snow lying, rain otherwise, cross-fading if that changes during a spell</td></tr>
+<tr><td>The water away from the coast should move</td><td>owner, round 7</td><td>The open sea's swell: faint crests across the screen, broken into dashes that come and go, drift down the sea; on the map, fainter in the middle view, none up close</td></tr>
+<tr><td>The meteor too small in the middle view</td><td>owner, round 7</td><td>Its streak is drawn 1.8 times larger there and falls from further up</td></tr>
+<tr><td>A dust cloud's dither jumping in one frame</td><td>found in round 7</td><td>Each cloud is painted once and stretched as it swells, instead of painted anew at each size</td></tr>
 </tbody></table></div>
 </section>
 
@@ -910,7 +914,13 @@ ${lightChart(officePoints, officeFirst)}
 <section id="light">
 <h2>The light</h2>
 <p>A tint multiplied over the land, plants and animals. Night is moonlit blue, dusk (the owner away) is rose, dawn (the owner back) is lilac, and the day is graded by the season. Each of the sim's 10-minute steps is eased in over the time before the next.</p>
-<div class="stills">${["day", "dawn", "dusk", "night", "moon"].filter((n) => shots.lights[n] !== undefined).map((n) => `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`).join("")}</div>
+<div class="stills">${["day", "dawn", "dusk", "night", "moon"]
+  .filter((n) => shots.lights[n] !== undefined)
+  .map(
+    (n) =>
+      `<figure><img src="${uri(shots.lights[n].poster)}" width="256" height="150" alt="The map at ${n}"><figcaption><strong>${n}</strong></figcaption></figure>`,
+  )
+  .join("")}</div>
 ${threeViews(shots.day, "A day at the desk", { map: "The office stream from midnight, a sim-day in a minute: night, the owner arriving (dawn), day, leaving (dusk), night.", middle: "", local: "" })}
 <div class="table"><table><thead><tr><th>Light</th><th>Multiplier</th></tr></thead><tbody>
 <tr><td>Night</td><td>${swatch(NIGHT)}</td></tr><tr><td>Dusk</td><td>${swatch(DUSK)}</td></tr><tr><td>Dawn</td><td>${swatch(DAWN)}</td></tr>
@@ -934,7 +944,7 @@ ${threeViews(shots.glow, "Glowing animals at night", {})}
 <h3>A thunderstorm</h3>${threeViews(shots.storm, "Thunderstorm", {})}
 <h3>The rain power</h3>${threeViews(shots.soaking, "Soaking rain", {})}
 <h3>Snow</h3>
-<p>Where it is cold enough for snow to lie (the sim's lying snow, from the season and the height of the land), what falls is snow: white flakes drifting down slowly in three layers, swaying, a pixel on the map and larger closer in. Where it is warmer the same spell falls as rain. Here, the winter recording with a spell of rain asked for: it snows on the snowy high ground and rains on the sea and the low land.</p>${threeViews(shots.snow, "Snow", {})}
+<p>Where it is cold enough for snow to lie (the sim's lying snow, from the season and the height of the land), what falls is snow: white flakes drifting down slowly in three layers, swaying, a pixel on the map and larger closer in. A view's whole fall is one kind (round 7): snow when at least half the land in sight has snow lying, rain otherwise, the two cross-fading if that changes during a spell. Here, the winter recording with a spell of rain asked for, over its snowy high ground.</p>${threeViews(shots.snow, "Snow", {})}
 <h3>An overcast sky</h3>
 <p>Between rains the sky clouds over now and then (8 spells a month, 3 to 36 hours): the day greys a little less than under rain, and nothing falls. It is only seen: plants and animals live under the same light, and fire is not slowed.</p>${threeViews(shots.cloud, "Overcast", {})}
 </section>
@@ -988,7 +998,7 @@ ${threeViews(shots.ark, "The ark", {})}
 
 <section id="sea">
 <h2>Algae, waves and the tide</h2>
-<p>M11's algae on the shallow sea, two weeks after the save: olive fronds in clumps, as thick as their biomass. The waves are drawn by a shader from each pixel's distance to the shore, after how top-down pixel water is drawn (ADR 0021): lines of lighter water form out at sea, faint and broken, and roll in, wider and brighter, breaking white at the shore; then the swash runs up the sand with a white edge while it rises, drains back more slowly, and leaves a darker stripe of wet sand that dries as the next wave comes. A wave every 5 s, on a front sweeping along the coast at 5 cells a second; the tide, turning over a minute, sets how far the swash runs. The map has the breaking lines without a swash. The films are on the coast by the thickest algae, 30 s.</p>
+<p>M11's algae on the shallow sea, two weeks after the save: olive fronds in clumps, as thick as their biomass. The waves are drawn by a shader from each pixel's distance to the shore, after how top-down pixel water is drawn (ADR 0021): lines of lighter water form out at sea, faint and broken, and roll in, wider and brighter, breaking white at the shore; then the swash runs up the sand with a white edge while it rises, drains back more slowly, and leaves a darker stripe of wet sand that dries as the next wave comes. A wave every 5 s, on a front sweeping along the coast at 5 cells a second; the tide, turning over a minute, sets how far the swash runs. The map has the breaking lines without a swash. Out past the waves the open sea has its swell (round 7): faint crests lying across the screen, bent by a wide noise and broken into short dashes that come and go, drift down the sea, a crest every 6 s; on the map, fainter in the middle view, and none up close, where the water away from the shore is calm. The films are on the coast by the thickest algae, 30 s.</p>
 ${threeViews(shots.algae, "Algae and the tide", {})}
 </section>
 
@@ -1012,7 +1022,7 @@ ${figure(shots.end, "World 1 ends and world 2 rises", "The whole sequence, as it
 
 <section id="tests">
 <h2>Tests</h2>
-<p>Renderer: ${tests.units} unit and ${tests.browser} browser tests listed. The atmosphere's unit tests were run for this report: <span class="pass">${units.passed} passed</span>, ${units.failed} failed. Python: weather (spell rates by season, kinds and lengths, the fire told each hour, state), lightning only in storms, rain slowing a fire, fire killing animals, the v11 to v12 migration and fixture, the stream's staging and lands after events.</p>
+<p>Renderer: ${tests.units} unit and ${tests.browser} browser tests listed. The atmosphere's unit tests were run for this report: <span class="pass">${units.passed} passed</span>, ${units.failed} failed. Python: weather (spell rates by season, kinds and lengths, the fire told each hour, state), lightning only in storms, rain slowing a fire, fire killing animals, a new cone or crater killing the animals on it, events staged outside a step seen as the step's own (<code>World.witness</code>), the v11 to v12 migration and fixture, the stream's staging and lands after events.</p>
 <div class="two">
 <div><h3>Browser (<code>tests/e2e/atmosphere.spec.ts</code>)</h3><ul>${tests.atmosphere.map((t) => `<li>${escape(t)}</li>`).join("")}</ul></div>
 <div><h3>Unit (<code>tests/atmosphere/</code>)</h3><ul>${units.names.map((t) => `<li>${escape(t)}</li>`).join("")}</ul></div>
