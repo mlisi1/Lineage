@@ -16,10 +16,15 @@
 export type WaterLook = "hue" | "murk" | "glass";
 export const WATER_LOOKS: readonly WaterLook[] = ["hue", "murk", "glass"];
 
-/** The water at a place: its colour (0xRRGGBB) and how deep, 0 at the shore … 1 deep. */
+/**
+ * The water at a place: its colour (0xRRGGBB), how deep for its look, 0 at the shore … 1
+ * deep, and how far below the sea it is in the land's height units (R5: whether a walker
+ * wades or is out of its depth).
+ */
 export interface Sea {
   colour: number;
   depth: number;
+  below?: number;
 }
 
 /** The water at a place in cells, or null on land. */

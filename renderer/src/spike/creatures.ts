@@ -29,6 +29,16 @@ import {
 import type { CreatureSeed } from "./fixture";
 import type { Passable } from "./habitat";
 import { dotOf, dotSize } from "../creatures/markers";
+import {
+  RIPPLES,
+  bobAt,
+  effortOf,
+  paceIn,
+  rippleAt,
+  ringTexture,
+  wetOf,
+  type Wet,
+} from "../creatures/wading";
 import { MAP_TILE } from "../terrain/ground";
 import type { Random } from "../rng";
 
@@ -124,6 +134,15 @@ interface Creature {
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
   seaKey: number;
+  /** A walker in the water (R5, `creatures/wading.ts`): how hard it is for it (0–1). */
+  effort: number;
+  /** Whether the water holds it, and how fast it goes there against on land. */
+  wet: Wet;
+  waterPace: number;
+  /** The rings that spread from it in the water, made the first time it wades. */
+  ripples: Sprite[] | null;
+  /** Its legs' sprites and the joint each of its parts rides, made the first time it wades. */
+  legSprites: Set<Sprite> | null;
   /** Glass: what draws the body see-through, once it needs one. */
   glass?: AlphaFilter;
   /** The joint at its widest, which breathes; and how far into a breath it started. */
@@ -133,6 +152,8 @@ interface Creature {
   arriving?: { age: number; lasts: number };
 }
 
+/** Ripples round a walker in the water: the foam's white. */
+const RIPPLE_TINT = 0xf4fbff;
 /** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
 const ARRIVE_STEPS = 4;
 /** Seconds a creature that died takes to fade from where it last stood. */
@@ -449,6 +470,9 @@ export class CreatureLayer {
       if (inView && posed) {
         this.pose(creature, dtS);
         if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
+        else if (creature.motion !== null && creature.arriving === undefined) {
+          this.wade(creature, head);
+        }
       }
       if (creature.arriving !== undefined) {
         creature.arriving.age += dtS;
@@ -602,6 +626,11 @@ export class CreatureLayer {
         .filter((child): child is Sprite => child instanceof Sprite)
         .map((sprite) => ({ sprite, colour: sprite.tint, alpha: sprite.alpha })),
       seaKey: -1,
+      effort: effortOf(seed.aquatic),
+      wet: "dry",
+      waterPace: 1,
+      ripples: null,
+      legSprites: null,
       pen: seed.pen,
       container,
       marker,
@@ -644,12 +673,81 @@ export class CreatureLayer {
     }
   }
 
+  /**
+   * A walker in the water (R5, `creatures/wading.ts`): wading in the shallows its legs are
+   * under the water; out of its depth they are gone from sight and its body is sunk but for
+   * its head, and it bobs; ripples spread from it either way, and it goes slower, all as
+   * much as the water is hard for it.
+   */
+  private wade(creature: Creature, head: Point): void {
+    const sea = this.sea?.(head.x, head.y) ?? null;
+    const wet = wetOf(sea?.below ?? 0);
+    const { effort } = creature;
+    creature.wet = wet;
+    creature.waterPace = paceIn(wet, effort);
+    if (wet === "dry" && creature.ripples === null) return;
+    // Colours change only when the water does.
+    const key = wet === "dry" ? -1 : (wet === "shallow" ? 1000 : 2000) + seaKey(sea);
+    if (key !== creature.seaKey) {
+      creature.seaKey = key;
+      creature.legSprites ??= new Set(
+        creature.legs.flatMap((leg) => [
+          leg.upper,
+          ...(leg.lower === null ? [] : [leg.lower]),
+          ...leg.edges,
+          ...(leg.sole === null ? [] : [leg.sole]),
+        ]),
+      );
+      const jointOf = new Map(
+        creature.sprites.map((sprite, i) => [sprite, creature.plan.parts[i]?.joint ?? 0]),
+      );
+      for (const { sprite, colour, alpha } of creature.paints) {
+        const leg = creature.legSprites.has(sprite);
+        const sunk = sea !== null && (leg || (wet === "deep" && (jointOf.get(sprite) ?? 0) > 0));
+        if (wet === "deep" && leg) {
+          sprite.alpha = 0;
+        } else if (sunk && alpha >= 1) {
+          sprite.tint = underWater(colour, sea, false, this.water);
+          sprite.alpha = alpha;
+        } else {
+          sprite.tint = colour;
+          // Its shadow on the ground does not fall on the water.
+          sprite.alpha = alpha < 1 && wet !== "dry" ? 0 : alpha;
+        }
+      }
+    }
+    creature.container.y = bobAt(wet, effort, this.clock, creature.breathOffset);
+    // Rings spread from its widest part.
+    const chest = creature.joints[creature.chest] ?? head;
+    if (wet !== "dry" && creature.ripples === null) {
+      creature.ripples = Array.from({ length: RIPPLES }, () => {
+        const ring = new Sprite({ texture: ringTexture(3), anchor: 0.5 });
+        ring.tint = RIPPLE_TINT;
+        return creature.container.addChildAt(ring, 0);
+      });
+    }
+    creature.ripples?.forEach((ring, k) => {
+      const ripple = rippleAt(wet, effort, creature.plan.length, this.clock, k);
+      ring.visible = ripple !== null;
+      if (ripple === null) return;
+      ring.texture = ringTexture(ripple.across * this.body.pixels);
+      ring.scale.set(1 / this.body.pixels);
+      ring.alpha = ripple.alpha;
+      ring.position.set(chest.x, chest.y - creature.container.y);
+    });
+  }
+
   /** Anchored: live near where the sim has it, and pull the chain after the head. */
   private live(creature: Creature, dtS: number): Point {
     const { plan, joints, motion } = creature;
     const head = joints[0] ?? { x: 0, y: 0 };
     if (motion === null) return head;
-    const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
+    const walker = {
+      head,
+      heading: creature.heading,
+      pace: plan.pace * creature.waterPace,
+      length: plan.length,
+    };
     const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
     const stride = drive(motion, walker, dtS, this.random, free);
     creature.heading = walker.heading;

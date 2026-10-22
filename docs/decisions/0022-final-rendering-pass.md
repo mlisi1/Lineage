@@ -102,6 +102,20 @@ stand in the sea. Reeds were the worst, and since round 3 grass clumps spill int
 next cell. A plant's foot must now be on the painted land and as far from the waterline
 as the swash reaches in its view; otherwise it and its shadow are left out.
 
+### Animals in the water (2026-10-22)
+
+On `main` the simulation lets a land animal into the sea. It pays heavily for each hour
+there and drowns when its energy runs out (M11, on the coordination board), so 1.1 % of
+the land animals' positions in `life.json` are on the water, and a few swim far out for
+days. On `m11-tuning`, the shallow shelf (≤ `wading_depth`, 0.03) costs nothing. The owner:
+"creatures can be in shallow water as long as it's clear they're struggling more than on
+land, unless they have some share of the aquatic gene". The renderer shows the
+simulation's place and never moves an animal out of the water. It draws the effort,
+`1 − AQUATIC / 0.6`: in the shallows legs under the water, slower and ripples; out of its
+depth legs out of sight, the body sunk but for the head, slower still, bobbing, faster
+and wider ripples. Whether wading on the shelf should also cost energy in the simulation
+is M11's lever and the owner's call: M11 made it free on the owner's word (2026-10-20).
+
 ## Consequences
 
 - The wire gains `young` (additive). S1 sends it as `tools/stream.py` does. M11's merge

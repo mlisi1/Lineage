@@ -144,25 +144,9 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **Pitfalls**: Vite's dev server does not reload the paint worker when
   `terrain/ground.ts` changes (restart it, or `?painter=inline`). The wire's `young` is
   additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
-- **Next: animals seen on water**, investigated 2026-10-21, not yet fixed. Findings:
-  - Wading (`wading_depth = 0.03`) is only on `m11-tuning`, not in `main` or here, so in
-    R5's recordings no land animal should be in the sea.
-  - The sim does put some there: in `life.json`, 1.1 % of the positions of land animals
-    (`AQUATIC` < 0.5) are on the water as painted, most just off the shore (median 0.023
-    below sea level). The sim judges land by whole cells while the ground paints the coast
-    between them. One animal stands far out at sea (0.375 below).
-  - The renderer follows: `reanchor` and `drive` (`creatures/motion.ts`) send an anchored
-    animal to where the sim has it with `travel`, which never stops at water ("going to
-    where the sim has it never does"). Only strolls and `settle` at birth respect
-    `passableIn`. Only the head is tested, so a long tail can trail over the water, and the
-    swash runs over the beach at high tide.
-  - Fix to propose to the owner: move an anchor on painted water to the nearest standable
-    place (as `settle` does at birth); keep the body's joints, not only the head, off the
-    water; keep walkers beyond the swash as plants are (`PlantLayer.ashore`). Once M11's
-    wading reaches `main`, waders are drawn in the shallows on purpose (item 10).
-  - Measure again after the fix with the same count over `life.json` (sim positions
-    against `heightAt`), and look at the far-at-sea animal: a sim question for M11 if it is
-    not a swimmer.
+- **Next**: animals through bushes and trees, bodies folding, legs in turn (worked on in
+  parallel on 2026-10-22 in worktrees `../Lineage-r5-bush`, `-fold`, `-legs`, branches
+  `r5-bush`, `r5-fold`, `r5-legs`, merged into `r5-final` when done).
 
 ### R5 checklist (the owner, 2026-10-21)
 
@@ -175,7 +159,9 @@ below was taken in scope by the owner. Tests wait until the look is called final
 **Known from R3 and R4**
 - [x] Plants that seem to stand on water (`plants.ts` `aboveSea` against the blended coast):
   a plant's foot must be on the painted land and beyond the swash (`PlantLayer.ashore`)
-- [ ] Animals seen on water (check against M11's wading first)
+- [x] Animals seen on water (check against M11's wading first): the sim does put walkers
+  in the sea (they pay for it and drown; M11 lets them wade the shelf free); the renderer
+  now shows it: wading in the shallows, struggling out of their depth (`creatures/wading.ts`)
 - [x] The R3 demo clicks out: a click or tap is the view button (`toMap` stays)
 - [ ] Animals do not walk through bushes and trees
 - [ ] A body never folds through itself as it turns
@@ -199,7 +185,8 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [x] 7. Young animals look like adults (age is not on the wire)
 - [ ] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning
 - [ ] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births
-- [ ] 10. Wading has no look (after M11 reaches main)
+- [x] 10. Wading has no look (after M11 reaches main): drawn from the depth, ready for
+  M11's shelf (`WADE_DEPTH` = its `wading_depth`)
 - [ ] 11. Chronicle entries carry a place and a species the scroll does not use
 
 **Rough edges**

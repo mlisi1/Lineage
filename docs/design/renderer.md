@@ -962,6 +962,14 @@ Round 1, items 1–7:
   (none, warmer, cooler, darker, warmer and darker: the owner); three to six to a cell by biomass, in clumps round a point
   of their cell that cross into the next; thin grass leaves a cell bare now and then.
 - **Snow** lies only where the simulation has it (above); bare heights are rock.
+- **Land animals in the water** (`creatures/wading.ts`). The simulation lets a walker
+  into the sea: it pays for every hour there and drowns (M11 makes the shallow shelf free).
+  The renderer draws what it says, never moving an animal out: in the shallows (no deeper
+  than `WADE_DEPTH`, 0.03, M11's `wading_depth`) its legs are under the water, it slows by
+  up to 45 % and ripples spread from it; out of its depth its legs are gone from sight, its
+  body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
+  faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
+  they struggle more than on land unless they are partly aquatic).
 - **Nothing stands on the water.** A plant's foot must be on the land as painted (heights
   between cells, `heightAt`, as animals read them) and as far from the waterline as the
   swash runs up the beach at high tide in that view; otherwise it, and its shadow, is left

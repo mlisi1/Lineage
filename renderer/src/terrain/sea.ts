@@ -91,7 +91,7 @@ export function seaAt(land: Land): SeaAt {
     const below = land.seaLevel - heightAt(land, x, y);
     if (below <= 0) return null;
     const band = bands.find((candidate) => below <= candidate.limit) ?? bands[bands.length - 1];
-    return { colour: band?.colour ?? 0, depth: Math.min(below / deepest, 1) };
+    return { colour: band?.colour ?? 0, depth: Math.min(below / deepest, 1), below };
   };
 }
 
