@@ -14,6 +14,7 @@ import { colour, lookOf } from "./creatures/body";
 import { ownColours, speciesColours, type SpeciesColour } from "./creatures/colours";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
+import { DYING, Remains, type BodyView, type Cause, type Laid } from "./creatures/remains";
 import {
   parseRareConfig,
   rareLooks,
@@ -23,7 +24,7 @@ import {
 } from "./creatures/rare";
 import type { SeaAt } from "./creatures/water";
 import type { Subject } from "./director";
-import type { ViewName } from "./landscape";
+import { TILES, type ViewName } from "./landscape";
 import type { PlantLayer } from "./plants/plants";
 import type { CreaturesMessage, FaunaMessage, Message } from "./protocol";
 import type { Random } from "./rng";
@@ -131,8 +132,13 @@ export class Herd {
   private glowBits = 0;
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
-  /** Told where each animal that dies was last (R4: the fire's dead leave a puff of ash). */
-  onGone: ((x: number, y: number) => void) | null = null;
+  /**
+   * Told where each animal that dies was last, and of what if the stream says (R4: the
+   * fire's dead leave a puff of ash).
+   */
+  onGone: ((x: number, y: number, cause: Cause | undefined) => void) | null = null;
+  /** What deaths and landings leave (R5): bones, dust, bubbles, splashes. */
+  readonly remains = new Remains();
   /**
    * Asked of each animal new to the scene where it is (R4): whether it arrives with the ark,
    * so comes into being over this many seconds; 0 for one simply born.
@@ -161,7 +167,7 @@ export class Herd {
 
   /** The containers to add to the world layer (in cells): the animals not among plants, and the dots. */
   get containers(): Container[] {
-    return [this.layers.middle.container, this.layers.local.container];
+    return [this.layers.middle.container, this.layers.local.container, this.remains.over];
   }
 
   /** The latest land, and the sea read from it when it changes. */
@@ -189,6 +195,37 @@ export class Herd {
     } else if (message.type === "species") {
       for (const species of message.species) this.names.set(species.id, species.name);
     } else if (message.type === "creatures") this.takeCreatures(message);
+    if (message.type === "clock" || message.type === "creatures") this.remains.now = message.t_ms;
+    // A new world: nothing of the old one lies on its land.
+    if (message.type === "events" && message.events.some(({ kind }) => kind === "world_began")) {
+      this.remains.clear();
+    }
+  }
+
+  /** Where slot `slot` is drawn in each view's layer, as it lies (`remains.ts`). */
+  private laid(slot: number): Record<BodyView, Laid> {
+    const of = (layer: CreatureLayer): Laid => {
+      const { joints, radii } = layer.spine(slot);
+      const head = joints[0] ?? { x: 0, y: 0 };
+      const tail = joints[joints.length - 1] ?? head;
+      let length = 0;
+      for (let i = 1; i < joints.length; i++) {
+        const a = joints[i - 1];
+        const b = joints[i];
+        if (a !== undefined && b !== undefined) length += Math.hypot(b.x - a.x, b.y - a.y);
+      }
+      // The body reaches past its end joints by their radii.
+      length += (radii[0] ?? 0) + (radii[radii.length - 1] ?? 0);
+      const centre = layer.centre(slot);
+      return {
+        x: centre.x,
+        y: centre.y,
+        heading: Math.atan2(head.y - tail.y, head.x - tail.x),
+        length,
+        width: 2 * Math.max(0, ...radii),
+      };
+    };
+    return { middle: of(this.layers.middle), local: of(this.layers.local) };
   }
 
   private genomeOrder: readonly number[] = GENE_NAMES.map((_, index) => index);
@@ -250,14 +287,24 @@ export class Herd {
   }
 
   private takeCreatures(message: CreaturesMessage): void {
-    if (this.onGone !== null) {
-      const alive = new Set(message.ids);
-      for (const [id, at] of this.roster.where) if (!alive.has(id)) this.onGone(at.x, at.y);
+    const causes = new Map((message.died ?? []).map(({ id, cause }) => [id, cause]));
+    const alive = new Set(message.ids);
+    const layers = Object.values(this.layers);
+    // The dead go where they fell, as their cause says, and leave their remains (R5).
+    for (const [id, at] of this.roster.where) {
+      if (alive.has(id)) continue;
+      const cause = causes.get(id);
+      this.onGone?.(at.x, at.y, cause);
+      const slot = this.roster.slotOf(id);
+      if (slot === undefined) continue;
+      if (cause !== undefined && this.layers.middle.has(slot)) {
+        this.remains.died(cause, this.laid(slot));
+      }
+      for (const layer of layers) layer.remove(slot, true, DYING[cause ?? "unknown"]);
     }
     const census = new Set(this.roster.species.values());
     const { placed, removed } = this.roster.take(message);
-    const layers = Object.values(this.layers);
-    // The dead fade away where they last stood.
+    // Any left (it should not happen) are taken off.
     for (const slot of removed) for (const layer of layers) layer.remove(slot, true);
     // A new species, or one gone: newcomers take the kinds of the census as it is now.
     const changed =
@@ -286,15 +333,19 @@ export class Herd {
     }
     for (const id of this.drawnGrowth.keys())
       if (!this.roster.where.has(id)) this.drawnGrowth.delete(id);
+    const landed = new Set(message.landed ?? []);
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
-      // An ark's newcomer comes into being under its light; one born, quickly.
-      const arriving = this.arrival?.(seed.x, seed.y) || BORN_S;
+      // An ark's newcomer comes into being under its light; one born, quickly; one landed
+      // from the sea is there at once, under a splash (R5).
+      const ark = this.arrival?.(seed.x, seed.y) ?? 0;
+      const arriving = ark > 0 ? ark : landed.has(id) ? 0 : BORN_S;
       for (const layer of layers) {
         layer.place(slot, seed);
         if (arriving > 0) layer.arrive(slot, arriving);
       }
+      if (landed.has(id)) this.remains.landed(this.laid(slot));
     }
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);
@@ -400,6 +451,7 @@ export class Herd {
       this.layers.middle.show(view === "middle" ? "bodies" : view === "map" ? "markers" : "hidden");
       this.layers.local.show(view === "local" ? "bodies" : "hidden");
     }
+    this.remains.update(dtS, view, TILES[view]);
     const layer = view === "local" ? this.layers.local : this.layers.middle;
     // The trees and bushes of the view: its animals keep clear of them (R5).
     if (view !== "map") layer.standAmong(plants);
