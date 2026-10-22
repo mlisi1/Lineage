@@ -206,7 +206,7 @@ the middle view, 93 for the local one).
 
 A creature is seen from above: a head that moves and a chain of joints that follows it
 at fixed distances, which bends the body by itself. Legs are placed by two-bone inverse
-kinematics: a foot stays planted until the body has left it behind. A body is a list of
+kinematics: feet step in turn on a gait cycle (R5). A body is a list of
 parts riding the joints (`src/creatures/body.ts`): discs, wedges and bars, each with a size, a place
 and a colour, all tinted sprites of one atlas, so a body costs no geometry, only
 transforms. The derived values (mass, leg pairs, speeds) come from
@@ -970,6 +970,28 @@ Round 1, items 1–7:
   body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
   faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
   they struggle more than on land unless they are partly aquatic).
+- **Legs step in turn** (`walk` in `src/spike/creatures.ts`). A legged body goes once
+  through a gait cycle for every 1.5 lengths of its shortest stepping leg it walks. Each
+  foot is in the air for 40 % of the cycle and stands still for the rest. The two feet of
+  a pair are half a cycle apart, and so are the same side's feet of neighbouring pairs:
+  diagonal feet swing together (alternating with one pair, a trot with two, tripods with
+  three), each pair 0.06 of a cycle after its partner in front. A swinging foot eases from
+  where it lifted to a point ahead of its rest by half of what the body walks while it
+  stands, drawn a little lifted toward the light; once down it does not slide. A body
+  creeping, turning or stopping still steps at least once in 0.8 s while a foot is in the
+  air or out of place, so it comes to rest with every foot under it. A foot far from its
+  place (a body moved, or back in view) is put there. Flippers still row on their own
+  stroke.
+- **No body folds through itself.** The chain (`followChain`) keeps each joint within a
+  bend set by the kind of body: a total from head to tail (`BODY_BEND`: worm, snake and eel
+  about 3 rad, curving into a U; newt and lizard 2; fish 1.4; beast 1; the shelled, short
+  and many-legged 0.3–0.8), shared evenly among the joints. The head turns at most 0.6 rad
+  from the body behind it (`NECK_TURN`). A long body walks a turn as an arc, never tighter
+  than `spacing / sin(NECK_TURN)`; a goal inside that circle stops a stroll short, and a
+  walk back to the anchor goes on ahead until it can turn. The short and stiff (hopper,
+  insect, tortoise, beetle, spider, crab) turn on the spot about their middle joint.
+  Looking about during a pause turns the head, not the body. A torpid animal still lies
+  curled; waking, its body straightens over about a tenth of a second.
 - **Nothing stands on the water.** A plant's foot must be on the land as painted (heights
   between cells, `heightAt`, as animals read them) and as far from the waterline as the
   swash runs up the beach at high tide in that view; otherwise it, and its shadow, is left

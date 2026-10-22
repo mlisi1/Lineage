@@ -164,8 +164,8 @@ below was taken in scope by the owner. Tests wait until the look is called final
   now shows it: wading in the shallows, struggling out of their depth (`creatures/wading.ts`)
 - [x] The R3 demo clicks out: a click or tap is the view button (`toMap` stays)
 - [ ] Animals do not walk through bushes and trees
-- [ ] A body never folds through itself as it turns
-- [ ] Legged animals step with their legs in turn
+- [x] A body never folds through itself as it turns (bend limits per kind, `chain.ts`)
+- [x] Legged animals step with their legs in turn (a gait cycle, `walk`)
 - [ ] Plants do not pop in over animals (round 2: no tuft pops over the animal followed;
   rows a quarter of a cell tall may still swap a plant and an animal at a row line)
 - [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it)

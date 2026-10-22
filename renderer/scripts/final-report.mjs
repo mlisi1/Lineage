@@ -53,6 +53,10 @@ const STILLS = {
 const FOLLOWS = {
   follow9: { query: "seed=9&follow=60&quiet", seconds: 6 },
   follow4: { query: "seed=4&follow=60&quiet", seconds: 6 },
+  // A lizard followed close: its legs and how its body bends as it turns.
+  follow2: { query: "seed=2&follow=60&quiet", seconds: 8 },
+  // Pinned (no presses): land animals swimming out off the north coast at the start.
+  water: { query: "view=local&x=183&y=11&quiet", seconds: 8, presses: 0 },
 };
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
 const ZOOMS = {
@@ -132,9 +136,9 @@ async function still(page, address, query) {
 }
 
 /** Press the view button twice (map → middle → local) and film `seconds` of the follow. */
-async function follow(page, address, name, { query, seconds }) {
+async function follow(page, address, name, { query, seconds, presses = 2 }) {
   await open(page, address, query);
-  for (let press = 0; press < 2; press++) {
+  for (let press = 0; press < presses; press++) {
     await page.evaluate(() => window.__press?.());
     await skip(page, 5);
   }
@@ -358,7 +362,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -460,12 +464,32 @@ ${compare("shore", "The east coast up close, cell (244, 110): reeds in the sea a
 </section>
 <hr>
 
+<section id="water">
+<div class="head"><span class="n">·</span><h2>Land animals in the water</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>The simulation lets a land animal into the sea, where it pays for every hour and drowns when its energy runs out (M11 makes the shallow shelf free). The renderer drew it as if on land: walking on the water.</p></div>
+<div><span class="label">Now</span><p>The renderer shows the simulation's place, never moving an animal out, and draws the effort (the owner: struggling more than on land unless partly aquatic), <code>1 − AQUATIC / 0.6</code>. In the shallows (no deeper than 0.03, M11's wading depth) its legs are under the water, it slows by up to 45 % and ripples spread from it. Out of its depth its legs are gone from sight, its body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples come faster and wider (<code>src/creatures/wading.ts</code>).</p></div>
+</div>
+${filmPair("water", ["Before: the north coast, cell (183, 11)", "After: swimming out sunk to the head, ripples round it"])}
+</section>
+<hr>
+
+<section id="bodies">
+<div class="head"><span class="n">·</span><h2>Legs in turn, and no body folding through itself</h2></div>
+<div class="notes">
+<div><span class="label">Legs</span><p>A foot stepped when its rest point was far enough away, so a short-legged or slow body moved all its feet on the same frame. Now a legged body goes through a gait cycle for every 1.5 lengths of its shortest leg it walks. Each foot is in the air for 40 % of it and stands still for the rest. A pair's two feet are half a cycle apart and diagonal feet swing together: alternating with one pair, a trot with two, tripods with three. A foot never slides once down, and a body that stops brings its feet back under it.</p></div>
+<div><span class="label">Bodies</span><p>The chain followed the head with no limit, so a sharp turn folded it back over itself. Now each kind bends only so far from head to tail (worms and snakes into a U, beasts a little, beetles and crabs hardly), the head turns at most 0.6 rad from the body, long bodies walk a turn as an arc, short stiff ones turn on the spot, and looking about turns the head only. Over 10 simulated minutes per kind, joints folded onto each other in 16–26 % of frames before and none after.</p></div>
+</div>
+${filmPair("follow2", ["Before: a lizard followed", "After: its feet in turn, its body in arcs"])}
+</section>
+<hr>
+
 <section id="open">
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
 <ul class="open">
-<li>Animals seen on water</li>
-<li>Animals through bushes, bodies folding on a turn, legs stepping together, plants popping in over animals</li>
+
+<li>Animals through bushes (being worked on), plants popping in over animals at row lines</li>
 <li>The name scroll by the animal followed</li>
 <li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
 <li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
@@ -499,7 +523,8 @@ const readme = [
   "  followed, no tuft popping over it; colours from six genes ranked among species, no",
   "  olive; round map dots; a calmer ground; grass as small unoutlined tufts after",
   "  references, nine sizes, random tints; snow only from the simulation; the young drawn",
-  "  small. Decisions: ADR 0022",
+  "  small; plants off the water; land animals wade or struggle in the sea; legs step in",
+  "  turn; no body folds through itself. Decisions: ADR 0022",
   "- Tests wait until the owner calls the look final; the device benchmark comes later",
   "",
   "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",

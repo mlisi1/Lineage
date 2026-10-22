@@ -116,6 +116,22 @@ depth legs out of sight, the body sunk but for the head, slower still, bobbing, 
 and wider ripples. Whether wading on the shelf should also cost energy in the simulation
 is M11's lever and the owner's call: M11 made it free on the owner's word (2026-10-20).
 
+### Legs and bodies (2026-10-22)
+
+Worked on in parallel worktrees and merged. **Legs**: a foot stepped when its rest point
+was 0.8 leg lengths away, so on a short-legged or slow body every foot crossed that line
+on the same frame. Now each leg has a phase in a gait cycle tied to the distance walked:
+diagonal feet together, a pair's feet half a cycle apart, 40 % of the cycle in the air.
+No foot slides, and a stopping body steps its feet back under it. Logged over about
+5 000 animal-frames (seeds 2, 4, 7, 10, 11 and 12), no frame had every foot in the air.
+**Bodies**: the chain followed the head with no limit on the angle between joints. Now
+each kind has a total bend (`BODY_BEND`), the head a neck limit (0.6 rad), long bodies
+turn in arcs and short stiff ones on the spot. In a stress test (10 simulated minutes per
+kind, a new anchor every 3 s), joints of non-neighbouring segments came within 1.2
+spacings in 16–26 % of frames before, and none after. Arc-turning bodies spend more time
+beyond their leash in that test (about 40 % of frames against 26–30 %), which looks minor
+at the scene's pace.
+
 ## Consequences
 
 - The wire gains `young` (additive). S1 sends it as `tools/stream.py` does. M11's merge
