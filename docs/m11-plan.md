@@ -266,3 +266,18 @@ interrupted to add mechanisms first, with the owner.)
   evolve from the herd (M4.3 0.08); D1 falls to 0 without strangers' random genomes;
   longevity sweeps in 4 seeds. Next: weekly presses, 10 years, predator levers in the
   sweep, then (only if needed, with the owner) hunters that arise from the herd.
+
+**2026-10-22** (ADR 0019, "Hunters that find their prey; the first weekly presses"):
+
+- **Why the hunters died**, found by replaying seeds: they landed far from the herd and
+  were built for prey ten times their size, so they starved among plenty. They now land
+  by the herd and are built a little larger than it; the defaults then fail only M4.3
+  among the M criteria (hunters present on a quarter of the days after year 1).
+- **Weekly presses keep hunters** (present 73 % of days) through the ark; early arks on
+  bare ground starved, so the ark now waits until an empty island is green. The owner:
+  criteria are judged without presses; god-power entries stay major.
+- **Ten years without presses**: hunters gone by year 3 in every seed, never back; the
+  rest of the island holds (no world ended, evolution still moving). Open for the owner:
+  predators kept by the weekly presses (the ark), or a mechanism by which hunters arise
+  from the herd. The sweep `closed-1` waits at 2 of 31 points until then.
+

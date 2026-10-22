@@ -457,7 +457,10 @@ needs a note in `docs/decisions/`.
   owner: the island is closed, no strangers (hunters land once as a second wave of
   founders, the ark brings them back); M3.5 tolerates a tenth of the seeds in open
   woodland; M6.1 leaves out the founding; the species definition is not tuned; the
-  tuned island is checked with a weekly press of the button.)
+  tuned island is checked with a weekly press of the button. 2026-10-22: hunters land by
+  the herd and are built a little larger than it; the ark waits until an empty island is
+  green enough for founders; every M criterion is judged without presses, press runs
+  only for harm; god-power entries stay major.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

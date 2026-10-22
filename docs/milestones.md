@@ -32,28 +32,41 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M11 in progress (branch `m11-tuning`, paused 2026-10-22 midday)
+### M11 in progress (branch `m11-tuning`, paused 2026-10-22 ~11:35)
 
 **Start here next session.** Read this section, then ADR 0019 (every decision and
 number; "Hunters that find their prey; the first weekly presses" is the newest), then
 `docs/m11-plan.md` §7.
 
 - **Where it stands**:
-  - The main checkout (`m11-tuning` at `be75730`) is running, or was running, the sweep
-    `closed-1` (31 points, started 2026-10-22 ~10:15; `runs/sweep-closed-1/`). If it is
-    not running (`pgrep -f tools.tune.sweep`), **resume it** (check `uptime`; finished
-    points are kept): `env -u PYTHONPATH uv run python -m tools.tune.sweep
+  - The sweep `closed-1` (31 points; `runs/sweep-closed-1/`, main checkout at
+    `be75730`) was **stopped by the owner at 2 of 31 points** to give the two checks below
+    the cores. Points so far: p000 (the defaults) fails M4.3 0.17, D1 0, D2, D3 (D3b
+    0.26); p001 (cap 31, meat 1720, pack 15, mutation 0.035, founder spread 0.094) also
+    fails M3.5 0.15 and M6.2, and keeps hunters no better (M4.3 0.13, D3b 0.29).
+    **Resume it first** (check `uptime`; finished points are kept), after merging
+    `m11-reach` (below: the sweep does not press, so the ark rule does not change it): `env -u PYTHONPATH uv run python -m tools.tune.sweep
     tools/tune/sweeps/closed-1.toml --jobs 10 --max-load 16 >> runs/sweep-closed-1.log 2>&1`.
     Then `uv run python -m tools.tune.sensitivity runs/sweep-closed-1`.
-  - Two checks were started at ~11:10 on the free cores: `runs/m11-closed-10y` (main
-    checkout, 10 years × 5 seeds, office, no presses: step 5 below) and
-    `../Lineage-m11-reach/runs/m11-closed-presses-2` (the worktree, weekly presses with the
-    ark rule: step 4). If they did not finish, rerun them with the commands in steps 4–5.
+  - **10 years without presses** (`runs/m11-closed-10y`, 5 seeds, office, at `be75730`,
+    done): **hunters vanish by year 3 in every seed and never return** (present on 0 % of
+    days in years 3–10); the herd sits at its cap; no world ended; genetic distance still
+    rising at year 10 (+0.014), 9 species alive (median); D1 still 0 (armour and swimming
+    reach their extremes in 1 seed of 5); in 3 of 5 seeds a rare gene stays fixed for long
+    (M7.2-style: 0.4 of seeds free of it over 10 years).
+  - **Open decision for the owner** (left for later, 2026-10-22): without presses nothing
+    can make hunters again once the last dies, so levers alone cannot pass M4.3/D3 on the
+    island alone. Either (a) rely on the weekly presses (the ark brings hunters to a herd
+    without them; within the owner's rule of founders and god powers only), judging
+    predators on press runs; or (b) a mechanism by which hunters arise from the herd
+    (e.g. scavenging carrion as a route from plant-eater to meat-eater), to be approved
+    before it is built. Ask before step 1's ranking means anything for predators.
+  - The weekly-press check with the ark rule (`../Lineage-m11-reach/runs/
+    m11-closed-presses-2`) was **stopped unfinished** at the owner's request (it writes
+    its results only at the end): rerun it (step 4).
   - The worktree `../Lineage-m11-reach` (branch `m11-reach`) is **ahead**: `5bc5baf`
-    (the ark waits for green) and this handoff. **Fast-forward `m11-tuning` to it only
-    after the sweep ends** (`git merge --ff-only m11-reach` in the main checkout): the
-    sweep's later points import the main checkout's code, and the ark rule only matters
-    with presses, which the sweep does not use.
+    (the ark waits for green) and this handoff. **Fast-forward `m11-tuning` to it now**
+    (`git merge --ff-only m11-reach` in the main checkout), while nothing runs there.
 - **The mechanism set is complete**: food at sea and wading, reach, cover, nutrients,
   seeds in guts (schema v13), R4's weather, storm fires, burnt deaths, barren land and
   blast kills (v12), and the closed island: no strangers; a pack of 8 hunters lands once
@@ -72,9 +85,10 @@ number; "Hunters that find their prey; the first weekly presses" is the newest),
   M3.5 0.05, no extinction. With weekly presses (`runs/m11-closed-presses`, before the
   ark rule): hunters present 73 %, M4.3 0.69, but early arks starved (fixed since).
 - **Next steps, in order**:
-  1. Let `closed-1` finish (6–8 h on the shared PC); rank the points (fewest M failures,
-     then D3, D1; worlds ended ≤ 0.1 per seed-year); `tools.tune.sensitivity`. Merge
-     `m11-reach`.
+  1. Merge `m11-reach`; ask the owner the open decision above; resume `closed-1` (29
+     points left, about 5 h on a free PC, more when the owner's ROS jobs run) unless the
+     decision changes the island first; rank the points (fewest M failures, then D3, D1;
+     worlds ended ≤ 0.1 per seed-year); `tools.tune.sensitivity`.
   2. If no point keeps hunters without presses, tell the owner: with weekly presses the
      ark keeps them; a mechanism by which hunters arise from the herd (scavenging into
      omnivory) is the alternative, to ask about before touching.

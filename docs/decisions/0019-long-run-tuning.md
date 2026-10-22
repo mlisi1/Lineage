@@ -384,6 +384,22 @@ presses, and the weekly-press run only checks for harm (extinctions, worlds endi
 predators, the chronicle's flood). Of the 3,085 presses, 42 % were rain, 31 % seed,
 17 % ark, 10 % meteor.
 
+### Ten years without presses (`m11-closed-10y`, 2026-10-22)
+
+5 seeds × 10 years, office, no presses, defaults at `be75730` (hunters land by the herd).
+Hunters vanish by year 3 in every seed and never return: present on 12–72 % of days in
+year 2, 0 % in years 3–10. Nothing else makes hunters: no herbivore lineage turns into
+one in a decade. The rest holds: no world ended, the herd at its cap, genetic distance
+still rising at year 10 (+0.014), 9 species alive (median). D1 stays 0 (very armoured or
+fully aquatic bodies in 1 seed of 5); in 3 seeds of 5 a rare gene stays fixed for long.
+
+So on the island alone, levers cannot keep predators past their first boom and bust; the
+first two `closed-1` points (cap 16 and 31) agree (M4.3 0.17 and 0.13). **Open, for the
+owner**: rely on the weekly presses (the ark returns hunters, within the rule of
+founders and god powers) and judge predators on press runs, or approve a mechanism by
+which hunters arise from the herd (scavenging carrion into omnivory). The sweep is
+stopped at 2 of 31 until then.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
