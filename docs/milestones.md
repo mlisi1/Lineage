@@ -45,6 +45,10 @@ number; "Hunters that find their prey; the first weekly presses" is the newest),
     points are kept): `env -u PYTHONPATH uv run python -m tools.tune.sweep
     tools/tune/sweeps/closed-1.toml --jobs 10 --max-load 16 >> runs/sweep-closed-1.log 2>&1`.
     Then `uv run python -m tools.tune.sensitivity runs/sweep-closed-1`.
+  - Two checks were started at ~11:10 on the free cores: `runs/m11-closed-10y` (main
+    checkout, 10 years × 5 seeds, office, no presses: step 5 below) and
+    `../Lineage-m11-reach/runs/m11-closed-presses-2` (the worktree, weekly presses with the
+    ark rule: step 4). If they did not finish, rerun them with the commands in steps 4–5.
   - The worktree `../Lineage-m11-reach` (branch `m11-reach`) is **ahead**: `5bc5baf`
     (the ark waits for green) and this handoff. **Fast-forward `m11-tuning` to it only
     after the sweep ends** (`git merge --ff-only m11-reach` in the main checkout): the
