@@ -127,6 +127,25 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Depth among plants (2026-10-22)
+
+The owner, after the bush clips: "it still seems that creatures are over the bushes. Some
+part of them are above the bushes… it's just to avoid a creature entering inside a tree.
+Can you search online how they solve this problem?" Top-down pixel-art games draw by
+the feet (a y-sort with the pivot at the base: a tree's trunk, a character's feet), block
+only at a tree's base so a character can walk behind the canopy, sometimes make the
+canopy see-through while the player is behind it, and split a sprite that spans depths
+(a big tree drawn as several tiles) so that each piece sorts by its own base. Ours had the
+first two. The third was missing: an animal was sorted whole by its lowest joint, so the
+head of an animal walking up the screen was drawn over a bush that stood in front of it.
+
+Now an animal that a tree or bush stands across is drawn in two parts, behind and in
+front of the plant. It is not split into a piece per joint, because the body draws all
+its outlines under all its fills, and per-joint pieces would show a dark seam at every
+joint. With two parts the one seam lies under the plant. The fade in front of the animal
+followed also went from 30 % to 60 % (bushes and trees) and from 40 % to 50 % (grass): a
+bush nearly gone in front of the animal made it look as if it stood on top.
+
 ### Legs and bodies (2026-10-22)
 
 Worked on in parallel worktrees and merged. **Legs**: a foot stepped when its rest point
@@ -162,3 +181,19 @@ at the scene's pace.
 - Slynyrd, "Pixelblog 20: top-down tiles", 2019,
   https://slynyrd.com/blog/2019/8/27/pixelblog-20-top-down-tiles (a few key shapes
   repeated, clusters across tile edges, few colours, low contrast, negative space).
+- KidsCanCode, "Using YSort", Godot recipes, https://kidscancode.org/godot_recipes/3.x/kyn/ysort
+  (draw order from the y of each object's base).
+- Godot forum, "Player sometimes renders behind bushes/trees even when clearly in front",
+  https://forum.godotengine.org/t/player-sometimes-renders-behind-bushes-trees-even-when-clearly-in-front-collision-issues/141959
+  (the tree's sort origin at the trunk's base, the player's at the feet; a tree of several
+  tiles sorts by its own base).
+- Godot forum, "Alternative to Y-sort", https://forum.godotengine.org/t/alternative-to-y-sort/11307
+  (a sprite spanning depths is split into pieces, each y-sorted).
+- Bugnet, "How to fix Unity sprite sort point: pivot vs center",
+  https://bugnet.io/blog/how-to-fix-unity-sprite-sort-point-pivot-vs-center (sorting by the
+  centre instead of the feet makes tall sprites flicker in front of and behind each other).
+- Codea forum, "Fake 3D effect", https://talk.codea.io/t/fake-3d-effect/8129 (collision
+  at a tree's base only; draw the player behind the tree once above its base).
+- Construct forum, "Tree opacity collision",
+  https://www.construct.net/en/forum/construct-3/how-do-i-8/tree-opacity-collision-178855
+  (the canopy see-through while the player is behind).

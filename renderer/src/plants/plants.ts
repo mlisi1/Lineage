@@ -76,11 +76,12 @@ const CHUNK_CELLS = 16;
 const REACH_CELLS = 1;
 /**
  * A plant in front of the animal the camera is on shows it through; grass and the small
- * things too (R5: a small animal was lost under the tufts), a little less see-through.
- * Smaller than `FADES_FROM_CELLS` (pebbles) nothing hides it.
+ * things too (R5: a small animal was lost under the tufts). Only partly: a bush or a tree
+ * nearly gone made the animal seem to stand on it (the owner, 2026-10-22), so it stays
+ * clearly in front. Smaller than `FADES_FROM_CELLS` (pebbles) nothing hides it.
  */
-const FADED = 0.3;
-const FADED_SMALL = 0.4;
+const FADED = 0.6;
+const FADED_SMALL = 0.5;
 const SMALL_BELOW_CELLS = 0.9;
 const FADES_FROM_CELLS = 0.2;
 /** A plant's foot keeps this far (cells) beyond where the swash reaches. */
@@ -290,6 +291,33 @@ export class PlantLayer {
       }
     });
     return drawn;
+  }
+
+  /**
+   * The row of the frontmost tree or bush whose foot lies after row `from` and no later
+   * than row `to`, and whose drawing overlaps `box` (cells); -1 if none (R5: an animal it
+   * stands across is drawn in two, `CreatureLayer.hostIn`). Grass and small things do not
+   * count.
+   */
+  across(box: CellRect, from: number, to: number): number {
+    const last = Math.min(to, this.rows.length - 1);
+    for (let index = last; index > from; index--) {
+      for (const [x, chunk] of this.rows[index]?.chunks ?? []) {
+        if (x + CHUNK_CELLS + REACH_CELLS < box.x0 || x - REACH_CELLS > box.x1) continue;
+        for (const child of chunk.children) {
+          const sprite = child as Sprite;
+          const wide = sprite.texture.width * sprite.scale.x;
+          const high = sprite.texture.height * sprite.scale.y;
+          if (high < SMALL_BELOW_CELLS) continue;
+          const left = sprite.x - sprite.anchor.x * wide;
+          const top = sprite.y - sprite.anchor.y * high;
+          if (left > box.x1 || left + wide < box.x0) continue;
+          if (top > box.y1 || sprite.y < box.y0) continue;
+          return index;
+        }
+      }
+    }
+    return -1;
   }
 
   /**

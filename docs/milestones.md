@@ -170,8 +170,9 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [x] Legged animals step with their legs in turn (a gait cycle, `walk`)
 - [ ] Plants do not pop in over animals (round 2: no tuft pops over the animal followed;
   rows a quarter of a cell tall may still swap a plant and an animal at a row line).
-  2026-10-22, the owner: creatures still seem over the bushes; each body segment is to be
-  sorted by its own row, as top-down games sort a big tree's tiles
+  2026-10-22, the owner: creatures still seem over the bushes. Done: a body a tree or bush
+  stands across is drawn in two (behind the plant, and in front); the fade in front of
+  the animal followed is lighter (60 %, grass 50 %)
 - [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it).
   The owner (2026-10-22): name, traits in words (size, diet, build) and pixel icons for what
   words do badly (aquatic, rare genes, night habits); always on while following, in a corner

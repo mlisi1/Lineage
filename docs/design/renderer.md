@@ -970,6 +970,19 @@ Round 1, items 1–7:
   body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
   faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
   they struggle more than on land unless they are partly aquatic).
+- **Bodies sorted where a plant stands across them.** Plants and animals are drawn in
+  rows by where they touch the ground, a quarter of a cell tall up close. A body was put
+  in the row of its lowest joint, so a lizard walking up the screen was drawn whole in
+  front of a bush whose foot lay between its tail and its head, its head over the leaves.
+  Top-down games solve this by sorting each piece of a big sprite by its own base (a tree
+  drawn as several tiles). Here a walker in sight that a tree or bush stands across
+  (`PlantLayer.across`: its foot between the head's row and the tail's, its drawing over
+  the body) is drawn in two: the joints behind the plant, with their legs, in a row before
+  it, the rest in front. Each part keeps the body's own drawing order. Only two parts, and
+  only then, so no seam shows where nothing stands between them. The fade in front of the
+  animal followed starts from its head (anything covering any part of it fades) and is
+  lighter: bushes and trees to 60 %, grass to 50 %; nearly gone, a bush made the animal
+  seem to stand on it.
 - **Animals keep clear of trees and bushes.** Each tree and bush the plant layer builds
   leaves a footprint: an ellipse about its foot, a tree's trunk with its roots (0.13 of
   the drawing's width) or a bush's lower puffs (0.4), half as deep as wide. The layer keeps

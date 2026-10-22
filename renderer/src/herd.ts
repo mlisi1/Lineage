@@ -405,11 +405,11 @@ export class Herd {
     if (view !== "map") layer.standAmong(plants);
     layer.update(dtS, view === "map" ? undefined : cells, view !== "map");
     if (view === "map") return;
-    layer.hostIn(plants?.guests ?? null, plants?.rowsPerCell);
+    layer.hostIn(plants?.guests ?? null, plants?.rowsPerCell, plants ?? null);
     const slot = subject === null ? undefined : this.roster.slotOf(subject);
     plants?.fade(
       slot === undefined ? null : layer.box(slot),
-      slot === undefined ? 0 : layer.footOf(slot),
+      slot === undefined ? 0 : layer.topOf(slot),
       dtS,
     );
   }
