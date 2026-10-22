@@ -1,7 +1,8 @@
 /**
  * The scene (R1–R3): the land, its plants and its animals from the state stream, filmed
  * by the documentary camera (`director.ts`), with the chronicle's notable entries on a
- * scroll (`captions.ts`); drawn at 512×300 art pixels and stretched to the screen
+ * scroll (`captions.ts`) and, in the local view, a card naming the animal followed
+ * (`card.ts`, R5); drawn at 512×300 art pixels and stretched to the screen
  * without smoothing. The picture is drawn a pixel larger all round and slid by the
  * camera's fraction of a pixel, so that slow pans glide instead of stepping a whole art
  * pixel at a time.
@@ -52,6 +53,7 @@ import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
 import { Captions } from "./captions";
+import { NameCard, type CardPhase } from "./card";
 import { Director, TIMINGS, type Scene, type Shot } from "./director";
 import { Herd } from "./herd";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
@@ -73,6 +75,8 @@ const BACKGROUND = "#24529c";
 const DARK = "#10081c";
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
+/** The name card waits until a dip between views is this clear before it unrolls (0–1). */
+const CARD_DIM = 0.5;
 /** The committed recordings (`tools/stream.py`). */
 const RECORDINGS: Readonly<Record<string, string>> = {
   life: "stream/life.json",
@@ -100,6 +104,15 @@ declare global {
     __camera?: () => Shot & { motion: string; dipping: boolean };
     /** What the scroll shows (tests). */
     __captions?: () => { phase: string; text: string | null; waiting: number };
+    /** What the name card of the animal followed shows (tests; S3 shows the same card). */
+    __card?: () => {
+      phase: CardPhase;
+      open: number;
+      id?: number;
+      name?: string;
+      traits?: string;
+      icons?: string[];
+    };
     /** What the atmosphere shows (tests). */
     __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
     __colours?: () => ReturnType<Herd["colourTable"]>;
@@ -187,7 +200,9 @@ async function start(): Promise<void> {
   dim.style.opacity = "0";
   dim.style.pointerEvents = "none";
   const captions = new Captions(WIDTH, HEIGHT);
-  frame.append(dim, captions.element);
+  // The name card of the animal followed, in the top-left corner (R5).
+  const card = new NameCard(WIDTH, HEIGHT);
+  frame.append(dim, captions.element, card.element);
 
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
@@ -324,6 +339,7 @@ async function start(): Promise<void> {
   window.__advance = (seconds) => {
     advance += seconds;
   };
+  window.__card = () => card.state;
   window.__captions = () => {
     const { phase, caption, waiting } = captions.state;
     return { phase, text: caption?.text ?? null, waiting };
@@ -436,6 +452,9 @@ async function start(): Promise<void> {
     canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     dim.style.opacity = String(shot.dim);
     captions.update(dtS);
+    // The card is out while the local view follows an animal and is not dipped to dark.
+    const following = shot.view === "local" && shot.dim < CARD_DIM ? shot.subject : null;
+    card.update(dtS, following === null ? null : herd.cardOf(following));
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.
