@@ -16,6 +16,7 @@ from lineage_sim.events import (
     ChronicleEntry,
     CraterFormed,
     CreaturesArrived,
+    CreaturesDied,
     EarthquakeStruck,
     FireEnded,
     FireStarted,
@@ -118,11 +119,30 @@ def fauna_message(world: World) -> Message:
 YOUNG_STEPS = 16
 
 
-def creatures_message(world: World, sent: set[int] | None = None) -> Message:
-    """Where every creature is; genomes of those not in ``sent``, which is then updated."""
+def creatures_message(
+    world: World, sent: set[int] | None = None, news: Sequence[OutputEvent] = ()
+) -> Message:
+    """Where every creature is; genomes of those not in ``sent``, which is then updated.
+    ``news`` are the world's outputs since the last creatures message: who of those sent
+    died of what, and who landed from the sea (R5)."""
     fauna = world.fauna
     ids = [int(value) for value in fauna.ids]
     known = sent if sent is not None else set()
+    died = [
+        {"id": int(ident), "cause": str(cause)}
+        for output in news
+        if isinstance(output, CreaturesDied)
+        for ident, cause in zip(output.ids, output.causes, strict=True)
+        if ident in known
+    ]
+    alive = set(ids)
+    landed = [
+        ident
+        for output in news
+        if isinstance(output, CreaturesArrived)
+        for ident in range(output.first_id, output.first_id + output.count)
+        if ident in alive
+    ]
     genes = fauna.genes
     # Rare genes (M7): the slots of each creature, and who is torpid, once the sim has them.
     slots = getattr(fauna, "slots", None)
@@ -159,6 +179,10 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
         message["young"] = [
             [ident, int(steps[row])] for row, ident in enumerate(ids) if steps[row] < YOUNG_STEPS
         ]
+    if died:
+        message["died"] = died
+    if landed:
+        message["landed"] = landed
     return message
 
 

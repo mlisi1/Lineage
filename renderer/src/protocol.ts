@@ -191,6 +191,17 @@ export interface CreaturesMessage {
    * The creatures not yet of age (R5): id and how far grown toward coming of age, in sixteenths (0 newborn, 15 nearly grown). Those absent are grown. Absent from streams recorded before R5.
    */
   young?: [number, number][];
+  /**
+   * The creatures sent before that died since the last creatures message, and of what (R5): starved, old_age, killed (by a hunter), drowned, burnt (in a fire) or blast (a meteor, a cone or crater rising under it). Absent when none died, and from streams recorded before R5's deaths.
+   */
+  died?: {
+    id: number;
+    cause: "starved" | "old_age" | "killed" | "drowned" | "burnt" | "blast";
+  }[];
+  /**
+   * The creatures among `ids` that landed from the sea since the last creatures message (R5): founders, strangers, the ark's. Absent when none did, and from streams recorded before R5's arrivals.
+   */
+  landed?: number[];
 }
 /**
  * Every species that has lived (M6). Sent on connect and when a species is born or dies out.
