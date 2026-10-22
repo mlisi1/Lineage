@@ -85,21 +85,31 @@ def recent_light(cfg: PresenceConfig, recent: float, day_light: float, days: flo
     return recent + (day_light - recent) * (1.0 - math.exp(-days / cfg.plant_light_days))
 
 
-def weights(cfg: PresenceConfig, needs: dict[Power, float]) -> list[float]:
+def weights(
+    cfg: PresenceConfig, needs: dict[Power, float], closed: frozenset[Power] = frozenset()
+) -> list[float]:
     """Each power's weight in the draw, in ``POWERS`` order: its base weight raised by
-    what the island needs."""
+    what the island needs; 0 for the ``closed`` ones (not available now)."""
     base = {
         Power.METEOR: cfg.god_weight_meteor,
         Power.RAIN: cfg.god_weight_rain,
         Power.SEED: cfg.god_weight_seed,
         Power.ARK: cfg.god_weight_ark,
     }
-    return [base[p] * (1.0 + cfg.god_need_gain * needs.get(p, 0.0)) for p in POWERS]
+    return [
+        0.0 if p in closed else base[p] * (1.0 + cfg.god_need_gain * needs.get(p, 0.0))
+        for p in POWERS
+    ]
 
 
-def choose(rng: Generator, cfg: PresenceConfig, needs: dict[Power, float]) -> Power:
+def choose(
+    rng: Generator,
+    cfg: PresenceConfig,
+    needs: dict[Power, float],
+    closed: frozenset[Power] = frozenset(),
+) -> Power:
     """Draw a power (one uniform draw, whatever the weights)."""
-    w = weights(cfg, needs)
+    w = weights(cfg, needs, closed)
     pick = rng.random() * sum(w)
     for power, weight in zip(POWERS, w, strict=True):
         if pick < weight:
@@ -165,6 +175,13 @@ class Presence:
     def ready_t_ms(self) -> int:
         """Sim time from which the button works (the LED is lit before it)."""
         return self._ready_ms
+
+    def closed(self) -> frozenset[Power]:
+        """Powers the island cannot draw now: the ark, on an empty island whose plants
+        could not yet feed founders (the owner, 2026-10-22: early arks starved)."""
+        if self._fauna.count == 0 and not self._fauna.green_enough():
+            return frozenset({Power.ARK})
+        return frozenset()
 
     def needs(self, instant: Instant) -> dict[Power, float]:
         """What the island needs, each in [0, 1]: rain against fire and dry weather, seed
@@ -253,7 +270,11 @@ class Presence:
         cfg, rng, t_ms = self._cfg, ctx.rng, ctx.t_ms
         if t_ms < self._ready_ms:
             return [GodPowerRefused(t_ms, self._ready_ms)]
-        power = Power(event.power) if event.power else choose(rng, cfg, self.needs(ctx.instant))
+        power = (
+            Power(event.power)
+            if event.power
+            else choose(rng, cfg, self.needs(ctx.instant), self.closed())
+        )
         self._ready_ms = t_ms + round(cfg.god_cooldown_days * MS_PER_DAY)
         self._ready_told = False
         x, y = self._site(rng)

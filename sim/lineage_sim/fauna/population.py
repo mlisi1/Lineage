@@ -1034,6 +1034,14 @@ class Fauna:
         founders do."""
         return self._arrive(rng, t_ms, count, Landing.HUNTERS if hunters else Landing.PLANT_EATERS)
 
+    def green_enough(self) -> bool:
+        """Whether plants have taken hold well enough to feed founders: at least
+        founder_min_plant_cover of the land carries well-grown plants."""
+        land = self._terrain.land
+        green = land & (self._flora.biomass >= _LANDING_BIOMASS)
+        cover = np.count_nonzero(green) / max(1, int(np.count_nonzero(land)))
+        return bool(cover >= self._cfg.founder_min_plant_cover)
+
     def lacks_hunters(self) -> bool:
         """Whether the herd is large enough for hunters and none live here."""
         herbivores, omnivores, predators = self.diet_counts()
@@ -1047,10 +1055,7 @@ class Fauna:
         if self._arrival_at_h < 0:
             if t_ms % MS_PER_DAY != 0:
                 return []  # plants are surveyed once a day, at midnight
-            land = self._terrain.land
-            green = land & (self._flora.biomass >= _LANDING_BIOMASS)
-            cover = np.count_nonzero(green) / max(1, int(np.count_nonzero(land)))
-            if cover >= cfg.founder_min_plant_cover:
+            if self.green_enough():
                 self._arrival_at_h = now_h + cfg.arrival_delay_days * _HOURS_PER_DAY
             return []
         if now_h < self._arrival_at_h:

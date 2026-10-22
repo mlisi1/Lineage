@@ -45,7 +45,7 @@ LED's cue. The cooldown is in the saved state.
 | Meteor | 1 | none | a crater (`meteor_radius_cells` 8, depth 0.15, rim and fertility as natural craters) on a random land cell; plants in the bowl destroyed; creatures within 2 × the radius killed, leaving nothing to eat |
 | Rain | 2 | 1 while a fire burns, else the season's dryness | every fire put out; soil fertility + 5 % of its room; for `rain_days` (5) no lightning, slow spread, plant growth × 1.5. A soaking rain of its own, beside the island's weather (R4: rain spells, thunderstorms and overcast spells seen only, `weather.py`) |
 | Seed | 2 | share of land without plants | 400 seeds of random genomes on random bare land cells, taking where they could grow; each carries a random plant rare gene with probability 0.1 |
-| Ark | 1 | how far creatures are below 40; 1 when a herd of 120 has no hunters (M11) | 12 plant eaters land on a vegetated spot, as founders do; 12 hunters instead when a herd of 120 has none |
+| Ark | 1 | how far creatures are below 40; 1 when a herd of 120 has no hunters (M11) | 12 plant eaters land on a vegetated spot, as founders do; 12 hunters instead when a herd of 120 has none. On an empty island not yet green enough for founders it is never drawn (the owner, 2026-10-22: early arks starved) |
 
 `GodPower(power="rain")` names a power instead (tests; a phone app later). Every power
 returns `GodPowerUsed(power, x, y)` and its own events (`CraterFormed`, `FireEnded`,

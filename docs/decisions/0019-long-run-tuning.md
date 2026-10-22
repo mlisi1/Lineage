@@ -359,6 +359,31 @@ predator levers (`predator_cap`, `hunter_wave_count`, `hunter_wave_herd`, `meat_
 `defence_toxicity`). If hunters still cannot persist without the god, a mechanism by which
 they arise from the herd (scavenging into omnivory) goes to the owner first.
 
+### Hunters that find their prey; the first weekly presses (2026-10-22)
+
+Replays of `m11-closed-office` seeds (hunters' deaths by cause, kills, distances)
+showed the pack starving among plenty, for two reasons in the wave itself: it landed on
+a random green spot, 22 cells on average from the nearest prey (prey within striking
+reach on 0.3 % of its ticks), and it was built at least medium-sized like strangers'
+hunters (mass 3–5) among founders of mass 0.3, so a kill paid 2.8 days of rest. Hunters
+(the pack and the ark's) now land by a member of the herd (`hunter_landing_cells`) and
+are built a little larger than it (`hunter_size_margin`). Replayed, seed 7 kept its
+hunters 80 days instead of 20 and seed 4 held a pack at its cap beside a full herd for
+about 200 days; seed 0 still lost its pack in 40. What remains (kills few and unevenly
+shared, young starving, a cap of 16) is for the sweep `closed-1`.
+
+**Weekly presses** (`m11-closed-presses`, with the fix above): hunters present 73 % of
+days after year 1, 4.9 % of creatures (M4.3 0.69 PASS); but the island asked for the ark
+as soon as it was empty, and arks landed plant eaters on bare ground in the first weeks,
+which starved: 2–5 extinctions per seed (M4.1 0.33), one world ended. God-power entries
+were 44 % of the notable ones (M9.2 0.40), and weekly seed and rain brought the first
+closed forest at 8.6 months (M3.2). **The owner (2026-10-22)**: the ark is not drawn on
+an empty island until it is green enough for founders (`Presence.closed`); god-power
+entries stay major (importance 4, pushed); every M criterion is judged on runs without
+presses, and the weekly-press run only checks for harm (extinctions, worlds ending,
+predators, the chronicle's flood). Of the 3,085 presses, 42 % were rain, 31 % seed,
+17 % ark, 10 % meteor.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
