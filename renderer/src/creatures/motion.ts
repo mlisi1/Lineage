@@ -8,7 +8,7 @@
  * Pure: the caller owns the head and heading of the body's chain and a random stream,
  * and says which places the body can stand on. Nothing here allocates per frame.
  */
-import type { Point } from "./chain";
+import { withinTurn, type Point } from "./chain";
 
 /** How far (cells) an animal strays from its anchor: this, and this much per body length. */
 const LEASH_BASE = 0.4;
@@ -62,6 +62,14 @@ export interface Walker {
   pace: number;
   /** Head to tail, cells. */
   length: number;
+  /**
+   * A body that bends only so far: which way the body behind the head points (radians),
+   * how far the head may turn from it, and the tightest circle (radius, cells) it can walk
+   * so. Left out, the head turns as it likes.
+   */
+  neck?: number;
+  bend?: number;
+  turning?: number;
 }
 
 export function leash(length: number): number {
@@ -138,7 +146,8 @@ export function drive(
     motion.timer -= dtS;
     // Looking about: now and then a new direction near the one it faced.
     if (random() < dtS / 1.2) motion.look = motion.facing + (random() * 2 - 1) * LOOK_SPAN;
-    walker.heading = turnToward(walker.heading, motion.look, LOOK_RATE, dtS);
+    // Only the head turns: the body stays as it stood.
+    walker.heading = keep(walker, turnToward(walker.heading, motion.look, LOOK_RATE, dtS));
     if (motion.timer <= 0) {
       if (random() < STROLL_CHANCE && chooseStroll(motion, reach, random, free)) {
         motion.mode = "stroll";
@@ -156,7 +165,16 @@ export function drive(
     pause(motion, walker.heading, lerp(PAUSE_MIN_S, PAUSE_MAX_S, random()));
     return 0;
   }
-  walker.heading = turnToward(walker.heading, Math.atan2(dy, dx), TURN_RATE, dtS);
+  // A place inside the circles it turns on cannot be reached by turning: a stroll stops
+  // short of it, a walk to where the sim has it goes on ahead until it can turn there.
+  const within = inside(walker, motion.goal);
+  if (within && motion.mode === "stroll") {
+    pause(motion, walker.heading, lerp(PAUSE_MIN_S, PAUSE_MAX_S, random()));
+    return 0;
+  }
+  if (!within) {
+    walker.heading = keep(walker, turnToward(walker.heading, Math.atan2(dy, dx), TURN_RATE, dtS));
+  }
   const behind = motion.mode === "travel" ? fromAnchor / reach : 0;
   const hurry = behind > HURRY_FROM_LEASHES ? Math.min(HURRY, behind / HURRY_FROM_LEASHES) : 1;
   const pace = walker.pace * (motion.mode === "stroll" ? STROLL_PACE : hurry);
@@ -173,6 +191,28 @@ export function drive(
   head.x = x;
   head.y = y;
   return stride;
+}
+
+/** `heading`, as far round as the walker's neck lets it turn from its body. */
+function keep(walker: Walker, heading: number): number {
+  const { neck, bend } = walker;
+  return neck === undefined || bend === undefined ? heading : withinTurn(heading, neck, bend);
+}
+
+/** Whether `goal` lies inside one of the two circles the walker turns on at its tightest. */
+function inside(walker: Walker, goal: Point): boolean {
+  const radius = walker.turning ?? 0;
+  if (radius <= 0) return false;
+  const { head, heading } = walker;
+  // The circles' centres lie to either side of the head, `radius` away.
+  const sideX = -Math.sin(heading) * radius;
+  const sideY = Math.cos(heading) * radius;
+  const leftX = goal.x - head.x - sideX;
+  const leftY = goal.y - head.y - sideY;
+  const rightX = goal.x - head.x + sideX;
+  const rightY = goal.y - head.y + sideY;
+  const squared = radius * radius;
+  return leftX * leftX + leftY * leftY < squared || rightX * rightX + rightY * rightY < squared;
 }
 
 /** Pick a place within the leash that the body can stand on; false if none was found. */
