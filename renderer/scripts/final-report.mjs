@@ -59,7 +59,7 @@ const FOLLOWS = {
   water: { query: "view=local&x=183&y=11&quiet", seconds: 8, presses: 0 },
   // Deaths in the creatures' recording, at the place each animal was last seen: the
   // scene is run on to a little before (a sim-hour is two seconds of film at its speed).
-  starved: { query: "view=local&x=172&y=16&quiet", seconds: 10, presses: 0, crop: 2, advance: 1 },
+  starved: { query: "view=local&x=162&y=15&quiet", seconds: 10, presses: 0, crop: 2, advance: 12 },
   drowned: { query: "view=local&x=190&y=14&quiet", seconds: 10, presses: 0, crop: 2, advance: 16 },
   oldAge: { query: "view=local&x=217&y=97&quiet", seconds: 10, presses: 0, crop: 2, advance: 120 },
   killed: { query: "view=local&x=66&y=105&quiet", seconds: 10, presses: 0, crop: 2, advance: 540 },
@@ -569,7 +569,7 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 <div><span class="label">Was</span><p>Every death was the same fade where the animal last stood (but for the fire's ash), and animals that landed from the sea faded in like births.</p></div>
 <div><span class="label">Now</span><p>The sim tells who died of what (<code>CreaturesDied</code>, an output only: no saved state changes) and the wire carries <code>died</code> and <code>landed</code> on the creatures message. The body stops, turns toward its cause's colour, and comes apart in steps, legs first, tail to head (no see-through filter any more). The starved lie still and pale; the old the same, slower; a kill goes under a scuffle of dust; the drowned sink blue with bubbles and rings; the burnt char under R4's ash; a blast takes them at once. Pixel bones lie where the body lay, charred for the burnt, none for the drowned or the blasted, as the sim leaves carrion; they stay half a sim-day and fade over the other half. An animal that lands from the sea is there at once under a splash of drops and rings, in a wet patch that dries (<code>src/creatures/remains.ts</code>).</p></div>
 </div>
-${filmPair("starved", ["Before: a starved animal, cell (172, 16)", "After: it pales, comes apart, leaves bones"])}
+${filmPair("starved", ["Before: a starved animal, cell (162, 15)", "After: it pales, comes apart, leaves bones"])}
 ${filmPair("drowned", ["Before: a land animal out at sea, cell (190, 14)", "After: it sinks blue, with bubbles"])}
 ${filmPair("oldAge", ["Before: an old animal, cell (217, 97)", "After: it lies down and goes, slower"])}
 ${filmPair("killed", ["Before: one killed by a hunter, cell (66, 105)", "After: dust, then bones"])}
