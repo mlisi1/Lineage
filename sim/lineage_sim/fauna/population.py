@@ -28,6 +28,7 @@ from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
     CraterFormed,
     CreaturesArrived,
+    CreaturesDied,
     InputEvent,
     JuvenileGrown,
     OutputEvent,
@@ -155,7 +156,8 @@ class Fauna:
         self._in_water: Flags = np.zeros(0, dtype=np.bool_)  # where each stood this tick
         self._meal = np.zeros(0, dtype=np.float32)  # energy eaten this tick
         self._leftover = np.zeros(0, dtype=np.float32)  # meat mass a kill left, per victim
-        self._grown: list[OutputEvent] = []  # youths that ended this tick
+        # Youths that ended and creatures that died this tick: outputs not yet handed on.
+        self._grown: list[OutputEvent] = []
         # Pairwise offsets and distances for the current positions; None when stale.
         self._apart: tuple[NDArray[np.float32], NDArray[np.float32]] | None = None
         # Daylight in [0, 1], set by the presence model (M8): the dark dims sight, stops
@@ -787,11 +789,22 @@ class Fauna:
                 cfg.carrion_scent_cells,
             )  # fmt: skip
 
-    def _bury(self, dead: NDArray[np.int8], t_ms: int) -> None:
-        """Remove the dead and count them by cause."""
+    def _bury(self, dead: NDArray[np.int8], t_ms: int, *, blast: bool = False) -> None:
+        """Remove the dead and count them by cause; tell who died of what (R5), the dead of
+        a ``blast`` as such."""
         gone = dead >= 0
         if not gone.any():
             return
+        which = np.nonzero(gone)[0]
+        self._grown.append(
+            CreaturesDied(
+                t_ms,
+                tuple(int(ident) for ident in self._ids[which]),
+                tuple(
+                    "blast" if blast else Death(int(cause)).name.lower() for cause in dead[which]
+                ),
+            )
+        )
         died_young = gone & (self._age_h < self._body.maturity_h)
         self._grown += self._youth_ended(np.nonzero(died_young)[0], t_ms, died=True)
         self._leave_remains(dead)
@@ -907,7 +920,7 @@ class Fauna:
             return []
         dead = np.where(hit, np.int8(Death.KILLED), np.int8(-1)).astype(np.int8)
         self._leftover = np.zeros(self.count, dtype=np.float32)
-        self._bury(dead, t_ms)
+        self._bury(dead, t_ms, blast=True)
         outputs, self._grown = self._grown, []
         if self.count == 0:
             self.tally.extinctions += 1

@@ -145,6 +145,17 @@ class CreaturesArrived(OutputEvent):
 
 
 @dataclass(frozen=True)
+class CreaturesDied(OutputEvent):
+    """Creatures died in one tick (R5: the scene shows each death by its cause). Each id in
+    ``ids`` died of the cause at the same place in ``causes``: ``starved``, ``old_age``,
+    ``killed`` (by a hunter), ``drowned``, ``burnt`` or ``blast`` (a meteor, or a cone or
+    crater rising under it)."""
+
+    ids: tuple[int, ...]
+    causes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PopulationExtinct(OutputEvent):
     """The last creature died."""
 
