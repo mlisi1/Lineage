@@ -57,6 +57,12 @@ const FOLLOWS = {
   follow2: { query: "seed=2&follow=60&quiet", seconds: 8 },
   // Pinned (no presses): land animals swimming out off the north coast at the start.
   water: { query: "view=local&x=183&y=11&quiet", seconds: 8, presses: 0 },
+  // Deaths in the creatures' recording, at the place each animal was last seen: the
+  // scene is run on to a little before (a sim-hour is two seconds of film at its speed).
+  starved: { query: "view=local&x=172&y=16&quiet", seconds: 10, presses: 0, crop: 2, advance: 1 },
+  drowned: { query: "view=local&x=190&y=14&quiet", seconds: 10, presses: 0, crop: 2, advance: 16 },
+  oldAge: { query: "view=local&x=217&y=97&quiet", seconds: 10, presses: 0, crop: 2, advance: 120 },
+  killed: { query: "view=local&x=66&y=105&quiet", seconds: 10, presses: 0, crop: 2, advance: 540 },
   // Animals of five sizes living among bushes, from the largest to the smallest, the
   // middle of the screen enlarged twice (the camera keeps the animal followed there).
   bush2: { query: "seed=2&follow=60&quiet", seconds: 12, crop: 2 },
@@ -65,6 +71,8 @@ const FOLLOWS = {
   bush32: { query: "seed=32&follow=60&quiet", seconds: 12, crop: 2 },
   bush15: { query: "seed=15&follow=60&quiet", seconds: 12, crop: 2 },
 };
+/** Seconds the scene moves on a frame while it is run on to a film's start. */
+const ADVANCE_STEP_S = 0.25;
 /** Where the name card stands (R5), in art pixels of a still: the top-left corner. */
 const CARD_CORNER = [0, 0, 200, 44];
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
@@ -145,8 +153,18 @@ async function still(page, address, query) {
 }
 
 /** Press the view button twice (map → middle → local) and film `seconds` of the follow. */
-async function follow(page, address, name, { query, seconds, presses = 2, crop = 1 }) {
+async function follow(page, address, name, { query, seconds, presses = 2, crop = 1, advance = 0 }) {
   await open(page, address, query);
+  // Run the scene on to just before what the film is for, a quarter of a second a frame.
+  for (let done = 0; done < advance; done += ADVANCE_STEP_S * 40) {
+    await page.evaluate((step) => {
+      for (let k = 0; k < 40; k++) window.__frame?.(step);
+    }, ADVANCE_STEP_S);
+    for (let tries = 0; tries < 400; tries++) {
+      if (!(await page.evaluate(() => window.__painting?.() === true))) break;
+      await page.waitForTimeout(10);
+    }
+  }
   for (let press = 0; press < presses; press++) {
     await page.evaluate(() => window.__press?.());
     await skip(page, 5);
@@ -389,7 +407,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -545,6 +563,20 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 </section>
 <hr>
 
+<section id="deaths">
+<div class="head"><span class="n">8·9</span><h2>Deaths by cause, bones, and landings from the sea</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Every death was the same fade where the animal last stood (but for the fire's ash), and animals that landed from the sea faded in like births.</p></div>
+<div><span class="label">Now</span><p>The sim tells who died of what (<code>CreaturesDied</code>, an output only: no saved state changes) and the wire carries <code>died</code> and <code>landed</code> on the creatures message. The body stops, turns toward its cause's colour, and comes apart in steps, legs first, tail to head (no see-through filter any more). The starved lie still and pale; the old the same, slower; a kill goes under a scuffle of dust; the drowned sink blue with bubbles and rings; the burnt char under R4's ash; a blast takes them at once. Pixel bones lie where the body lay, charred for the burnt, none for the drowned or the blasted, as the sim leaves carrion; they stay half a sim-day and fade over the other half. An animal that lands from the sea is there at once under a splash of drops and rings, in a wet patch that dries (<code>src/creatures/remains.ts</code>).</p></div>
+</div>
+${filmPair("starved", ["Before: a starved animal, cell (172, 16)", "After: it pales, comes apart, leaves bones"])}
+${filmPair("drowned", ["Before: a land animal out at sea, cell (190, 14)", "After: it sinks blue, with bubbles"])}
+${filmPair("oldAge", ["Before: an old animal, cell (217, 97)", "After: it lies down and goes, slower"])}
+${filmPair("killed", ["Before: one killed by a hunter, cell (66, 105)", "After: dust, then bones"])}
+<p class="meta">Each film is a fixed view on where the animal was last seen, enlarged twice; deaths come in the stream's creatures messages, every two sim-hours. No landing from the sea happens in the committed recordings (no founders, strangers or ark in them); the splash was checked on a staged ark stream.</p>
+</section>
+<hr>
+
 <section id="open">
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
@@ -552,7 +584,7 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 
 <li>Plants popping in over animals at row lines</li>
 
-<li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
+<li>Chronicle places and species</li>
 <li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
 <li>The scene off the spike, a benchmark mode, per-frame costs, the board run on the 7" screen at a 30 fps cap</li>
 <li>Tests, once the owner calls the look final</li>
@@ -586,7 +618,8 @@ const readme = [
   "  references, nine sizes, random tints; snow only from the simulation; the young drawn",
   "  small; plants off the water; land animals wade or struggle in the sea; legs step in",
   "  turn; no body folds through itself; animals keep clear of trees and bushes.",
-  "  The name card of the animal followed. Decisions: ADR 0022",
+  "  The name card of the animal followed; deaths by cause with bones, landings with a",
+  "  splash. Decisions: ADR 0022",
   "- Tests wait until the owner calls the look final; the device benchmark comes later",
   "",
   "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",

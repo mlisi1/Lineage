@@ -603,7 +603,7 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
 | `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
 | `fauna` | on connect | creature gene names, the phenotype's config keys, and the config drawing rare genes needs (`rare_config`: GIANT's mass factor) (R2, M7) |
-| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`) (R5) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
 | `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
@@ -970,6 +970,20 @@ Round 1, items 1–7:
   body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
   faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
   they struggle more than on land unless they are partly aquatic).
+- **Deaths and landings** (`creatures/remains.ts`). A death shows its cause. The body
+  stops where it fell, its colours turn toward the cause's in three steps, and its parts
+  go in steps, legs first, then from the tail to the head; whole sprites are hidden, with
+  no alpha filter, so no part shows through another. The starved lie still and pale, then
+  go; the old the same, slower and gentler; a kill is gone at once under a scuffle of
+  dust; the drowned sink blue, legs first, with bubbles and rings; the burnt char and go
+  under R4's ash; a blast takes them at once. Under the body lie its remains, pixel bones
+  drawn by the renderer (skull, vertebrae, ribs, pelvis, a faint stain) along the body in
+  the view's own scale: charred for the burnt, none for the drowned or the blasted, as
+  the sim leaves carrion. They stay whole for half a sim-day and fade in four steps over
+  the second half (at most 48 kept). An animal that landed from the sea is there at once,
+  under a splash of drops, with rings spreading in a wet patch round its feet that dries
+  in a few seconds; the ark's newcomers keep its light too. On the map the dot of the dead
+  only fades.
 - **The name card** (`src/card.ts`, the owner's choices, 2026-10-22). While the local
   view follows an animal, a small parchment scroll in the top-left corner (clear of the
   chronicle's scroll at the foot) gives its species' name beside a swatch of its own body

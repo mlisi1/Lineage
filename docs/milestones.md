@@ -146,8 +146,11 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
 - **Done 2026-10-22**: animals in the water, bushes and trees, bodies folding and legs in
   turn (the last three in parallel worktrees, merged into `r5-final`).
-- **Next**: plants popping in over animals at row lines (exact-height sorting if still
-  seen), then the name scroll by the animal followed, then items 8–20.
+- **Done 2026-10-22 (afternoon)**: depth among plants (a body split where a plant stands
+  across it), the name card (`card.ts`), deaths by cause with bones and landings with a
+  splash (`remains.ts`; `died`, `landed` on the wire; the sim's `CreaturesDied` output).
+- **Next**: items 11–20 (chronicle places, the scroll at night, the tide's line, demo code,
+  off the spike, the benchmark).
 
 ### R5 checklist (the owner, 2026-10-21)
 
@@ -191,10 +194,12 @@ below was taken in scope by the owner. Tests wait until the look is called final
 
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)
-- [ ] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning.
-  The owner (2026-10-22): by cause, and a carcass left where it died, fading
-- [ ] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births.
-  The owner (2026-10-22): a splash and ripples where they appear, no journey
+- [x] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning.
+  The owner (2026-10-22): by cause, and a carcass left where it died, fading. Done:
+  `died` on the wire (the sim's `CreaturesDied`), `creatures/remains.ts`
+- [x] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births.
+  The owner (2026-10-22): a splash and ripples where they appear, no journey. Done:
+  `landed` on the wire (from `CreaturesArrived`)
 - [x] 10. Wading has no look (after M11 reaches main): drawn from the depth, ready for
   M11's shelf (`WADE_DEPTH` = its `wading_depth`)
 - [ ] 11. Chronicle entries carry a place and a species the scroll does not use

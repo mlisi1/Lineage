@@ -127,6 +127,22 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Deaths and landings (2026-10-22)
+
+The owner chose deaths shown by cause, plus a carcass, and a splash only for landings
+from the sea. The sim knew each death's cause (`Death`) but returned none of it, so it now
+emits `CreaturesDied(ids, causes)` per tick, an output that changes no saved state and no
+random draw (golden hashes unchanged). A blast's dead are reported as `blast` rather than
+`killed`. Landings use the existing `CreaturesArrived`. The wire gains `died` and `landed`
+on `creatures` (additive). The recordings differ from the old ones only by them. The
+carcass is the renderer's, one per death, rather than the sim's carrion grid, which is not
+on the wire and is eaten cell by cell, not body by body. It has bones (charred for the
+burnt, none for the drowned or the blasted, as the sim leaves no carrion there), whole
+for half a sim-day, then fading. The dying no longer get an alpha filter each (a known
+device cost): whole sprites are hidden in steps. Left open: the ark's light hides the
+splash; charred bones barely show on grass; the committed recordings have no landing or
+burnt death.
+
 ### The name card (2026-10-22)
 
 The owner chose a hybrid: the species' name, traits in words where words do well (size,
