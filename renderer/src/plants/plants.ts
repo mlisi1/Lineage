@@ -87,6 +87,11 @@ const FADES_FROM_CELLS = 0.2;
 const SHORE_KEEP_CELLS = 0.05;
 /** Seconds a plant takes to go see-through or back. */
 const FADE_S = 0.25;
+/**
+ * A footprint's middle is this many of its half-heights above the plant's foot: the foot
+ * is the front of what stands on the ground, the trunk's base or the bush's lowest puffs.
+ */
+const FOOTPRINT_RAISE = 0.6;
 
 export interface Placed {
   texture: Texture;
@@ -102,6 +107,11 @@ export interface Placed {
   shadow?: { rx: number; ry: number };
   /** A tint over its colours (0xRRGGBB), if any: grass varies a little tuft to tuft. */
   tint?: number;
+  /**
+   * What animals keep out of (R5), for a tree or a bush: an ellipse about its foot, as
+   * half its width and height in cells.
+   */
+  footprint?: { rx: number; ry: number };
 }
 
 interface Row {
@@ -135,6 +145,13 @@ export class PlantLayer {
   private readonly faded = new Set<Sprite>();
   /** What else goes with the layer when it is destroyed: the texture its drawings are in. */
   private readonly owned: { destroy: () => void }[] = [];
+  /**
+   * The footprints of the trees and bushes built so far (R5), by the cell their middle is
+   * in: four numbers each, the middle and the half width and height, in cells.
+   */
+  private readonly feet: (number[] | undefined)[];
+  /** The largest half width or height of a footprint so far: how far round a place to look. */
+  private widest = 0;
 
   /** `place` says what stands on a cell (whose plant, if any, is `look`). */
   constructor(
@@ -144,6 +161,7 @@ export class PlantLayer {
   ) {
     this.tall = options.tall;
     this.rowsPerCell = options.rowsPerCell ?? 1;
+    this.feet = new Array<number[] | undefined>(land.width * land.height);
     for (let row = 0; row < land.height * this.rowsPerCell; row++) {
       const made: Row = { container: new Container(), chunks: new Map(), guests: new Container() };
       made.container.addChild(made.guests);
@@ -168,6 +186,32 @@ export class PlantLayer {
     this.container.destroy({ children: true });
     for (const thing of this.owned) thing.destroy();
     this.owned.length = 0;
+  }
+
+  /**
+   * Whether a body of radius `margin` (cells) whose middle is at (x, y) overlaps a tree's
+   * foot or a bush (`Footprints`). Only plants built so far count: those of the view and
+   * near it, which are the ones seen; an animal far off walks as it would on open ground.
+   */
+  blocked(x: number, y: number, margin: number): boolean {
+    const { width, height } = this.land;
+    const reach = this.widest + margin;
+    const x0 = Math.max(Math.floor(x - reach), 0);
+    const x1 = Math.min(Math.floor(x + reach), width - 1);
+    const y0 = Math.max(Math.floor(y - reach), 0);
+    const y1 = Math.min(Math.floor(y + reach), height - 1);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const feet = this.feet[cy * width + cx];
+        if (feet === undefined) continue;
+        for (let k = 0; k < feet.length; k += 4) {
+          const u = (x - (feet[k] ?? 0)) / ((feet[k + 2] ?? 0) + margin);
+          const v = (y - (feet[k + 1] ?? 0)) / ((feet[k + 3] ?? 0) + margin);
+          if (u * u + v * v < 1) return true;
+        }
+      }
+    }
+    return false;
   }
 
   /** Number of plant sprites built so far: all of them for an eager layer. */
@@ -315,6 +359,19 @@ export class PlantLayer {
     return true;
   }
 
+  /** Keep a footprint about the foot at (x, y) (cells) for `blocked`. */
+  private tread(x: number, y: number, { rx, ry }: { rx: number; ry: number }): void {
+    const { width, height } = this.land;
+    const middle = y - ry * FOOTPRINT_RAISE;
+    const column = Math.min(Math.max(Math.floor(x), 0), width - 1);
+    const row = Math.min(Math.max(Math.floor(middle), 0), height - 1);
+    const cell = row * width + column;
+    const feet = this.feet[cell] ?? [];
+    feet.push(x, middle, rx, ry);
+    this.feet[cell] = feet;
+    this.widest = Math.max(this.widest, rx, ry);
+  }
+
   /** Build the plants of the cells of row `y` from column `left` on, once. */
   private build(y: number, left: number): void {
     const key = y * 4096 + left;
@@ -346,6 +403,7 @@ export class PlantLayer {
           continue;
         }
         sprite.position.set(footX, footY);
+        if (placed.footprint !== undefined) this.tread(footX, footY, placed.footprint);
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
         const at = Math.min(
           Math.max(Math.ceil(footY * this.rowsPerCell) - 1, 0),
@@ -533,6 +591,12 @@ const CHARRED_WOOD = "#1a1414";
 const CHARRED_EMBER = "#7a4a32";
 const CHARRED_FROM_SCORCH = 60;
 const CHARRED_TREE_HEIGHT = 153;
+/**
+ * What animals keep out of (R5), as shares of the drawing's width: a tree's trunk with its
+ * roots, a bush's lower puffs; each this much less deep than wide, as the ground is seen.
+ */
+const FOOTPRINT_SHARE = { tree: 0.13, bush: 0.4 } as const;
+const FOOTPRINT_FLATTEN = 0.5;
 
 /** Snow (0–255) on a cell from which the plants on it carry some. */
 const PLANT_SNOW_FROM = 96;
@@ -1102,6 +1166,18 @@ export function standingPlants(
     return [...own, ...overlays];
   };
 
+  /**
+   * A tree's or a bush's own drawing (the first of `plants`, before its overlays) with
+   * the footprint animals keep out of; a sprout has none.
+   */
+  const standing = (plants: Placed[], kind: "tree" | "bush", sprout: boolean): Placed[] => {
+    const own = plants[0];
+    if (own === undefined || sprout) return plants;
+    const rx = (FOOTPRINT_SHARE[kind] * own.texture.width) / tile;
+    own.footprint = { rx, ry: rx * FOOTPRINT_FLATTEN };
+    return plants;
+  };
+
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
@@ -1125,7 +1201,11 @@ export function standingPlants(
         const key = `${standingKey("BROADLEAF", "grown", buildOf(x, y))}/charred`;
         return [
           ...out,
-          ...placed(named(plantSeason(x, y), x, y, key), dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+          ...standing(
+            placed(named(plantSeason(x, y), x, y, key), dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+            "tree",
+            false,
+          ),
         ];
       }
       if (look === null && land.cover[cell] === burntClass && looks.includes("bark")) {
@@ -1139,7 +1219,11 @@ export function standingPlants(
         const [dx, dy] = plantOffset(x, y);
         return [
           ...out,
-          ...withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH, true),
+          ...standing(
+            withLooks(shown, x, y, base, looks, true, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH, true),
+            "tree",
+            growthOf(biomass) === "sprout",
+          ),
         ];
       }
       // A mangrove in the sea is classed by its form (a bush, sometimes a tree), so it
@@ -1176,7 +1260,11 @@ export function standingPlants(
       const tree = look.form === "BROADLEAF" || look.form === "CONIFER";
       return [
         ...out,
-        ...withLooks(shown, x, y, base, looks, tree, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+        ...standing(
+          withLooks(shown, x, y, base, looks, tree, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
+          tree ? "tree" : "bush",
+          growthOf(biomass) === "sprout",
+        ),
       ];
     },
     // Close up, plants and animals are large enough to be sorted four rows to the cell.

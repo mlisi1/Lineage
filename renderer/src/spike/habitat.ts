@@ -5,6 +5,15 @@ import type { WorldFixture } from "./fixture";
 /** Can a creature be at this place (in cells)? `swims` asks for water instead of land. */
 export type Passable = (x: number, y: number, swims: boolean) => boolean;
 
+/**
+ * What stands in an animal's way among the plants (R5): the feet of trees and the bodies
+ * of bushes. `blocked` says whether a body of radius `margin` (cells) whose middle is at
+ * (x, y) would overlap one. Grass and the small things are walked through.
+ */
+export interface Footprints {
+  blocked(x: number, y: number, margin: number): boolean;
+}
+
 /** What `heightAt` and `passableIn` read of a world: the spike's fixture or the stream's land. */
 export type Relief = Pick<WorldFixture, "width" | "height" | "heights" | "seaLevel">;
 
