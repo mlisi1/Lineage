@@ -10,6 +10,7 @@
  */
 import type { Container } from "pixi.js";
 import type { Spot } from "./atmosphere/atmosphere";
+import type { CardFacts } from "./card";
 import { colour, lookOf } from "./creatures/body";
 import { ownColours, speciesColours, type SpeciesColour } from "./creatures/colours";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
@@ -319,6 +320,34 @@ export class Herd {
       body: colour(colours.body.hue, colours.body.light, colours.body.saturation),
       mark: colour(colours.mark.hue, colours.mark.light, colours.mark.saturation),
     }));
+  }
+
+  /** What the name card says of animal `id` (R5, `card.ts`); null if it is not known, or not yet coloured. */
+  cardOf(id: number): CardFacts | null {
+    const config = this.phenotypeConfig;
+    const known = this.roster.genomes.get(id);
+    const species = this.roster.species.get(id) ?? 0;
+    const ranked = this.colours.get(species);
+    if (config === null || known === undefined || ranked === undefined) return null;
+    const genome: Genome = this.genomeOrder.map((index) => known.genome[index] ?? 0);
+    const body = phenotype(config, genome);
+    const colours = ownColours(ranked, genome);
+    const signatures = [...this.signatures]
+      .sort(([a], [b]) => a - b)
+      .filter(([bit]) => (known.slots & bit) !== 0)
+      .map(([, signature]) => signature);
+    const tint = (part: { hue: number; light: number; saturation: number }): number =>
+      colour(part.hue, part.light, part.saturation);
+    return {
+      id,
+      name: this.names.get(species) ?? "",
+      genome,
+      mass: body.mass * (signatures.includes("giant") ? this.rareConfig.giant_mass_factor : 1),
+      limbPairs: body.limbPairs,
+      signatures,
+      body: tint(colours.body),
+      mark: tint(colours.mark),
+    };
   }
 
   /** The animals alive, where the view's layer draws them (the local view's, when hidden). */

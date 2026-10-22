@@ -38,22 +38,22 @@ const CURL = 2;
 /** At most so many lines of text; an entry longer than that is cut with an ellipsis. */
 const MOST_LINES = 4;
 
-/** The scroll's colours (0xRRGGBB). */
-const INK = 0x5a3424;
-const FADED_INK = 0x9a6b44;
-const PAPER = 0xf7e6bc;
-const PAPER_SHADE = 0xe9cf98;
-const PAPER_EDGE = 0x8f5b3a;
+/** The scroll's colours (0xRRGGBB), the name card's too (`card.ts`). */
+export const INK = 0x5a3424;
+export const FADED_INK = 0x9a6b44;
+export const PAPER = 0xf7e6bc;
+export const PAPER_SHADE = 0xe9cf98;
+export const PAPER_EDGE = 0x8f5b3a;
 /** A roll across, left to right: lit from the upper left, as everything in the scene. */
-const ROLL = [
+export const ROLL = [
   0x5a2e2a, 0xc48e52, 0xf2d496, 0xfbe7b5, 0xeac684, 0xdcae6c, 0xcf9c5b, 0xb07a45, 0x8c5634,
   0x5a2e2a,
 ] as const;
-const ROLL_EDGE = 0x5a2e2a;
-const KNOB_RAMP = [0x4a2420, 0xb5733f, 0x8a4e2a, 0x4a2420] as const;
+export const ROLL_EDGE = 0x5a2e2a;
+export const KNOB_RAMP = [0x4a2420, 0xb5733f, 0x8a4e2a, 0x4a2420] as const;
 /** The shadow under the scroll: the scene's ground shadow, see-through. */
-const SHADOW_COLOUR = 0x10081c;
-const SHADOW_ALPHA = 90;
+export const SHADOW_COLOUR = 0x10081c;
+export const SHADOW_ALPHA = 90;
 
 /** A notable entry as the scroll shows it. */
 export interface Caption {
