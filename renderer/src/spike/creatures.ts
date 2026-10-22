@@ -35,6 +35,7 @@ import {
   stepOut,
   type Motion,
 } from "../creatures/motion";
+import { DYING, TINT_STEPS, mixColour, type Dying } from "../creatures/remains";
 import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
 import {
   opacityUnderWater,
@@ -235,14 +236,24 @@ export interface Occluders {
 
 /** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
 const ARRIVE_STEPS = 4;
-/** Seconds a creature that died takes to fade from where it last stood. */
-const DEPART_S = 0.8;
+/** A creature that died, going where it fell (`remove`). */
+interface Departing {
+  creature: Creature;
+  how: Dying;
+  /** Seconds since it died. */
+  age: number;
+  /** Its sprites in the order they go: legs first, then from the tail to the head. */
+  order: Sprite[];
+  /** How many of `order` are gone, and the colour step it was last painted at. */
+  gone: number;
+  tinted: number;
+}
 
 export class CreatureLayer {
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
-  /** Creatures that died, fading where they last stood. */
-  private departing: { creature: Creature; left: number }[] = [];
+  /** Creatures that died, going where they fell. */
+  private departing: Departing[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
   private readonly creatures: (Creature | undefined)[] = [];
   private active = 0;
@@ -338,16 +349,42 @@ export class CreatureLayer {
 
   /**
    * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
-   * that died, `fade`) fading away over `DEPART_S` where it last stood.
+   * that died, `fade`) going where it fell, as `how` says (`creatures/remains.ts`): it lies
+   * still, its colours turning, then its parts go in steps, legs first, then from the tail
+   * to the head. No filter: whole sprites go, so nothing shows through anything.
    */
-  remove(index: number, fade = false): void {
+  remove(index: number, fade = false, how: Dying = DYING.unknown): void {
     const creature = this.creatures[index];
     if (creature === undefined) return;
     this.creatures[index] = undefined;
     // Whole again: the dead fade as one.
     this.split(creature, 0);
     if (fade && (creature.container.visible || creature.marker.visible)) {
-      this.departing.push({ creature, left: DEPART_S });
+      const legs = new Set(
+        creature.legs.flatMap((leg) => [
+          leg.upper,
+          ...(leg.lower === null ? [] : [leg.lower]),
+          ...leg.edges,
+          ...(leg.sole === null ? [] : [leg.sole]),
+        ]),
+      );
+      const parts = creature.plan.parts;
+      const body = creature.sprites
+        .map((sprite, i) => ({ sprite, joint: parts[i]?.joint ?? 0 }))
+        .sort((a, b) => b.joint - a.joint)
+        .map(({ sprite }) => sprite);
+      // What is not of the body (ripples, a shadow) goes at once, and a sunk body's legs.
+      for (const ring of creature.ripples ?? []) ring.visible = false;
+      for (const { sprite, alpha } of creature.paints) if (alpha < 1) sprite.visible = false;
+      if (how.sinks) for (const sprite of legs) sprite.visible = false;
+      this.departing.push({
+        creature,
+        how,
+        age: 0,
+        order: [...legs, ...body],
+        gone: 0,
+        tinted: 0,
+      });
       return;
     }
     this.destroy(creature);
@@ -361,22 +398,48 @@ export class CreatureLayer {
     creature.glass?.destroy();
   }
 
-  /** The dead fading away: less of them each frame, in steps, until they are gone. */
+  /** The dead going where they fell, step by step, until they are gone. */
   private depart(dtS: number): void {
-    this.departing = this.departing.filter((leaving) => {
-      leaving.left -= dtS;
-      if (leaving.left <= 0) {
-        this.destroy(leaving.creature);
-        return false;
+    // Kept in place, so that a frame makes no new list.
+    let kept = 0;
+    for (const leaving of this.departing) {
+      if (this.going(leaving, dtS)) this.departing[kept++] = leaving;
+    }
+    this.departing.length = kept;
+  }
+
+  /** Move `leaving` on by `dtS`: whether it is still there. */
+  private going(leaving: Departing, dtS: number): boolean {
+    leaving.age += dtS;
+    const { creature, how, order } = leaving;
+    const lasts = how.still + how.goes;
+    if (leaving.age >= lasts) {
+      this.destroy(creature);
+      return false;
+    }
+    // Its colours turn while it lies still, in a few steps.
+    const step = Math.min(
+      Math.floor((leaving.age / Math.max(how.still, 0.01)) * TINT_STEPS) + 1,
+      TINT_STEPS,
+    );
+    if (how.tinted > 0 && step !== leaving.tinted) {
+      leaving.tinted = step;
+      const share = (how.tinted * step) / TINT_STEPS;
+      for (const { sprite, colour, alpha } of creature.paints) {
+        if (alpha >= 1) sprite.tint = mixColour(colour, how.tint, share);
       }
-      const opacity = Math.ceil((leaving.left / DEPART_S) * ARRIVE_STEPS) / (ARRIVE_STEPS + 1);
-      const { creature } = leaving;
-      creature.marker.alpha = opacity;
-      creature.glass ??= new AlphaFilter();
-      creature.glass.alpha = opacity;
-      creature.container.filters = [creature.glass];
-      return true;
-    });
+    }
+    // Then its parts go, legs first, then from the tail to the head.
+    const share = Math.max(leaving.age - how.still, 0) / Math.max(how.goes, 0.01);
+    const gone = Math.min(Math.floor(share * (order.length + 1)), order.length);
+    for (; leaving.gone < gone; leaving.gone++) {
+      const sprite = order[leaving.gone];
+      if (sprite !== undefined) sprite.visible = false;
+    }
+    // On the map its dot fades in steps.
+    creature.marker.alpha =
+      Math.ceil((1 - leaving.age / lasts) * ARRIVE_STEPS) / (ARRIVE_STEPS + 1);
+    return true;
   }
 
   /**

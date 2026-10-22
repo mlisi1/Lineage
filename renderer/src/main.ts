@@ -235,7 +235,7 @@ async function start(): Promise<void> {
     },
   });
   world.addChild(atmosphere.ground);
-  landscape.floor.addChild(atmosphere.floor);
+  landscape.floor.addChild(atmosphere.floor, herd.remains.floor);
   // Nothing stands on a cone or in a crater the scene draws.
   landscape.covered = (x, y) => atmosphere.covers(x, y);
   app.stage.addChild(
@@ -245,11 +245,13 @@ async function start(): Promise<void> {
     atmosphere.lights,
     atmosphere.sky,
   );
-  // An animal that dies in a burning cell leaves a puff of ash.
-  herd.onGone = (x, y) => {
+  // An animal burnt to death (or, in streams without causes, that dies in a burning
+  // cell) leaves a puff of ash.
+  herd.onGone = (x, y, cause) => {
     const land = landscape.current;
     if (land === null) return;
-    if (atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x))) atmosphere.burnt(x, y);
+    const burning = atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x));
+    if (cause === "burnt" || (cause === undefined && burning)) atmosphere.burnt(x, y);
   };
   // The ark's newcomers come into being where its light is.
   herd.arrival = (x, y) => atmosphere.arrival(x, y);

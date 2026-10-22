@@ -374,6 +374,43 @@
             "minItems": 2,
             "maxItems": 2
           }
+        },
+        "died": {
+          "description": "The creatures sent before that died since the last creatures message, and of what (R5): starved, old_age, killed (by a hunter), drowned, burnt (in a fire) or blast (a meteor, a cone or crater rising under it). Absent when none died, and from streams recorded before R5's deaths.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "cause"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cause": {
+                "type": "string",
+                "enum": [
+                  "starved",
+                  "old_age",
+                  "killed",
+                  "drowned",
+                  "burnt",
+                  "blast"
+                ]
+              }
+            }
+          }
+        },
+        "landed": {
+          "description": "The creatures among `ids` that landed from the sea since the last creatures message (R5): founders, strangers, the ark's. Absent when none did, and from streams recorded before R5's arrivals.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     },
