@@ -649,6 +649,35 @@ def test_hunters_wait_for_the_herd_and_for_spring(config: Config) -> None:
     assert not [o for o in outputs if isinstance(o, CreaturesArrived)]
 
 
+def test_hunters_land_by_the_herd_and_are_built_for_it(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    site.run(24.0 * 2)
+    hunters = site.fauna.genes[:, Gene.DIET] >= site.cfg.predator_min_diet
+    assert np.count_nonzero(hunters) == 4
+    # A little larger than their prey (founder spread aside).
+    size = site.fauna.genes[hunters, Gene.SIZE].mean()
+    expected = GRAZER[Gene.SIZE] + site.cfg.hunter_size_margin
+    assert float(size) == pytest.approx(expected, abs=3 * site.cfg.founder_spread)
+
+
+def test_hunters_land_on_the_green_nearest_a_member_of_the_herd(config: Config) -> None:
+    site = Site(config)
+    site.add(GRAZER, [(50.0, 30.0)])
+    ys, xs = np.nonzero(site.terrain.land)
+    reach = site.cfg.hunter_landing_cells
+    near = site.fauna._near_the_herd(Generator(PCG64(3)), ys, xs)  # pyright: ignore[reportPrivateUsage]
+    assert 0 < near[0].size < ys.size
+    assert float(np.hypot(near[1] - 50.0, near[0] - 30.0).max()) <= reach
+    # The herd has grazed the ground round it bare: the nearest green, and a little beyond.
+    far = np.hypot(xs - 50.0, ys - 30.0) > 12.0
+    ys, xs = ys[far], xs[far]
+    near = site.fauna._near_the_herd(Generator(PCG64(3)), ys, xs)  # pyright: ignore[reportPrivateUsage]
+    apart = np.hypot(near[1] - 50.0, near[0] - 30.0)
+    assert float(apart.min()) > 12.0
+    assert float(apart.max()) <= 12.0 + 1.0 + reach
+
+
 def test_hunters_land_once_per_world(config: Config) -> None:
     site = _waiting_for_hunters(config)
     site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])

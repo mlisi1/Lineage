@@ -411,6 +411,15 @@ immigrant_hunter_share = 0.5
 # a herd above population_cap: off.
 hunter_wave_herd = 120
 hunter_wave_count = 8
+# Hunters (the pack, or the ark's) land by a member of the herd drawn at random: on a
+# landing spot within this many cells of the spot nearest it (the herd grazes the ground
+# round it bare). They come where they find prey: landed at random, a pack of 8 rarely
+# found the herd (M11).
+hunter_landing_cells = 8.0
+# Their size gene is the herd's mean plus hunter_size_margin: a little larger than their
+# prey, so that a kill feeds them (built at least medium-sized like strangers' hunters,
+# a pack of mass 3–5 among prey of 0.3 starved while it killed, M11).
+hunter_size_margin = 0.1
 
 # --- Body (phenotype) ---
 # Mass grows geometrically with the size gene, from mass_min to mass_max.

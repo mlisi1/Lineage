@@ -179,8 +179,10 @@ networks, predator–prey coexistence): ADR 0009, "References".
   the world (M10, ADR 0018) and the founders land on the next continent.
 - **Hunters**, the second wave of founders (M11, ADR 0019): once the herd (every
   creature that is not a predator) reaches 120, a pack of 8 of a hunter species (land
-  walkers, at least medium-sized, with jaw, legs and senses to match) lands in spring
-  or summer, once per world. After that predators live, evolve again from the herd, or
+  walkers with jaw, legs and senses to match) lands in spring or summer, once per world,
+  by a member of the herd drawn at random (`hunter_landing_cells`), its size gene the
+  herd's mean plus `hunter_size_margin` (0.1): hunters that follow a herd, built for it.
+  The ark's hunters land and are built the same way. After that predators live, evolve again from the herd, or
   come by the ark.
 - **No strangers** since M11 (the owner, ADR 0019): the island is closed, and every
   species descends from its founders or the ark. Strangers (`immigrant_groups_per_year`,

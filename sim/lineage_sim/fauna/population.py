@@ -1070,6 +1070,20 @@ class Fauna:
             return []
         return self._arrive(rng, t_ms, cfg.hunter_wave_count, Landing.HUNTERS)
 
+    def _near_the_herd(
+        self, rng: Generator, spots_y: NDArray[np.intp], spots_x: NDArray[np.intp]
+    ) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+        """Hunters land where they find prey: on the landing spots nearest one member of
+        the herd, drawn at random (within hunter_landing_cells of the nearest spot, as a
+        herd grazes the ground round it bare)."""
+        herd = np.flatnonzero(self._genes[:, Gene.DIET] < self._cfg.predator_min_diet)
+        if herd.size == 0:
+            return spots_y, spots_x
+        x, y = self._positions[herd[int(rng.integers(0, herd.size))]]
+        apart = np.hypot(spots_x - x, spots_y - y)
+        near = apart <= apart.min() + self._cfg.hunter_landing_cells
+        return spots_y[near], spots_x[near]
+
     def _arrive(self, rng: Generator, t_ms: int, count: int, landing: Landing) -> list[OutputEvent]:
         """A group of one new species lands on a vegetated spot."""
         cfg = self._cfg
@@ -1078,6 +1092,8 @@ class Fauna:
         )
         if count <= 0 or spots_y.size == 0:
             return []
+        if landing is Landing.HUNTERS:
+            spots_y, spots_x = self._near_the_herd(rng, spots_y, spots_x)
         spot = int(rng.integers(0, spots_y.size))
         base = gn.random_genes(rng, 1)
         low, high = _WALKER_LIMBS
@@ -1097,6 +1113,12 @@ class Fauna:
                 cfg.predator_min_diet + (1.0 - cfg.predator_min_diet) * base[0, Gene.DIET]
             )
             base[0, Gene.SIZE] = _HUNTER_MIN + (1.0 - _HUNTER_MIN) * base[0, Gene.SIZE]
+            herd = self._genes[:, Gene.DIET] < cfg.predator_min_diet
+            if landing is Landing.HUNTERS and herd.any():
+                # Hunters that follow a herd are built for it: a little larger than their
+                # prey, so a kill feeds them (M11).
+                size = float(self._genes[herd, Gene.SIZE].mean()) + cfg.hunter_size_margin
+                base[0, Gene.SIZE] = min(max(size, 0.0), 1.0)
             for gene in (Gene.JAW, Gene.SPEED, Gene.SENSE):
                 base[0, gene] = _HUNTER_MIN + (1.0 - _HUNTER_MIN) * base[0, gene]
             base[0, Gene.AQUATIC] *= _WALKER_AQUATIC_MAX

@@ -367,6 +367,8 @@ class FaunaConfig:
     immigrant_hunter_share: float
     hunter_wave_herd: int
     hunter_wave_count: int
+    hunter_landing_cells: float
+    hunter_size_margin: float
     mass_min: float
     mass_max: float
     limb_pairs_max: int
