@@ -460,7 +460,8 @@ needs a note in `docs/decisions/`.
   tuned island is checked with a weekly press of the button. 2026-10-22: hunters land by
   the herd and are built a little larger than it; the ark waits until an empty island is
   green enough for founders; every M criterion is judged without presses, press runs
-  only for harm; god-power entries stay major.)
+  only for harm; god-power entries stay major. 2026-10-23: no lever keeps hunters on the
+  island alone (sweep `closed-1`); weekly presses do; the owner's choice is pending.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

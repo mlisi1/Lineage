@@ -281,3 +281,9 @@ interrupted to add mechanisms first, with the owner.)
   predators kept by the weekly presses (the ark), or a mechanism by which hunters arise
   from the herd. The sweep `closed-1` waits at 2 of 31 points until then.
 
+**2026-10-23**: the predator sweep `closed-1` (23 of 31 points) and a second weekly-press
+run settle it: levers (a bigger, better-built pack) lengthen the hunters' first stay, but
+no point keeps them past it without the god (best M4.3 0.29); with weekly presses and the
+ark rule hunters are present 77 % of the time and nothing goes extinct. The choice
+(presses, or hunters arising from the herd) is the owner's, pending.
+

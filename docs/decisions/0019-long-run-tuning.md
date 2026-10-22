@@ -400,6 +400,30 @@ founders and god powers) and judge predators on press runs, or approve a mechani
 which hunters arise from the herd (scavenging carrion into omnivory). The sweep is
 stopped at 2 of 31 until then.
 
+### Sweep `closed-1` and the second press check (2026-10-22 evening, overnight)
+
+**Weekly presses with the ark rule** (`m11-closed-presses-2`, 20 seeds × 3 years,
+office, at `43d0535`), against the first press run: early extinctions gone (M4.1 0.33 →
+0), no world ended (was one), hunters present on 77 % of days after year 1 (73 %), 5.7 %
+of creatures, M4.3 0.71. With weekly seed and rain the forest closes at 7.9 months and
+M3.5 is 0.45: not judged on press runs (the owner, 2026-10-22).
+
+**`closed-1`** (Latin hypercube, 10 levers, seeds 0–19, office, no presses): stopped by
+the owner at 23 of 31 points (p000–p001 at `be75730`, p002–p022 at `43d0535`; the only
+difference, the ark rule, acts only on presses). M4.3 fails at every point (best 0.29 at
+p021, band ≥ 0.6); D1 is 0 at every point; hunters are present on at most 43 % of days
+after year 1. The best points fail only M4.3 among the M criteria: p021 (cap 26, meat
+2688, hunt below 0.68 of capacity, pack 14, size margin 0.24, cover 0.46, toxicity 0.44,
+mutation 0.029, founder spread 0.054, longevity cost 0.29: M6.1 0.96, M3.5 0, D3b 0.43),
+p018, p004. Failing elsewhere: M3.5 in 12 points, M6.2 in 8, M7.2 in 4, M6.1 in 3.
+Rank correlations over 22 points (|ρ| < 0.43 is noise): hunters' presence follows the
+pack's size (M4.3 +0.58, D3b +0.49) and build (`hunter_size_margin`, D3b +0.58);
+`predator_cap` does not help; body mutation lowers speciation (−0.69).
+
+So levers raise the hunters' first stay but cannot bring them back: on the island alone,
+predators end with their pack. Open for the owner: rely on the weekly presses, or a
+mechanism by which hunters arise from the herd.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
