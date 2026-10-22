@@ -284,7 +284,8 @@ export class Herd {
       if (slot === undefined || seed === null) continue;
       for (const layer of layers) layer.rebuild(slot, seed);
     }
-    for (const id of this.drawnGrowth.keys()) if (!this.roster.where.has(id)) this.drawnGrowth.delete(id);
+    for (const id of this.drawnGrowth.keys())
+      if (!this.roster.where.has(id)) this.drawnGrowth.delete(id);
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
@@ -400,6 +401,8 @@ export class Herd {
       this.layers.local.show(view === "local" ? "bodies" : "hidden");
     }
     const layer = view === "local" ? this.layers.local : this.layers.middle;
+    // The trees and bushes of the view: its animals keep clear of them (R5).
+    if (view !== "map") layer.standAmong(plants);
     layer.update(dtS, view === "map" ? undefined : cells, view !== "map");
     if (view === "map") return;
     layer.hostIn(plants?.guests ?? null, plants?.rowsPerCell);
