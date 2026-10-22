@@ -65,6 +65,8 @@ const FOLLOWS = {
   bush32: { query: "seed=32&follow=60&quiet", seconds: 12, crop: 2 },
   bush15: { query: "seed=15&follow=60&quiet", seconds: 12, crop: 2 },
 };
+/** Where the name card stands (R5), in art pixels of a still: the top-left corner. */
+const CARD_CORNER = [0, 0, 200, 44];
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
 const ZOOMS = {
   map: [320, 40, 110, 80],
@@ -163,10 +165,12 @@ async function follow(page, address, name, { query, seconds, presses = 2, crop =
   });
   const frames = Math.round(seconds * FPS);
   let poster = null;
+  let corner = null;
   for (let k = 0; k < frames; k++) {
     const shot = await frame(page);
     if (k === Math.floor(frames / 2)) {
       const whole = shrink(decodePng(shot), 2);
+      corner = cropBox(whole, CARD_CORNER);
       // A cropped film's poster is the same middle of the screen.
       const [wide, tall] = [whole.width / crop, whole.height / crop];
       poster =
@@ -179,7 +183,9 @@ async function follow(page, address, name, { query, seconds, presses = 2, crop =
   }
   encoder.stdin.end();
   await done;
-  return { file, poster, frames, seconds, bytes: statSync(join(FILMS, file)).size };
+  // The name card of the animal followed, where the page has one (R5), and its corner.
+  const card = await page.evaluate(() => window.__card?.() ?? null);
+  return { file, poster, frames, seconds, bytes: statSync(join(FILMS, file)).size, card, corner };
 }
 
 /** ffmpeg's filter for the middle `1 / crop` of the screen enlarged `crop` times, or none. */
@@ -383,7 +389,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -521,13 +527,31 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 </section>
 <hr>
 
+<section id="card">
+<div class="head"><span class="n">·</span><h2>The name card of the animal followed</h2></div>
+<div class="notes">
+<div><span class="label">The owner's choice</span><p>While the local view follows an animal: its species' name, its traits in words where words do well, pixel icons where they don't, always on, in a corner of the screen. The phone's follow-a-creature (S3) shows the same card.</p></div>
+<div><span class="label">Now</span><p>R3's parchment, smaller, top-left (the chronicle's scroll unrolls at the foot). The name beside a swatch of the animal's own colours; at most three words for size (by mass: small, mid-sized, large), build (armoured, finned, swift, sluggish, legless, two-, six-, eight-legged, long- or short-legged) and diet (grazer, omnivore, hunter: the sim's own classes); icons for water-loving and each rare gene (fangs, warning sign, up arrow for giant, hourglass, frog, snowflake, leaf, sparkle for glow). It unrolls when the camera settles on the animal and rolls up when it leaves (<code>src/card.ts</code>, <code>window.__card()</code>).</p></div>
+</div>
+<div class="pair zoom">${["follow2", "follow4", "follow9", "bush21", "bush10", "bush32", "bush15"]
+  .map((name) => films.after[name])
+  .filter((film) => film !== undefined && film.card?.name !== undefined && film.corner !== null)
+  .map(
+    (film) =>
+      `<figure><img src="${uri(film.corner)}" alt="Name card" width="${CARD_CORNER[2]}" height="${CARD_CORNER[3]}"><figcaption>${escape(film.card.name)}: “${escape(film.card.traits)}”${(film.card.icons ?? []).length > 0 ? `, icons: ${escape(film.card.icons.join(", "))}` : ""}</figcaption></figure>`,
+  )
+  .join("")}</div>
+<p class="meta">Cropped from the films above, the top-left corner at the art pixels' size. The recordings have few rare-gene carriers, so few icons show here.</p>
+</section>
+<hr>
+
 <section id="open">
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
 <ul class="open">
 
 <li>Plants popping in over animals at row lines</li>
-<li>The name scroll by the animal followed</li>
+
 <li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
 <li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
 <li>The scene off the spike, a benchmark mode, per-frame costs, the board run on the 7" screen at a 30 fps cap</li>
@@ -562,7 +586,7 @@ const readme = [
   "  references, nine sizes, random tints; snow only from the simulation; the young drawn",
   "  small; plants off the water; land animals wade or struggle in the sea; legs step in",
   "  turn; no body folds through itself; animals keep clear of trees and bushes.",
-  "  Decisions: ADR 0022",
+  "  The name card of the animal followed. Decisions: ADR 0022",
   "- Tests wait until the owner calls the look final; the device benchmark comes later",
   "",
   "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",

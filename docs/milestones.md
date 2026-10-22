@@ -173,9 +173,10 @@ below was taken in scope by the owner. Tests wait until the look is called final
   2026-10-22, the owner: creatures still seem over the bushes. Done: a body a tree or bush
   stands across is drawn in two (behind the plant, and in front); the fade in front of
   the animal followed is lighter (60 %, grass 50 %)
-- [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it).
+- [x] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it).
   The owner (2026-10-22): name, traits in words (size, diet, build) and pixel icons for what
-  words do badly (aquatic, rare genes, night habits); always on while following, in a corner
+  words do badly (aquatic, rare genes, night habits); always on while following, in a corner.
+  Done: `card.ts`, top-left; the genome has no night gene, so glow is the night trait
 
 **Seen on screen at the start**
 - [x] 1. The animal followed can be tiny and lost under the grass tufts drawn over it

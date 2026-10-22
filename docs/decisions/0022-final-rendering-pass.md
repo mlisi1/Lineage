@@ -127,6 +127,18 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### The name card (2026-10-22)
+
+The owner chose a hybrid: the species' name, traits in words where words do well (size,
+build, diet), pixel icons where they don't (water-loving, rare genes, night habits). It is
+always on while following, in a corner. It is built in `card.ts` as R3's scroll, smaller,
+in the top-left corner (the chronicle's scroll unrolls at the foot). The words follow the
+genes by named thresholds (diet by the sim's own chronicle classes, 0.35 and 0.65). The
+genome has no nocturnal gene, so none was invented: the glow rare gene is the one night
+trait, with its icon. Left open: an animal with warning colours is drawn in warning bands
+while its swatch shows its gene colours; three sizes make some lines three words with no
+build word; the drop and warning icons are the weakest at seven pixels.
+
 ### Depth among plants (2026-10-22)
 
 The owner, after the bush clips: "it still seems that creatures are over the bushes. Some

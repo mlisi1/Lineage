@@ -970,6 +970,24 @@ Round 1, items 1–7:
   body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
   faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
   they struggle more than on land unless they are partly aquatic).
+- **The name card** (`src/card.ts`, the owner's choices, 2026-10-22). While the local
+  view follows an animal, a small parchment scroll in the top-left corner (clear of the
+  chronicle's scroll at the foot) gives its species' name beside a swatch of its own body
+  and marking colours, a line of at most three words for its size, build and diet, and
+  pixel icons for what words do badly. Size goes by mass as drawn (a giant's doubled):
+  small below 0.7, large from 3, mid-sized between. Diet goes by the sim's own classes:
+  grazer up to 0.35, hunter from 0.65, omnivore between. Build is one word, the first
+  that applies: armoured (ARMOUR ≥ 0.55); finned, swift, sluggish or legless with no
+  legs; two-, six- or eight-legged; long-legged or short-legged on four legs by SPEED
+  (≥ 0.7, ≤ 0.2), the legs being drawn longer with speed. The icons, seven art pixels
+  square in the cosy palette: a drop for water-loving (AQUATIC ≥ 0.4), then one per rare
+  gene by its signature: fangs (venom), a warning sign, an up arrow (giant), an hourglass
+  (elder), a frog (gills), a snowflake (coat), a leaf (leaves) and a sparkle on night blue
+  (glow). The genome has no gene for night habits, so glow is the only night trait shown.
+  The card is R3's scroll, smaller: the same paper, rolls and font. It unrolls from its
+  left roll in 0.7 s once a dip is half clear, and rolls up in 0.45 s when the view leaves
+  the animal or turns to another. `window.__card()` reads it out; the phone's
+  follow-a-creature (S3) shows the same card.
 - **Bodies sorted where a plant stands across them.** Plants and animals are drawn in
   rows by where they touch the ground, a quarter of a cell tall up close. A body was put
   in the row of its lowest joint, so a lizard walking up the screen was drawn whole in
