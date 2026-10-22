@@ -57,8 +57,13 @@ const FOLLOWS = {
   follow2: { query: "seed=2&follow=60&quiet", seconds: 8 },
   // Pinned (no presses): land animals swimming out off the north coast at the start.
   water: { query: "view=local&x=183&y=11&quiet", seconds: 8, presses: 0 },
-  // An animal among bushes.
-  follow5: { query: "seed=5&follow=60&quiet", seconds: 8 },
+  // Animals of five sizes living among bushes, from the largest to the smallest, the
+  // middle of the screen enlarged twice (the camera keeps the animal followed there).
+  bush2: { query: "seed=2&follow=60&quiet", seconds: 12, crop: 2 },
+  bush21: { query: "seed=21&follow=60&quiet", seconds: 12, crop: 2 },
+  bush10: { query: "seed=10&follow=60&quiet", seconds: 12, crop: 2 },
+  bush32: { query: "seed=32&follow=60&quiet", seconds: 12, crop: 2 },
+  bush15: { query: "seed=15&follow=60&quiet", seconds: 12, crop: 2 },
 };
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
 const ZOOMS = {
@@ -138,7 +143,7 @@ async function still(page, address, query) {
 }
 
 /** Press the view button twice (map → middle → local) and film `seconds` of the follow. */
-async function follow(page, address, name, { query, seconds, presses = 2 }) {
+async function follow(page, address, name, { query, seconds, presses = 2, crop = 1 }) {
   await open(page, address, query);
   for (let press = 0; press < presses; press++) {
     await page.evaluate(() => window.__press?.());
@@ -149,7 +154,7 @@ async function follow(page, address, name, { query, seconds, presses = 2 }) {
   const encoder = spawn(
     "ffmpeg",
     ["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png",
-     "-i", "-", "-c:v", "libvpx-vp9", "-pix_fmt", "yuv444p", "-crf", "16", "-b:v", "0",
+     "-i", "-", ...cropTo(crop), "-c:v", "libvpx-vp9", "-pix_fmt", "yuv444p", "-crf", "16", "-b:v", "0",
      "-row-mt", "1", "-deadline", "good", "-cpu-used", "4", join(FILMS, file)],
     { stdio: ["pipe", "ignore", "inherit"] },
   ); // prettier-ignore
@@ -160,7 +165,15 @@ async function follow(page, address, name, { query, seconds, presses = 2 }) {
   let poster = null;
   for (let k = 0; k < frames; k++) {
     const shot = await frame(page);
-    if (k === Math.floor(frames / 2)) poster = shrink(decodePng(shot), 2);
+    if (k === Math.floor(frames / 2)) {
+      const whole = shrink(decodePng(shot), 2);
+      // A cropped film's poster is the same middle of the screen.
+      const [wide, tall] = [whole.width / crop, whole.height / crop];
+      poster =
+        crop > 1
+          ? cropBox(whole, [(whole.width - wide) / 2, (whole.height - tall) / 2, wide, tall])
+          : whole;
+    }
     if (!encoder.stdin.write(shot))
       await new Promise((resolve) => encoder.stdin.once("drain", resolve));
   }
@@ -169,8 +182,14 @@ async function follow(page, address, name, { query, seconds, presses = 2 }) {
   return { file, poster, frames, seconds, bytes: statSync(join(FILMS, file)).size };
 }
 
+/** ffmpeg's filter for the middle `1 / crop` of the screen enlarged `crop` times, or none. */
+function cropTo(crop) {
+  if (crop <= 1) return [];
+  return ["-vf", `crop=iw/${crop}:ih/${crop},scale=iw*${crop}:ih*${crop}:flags=neighbor`];
+}
+
 /** The box (x, y, wide, tall) of an image at the art pixels' size. */
-function crop(image, [x0, y0, wide, tall]) {
+function cropBox(image, [x0, y0, wide, tall]) {
   const rgb = Buffer.alloc(wide * tall * 3);
   for (let y = 0; y < tall; y++) {
     const from = ((y0 + y) * image.width + x0) * 3;
@@ -263,7 +282,7 @@ function zoom(name, caption) {
   return `<div class="pair zoom">${["before", "after"]
     .map(
       (side) =>
-        `<figure><img src="${uri(crop(shots[side][name], box))}" alt="${escape(caption)}, ${side}" width="${box[2]}" height="${box[3]}"><figcaption>${side === "before" ? "Before" : "After"}, close-up</figcaption></figure>`,
+        `<figure><img src="${uri(cropBox(shots[side][name], box))}" alt="${escape(caption)}, ${side}" width="${box[2]}" height="${box[3]}"><figcaption>${side === "before" ? "Before" : "After"}, close-up</figcaption></figure>`,
     )
     .join("")}</div>`;
 }
@@ -492,7 +511,12 @@ ${filmPair("follow2", ["Before: a lizard followed", "After: its feet in turn, it
 <div><span class="label">Was</span><p>Between the simulation's ticks an animal strolled anywhere that was land, so it walked through bushes and stood on trunks, and seemed to walk over the vegetation.</p></div>
 <div><span class="label">Now</span><p>Each tree and bush leaves a footprint (a tree's trunk and roots, a bush's lower puffs). Strolls pick clear goals and stop before a plant; the walk to where the simulation has the animal steers round them; a place the simulation puts inside a bush is drawn beside it, without changing the simulation's data. Grass and flowers are still walked through. In the middle view at (64, 64), 1–3 of about 14 animals were in a footprint at any moment before, and almost always none after.</p></div>
 </div>
-${filmPair("follow5", ["Before: an animal among bushes", "After: it goes round them and stands behind them"])}
+<p class="meta">Five animals of different sizes followed among bushes, 12 s each, the middle of the screen enlarged twice: before left, after right.</p>
+${filmPair("bush2", ["Before: Shepisu, the largest (SIZE 0.97)", "After"])}
+${filmPair("bush21", ["Before: Maleha (SIZE 0.51)", "After"])}
+${filmPair("bush10", ["Before: Malehe (SIZE 0.45)", "After"])}
+${filmPair("bush32", ["Before: Malera, small (SIZE 0.24)", "After"])}
+${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "After"])}
 </section>
 <hr>
 
