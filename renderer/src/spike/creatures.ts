@@ -26,7 +26,15 @@ import {
   type Point,
   type Stiffness,
 } from "../creatures/chain";
-import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
+import {
+  breath,
+  clearAnchor,
+  drive,
+  newMotion,
+  reanchor,
+  stepOut,
+  type Motion,
+} from "../creatures/motion";
 import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
 import {
   opacityUnderWater,
@@ -37,7 +45,7 @@ import {
   type WaterLook,
 } from "../creatures/water";
 import type { CreatureSeed } from "./fixture";
-import type { Passable } from "./habitat";
+import type { Footprints, Passable } from "./habitat";
 import { dotOf, dotSize } from "../creatures/markers";
 import {
   RIPPLES,
@@ -231,6 +239,8 @@ export class CreatureLayer {
   private readonly angle = new Float32Array(16);
   /** Seconds since the layer began: the clock breaths keep. */
   private clock = 0;
+  /** The trees and bushes anchored animals keep clear of (R5), if any. */
+  private footprints: Footprints | null = null;
 
   constructor(
     private readonly atlas: Atlas,
@@ -391,6 +401,26 @@ export class CreatureLayer {
   }
 
   /**
+   * From now on anchored walkers keep clear of `footprints` (R5: the trees and bushes of
+   * the plants they stand among), or of nothing with null. Swimmers pass under what stands
+   * in the sea.
+   */
+  standAmong(footprints: Footprints | null): void {
+    this.footprints = footprints;
+  }
+
+  /**
+   * Whether a creature can stand at (x, y): on its ground, and (a walker) clear of the
+   * trees and bushes by the width of its body.
+   */
+  private clear(creature: Creature, x: number, y: number): boolean {
+    const { plan } = creature;
+    if (!this.passable(x, y, plan.swims)) return false;
+    const footprints = plan.swims ? null : this.footprints;
+    return footprints === null || !footprints.blocked(x, y, plan.radii[creature.chest] ?? 0);
+  }
+
+  /**
    * Where the sim now has creature `index`, in cells. An anchored creature walks there
    * (or is put there, if too far to walk); a wandering one ignores it.
    */
@@ -404,10 +434,15 @@ export class CreatureLayer {
     const { plan } = creature;
     const walker = { head, heading: creature.heading, pace: plan.pace, length: plan.length };
     if (reanchor(motion, walker, x, y)) {
-      // Put there: the body comes along in a line behind the head.
+      // Put there, beside the trunk or bush it may be in (R5): the body comes along in a
+      // line behind the head.
+      if (this.passable(x, y, plan.swims)) {
+        clearAnchor(motion, (x, y) => this.clear(creature, x, y), plan.length);
+      }
+      const { anchor } = motion;
       creature.joints.forEach((joint, i) => {
-        joint.x = x - Math.cos(creature.heading) * plan.spacing * i;
-        joint.y = y - Math.sin(creature.heading) * plan.spacing * i;
+        joint.x = anchor.x - Math.cos(creature.heading) * plan.spacing * i;
+        joint.y = anchor.y - Math.sin(creature.heading) * plan.spacing * i;
       });
     }
   }
@@ -823,8 +858,17 @@ export class CreatureLayer {
       bend: stiff.neck,
       turning: stiff.turning,
     };
-    const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
-    const stride = drive(motion, walker, dtS, this.random, free);
+    const ground = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
+    const free = (x: number, y: number): boolean => this.clear(creature, x, y);
+    // Where the sim has it is drawn beside the plant it may be in, not on it (R5).
+    const { anchor } = motion;
+    if (ground(anchor.x, anchor.y)) clearAnchor(motion, free, plan.length);
+    // Paused with its tail in a bush or on a trunk: it steps out.
+    const tail = joints[joints.length - 1];
+    if (motion.mode === "pause" && tail !== undefined && ground(tail.x, tail.y)) {
+      if (!free(tail.x, tail.y) && free(head.x, head.y)) stepOut(motion, walker, free);
+    }
+    const stride = drive(motion, walker, dtS, this.random, free, ground);
     creature.heading = walker.heading;
     creature.walked += stride;
     if (stiff.pivots) pivot(joints, creature.heading, stiff.neck);
