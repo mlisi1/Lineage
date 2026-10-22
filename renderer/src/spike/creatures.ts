@@ -47,8 +47,35 @@ const TURN_JITTER = 6;
 const TURN_DAMPING = 1.5;
 const AVOID_TURN = 3.5;
 const LOOK_AHEAD_CELLS = 1.2;
-/** How briskly a foot swings to its target. */
-const STEP_RATE = 16;
+/**
+ * Legs step in turn: the body goes once through its gait cycle for every so many lengths
+ * of its shortest stepping leg that it walks, and each foot swings in its own part of the
+ * cycle and stands still the rest of it.
+ */
+const STRIDE_LEGS = 1.5;
+/** The share of the cycle a foot spends in the air. */
+const SWING_SHARE = 0.4;
+/**
+ * The feet of a pair swing half a cycle apart, and so do the same side's feet of
+ * neighbouring pairs (diagonal pairs together: a trot, a tripod); each pair behind the
+ * first lifts this much of a cycle later than its diagonal partner in front.
+ */
+const PAIR_LAG = 0.06;
+/** How high a foot is lifted at the middle of its swing, in leg lengths (toward the light). */
+const FOOT_LIFT = 0.1;
+/**
+ * A body standing or creeping still steps at least once in so many seconds while a foot
+ * is in the air or farther than `SETTLE_OFF` leg lengths from where it should stand, so
+ * that it comes to rest with every foot down under it.
+ */
+const SETTLE_CYCLE_S = 0.8;
+const SETTLE_OFF = 0.25;
+/** A foot farther than so many leg lengths from its place (put somewhere new, or back in view) is put there. */
+const SNAP_LEGS = 3;
+/** The most of a cycle one frame may advance, so that a long frame skips no foot's swing. */
+const MAX_ADVANCE = 0.25;
+/** How quickly (per second) the share of the cycle that comes from walking follows it. */
+const STRIDING_RATE = 6;
 /** Texels across the white square of the atlas. */
 const WHITE_TEXELS = 2;
 /** How far (cells) a creature that starts where it cannot live is moved to where it can. */
@@ -105,6 +132,11 @@ interface Leg {
   webbed: boolean;
   /** Its foot has been put down once; until then it is put where it rests, not swung there. */
   planted: boolean;
+  /** Where in the gait cycle its swing starts (0 to 1). */
+  phase: number;
+  /** The foot is in the air, swinging from `lift` to `target`. */
+  swinging: boolean;
+  lift: Point;
 }
 
 interface Creature {
@@ -117,6 +149,15 @@ interface Creature {
   avoid: 1 | -1;
   /** How far through a stroke its flippers are, in radians. */
   stroke: number;
+  /** How far through its gait cycle its legs are (0 to 1), and the cells walked to one cycle. */
+  gait: number;
+  stride: number;
+  /** Cells walked since its legs were last placed. */
+  walked: number;
+  /** The share of the gait cycle's advance that comes from walking (smoothed), not settling. */
+  striding: number;
+  /** A foot is in the air or out of its place, so the legs step even standing still. */
+  unsettled: boolean;
   /** Where it may go, if it is kept somewhere. */
   pen: CreatureSeed["pen"];
   /** One sprite per part of the plan, in the same order. */
@@ -172,6 +213,7 @@ export class CreatureLayer {
   // Scratch, reused every frame so the animation allocates nothing.
   private readonly hip: Point = { x: 0, y: 0 };
   private readonly knee: Point = { x: 0, y: 0 };
+  private readonly foot: Point = { x: 0, y: 0 };
   private readonly dirX = new Float32Array(16);
   private readonly dirY = new Float32Array(16);
   private readonly angle = new Float32Array(16);
@@ -572,6 +614,10 @@ export class CreatureLayer {
     });
     const legs = plan.legs.map((leg, index): Leg => {
       const flipper = leg.fin === 1;
+      // Legs come in pairs, front first: the pair's two sides half a cycle apart, and
+      // each pair against the one in front, so that diagonal feet swing together.
+      const pair = Math.floor(index / 2);
+      const phase = ((pair % 2) * 0.5 + (leg.side === 1 ? 0 : 0.5) + pair * PAIR_LAG) % 1;
       return {
         plan: leg,
         foot: { x, y },
@@ -582,8 +628,14 @@ export class CreatureLayer {
         sole: !flipper && leg.foot > 0 ? round(leg.sole, leg.foot, leg.fin > 0) : null,
         webbed: leg.fin > 0,
         planted: false,
+        phase,
+        swinging: false,
+        lift: { x, y },
       };
     });
+    // The gait is measured in the shortest leg that steps (flippers row, `walk`).
+    const steppers = plan.legs.filter((leg) => leg.fin < 1).map((leg) => leg.length);
+    const shortest = steppers.length > 0 ? Math.min(...steppers) : 0;
     const textures: Record<string, [Texture, number]> = {
       disc: [this.atlas.disc, DISC_SIZE],
       wedge: [this.atlas.wedge, DISC_SIZE],
@@ -639,6 +691,11 @@ export class CreatureLayer {
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
       stroke: random() * Math.PI * 2,
+      gait: random(),
+      stride: STRIDE_LEGS * shortest,
+      walked: 0,
+      striding: 0,
+      unsettled: true,
       sprites,
       legs,
       inView: true,
@@ -751,6 +808,7 @@ export class CreatureLayer {
     const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
     const stride = drive(motion, walker, dtS, this.random, free);
     creature.heading = walker.heading;
+    creature.walked += stride;
     creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
     followChain(joints, plan.spacing);
     creature.marker.position.set(head.x, head.y);
@@ -780,6 +838,7 @@ export class CreatureLayer {
     if (!blocked || stuck) {
       head.x += dirX * stride;
       head.y += dirY * stride;
+      creature.walked += stride;
       creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
     }
     followChain(joints, plan.spacing);
@@ -826,10 +885,30 @@ export class CreatureLayer {
         sprite.scale.y = (part.across / texels) * (1 + BREATH_WIDENS * full);
       }
     }
-    for (const leg of creature.legs) this.walk(creature, leg, dtS);
+    this.step(creature, dtS);
+    creature.unsettled = false;
+    for (const leg of creature.legs) this.walk(creature, leg);
   }
 
-  private walk(creature: Creature, leg: Leg, dtS: number): void {
+  /**
+   * Move the gait cycle on: by the distance walked, and while a foot is in the air or out
+   * of place at least at a settling pace, so a body that stops still brings its feet in.
+   */
+  private step(creature: Creature, dtS: number): void {
+    const walked = creature.stride > 0 ? creature.walked / creature.stride : 0;
+    creature.walked = 0;
+    const settling = creature.unsettled ? dtS / SETTLE_CYCLE_S : 0;
+    const advance = Math.min(Math.max(walked, settling), MAX_ADVANCE);
+    if (advance > 0) {
+      const share = Math.min(1, walked / advance);
+      creature.striding += (share - creature.striding) * Math.min(1, dtS * STRIDING_RATE);
+    } else {
+      creature.striding = 0;
+    }
+    creature.gait = (creature.gait + advance) % 1;
+  }
+
+  private walk(creature: Creature, leg: Leg): void {
     const { joint: at, side, length, thickness, aim } = leg.plan;
     const joint = creature.joints[at];
     if (joint === undefined) return;
@@ -857,37 +936,63 @@ export class CreatureLayer {
     const ahead = Math.sin(aim) * length * 0.8;
     const restX = hip.x + sideX * out + forwardX * ahead;
     const restY = hip.y + sideY * out + forwardY * ahead;
-    // A planted foot stays put until the body has left it behind, then swings ahead.
-    if (Math.hypot(leg.target.x - restX, leg.target.y - restY) > length * 0.8) {
-      leg.target.x = restX + forwardX * length * 0.5;
-      leg.target.y = restY + forwardY * length * 0.5;
-    }
-    if (!leg.planted) {
-      leg.target.x = restX;
-      leg.target.y = restY;
+    // A foot lands ahead of where it rests by half of what the body walks while it
+    // stands, so it is as far behind when it lifts again.
+    const lead = ((1 - SWING_SHARE) * creature.stride * creature.striding) / 2;
+    const landX = restX + forwardX * lead;
+    const landY = restY + forwardY * lead;
+    if (!leg.planted || Math.hypot(leg.foot.x - restX, leg.foot.y - restY) > length * SNAP_LEGS) {
       leg.foot.x = restX;
       leg.foot.y = restY;
       leg.planted = true;
+      leg.swinging = false;
     }
-    const swing = Math.min(1, dtS * STEP_RATE);
-    leg.foot.x += (leg.target.x - leg.foot.x) * swing;
-    leg.foot.y += (leg.target.y - leg.foot.y) * swing;
+    // Its own part of the cycle: the foot swings from where it lifted to where it lands
+    // (which moves on with the body), then stands where it landed until its turn comes again.
+    const into = (creature.gait - leg.phase + 1) % 1;
+    const swinging = into < SWING_SHARE;
+    let raised = 0;
+    if (swinging) {
+      if (!leg.swinging) {
+        leg.lift.x = leg.foot.x;
+        leg.lift.y = leg.foot.y;
+      }
+      const t = into / SWING_SHARE;
+      const eased = t * t * (3 - 2 * t);
+      leg.target.x = landX;
+      leg.target.y = landY;
+      leg.foot.x = leg.lift.x + (landX - leg.lift.x) * eased;
+      leg.foot.y = leg.lift.y + (landY - leg.lift.y) * eased;
+      raised = Math.sin(Math.PI * t) * FOOT_LIFT * length * LIGHT;
+      creature.unsettled = true;
+    } else if (leg.swinging) {
+      // Down where it was going, firmly: it does not slide while it stands.
+      leg.foot.x = leg.target.x;
+      leg.foot.y = leg.target.y;
+    }
+    leg.swinging = swinging;
+    if (Math.hypot(leg.foot.x - landX, leg.foot.y - landY) > length * SETTLE_OFF) {
+      creature.unsettled = true;
+    }
+    // A foot in the air is drawn lifted toward the light; where it stands is unchanged.
+    const foot = this.foot;
+    foot.x = leg.foot.x - raised;
+    foot.y = leg.foot.y - raised;
 
     const bone = length * 0.6;
-    solveKnee(hip, leg.foot, bone, bone, side, this.knee);
+    solveKnee(hip, foot, bone, bone, side, this.knee);
     this.stretch(leg.upper, hip, this.knee, thickness);
-    this.stretch(leg.lower, this.knee, leg.foot, thickness * 0.8);
+    this.stretch(leg.lower, this.knee, foot, thickness * 0.8);
     const [upperEdge, lowerEdge, soleEdge] = leg.edges;
     const edge = 2 * leg.plan.edge;
     if (upperEdge !== undefined) this.stretch(upperEdge, hip, this.knee, thickness + edge);
-    if (lowerEdge !== undefined)
-      this.stretch(lowerEdge, this.knee, leg.foot, thickness * 0.8 + edge);
+    if (lowerEdge !== undefined) this.stretch(lowerEdge, this.knee, foot, thickness * 0.8 + edge);
     // A webbed foot lies ahead of the leg's end, across the way the shin points.
     const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
-    const shin = Math.atan2(leg.foot.y - this.knee.y, leg.foot.x - this.knee.x);
+    const shin = Math.atan2(foot.y - this.knee.y, foot.x - this.knee.x);
     for (const sprite of [soleEdge, leg.sole]) {
       if (sprite === undefined || sprite === null) continue;
-      sprite.position.set(leg.foot.x + Math.cos(shin) * reach, leg.foot.y + Math.sin(shin) * reach);
+      sprite.position.set(foot.x + Math.cos(shin) * reach, foot.y + Math.sin(shin) * reach);
       if (leg.webbed) sprite.rotation = shin;
     }
   }
