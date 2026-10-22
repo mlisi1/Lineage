@@ -15,7 +15,17 @@ import {
   type LegPlan,
 } from "../creatures/body";
 import type { CellRect } from "./camera";
-import { curl, followChain, solveKnee, type Point } from "../creatures/chain";
+import {
+  curl,
+  followChain,
+  neckDirection,
+  pivot,
+  solveKnee,
+  stiffness,
+  withinTurn,
+  type Point,
+  type Stiffness,
+} from "../creatures/chain";
 import { breath, drive, newMotion, reanchor, type Motion } from "../creatures/motion";
 import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
 import {
@@ -144,6 +154,8 @@ interface Creature {
   container: Container;
   marker: Container;
   joints: Point[];
+  /** How far its body bends at each joint, and its head from its body. */
+  stiffness: Stiffness;
   heading: number;
   turn: number;
   avoid: 1 | -1;
@@ -687,6 +699,7 @@ export class CreatureLayer {
       container,
       marker,
       joints,
+      stiffness: stiffness(plan.kind, plan.joints, plan.spacing),
       heading,
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
@@ -799,18 +812,24 @@ export class CreatureLayer {
     const { plan, joints, motion } = creature;
     const head = joints[0] ?? { x: 0, y: 0 };
     if (motion === null) return head;
+    const { stiffness: stiff } = creature;
     const walker = {
       head,
       heading: creature.heading,
       pace: plan.pace * creature.waterPace,
       length: plan.length,
+      // A body that turns on the spot lets its head turn as it likes, and comes round after.
+      neck: stiff.pivots ? undefined : neckDirection(joints, creature.heading),
+      bend: stiff.neck,
+      turning: stiff.turning,
     };
     const free = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
     const stride = drive(motion, walker, dtS, this.random, free);
     creature.heading = walker.heading;
     creature.walked += stride;
+    if (stiff.pivots) pivot(joints, creature.heading, stiff.neck);
     creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
-    followChain(joints, plan.spacing);
+    followChain(joints, plan.spacing, stiff, creature.heading, dtS);
     creature.marker.position.set(head.x, head.y);
     return head;
   }
@@ -831,6 +850,19 @@ export class CreatureLayer {
       (pen === undefined || (x >= pen.x0 && x <= pen.x1 && y >= pen.y0 && y <= pen.y1));
     const blocked = !free(head.x + dirX * LOOK_AHEAD_CELLS, head.y + dirY * LOOK_AHEAD_CELLS);
     creature.heading += (blocked ? creature.avoid * AVOID_TURN : creature.turn) * dtS;
+    // The head turns no further from the body than its neck lets it, and the body comes
+    // round after; stopped in front of what it cannot cross, or short and stiff, it turns
+    // on the spot.
+    const { stiffness: stiff } = creature;
+    if (blocked || stiff.pivots) {
+      pivot(joints, creature.heading, stiff.neck);
+    } else {
+      creature.heading = withinTurn(
+        creature.heading,
+        neckDirection(joints, creature.heading),
+        stiff.neck,
+      );
+    }
     dirX = Math.cos(creature.heading);
     dirY = Math.sin(creature.heading);
     const stride = plan.pace * dtS;
@@ -841,7 +873,7 @@ export class CreatureLayer {
       creature.walked += stride;
       creature.stroke += (stride / plan.length) * STROKES_PER_LENGTH * 2 * Math.PI;
     }
-    followChain(joints, plan.spacing);
+    followChain(joints, plan.spacing, creature.stiffness, creature.heading, dtS);
     creature.marker.position.set(head.x, head.y);
     return head;
   }
