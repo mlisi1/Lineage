@@ -57,6 +57,8 @@ const FOLLOWS = {
   follow2: { query: "seed=2&follow=60&quiet", seconds: 8 },
   // Pinned (no presses): land animals swimming out off the north coast at the start.
   water: { query: "view=local&x=183&y=11&quiet", seconds: 8, presses: 0 },
+  // An animal among bushes.
+  follow5: { query: "seed=5&follow=60&quiet", seconds: 8 },
 };
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
 const ZOOMS = {
@@ -362,7 +364,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -484,12 +486,22 @@ ${filmPair("follow2", ["Before: a lizard followed", "After: its feet in turn, it
 </section>
 <hr>
 
+<section id="bushes">
+<div class="head"><span class="n">·</span><h2>Animals keep clear of trees and bushes</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Between the simulation's ticks an animal strolled anywhere that was land, so it walked through bushes and stood on trunks, and seemed to walk over the vegetation.</p></div>
+<div><span class="label">Now</span><p>Each tree and bush leaves a footprint (a tree's trunk and roots, a bush's lower puffs). Strolls pick clear goals and stop before a plant; the walk to where the simulation has the animal steers round them; a place the simulation puts inside a bush is drawn beside it, without changing the simulation's data. Grass and flowers are still walked through. In the middle view at (64, 64), 1–3 of about 14 animals were in a footprint at any moment before, and almost always none after.</p></div>
+</div>
+${filmPair("follow5", ["Before: an animal among bushes", "After: it goes round them and stands behind them"])}
+</section>
+<hr>
+
 <section id="open">
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
 <ul class="open">
 
-<li>Animals through bushes (being worked on), plants popping in over animals at row lines</li>
+<li>Plants popping in over animals at row lines</li>
 <li>The name scroll by the animal followed</li>
 <li>Deaths and carcasses, arrivals by sea, wading, chronicle places and species</li>
 <li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
@@ -524,7 +536,8 @@ const readme = [
   "  olive; round map dots; a calmer ground; grass as small unoutlined tufts after",
   "  references, nine sizes, random tints; snow only from the simulation; the young drawn",
   "  small; plants off the water; land animals wade or struggle in the sea; legs step in",
-  "  turn; no body folds through itself. Decisions: ADR 0022",
+  "  turn; no body folds through itself; animals keep clear of trees and bushes.",
+  "  Decisions: ADR 0022",
   "- Tests wait until the owner calls the look final; the device benchmark comes later",
   "",
   "Regenerate with `cd renderer && npm run final` (`R5_REPORT_BEFORE=<commit>` to compare",

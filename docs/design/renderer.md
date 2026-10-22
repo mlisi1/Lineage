@@ -970,6 +970,19 @@ Round 1, items 1–7:
   body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
   faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
   they struggle more than on land unless they are partly aquatic).
+- **Animals keep clear of trees and bushes.** Each tree and bush the plant layer builds
+  leaves a footprint: an ellipse about its foot, a tree's trunk with its roots (0.13 of
+  the drawing's width) or a bush's lower puffs (0.4), half as deep as wide. The layer keeps
+  them by cell and answers whether a body of a given radius at a place overlaps one
+  (`PlantLayer.blocked`). Only plants already built count (in and near the view): an animal
+  far off walks as on open ground. Grass, flowers, stones, logs and sprouts are walked
+  through, and swimmers pass under mangroves. A walker's strolls pick goals whose way is
+  clear and stop before a plant. Its walk to where the sim has it steers round plants
+  (looking 0.6 of its length ahead, turning aside in eighths of a half-turn on the side it
+  last chose) and goes straight on only when there is no way round. Where the sim's place
+  lies in a wood or a bush, it is drawn at the nearest clear spot, a little further out so
+  that the tail fits; the sim's data is never changed. A paused animal whose tail lies in
+  a bush steps on, and one standing in a plant (one grew there) walks out.
 - **Legs step in turn** (`walk` in `src/spike/creatures.ts`). A legged body goes once
   through a gait cycle for every 1.5 lengths of its shortest stepping leg it walks. Each
   foot is in the air for 40 % of the cycle and stands still for the rest. The two feet of

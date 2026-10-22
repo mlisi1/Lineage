@@ -116,6 +116,17 @@ depth legs out of sight, the body sunk but for the head, slower still, bobbing, 
 and wider ripples. Whether wading on the shelf should also cost energy in the simulation
 is M11's lever and the owner's call: M11 made it free on the owner's word (2026-10-20).
 
+### Trees and bushes (2026-10-22)
+
+Strolls between sim ticks asked only whether a place was land or water, so animals walked
+through bushes and stood on trunks. Trees and bushes now leave footprints (the trunk and
+roots of a tree, the lower puffs of a bush) that strolls avoid and that the walk to the
+sim's place steers round. A sim place inside one is drawn beside it, without changing the
+sim's data. Measured in the page, the middle view at (64, 64) went from 1–3 of about 14
+animals in a footprint at any moment to almost always none. The footprint sizes are first
+guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
+through when there is no way round.
+
 ### Legs and bodies (2026-10-22)
 
 Worked on in parallel worktrees and merged. **Legs**: a foot stepped when its rest point

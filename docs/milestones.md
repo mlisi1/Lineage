@@ -144,9 +144,10 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **Pitfalls**: Vite's dev server does not reload the paint worker when
   `terrain/ground.ts` changes (restart it, or `?painter=inline`). The wire's `young` is
   additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
-- **Next**: animals through bushes and trees, bodies folding, legs in turn (worked on in
-  parallel on 2026-10-22 in worktrees `../Lineage-r5-bush`, `-fold`, `-legs`, branches
-  `r5-bush`, `r5-fold`, `r5-legs`, merged into `r5-final` when done).
+- **Done 2026-10-22**: animals in the water, bushes and trees, bodies folding and legs in
+  turn (the last three in parallel worktrees, merged into `r5-final`).
+- **Next**: plants popping in over animals at row lines (exact-height sorting if still
+  seen), then the name scroll by the animal followed, then items 8–20.
 
 ### R5 checklist (the owner, 2026-10-21)
 
@@ -163,7 +164,8 @@ below was taken in scope by the owner. Tests wait until the look is called final
   in the sea (they pay for it and drown; M11 lets them wade the shelf free); the renderer
   now shows it: wading in the shallows, struggling out of their depth (`creatures/wading.ts`)
 - [x] The R3 demo clicks out: a click or tap is the view button (`toMap` stays)
-- [ ] Animals do not walk through bushes and trees
+- [x] Animals do not walk through bushes and trees (plant footprints, steering, a drawn
+  anchor beside the plant: `PlantLayer.blocked`, `motion.ts` `steer`, `clearAnchor`)
 - [x] A body never folds through itself as it turns (bend limits per kind, `chain.ts`)
 - [x] Legged animals step with their legs in turn (a gait cycle, `walk`)
 - [ ] Plants do not pop in over animals (round 2: no tuft pops over the animal followed;
