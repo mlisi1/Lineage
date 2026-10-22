@@ -169,8 +169,12 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [x] A body never folds through itself as it turns (bend limits per kind, `chain.ts`)
 - [x] Legged animals step with their legs in turn (a gait cycle, `walk`)
 - [ ] Plants do not pop in over animals (round 2: no tuft pops over the animal followed;
-  rows a quarter of a cell tall may still swap a plant and an animal at a row line)
-- [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it)
+  rows a quarter of a cell tall may still swap a plant and an animal at a row line).
+  2026-10-22, the owner: creatures still seem over the bushes; each body segment is to be
+  sorted by its own row, as top-down games sort a big tree's tiles
+- [ ] A name scroll by the animal followed: its species' name and a few genes (S3 reuses it).
+  The owner (2026-10-22): name, traits in words (size, diet, build) and pixel icons for what
+  words do badly (aquatic, rare genes, night habits); always on while following, in a corner
 
 **Seen on screen at the start**
 - [x] 1. The animal followed can be tiny and lost under the grass tufts drawn over it
@@ -185,8 +189,10 @@ below was taken in scope by the owner. Tests wait until the look is called final
 
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)
-- [ ] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning
-- [ ] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births
+- [ ] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning.
+  The owner (2026-10-22): by cause, and a carcass left where it died, fading
+- [ ] 9. Animals that come by sea (the founders, the hunters' second wave) fade in like births.
+  The owner (2026-10-22): a splash and ripples where they appear, no journey
 - [x] 10. Wading has no look (after M11 reaches main): drawn from the depth, ready for
   M11's shelf (`WADE_DEPTH` = its `wading_depth`)
 - [ ] 11. Chronicle entries carry a place and a species the scroll does not use
