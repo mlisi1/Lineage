@@ -15,7 +15,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; all five mechanisms in (food at sea with wading, reach, cover, nutrients; seeds in guts, schema v13) and R4 merged (v12); the island closed to strangers (hunters land once, the ark brings them back); M3.5 and M6.1 revised with the owner; criteria D1–D3 reported, bands pending; first closed-island run: predators die out within months, next weekly presses and 10 years (ADR 0019) | — |
+| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; mechanisms complete (food at sea and wading, reach, cover, nutrients, seeds in guts v13; R4 merged, v12); the island closed to strangers, hunters land once by the herd, the ark brings them back and waits for green; M3.5 and M6.1 revised with the owner; criteria judged without presses; defaults fail only M4.3 (hunters do not last without the god); sweep `closed-1` on the predator levers (ADR 0019) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -32,71 +32,60 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M11 in progress (branch `m11-tuning`, paused 2026-10-21 evening)
+### M11 in progress (branch `m11-tuning`, paused 2026-10-22 midday)
 
 **Start here next session.** Read this section, then ADR 0019 (every decision and
-number; "Fourth round" and "The closed island, first run" are today's), then
+number; "Hunters that find their prey; the first weekly presses" is the newest), then
 `docs/m11-plan.md` §7.
 
-- **Where it stands**: `m11-tuning` at the commit that adds this note, clean; R4 is merged
-  in (`4d41ec4`). The worktree `../Lineage-m11-reach` (branch `m11-reach`) is still at
-  `373a371`: fast-forward it (`git -C ../Lineage-m11-reach merge --ff-only m11-tuning`)
-  before writing code there. **Nothing of M11 is running.** The slow tests are to be rerun
-  first thing (step 7 of "Next steps"; the owner, 2026-10-22).
-- **The mechanism set is complete** (the owner, 2026-10-21: tune only once it is):
-  food at sea and wading, reach, cover, nutrients, **seeds in guts** (schema v13,
-  `a7ab1d5`), R4's weather, storm fires, burnt deaths, barren land and blast kills
-  (schema v12), and **the closed island** (`83b3252`): no strangers; a pack of 8 hunters
-  lands once per world when the herd reaches 120; the ark brings hunters to a herd of
-  120 without any. `fastforward --press-every-days 7` plays the owner's weekly press.
-- **Criteria changed with the owner's OK** (ADR 0019, fourth round): M3.5 allows a tenth
-  of the seeds to stay open woodland (`seeds_without_succession.share` ≤ 0.1); M6.1
-  leaves out the founding (from the first day with 3 species, at most a season);
-  `[species] link_distance` and `min_members` are fixed, no longer swept.
-- **The closed island, first run** (`runs/m11-closed-office`, 3 years × 20 seeds, office,
-  at `a7ab1d5`; against `runs/sweep-species-1/p000`, the defaults with strangers, before
-  R4 and gut seeds): M6.1 now passes (0.94), M2/M3/M9 pass, no world ended, no seed
-  without closed forest, photosynthesis held back. But **predators do not last**: the
-  pack lands in every seed, reaches the cap of 16 within weeks and dies out after a
-  median of about 75 days (only seed 10 keeps hunters to the end; seed 14 to day 950);
-  no hunter ever evolved from the herd. M4.3 0.60 → 0.08, D3b 0.53 → 0.17. Without
-  strangers' random genomes D1 falls 0.2 → 0 (armour and swimming never reach their
-  extremes in 3 years) and M7.2 fails (0.8: longevity sweeps the herd in 4 seeds).
-- **Next steps, in order** (check `uptime` first: the PC is shared, the owner's ROS and
-  Ruby jobs ran it to load 60 today; `--jobs 8`):
-  1. Weekly presses: `env -u PYTHONPATH uv run python -m tools.fastforward --years 3
-     --seeds 20 --schedule office --press-every-days 7 --jobs 8 --out
-     runs/m11-closed-presses`. Do hunters come back by the ark (it is drawn about half
-     the time when a herd of 120 has none)? Compare with `m11-closed-office`
-     (score both with `tools.tune.score.score`, criterion by criterion).
-  2. Ten years on 5 seeds, office, no presses (`--years 10 --seeds 5 --save-days 30`):
-     does D1 recover with time (mutation only), does longevity keep sweeping, do worlds
-     end?
-  3. A sweep with the predator levers (`predator_cap`, `hunter_wave_count`,
-     `hunter_wave_herd`, `meat_energy`, `defence_toxicity`) and mutation/founder spread;
-     not `link_distance`. If predators still cannot persist without the god, ask the
-     owner about a mechanism (hunters arising from the herd, e.g. scavenging into
-     omnivory) before touching it.
-  4. Propose D1–D3 bands to the owner; revisit D2's plant test (niche genes such as
-     fire-pine and mangrove cannot hold 5 % of all vegetation; judge them in their
-     habitat).
-  5. Held-out check (seeds 20–39) of 2–3 candidates; the M11 report's runs (5-year, fork,
+- **Where it stands**:
+  - The main checkout (`m11-tuning` at `be75730`) is running, or was running, the sweep
+    `closed-1` (31 points, started 2026-10-22 ~10:15; `runs/sweep-closed-1/`). If it is
+    not running (`pgrep -f tools.tune.sweep`), **resume it** (check `uptime`; finished
+    points are kept): `env -u PYTHONPATH uv run python -m tools.tune.sweep
+    tools/tune/sweeps/closed-1.toml --jobs 10 --max-load 16 >> runs/sweep-closed-1.log 2>&1`.
+    Then `uv run python -m tools.tune.sensitivity runs/sweep-closed-1`.
+  - The worktree `../Lineage-m11-reach` (branch `m11-reach`) is **ahead**: `5bc5baf`
+    (the ark waits for green) and this handoff. **Fast-forward `m11-tuning` to it only
+    after the sweep ends** (`git merge --ff-only m11-reach` in the main checkout): the
+    sweep's later points import the main checkout's code, and the ark rule only matters
+    with presses, which the sweep does not use.
+- **The mechanism set is complete**: food at sea and wading, reach, cover, nutrients,
+  seeds in guts (schema v13), R4's weather, storm fires, burnt deaths, barren land and
+  blast kills (v12), and the closed island: no strangers; a pack of 8 hunters lands once
+  per world when the herd reaches 120, **by a member of the herd and a little larger than
+  it** (`9dcb3f0`); the ark brings hunters to a herd of 120 without any, and **is not
+  drawn on an empty island until it is green enough for founders** (`5bc5baf`).
+  `fastforward --press-every-days 7` plays the owner's weekly press.
+- **Criteria** (ADR 0019): M3.5 allows a tenth of the seeds in open woodland; M6.1 leaves
+  out the founding; the species definition is fixed. **Every M criterion is judged on
+  runs without presses**; the weekly-press run only checks for harm (extinctions, worlds
+  ending, predators, the chronicle's flood). God-power entries stay major (pushed).
+- **Where the island is** (sweep point p000 = today's defaults, no presses): every M
+  criterion passes except **M4.3 (0.17)**: hunters are present on 26 % of days after
+  year 1 (D3b) and 0 % of creatures (D3a, median); D1 0 (armour and swimming never reach
+  their extremes in 3 years without strangers); D2 0 (plants). M6.1 0.95, M7.2 0.95,
+  M3.5 0.05, no extinction. With weekly presses (`runs/m11-closed-presses`, before the
+  ark rule): hunters present 73 %, M4.3 0.69, but early arks starved (fixed since).
+- **Next steps, in order**:
+  1. Let `closed-1` finish (6–8 h on the shared PC); rank the points (fewest M failures,
+     then D3, D1; worlds ended ≤ 0.1 per seed-year); `tools.tune.sensitivity`. Merge
+     `m11-reach`.
+  2. If no point keeps hunters without presses, tell the owner: with weekly presses the
+     ark keeps them; a mechanism by which hunters arise from the herd (scavenging into
+     omnivory) is the alternative, to ask about before touching.
+  3. D1 without strangers: look at the 10-year run (step 5) before proposing anything;
+     propose D1–D3 bands to the owner; revisit D2's plant test (judge niche genes such as
+     fire-pine and mangrove in their habitat).
+  4. Rerun the weekly-press check with the ark rule and the chosen candidate
+     (`--press-every-days 7`, harm only).
+  5. 10 years on 5 seeds (`--years 10 --seeds 5 --save-days 30`, office, no presses).
+  6. Held-out check (seeds 20–39) of 2–3 candidates; the M11 report's runs (5-year, fork,
      learning off, always / office-august / conference, one per mechanism off, weekly
      presses); `uv run python -m tools.report M11 ...`.
-  6. 10-year runs; slow suite; measure the sim on the Orange Pi once.
-  7. **Slow tests**: after the merge, `test_fauna_acceptance_over_three_years`,
-     `test_rare_genes_appear_and_none_takes_over`, `test_learning_tracks_the_local_plants`
-     and `test_life_survives_the_holidays` failed (and the bare-rock golden hash and the
-     winter recording, both expected and re-made since). A rerun at `a7ab1d5` was
-     stopped unfinished at the owner's request (three failures by then); **rerun them
-     before the other steps**:
-     `env -u PYTHONPATH uv run pytest -m slow -q --tb=short sim/tests/test_fauna.py
-     sim/tests/test_fauna_statistical.py sim/tests/test_rare_statistical.py
-     tools/tests/test_m5_statistical.py tools/tests/test_m8_statistical.py` (~35 min).
-     The M4 and M7 ones are likely the predators and longevity above; the holiday one
-     (M8.2/M8.3) matters most: without strangers a herd that crashes in an absence is not
-     restocked. Update the bare-rock golden hash with an explanation.
-  Remaining compute, estimated: 10–15 hours.
+  7. **Slow suite once, at the end** (the owner, 2026-10-22: the scored runs are the
+     check while tuning); update the bare-rock golden hash then, with its explanation.
+  8. Measure the sim on the Orange Pi once.
 - **The owner's answers** (ADR 0019): worlds end about once a decade; numbers first,
   mechanisms only after asking; keep photosynthesis, watched; D1–D3 (bands later); step
   budget 600 ms, M2.5 retired; 2026-10-21: the aim is "an interesting and balanced
@@ -119,7 +108,13 @@ number; "Fourth round" and "The closed island, first run" are today's), then
   - A new random draw in fauna shifts every later draw: draw only for the creatures
     concerned (gut seeds do), or scenario tests without the feature change outcome.
   - Pausing: `kill -STOP` the run's processes (and `-CONT` to resume); never put the
-    pattern in a shell that `pgrep -f` can match, it stops itself.
+    pattern in a shell that `pgrep -f` can match, it stops itself (the same for `kill`
+    and `xargs kill`: read the PIDs from `ps` into a file first).
+  - A run or sweep started from this session is a background job of it: closing the
+    session may stop it. Sweeps resume; a fast-forward run restarts from scratch.
+  - Diagnosing a mechanism: replay one seed with `World.create` and `live_day` and wrap
+    the method in question (deaths by cause in `Fauna._bury`, distances in `_hunt`);
+    that is how the hunters' starvation was found.
   - One 20-seed run cannot resolve a share's change below about 0.2.
   - Step-time criteria read the shared PC's load; sweeps leave them out.
   - Trends do not extrapolate past a sweep's range.
