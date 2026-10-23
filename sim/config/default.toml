@@ -493,8 +493,12 @@ browse_floor = 0.3
 # Energy in one full cell of plant biomass, and per unit of prey mass.
 plant_energy = 300.0
 meat_energy = 1600.0
-# Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
+# Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat
+# diet^meat_diet_exponent. Below 1 a meat exponent lets a little meat pay well, so a
+# lineage of the herd can take the first steps toward meat while grazers keep their
+# edge on plants (M11).
 diet_exponent = 1.0
+meat_diet_exponent = 1.0
 # Plant defence also poisons: energy from plants is multiplied by
 # 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
 # than it gives). Grazers cannot sense defence, only plant form (M5).

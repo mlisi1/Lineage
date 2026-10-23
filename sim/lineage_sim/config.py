@@ -409,6 +409,7 @@ class FaunaConfig:
     plant_energy: float
     meat_energy: float
     diet_exponent: float
+    meat_diet_exponent: float
     attack_min_diet: float
     carcass_share: float
     carrion_decay_hours: float
@@ -513,6 +514,7 @@ class FaunaConfig:
             "plant_energy",
             "meat_energy",
             "diet_exponent",
+            "meat_diet_exponent",
             "reach_cells",
             "attack_softness",
             "compat_distance",
