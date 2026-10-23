@@ -29,11 +29,11 @@ import { TILES, type ViewName } from "./landscape";
 import type { PlantLayer } from "./plants/plants";
 import type { CreaturesMessage, FaunaMessage, Message } from "./protocol";
 import type { Random } from "./rng";
-import type { Atlas } from "./spike/atlas";
-import { CreatureLayer } from "./spike/creatures";
-import type { CreatureSeed } from "./spike/fixture";
-import { passableIn, type Passable } from "./spike/habitat";
-import { CREATURE_SCALE, LOCAL_PIXELS, MID_BODY, WATER_LOOK, localBody } from "./spike/proposal";
+import type { Atlas } from "./creatures/atlas";
+import { CreatureLayer } from "./creatures/layer";
+import type { CreatureSeed } from "./creatures/seed";
+import { passableIn, type Passable } from "./creatures/habitat";
+import { CREATURE_SCALE, LOCAL_PIXELS, MID_BODY, WATER_LOOK, localBody } from "./creatures/views";
 import type { CellRect, Land } from "./terrain/land";
 import { seaAt } from "./terrain/sea";
 

@@ -782,7 +782,9 @@ export function bodyPlan(
   const shares = widths(kind, base);
   const joints = shares.length;
   const spacing = length / (joints - 1);
-  const radii = shares.map((share, i) => share * reference * (i === 0 ? 1 + YOUNG_HEAD * young : 1));
+  const radii = shares.map(
+    (share, i) => share * reference * (i === 0 ? 1 + YOUNG_HEAD * young : 1),
+  );
   const last = joints - 1;
   const light = bodyTone(0.15);
   const mark = tone(seed.hue + 0.08, 0.38);

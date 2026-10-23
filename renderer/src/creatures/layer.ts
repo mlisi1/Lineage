@@ -6,15 +6,8 @@
  */
 import { AlphaFilter, Container, Sprite, type Texture } from "pixi.js";
 import { DISC_SIZE, type Atlas } from "./atlas";
-import {
-  FIRST_LOOK,
-  LAYER,
-  bodyPlan,
-  type BodyOptions,
-  type BodyPlan,
-  type LegPlan,
-} from "../creatures/body";
-import type { CellRect } from "./camera";
+import { FIRST_LOOK, LAYER, bodyPlan, type BodyOptions, type BodyPlan, type LegPlan } from "./body";
+import type { CellRect } from "../terrain/land";
 import {
   curl,
   followChain,
@@ -25,18 +18,10 @@ import {
   withinTurn,
   type Point,
   type Stiffness,
-} from "../creatures/chain";
-import {
-  breath,
-  clearAnchor,
-  drive,
-  newMotion,
-  reanchor,
-  stepOut,
-  type Motion,
-} from "../creatures/motion";
-import { DYING, TINT_STEPS, mixColour, type Dying } from "../creatures/remains";
-import { kindFor, speciesPlans, type SpeciesPlan } from "../creatures/species";
+} from "./chain";
+import { breath, clearAnchor, drive, newMotion, reanchor, stepOut, type Motion } from "./motion";
+import { DYING, TINT_STEPS, mixColour, type Dying } from "./remains";
+import { kindFor, speciesPlans, type SpeciesPlan } from "./species";
 import {
   opacityUnderWater,
   seaKey,
@@ -44,20 +29,11 @@ import {
   underWater,
   type SeaAt,
   type WaterLook,
-} from "../creatures/water";
-import type { CreatureSeed } from "./fixture";
+} from "./water";
+import type { CreatureSeed } from "./seed";
 import type { Footprints, Passable } from "./habitat";
-import { dotOf, dotSize } from "../creatures/markers";
-import {
-  RIPPLES,
-  bobAt,
-  effortOf,
-  paceIn,
-  rippleAt,
-  ringTexture,
-  wetOf,
-  type Wet,
-} from "../creatures/wading";
+import { dotOf, dotSize } from "./markers";
+import { RIPPLES, bobAt, effortOf, paceIn, rippleAt, ringTexture, wetOf, type Wet } from "./wading";
 import { MAP_TILE } from "../terrain/ground";
 import type { Random } from "../rng";
 

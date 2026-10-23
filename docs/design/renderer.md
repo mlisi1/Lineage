@@ -1059,6 +1059,12 @@ Round 1, items 1–7:
 
 ## What the spike stands in for
 
+(R5: the real scene no longer imports from `src/spike/`. The creature layer is
+`creatures/layer.ts`, its atlas `creatures/atlas.ts`, land and water for walkers and
+swimmers `creatures/habitat.ts`, the animal to draw `creatures/seed.ts`, and the views'
+sizes `creatures/views.ts`. The spike's pages, look sheets and benchmark import them from
+there.)
+
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
   (`lineage-spike-fixture/5`): the heights, cover and biomass of a save's world, the
   maps' rules for colouring them, its creatures (where each is, its genome to the bit,

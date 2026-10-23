@@ -95,11 +95,13 @@ lineage/
 │   │   │                     #   the view button's camera), herd.ts (the stream's animals),
 │   │   │                     #   pixelfont.ts (the captions' font), atmosphere/ (R4: light,
 │   │   │                     #   glow, weather of events, the apocalypse sequence),
-│   │   │                     #   creatures/colours.ts and markers.ts (R5: colours from the
-│   │   │                     #   genes, the map's dots)
+│   │   │                     #   creatures/ (R5: the creature layer `layer.ts`, its atlas,
+│   │   │                     #   `habitat.ts`, `views.ts`, colours from the genes, the map's
+│   │   │                     #   dots, wading, remains), card.ts (the name card)
 │   │   ├── sheets/           # look sheets of the real scene (land.html, R1)
 │   │   └── spike/            # R0 spike: the scene, its in-page benchmark (spike.html),
-│   │                         #   the look sheet (look.html) and the creature sheet (R2)
+│   │                         #   the look sheet (look.html) and the creature sheet (R2);
+│   │                         #   the real scene no longer imports from it (R5)
 │   ├── scripts/              # look-report.mjs: write the look or creature sheet to reports/;
 │   │                         #   atmosphere-report.mjs (+ apng.mjs): the R4 report;
 │   │                         #   final-report.mjs: the R5 report (before and after)

@@ -214,8 +214,9 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [ ] 14. Demo code (`?show=`, the recordings) in the kiosk build: behind a dev flag
 
 **For the benchmark**
-- [ ] 15. The real scene off the spike: `CreatureLayer`, the atlas and the habitat into
-  `creatures/` (where the legs, folding and bush fixes go)
+- [x] 15. The real scene off the spike: `CreatureLayer`, the atlas and the habitat into
+  `creatures/` (where the legs, folding and bush fixes go). Done 2026-10-23: `layer.ts`,
+  `atlas.ts`, `habitat.ts`, `seed.ts`, `views.ts`; the spike imports from them
 - [ ] 16. A benchmark mode on the real page (map, middle, crowded middle, local) and
   `tools/kiosk_bench.py` pointed at it
 - [ ] 17. Per-frame costs, fixed where the board shows they matter: a filter pass per

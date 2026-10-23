@@ -18,7 +18,7 @@ import { kindFor, speciesPlans } from "../creatures/species";
 import { withRare } from "../creatures/rare";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "../scene";
 import type { CellRect } from "./camera";
-import type { CreatureLayer } from "./creatures";
+import type { CreatureLayer } from "../creatures/layer";
 import { parseFixture, type Cast, type CreatureSeed } from "./fixture";
 import { MID_TILE, paintGround } from "../terrain/ground";
 import {

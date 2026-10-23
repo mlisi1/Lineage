@@ -21,7 +21,7 @@ import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
 import { cellHash } from "../terrain/pixels";
 import { shoreSizes } from "../terrain/tide";
-import { heightAt } from "../spike/habitat";
+import { heightAt } from "../creatures/habitat";
 import {
   SPRITE_WIDTH,
   VISIBLE_FROM,

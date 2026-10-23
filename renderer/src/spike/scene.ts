@@ -6,7 +6,7 @@ import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
 import type { BodyOptions } from "../creatures/body";
 import { viewAt, type View } from "./camera";
-import { CreatureLayer } from "./creatures";
+import { CreatureLayer } from "../creatures/layer";
 import type { WorldFixture } from "./fixture";
 import { MID_TILE, MAP_TILE, paintGround } from "../terrain/ground";
 import { GroundPieces, PIXEL_ART, groundSprite, loadWorldLayers, type WorldLayers } from "./layers";

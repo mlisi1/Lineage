@@ -60,8 +60,8 @@ import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
 import type { CreaturesMessage, Message } from "./protocol";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
-import { creatureAtlas } from "./spike/atlas";
-import { heightAt } from "./spike/habitat";
+import { creatureAtlas } from "./creatures/atlas";
+import { heightAt } from "./creatures/habitat";
 import { Recording, SocketSource, type Source } from "./stream";
 import { InlinePainter, makePainter } from "./terrain/painter";
 

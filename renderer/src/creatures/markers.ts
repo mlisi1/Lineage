@@ -81,7 +81,8 @@ function drawDots(): Map<string, Dot> {
     }
     const fillLeft = left + widest + 1;
     for (let y = 0; y < mask.length; y++)
-      for (let x = 0; x < mask.length; x++) if (at(x, y)) context.fillRect(fillLeft + x + 1, y + 1, 1, 1);
+      for (let x = 0; x < mask.length; x++)
+        if (at(x, y)) context.fillRect(fillLeft + x + 1, y + 1, 1, 1);
     frames.push([
       key,
       new Rectangle(left, 0, across, across),
@@ -93,7 +94,11 @@ function drawDots(): Map<string, Dot> {
   return new Map(
     frames.map(([key, edge, fill, across]) => [
       key,
-      { edge: new Texture({ source, frame: edge }), fill: new Texture({ source, frame: fill }), across },
+      {
+        edge: new Texture({ source, frame: edge }),
+        fill: new Texture({ source, frame: fill }),
+        across,
+      },
     ]),
   );
 }

@@ -7,7 +7,7 @@ import { ApngWriter, dataUri } from "./apng";
 import type { Point } from "../creatures/chain";
 import type { CellRect } from "./camera";
 import type { CreatureSeed, WorldFixture } from "./fixture";
-import type { Passable } from "./habitat";
+import type { Passable } from "../creatures/habitat";
 import { hexToRgb } from "./pixelart";
 import type { Random } from "../rng";
 import type { Picture, Stage } from "./stage";
