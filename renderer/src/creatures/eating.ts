@@ -92,18 +92,22 @@ export class Flecks {
 
   /** Throw a fleck of `food` from `mouth` (cells), drifting `side` (−1 or 1). */
   throw(food: Food, mouth: Point, side: number): void {
-    if (food === "none") return;
+    if (food !== "none") this.fling(FLECK_COLOUR[food], mouth, side);
+  }
+
+  /** Throw a fleck of `colour` from `from` (cells), drifting `side` (R5: a hunter's dust too). */
+  fling(colour: number, from: Point, side: number): void {
     const k = this.next;
     this.next = (this.next + 1) % FLECKS;
     const sprite = this.sprites[k];
     const flying = this.flying[k];
     if (sprite === undefined || flying === undefined) return;
-    sprite.tint = FLECK_COLOUR[food];
+    sprite.tint = colour;
     sprite.visible = true;
     sprite.alpha = 1;
     flying.age = 0;
-    flying.x = mouth.x;
-    flying.y = mouth.y;
+    flying.x = from.x;
+    flying.y = from.y;
     flying.dx = side * FLECK_DRIFT;
   }
 

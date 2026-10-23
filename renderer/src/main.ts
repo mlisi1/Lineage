@@ -170,6 +170,8 @@ declare global {
     __pin?: (id: number, x: number, y: number, heading: number) => boolean;
     __send?: (id: number, x: number, y: number) => boolean;
     __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
+    __hunt?: (hunterId: number, preyId: number) => boolean;
+    __birth?: (motherId: number, childId: number, egg?: boolean) => boolean;
     __standing?: (
       x0: number,
       y0: number,
@@ -419,6 +421,8 @@ async function start(): Promise<void> {
   window.__pin = (id, x, y, heading) => herd.pin(id, x, y, heading);
   window.__send = (id, x, y) => herd.send(id, x, y);
   window.__feed = (id, food) => herd.feed(id, food);
+  window.__hunt = (hunterId, preyId) => herd.hunt(hunterId, preyId);
+  window.__birth = (motherId, childId, egg) => herd.birth(motherId, childId, egg);
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
   window.__landAt = (x, y) => {
     const land = landscape.current;

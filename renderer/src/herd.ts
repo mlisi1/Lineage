@@ -15,6 +15,7 @@ import { colour, lookOf } from "./creatures/body";
 import { ownColours, speciesColours, type SpeciesColour } from "./creatures/colours";
 import { GENE_NAMES, type Genome } from "./creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "./creatures/phenotype";
+import { EGG_BROOD, NEWBORN_S } from "./creatures/nursery";
 import { DYING, Remains, type BodyView, type Cause, type Laid } from "./creatures/remains";
 import {
   parseRareConfig,
@@ -127,9 +128,6 @@ const BODIES = {
 /** Growth comes in sixteenths of the way to coming of age (`young` on the wire). */
 const YOUNG_STEPS = 16;
 
-/** Seconds a newborn takes to fade in where it was born. */
-const BORN_S = 0.6;
-
 export class Herd {
   private readonly roster = new Roster();
   private readonly layers: Record<"middle" | "local", CreatureLayer>;
@@ -160,6 +158,56 @@ export class Herd {
     if (slot === undefined) return false;
     for (const layer of Object.values(this.layers)) layer.setFood(slot, food, true);
     return true;
+  }
+
+  /**
+   * Animal `hunterId` hunts `preyId` now, in the view shown (debugging the look: a hunt
+   * staged by hand, R5): it runs and strikes, and the prey dies a kill's death, in the
+   * scene only (the stream may still have it alive). False if it cannot be shown so.
+   */
+  hunt(hunterId: number, preyId: number): boolean {
+    const hunter = this.roster.slotOf(hunterId);
+    const prey = this.roster.slotOf(preyId);
+    const layer = this.shown();
+    if (hunter === undefined || prey === undefined || layer === null) return false;
+    const wait = layer.hunt(hunter, prey, true);
+    if (wait === null) return false;
+    this.remains.died("killed", this.laid(prey), wait);
+    for (const each of Object.values(this.layers)) {
+      each.remove(prey, true, DYING.killed, each === layer ? wait : 0);
+    }
+    return true;
+  }
+
+  /**
+   * Animal `childId` is born to `motherId` now, in the view shown (debugging the look: a
+   * birth staged by hand, R5; any animal will do for the newborn), out of an egg if `egg`
+   * (left out: if she lays). False if it cannot be shown so.
+   */
+  birth(motherId: number, childId: number, egg?: boolean): boolean {
+    const mother = this.roster.slotOf(motherId);
+    const child = this.roster.slotOf(childId);
+    const layer = this.shown();
+    if (mother === undefined || child === undefined || layer === null) return false;
+    return layer.nurse(child, mother, egg ?? this.lays(motherId), true);
+  }
+
+  /** The layer drawing bodies in the view shown; null on the map and before the first frame. */
+  private shown(): CreatureLayer | null {
+    return this.view === "middle"
+      ? this.layers.middle
+      : this.view === "local"
+        ? this.layers.local
+        : null;
+  }
+
+  /** Whether animal `id` lays eggs (R5): its broods are large. */
+  private lays(id: number): boolean {
+    const config = this.phenotypeConfig;
+    const known = this.roster.genomes.get(id);
+    if (config === null || known === undefined) return false;
+    const genome: Genome = this.genomeOrder.map((index) => known.genome[index] ?? 0);
+    return phenotype(config, genome).brood >= EGG_BROOD;
   }
 
   /** Send animal `id` to (x, y), in both views (debugging the look, `CreatureLayer.send`). */
@@ -328,20 +376,32 @@ export class Herd {
 
   private takeCreatures(message: CreaturesMessage): void {
     const causes = new Map((message.died ?? []).map(({ id, cause }) => [id, cause]));
+    const killers = new Map((message.died ?? []).map(({ id, by }) => [id, by]));
     const alive = new Set(message.ids);
     const layers = Object.values(this.layers);
-    // The dead go where they fell, as their cause says, and leave their remains (R5).
+    const shown = this.shown();
+    // The dead go where they fell, as their cause says, and leave their remains (R5); a
+    // hunter's prey once its hunter, still alive, has run to it and struck, in the view shown.
     for (const [id, at] of this.roster.where) {
       if (alive.has(id)) continue;
       const cause = causes.get(id);
       this.onGone?.(at.x, at.y, cause);
       const slot = this.roster.slotOf(id);
       if (slot === undefined) continue;
-      if (cause !== undefined && this.layers.middle.has(slot)) {
-        this.remains.died(cause, this.laid(slot));
+      const by = killers.get(id);
+      const hunter = by === undefined || !alive.has(by) ? undefined : this.roster.slotOf(by);
+      const laid = this.layers.middle.has(slot) ? this.laid(slot) : null;
+      const wait =
+        cause === "killed" && hunter !== undefined && shown !== null
+          ? (shown.hunt(hunter, slot) ?? 0)
+          : 0;
+      if (cause !== undefined && laid !== null) this.remains.died(cause, laid, wait);
+      for (const layer of layers) {
+        layer.remove(slot, true, DYING[cause ?? "unknown"], layer === shown ? wait : 0);
       }
-      for (const layer of layers) layer.remove(slot, true, DYING[cause ?? "unknown"]);
     }
+    // The mother of each newborn (R5): it is born beside her, in the view shown.
+    const mothers = new Map(message.born.map(({ id, parent }) => [id, parent]));
     const census = new Set(this.roster.species.values());
     const { placed, removed } = this.roster.take(message);
     // Any left (it should not happen) are taken off.
@@ -380,9 +440,16 @@ export class Herd {
       // An ark's newcomer comes into being under its light; one born, quickly; one landed
       // from the sea is there at once, under a splash (R5).
       const ark = this.arrival?.(seed.x, seed.y) ?? 0;
-      const arriving = ark > 0 ? ark : landed.has(id) ? 0 : BORN_S;
+      const arriving = ark > 0 ? ark : landed.has(id) ? 0 : NEWBORN_S;
+      const mother = mothers.get(id);
+      const by = mother === undefined ? undefined : this.roster.slotOf(mother);
+      const egg = mother !== undefined && this.lays(mother);
       for (const layer of layers) {
         layer.place(slot, seed);
+        // Born beside its mother in the view shown; else it fades in where it is.
+        if (layer === shown && by !== undefined && ark === 0 && layer.nurse(slot, by, egg)) {
+          continue;
+        }
         if (arriving > 0) layer.arrive(slot, arriving);
       }
       if (landed.has(id)) this.remains.landed(this.laid(slot));

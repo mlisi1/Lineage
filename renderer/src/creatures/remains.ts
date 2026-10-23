@@ -292,9 +292,13 @@ export class Remains {
     this.simMs = ms;
   }
 
-  /** An animal died of `cause`, lying as `at` says in each view. */
-  died(cause: Cause, at: Record<BodyView, Laid>): void {
-    this.remains.push({ cause, at, bornS: this.timeS, bornMs: this.simMs, salt: ++this.salts });
+  /**
+   * An animal died of `cause`, lying as `at` says in each view; what it leaves shows
+   * `waitS` seconds from now (R5: a prey's, once its hunter strikes).
+   */
+  died(cause: Cause, at: Record<BodyView, Laid>, waitS = 0): void {
+    const bornS = this.timeS + waitS;
+    this.remains.push({ cause, at, bornS, bornMs: this.simMs, salt: ++this.salts });
     if (this.remains.length > MOST_REMAINS) this.remains.shift();
   }
 
@@ -336,6 +340,8 @@ export class Remains {
   private drawRemain(remain: Remain, at: Laid, tile: number): void {
     const { cause, salt } = remain;
     const age = this.timeS - remain.bornS;
+    // Not yet: its hunter has still to strike.
+    if (age < 0) return;
     // The drowned are lost to the sea, the blasted to the blast: no bones.
     if (cause !== "drowned" && cause !== "blast") {
       const opacity = remainsOpacity(this.simMs - remain.bornMs);
@@ -459,7 +465,7 @@ export class Remains {
 const rounds = new Map<number, Texture>();
 
 /** A filled pixel disc `across` art pixels wide, white (tinted by whoever draws it). */
-function roundTexture(across: number): Texture {
+export function roundTexture(across: number): Texture {
   const wide = Math.max(1, across);
   return filled(rounds, wide, wide);
 }
