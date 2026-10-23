@@ -445,6 +445,25 @@ presses, against `m11-closed-10y`), and M4.3/D3 on 20 seeds over 3 years (agains
 `closed-1` p000); risks: cannibal booms crashing the herd, omnivores everywhere, fewer
 species (M6).
 
+**Measured (2026-10-23).** The rule alone did nothing: in 10 years on seeds 0–4
+(`m11-kin-10y`) hunters behaved exactly as without it, because the herd's diet drifts the
+other way (mean 0.10 → 0.05) and nobody reaches the gap; 3 years on 20 seeds
+(`m11-kin-office`): M4.3 0.12 against 0.17, noise. Meat must pay on the way up: with
+`diet_exponent` 1 a creature of diet 0.3 absorbs 70 % of plant and 30 % of meat energy,
+and before it can kill its only meat is carrion. A gentler trade-off (`diet_exponent`
+< 1: generalists absorb more of both) opens the path. 10 years on seeds 0–4, hunters
+present on most days of years 4–10: exponent 0.7 with gap 0.3 or 0.2, 1 seed of 5;
+exponent 0.5, gap 0.3, 2 seeds (one world ended); **exponent 0.5, gap 0.2, 2 seeds, where
+hunters died out and evolved again from the herd for good** (3 hunter species from the
+herd). On new seeds 5–9 (`m11-diet-10y-b` against `m11-kin-10y-b`): hunters back in
+seeds 8 and 9 (present 0.67 and 0.71 of years 4–10), partly in 6; the baseline, none; one
+world ended in 50 seed-years. 3 years on 20 seeds (`m11-diet-office`): M4.3 0.53 (0.17),
+D3a 7.4 % PASS, D3b 0.63 (0.26); every other M criterion passes (M4.4 read 677 ms on a
+PC at load 64, not judged), no world ended, 8 species. **But where hunters come back the
+whole herd turns omnivore** (about 190 of 200 at year 10, mean diet 0.6): hunters return
+by way of omnivores, and grazers almost vanish. A grid of `diet_exponent` 0.6/0.65 ×
+`prey_diet_gap` 0.15/0.2 (10 years, seeds 0–9) looks for the middle.
+
 ### References
 
 - Pfennig, D. W. (1990). The adaptive significance of an environmentally-cued
