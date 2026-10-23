@@ -64,6 +64,7 @@
  * and the button does nothing.
  */
 import { Application, Container, WebGLRenderer } from "pixi.js";
+import { Ambient } from "./atmosphere/ambient";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
@@ -175,6 +176,10 @@ declare global {
     __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
     __hunt?: (hunterId: number, preyId: number) => boolean;
     __birth?: (motherId: number, childId: number, egg?: boolean) => boolean;
+    /** Animal `id`'s sleep (R5): night-active, asleep, how far lying down. */
+    __sleep?: (id: number) => ReturnType<Herd["sleepOf"]>;
+    /** What the small life about the island shows (R5): fireflies lit, dust, birds, butterflies. */
+    __ambient?: () => Ambient["state"];
     __standing?: (
       x0: number,
       y0: number,
@@ -267,6 +272,10 @@ async function start(): Promise<void> {
   const portraits = new Portraits(app.renderer, atlas);
   herd.swash = (x, y) => landscape.swashCovers(x, y);
   world.addChild(...herd.containers);
+  // Small life about the island (R5): fireflies, dust from running feet, birds, butterflies.
+  const ambient = new Ambient(seed + 3);
+  herd.footfall = (x, y) => ambient.dust(x, y);
+  world.addChild(ambient.over);
   const still = params.get("still") !== null;
 
   // Over the scene: the dip between views, then the captions above it.
@@ -318,6 +327,7 @@ async function start(): Promise<void> {
     landscape.receive(message);
     herd.receive(message);
     atmosphere.receive(message);
+    ambient.receive(message);
   };
   // The director comes later; a world's end sends the camera to the map through this.
   let toMap = (): void => undefined;
@@ -337,6 +347,7 @@ async function start(): Promise<void> {
     },
   });
   world.addChild(atmosphere.ground);
+  atmosphere.lights.addChild(ambient.lights);
   landscape.floor.addChild(atmosphere.floor, herd.remains.floor);
   // Nothing stands on a cone or in a crater the scene draws.
   landscape.covered = (x, y) => atmosphere.covers(x, y);
@@ -431,6 +442,8 @@ async function start(): Promise<void> {
   window.__feed = (id, food) => herd.feed(id, food);
   window.__hunt = (hunterId, preyId) => herd.hunt(hunterId, preyId);
   window.__birth = (motherId, childId, egg) => herd.birth(motherId, childId, egg);
+  window.__sleep = (id) => herd.sleepOf(id);
+  window.__ambient = () => ambient.state;
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
   window.__screenOf = (x, y) => world.toGlobal({ x, y });
   window.__blocked = (x, y, margin) => landscape.hosts?.blocked(x, y, margin) ?? false;
@@ -485,6 +498,10 @@ async function start(): Promise<void> {
   let shown = shows.length === 0;
   // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
   let later: Timed[] = [];
+  /** The light of the moment as last drawn (the animals sleep by it, R5). */
+  let sceneLight = 1;
+  /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
+  let sceneRain = "none";
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
     const size = landscape.size;
@@ -530,6 +547,8 @@ async function start(): Promise<void> {
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    // The animals sleep by the light of the moment (R5), as last drawn.
+    herd.nightfall(sceneLight);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
     const land = landscape.current;
     if (!shown && land !== null) {
@@ -558,6 +577,15 @@ async function start(): Promise<void> {
       margin: MARGIN,
       rows: landscape.hosts,
     });
+    ambient.update(stepS, {
+      view: shot.view,
+      cells,
+      tile,
+      land,
+      light: sceneLight,
+      raining: sceneRain !== "none",
+      ending: atmosphere.ending,
+    });
     advance = 0;
     // The plants lean in the atmosphere's wind from the next frame on; a picture that must
     // not change keeps them straight.
@@ -583,7 +611,9 @@ async function start(): Promise<void> {
     dim.style.opacity = String(shot.dim);
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
-    const { light, tint } = atmosphere.state;
+    const { light, tint, rain } = atmosphere.state;
+    sceneLight = light;
+    sceneRain = rain;
     const lamp = lantern(light, tint, atmosphere.ending);
     captions.update(dtS, lamp);
     // The card is out while the local view follows an animal and is not dipped to dark,

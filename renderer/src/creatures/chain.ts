@@ -197,15 +197,20 @@ const CURL_TURNS = 0.85;
 /**
  * Curl a chain up, as an animal lying torpid: the head stays where it is, facing
  * `heading`, and the joints follow it round a circle, `spacing` apart, curving to the
- * body's left.
+ * body's left; `turns` round (R5: a sleeper curls as far as its body bends).
  */
-export function curl(joints: readonly Point[], spacing: number, heading: number): void {
+export function curl(
+  joints: readonly Point[],
+  spacing: number,
+  heading: number,
+  turns = CURL_TURNS,
+): void {
   const head = joints[0];
   if (head === undefined || joints.length < 2) return;
   const length = spacing * (joints.length - 1);
-  // Round enough that the body goes CURL_TURNS round, but never so tight that two joints
+  // Round enough that the body goes `turns` round, but never so tight that two joints
   // `spacing` apart would not fit on it.
-  const radius = Math.max(length / (2 * Math.PI * CURL_TURNS), spacing / 2 + 1e-9);
+  const radius = Math.max(length / (2 * Math.PI * Math.max(turns, 1e-3)), spacing / 2 + 1e-9);
   const step = 2 * Math.asin(spacing / (2 * radius));
   // The centre is to the head's left; going backward round it is going down the body.
   const cx = head.x - Math.sin(heading) * radius;

@@ -117,6 +117,13 @@ export function leash(length: number): number {
   return LEASH_BASE + LEASH_PER_LENGTH * length;
 }
 
+/** Whether an animal whose head is at `head` hurries to where the sim has it (R5: dust at its feet). */
+export function hurries(motion: Motion, head: Point, length: number): boolean {
+  if (motion.mode !== "travel") return false;
+  const behind = Math.hypot(head.x - motion.anchor.x, head.y - motion.anchor.y) / leash(length);
+  return behind > HURRY_FROM_LEASHES;
+}
+
 export function newMotion(anchor: Point, heading: number): Motion {
   return {
     anchor: { x: anchor.x, y: anchor.y },
