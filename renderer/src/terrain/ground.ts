@@ -825,7 +825,8 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const wander =
         calm > 0
           ? KIND_WANDER *
-            (valueNoise(u * KIND_WANDER_FREQUENCY, v * KIND_WANDER_FREQUENCY, 14) - 0.5 +
+            (valueNoise(u * KIND_WANDER_FREQUENCY, v * KIND_WANDER_FREQUENCY, 14) -
+              0.5 +
               0.35 * (valueNoise(worldX / PATCH, worldY / PATCH, 15) - 0.5))
           : 0;
       const leads = lead + wander;

@@ -1449,7 +1449,9 @@ export function drawStanding(
   const sizes: Size = [Math.round(width), Math.max(2, Math.round(height * short))];
   const seeding = season === "autumn" && young === 0;
   const flat = look.season === "winter";
-  return cosy ? cosyTuft(sizes, random, seeding, flat, variant) : drawTuft(sizes, random, seeding, flat);
+  return cosy
+    ? cosyTuft(sizes, random, seeding, flat, variant)
+    : drawTuft(sizes, random, seeding, flat);
 }
 /** A young plant against a full-grown one, as the scale's two sizes have it. */
 const YOUNG_SHARE = PLANT_SCALE.broadleaf[1][1] / PLANT_SCALE.broadleaf[0][1];
