@@ -287,3 +287,11 @@ no point keeps them past it without the god (best M4.3 0.29); with weekly presse
 ark rule hunters are present 77 % of the time and nothing goes extinct. The choice
 (presses, or hunters arising from the herd) is the owner's, pending.
 
+**2026-10-23/24** (ADR 0019, "Hunters from the herd", "Two islands, and why"): the owner
+cannot rely on presses for predators. Hunters may now prey on kin that eat far more
+plants; with a gentler diet trade-off (`diet_exponent` 0.5–0.6) hunters come back from
+the herd in about 3–4 seeds of 10 over 10 years, but the herd turns omnivore where they
+do: seeds settle as grazers without hunters or omnivores with hunters. Pure meat-eaters
+starve among grazers (too few kills), so the next lever family is hunting itself (chase
+instinct, strike reach, attack rate and cost); a mechanism only with the owner.
+

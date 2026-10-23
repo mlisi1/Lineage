@@ -132,7 +132,9 @@ networks, predator–prey coexistence): ADR 0009, "References".
   could mate with) it spares, unless they eat far more plants: a diet gene at least
   `prey_diet_gap` (0.3) below its own (M11, the owner, 2026-10-23; cannibal morphs, as in
   spadefoot and salamander larvae). So a lineage of the herd that drifts toward meat finds
-  prey in the herd itself, and hunters can arise again after the last pack dies. A hit kills with a
+  prey in the herd itself, and hunters can arise again after the last pack dies. What it
+  digests: plants `(1 − diet)^diet_exponent`, meat `diet^meat_diet_exponent` (both 1.0;
+  below 1, generalists absorb more, ADR 0019 "Two islands, and why"). A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
 - **Cover** (M11): prey standing among plants taller than it reaches (see "Reach") is

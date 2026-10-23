@@ -473,6 +473,34 @@ by way of omnivores, and grazers almost vanish. A grid of `diet_exponent` 0.6/0.
   typical and cannibalistic salamander larvae in *Ambystoma tigrinum nebulosum*.
   *American Zoologist* 23, 77–84.
 
+### Two islands, and why: the diet grid and the meat exponent (2026-10-23)
+
+**Diet grid** (`m11-grid-e{0.6,0.65}-g{0.15,0.2}`, 10 years × seeds 0–9, office, no
+presses, at `e8bba5f`). Seeds settle into one of two islands: grazers without hunters, or
+omnivores with hunters (hunters evolve out of the omnivores, which then outcompete the
+grazers). Best, `diet_exponent` 0.6 with `prey_diet_gap` 0.2: hunters present on most days
+of years 4–10 in 3 of 10 seeds, and with more than 30 % grazers in only 1 (seed 7: hunters
+0.68, grazers 0.47); no world ended. 0.6/0.15: 4 of 10, none with grazers; 0.65/0.15: two
+worlds ended.
+
+**A meat exponent apart from the plant one** (`[fauna] meat_diet_exponent`, `d1990f2`,
+default 1.0, no change): plants stay linear so grazers keep their edge, and a little meat
+pays. 10 years × seeds 0–9 (`m11-meat-m{0.6,0.5,0.4}-g0.2`, `m11-meat-m0.5-g0.15`):
+hunters on most of years 4–10 in 1–3 seeds of 10, **never together with more than 30 %
+grazers**; worlds ended 0–4 (4 at gap 0.15). 3 years × 20 seeds (`m11-meat-office`, 0.5 /
+0.2): M4.3 0.16, D3b 0.30, M6.2 0.98 FAIL; no better than the defaults. The single
+exponent at 0.5 stays the best 3-year result (`m11-diet-office`: M4.3 0.53, D3a 7.4 %
+PASS, D3b 0.63).
+
+**Diagnosis.** The split is about the hunters, not the herd's diet. Hunters that last are
+ones that also eat plants (diet about 0.65–0.75, evolved from omnivores, grazing between
+kills); pure meat-eaters starve among plenty of grazers, as the first pack did (replays,
+"Hunters that find their prey"): too few kills, because prey flee more strongly than
+hunters chase (`instinct_flee` 2.0 against `instinct_prey` 1.6), the striking reach is
+short (`reach_cells` 1.2) and a strike costs energy (`attack_cost`). No sweep has touched
+these hunting levers yet. **Next**: 10-year runs on the hunting levers, combined with the
+best diet setting (one exponent 0.6, gap 0.2), aiming at hunters that live on grazers.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
