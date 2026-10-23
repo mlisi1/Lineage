@@ -182,6 +182,10 @@ export interface CreaturesMessage {
      * Its rare genes, as the bits of `RareMessage.genes` of kingdom creature (M7); fixed for life. Absent before rare genes exist.
      */
     slots?: number;
+    /**
+     * The mother it was born to on the island since the last creatures message (R5: drawn beside her; a clone's only parent). Absent for those not born since (on connect, landed, older streams).
+     */
+    parent?: number;
   }[];
   /**
    * Ids of the creatures that are torpid now (hibernating, lying still: M7). Absent before rare genes exist.
@@ -197,6 +201,10 @@ export interface CreaturesMessage {
   died?: {
     id: number;
     cause: "starved" | "old_age" | "killed" | "drowned" | "burnt" | "blast";
+    /**
+     * The hunter that killed it (R5: drawn running to it and striking), when the cause is killed. Absent for other causes, a blast, and from streams recorded before.
+     */
+    by?: number;
   }[];
   /**
    * The creatures among `ids` that landed from the sea since the last creatures message (R5): founders, strangers, the ark's. Absent when none did, and from streams recorded before R5's arrivals.

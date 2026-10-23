@@ -351,6 +351,11 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 65535
+              },
+              "parent": {
+                "description": "The mother it was born to on the island since the last creatures message (R5: drawn beside her; a clone's only parent). Absent for those not born since (on connect, landed, older streams).",
+                "type": "integer",
+                "minimum": 0
               }
             }
           }
@@ -400,6 +405,11 @@
                   "burnt",
                   "blast"
                 ]
+              },
+              "by": {
+                "description": "The hunter that killed it (R5: drawn running to it and striking), when the cause is killed. Absent for other causes, a blast, and from streams recorded before.",
+                "type": "integer",
+                "minimum": 0
               }
             }
           }
