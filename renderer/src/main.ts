@@ -43,6 +43,18 @@
  *                              not taken): day, dusk, dawn, night, moon, rain, fire,
  *                              volcano, quake, meteor, seed, ark, end. With `?still` the
  *                              atmosphere stands still too, moved on only by `__advance`
+ *   ?cap=30                    R5: at most this many frames a second (`framecap.ts`): the
+ *                              kiosk's cap on the board, which has no fan
+ *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
+ *                              `benchplan.ts` on the recordings, the results POSTed to
+ *                              `?post=` (`tools/kiosk_bench.py`)
+ *
+ * The desk's build (`npm run build:kiosk`, into `dist-kiosk/`) leaves the demo paths out:
+ * with no `?source=` it takes the server's stream from the host that served the page,
+ * `ws://<host>/stream` (S1), and `?film`, `?file=`, `?show=` and `?recording=` do
+ * nothing, but for `?bench`, whose scenarios play the committed recordings and make up
+ * what they lack as `?show=` does: the one way off the server the desk keeps, so that the
+ * board can be measured from the build it runs.
  *
  * Over the scene the atmosphere (R4, `atmosphere/`): the light of the moment, what glows,
  * the weather of events, and the end of a world, during which the camera stays on the map
@@ -66,6 +78,8 @@ import { creatureAtlas } from "./creatures/atlas";
 import { heightAt } from "./creatures/habitat";
 import { Recording, SocketSource, type Source } from "./stream";
 import { InlinePainter, makePainter } from "./terrain/painter";
+import { Bench } from "./bench";
+import { capFrames } from "./framecap";
 
 /** Screen pixels per art pixel (ADR 0007). */
 const ART = 2;
@@ -93,6 +107,23 @@ const RECORDINGS: Readonly<Record<string, string>> = {
 const LIVING = ["life", "office", "end"];
 /** Sim-seconds a wall second, playing the creatures' recording: two sim-hours in 4 s. */
 const LIFE_SPEED = 1800;
+/**
+ * The desk's build (`vite build --mode kiosk`): the demo paths are compiled out (the
+ * bundler drops every branch behind `!KIOSK`) and the page takes the server's stream.
+ */
+const KIOSK = import.meta.env.MODE === "kiosk";
+/** Each view's size in cells. */
+const VIEW_CELLS: Readonly<Record<ViewName, { width: number; height: number }>> = {
+  map: { width: WIDTH / TILES.map, height: HEIGHT / TILES.map },
+  middle: { width: WIDTH / TILES.middle, height: HEIGHT / TILES.middle },
+  local: { width: WIDTH / TILES.local, height: HEIGHT / TILES.local },
+};
+
+/** The server's stream (S1), from the host that served the page. */
+function serverStream(): string {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${window.location.host}/stream`;
+}
 
 declare global {
   interface Window {
@@ -150,7 +181,10 @@ function pinnedView(name: string | null): ViewName | null {
 }
 
 async function start(): Promise<void> {
-  const params = new URLSearchParams(window.location.search);
+  // The benchmark (R5): with `?bench` it gives the scene its options for the scenario at
+  // hand, and once the scene is built it is handed the hooks it measures with (below).
+  const bench = await Bench.start(window.location.search, VIEW_CELLS);
+  const params = bench?.params ?? new URLSearchParams(window.location.search);
   const pinned = pinnedView(params.get("view"));
 
   const app = new Application();
@@ -295,11 +329,13 @@ async function start(): Promise<void> {
   const receive = (message: Message): void => {
     if (!atmosphere.hold(message)) deliver(message);
   };
-  const shows = showsOf(params.get("show"));
+  // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
+  const shows = KIOSK && bench === null ? [] : showsOf(params.get("show"));
 
-  const socket = params.get("source");
+  // The desk's build takes the server's stream unless benchmarked.
+  const socket = params.get("source") ?? (KIOSK && bench === null ? serverStream() : null);
   // `?file=` plays any recording under `stream/` (the report's, R4), as a creatures' one.
-  const file = params.get("file");
+  const file = KIOSK ? null : params.get("file");
   const name = file === null ? (params.get("recording") ?? "life") : "life";
   const recording =
     file !== null && /^[\w/-]+\.json$/.test(file)
@@ -309,7 +345,7 @@ async function start(): Promise<void> {
   const speed = Number(
     params.get("speed") ?? (every === null && LIVING.includes(name) ? LIFE_SPEED : 0),
   );
-  const film = params.get("film") !== null;
+  const film = !KIOSK && params.get("film") !== null;
   const source: Source =
     socket !== null
       ? new SocketSource(socket)
@@ -327,19 +363,11 @@ async function start(): Promise<void> {
     return Number.isFinite(value) && value > 0 ? value : otherwise;
   };
   const follow = params.get("follow");
-  const director = new Director(
-    {
-      map: { width: WIDTH / TILES.map, height: HEIGHT / TILES.map },
-      middle: { width: WIDTH / TILES.middle, height: HEIGHT / TILES.middle },
-      local: { width: WIDTH / TILES.local, height: HEIGHT / TILES.local },
-    },
-    mulberry32(seed),
-    {
-      idleS: number("idle", TIMINGS.idleS),
-      followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
-      followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
-    },
-  );
+  const director = new Director(VIEW_CELLS, mulberry32(seed), {
+    idleS: number("idle", TIMINGS.idleS),
+    followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
+    followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
+  });
 
   toMap = () => {
     if (pinned === null) director.toMap();
@@ -389,10 +417,11 @@ async function start(): Promise<void> {
     return { phase, text: caption?.text ?? null, waiting, lamp };
   };
   // PixiJS leaves a freed texture's place empty (null) rather than taking it out: count the rest.
-  window.__textures = () =>
+  const textures = (): number =>
     app.renderer instanceof WebGLRenderer
       ? app.renderer.texture.managedTextures.filter((source) => source !== null).length
       : -1;
+  window.__textures = textures;
 
   const scene: Scene = {
     width: 0,
@@ -525,8 +554,31 @@ async function start(): Promise<void> {
     };
   } else {
     app.ticker.add((ticker) => step(ticker.deltaMS));
+    // The kiosk's cap on the board (R5, ADR 0022): none unless asked.
+    capFrames(app.ticker, Number(params.get("cap") ?? 0));
   }
   window.__painting = () => landscape.painting;
+
+  // The benchmark's hooks (R5, `bench.ts`): what it may do to the scene and read of it.
+  bench?.attach({
+    app,
+    artScale: ART,
+    press,
+    receive,
+    advance: (seconds) => {
+      advance += seconds;
+    },
+    settled: () => landscape.settled,
+    camera: () => ({ view: shot.view, dipping: director.state.dipping }),
+    sight: () => sight(shot.centre, WIDTH / TILES[shot.view], HEIGHT / TILES[shot.view]),
+    land: () => landscape.current,
+    animals: () => herd.subjects(),
+    simMs: () => lastMs,
+    creatures: () => lastCreatures,
+    atmosphere: () => ({ ...atmosphere.state, ...atmosphere.counts }),
+    textures,
+    layers: { land: landscape.container, creatures: herd.containers },
+  });
 }
 
 void start();

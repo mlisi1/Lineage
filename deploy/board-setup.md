@@ -168,6 +168,9 @@ drawn by the processor (`llvmpipe`); the benchmark tells, in step 7.
 
 ## 6. Copy the benchmark over
 
+(This guide is R0's, the spike's page. The scene's benchmark, R5, goes the same way with
+the desk's build, `--fps-cap 30` and `lineage-r5@.service`: see [`README.md`](README.md).)
+
 On the PC, in the repository:
 
 ```sh
@@ -189,7 +192,7 @@ On the board, over SSH:
 groups | grep -qw render || sudo usermod -aG render,video "$USER"   # then log out and in
 cd ~/lineage-r0
 WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 \
-  cage -- python3 kiosk_bench.py --dist dist --out kiosk-bench-virtual.json \
+  cage -- python3 kiosk_bench.py --dist dist --page spike.html --out kiosk-bench-virtual.json \
   --profiles default,gpu,gpu-gles --only spec-1x,mid-view,mid-crowd,local-view
 ```
 
@@ -265,7 +268,7 @@ sudo journalctl -fu lineage-r0@lineage
 
 The unit gives `cage` a session on the board's console and runs the benchmark in it, so
 it works from SSH with no keyboard on the board. (With a keyboard, logged in on the
-board's own console, `cd ~/lineage-r0 && cage -s -- python3 kiosk_bench.py --dist dist`
+board's own console, `cd ~/lineage-r0 && cage -s -- python3 kiosk_bench.py --dist dist --page spike.html`
 does the same.)
 
 **You should see** the scene on the screen within half a minute, changing every ten

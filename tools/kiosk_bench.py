@@ -3,7 +3,7 @@
 
 Standard library only, so it runs on the device as a single copied file::
 
-    python3 kiosk_bench.py --dist dist                 # on the Orange Pi, in its desktop session
+    python3 kiosk_bench.py --dist dist --fps-cap 30    # on the Orange Pi, in its desktop session
     uv run python -m tools.kiosk_bench --dist renderer/dist --headless   # on a PC, to try it
 
 For each browser-flag profile it serves ``dist`` on localhost, opens the page in Chromium
@@ -12,6 +12,17 @@ CPU time and memory of every Chromium process from ``/proc``. Everything goes in
 JSON file: the page's own numbers (frame rate per scenario, GPU driver in use) plus CPU,
 RAM and temperature per scenario.
 
+Two pages measure themselves. The scene (``index.html?bench``, R5, the default) runs the
+real renderer on the committed recordings: the three views and the crowded middle one,
+then what the atmosphere costs (``renderer/src/benchplan.ts``); it loads itself once per
+scenario, so the window may flash between them. The R0 spike (``--page spike.html``) runs
+its own scenarios, kept for R0's history.
+
+``--fps-cap 30`` holds the scene at 30 frames a second, as the kiosk is held on the board.
+Chromium has no flag that caps a page below the display's refresh (its flags only take
+the limit off), so the runner asks the page (``?cap=30``, ``renderer/src/framecap.ts``),
+which then draws on every other refresh of a 60 Hz screen.
+
 Profiles differ only in Chromium flags (and, for ``canvas``, the page's drawing backend),
 because whether Chromium uses the GPU on an ARM board depends on them:
 
@@ -19,7 +30,8 @@ because whether Chromium uses the GPU on an ARM board depends on them:
 - ``gpu``       ignore the GPU blocklist, rasterise on the GPU
 - ``gpu-gles``  the same, talking to the driver through OpenGL ES
 - ``software``  WebGL drawn by the CPU (SwiftShader): the fallback if no GPU path works
-- ``canvas``    PixiJS drawing with the 2D canvas instead of WebGL
+- ``canvas``    PixiJS drawing with the 2D canvas instead of WebGL (the spike only: the
+                scene has no canvas backend)
 """
 
 from __future__ import annotations
@@ -53,11 +65,17 @@ BROWSERS = ("chromium-browser", "chromium", "google-chrome", "google-chrome-stab
 # costlier to read than the rest, so it is sampled only every PSS_EVERY samples.
 SAMPLE_PERIOD_S = 1.0
 PSS_EVERY = 5
+# The scene's page, benchmarked with ?bench (R5), and the R0 spike's.
+SCENE_PAGE = "index.html"
+SPIKE_PAGE = "spike.html"
 # Seconds allowed for the browser to start and the page to load, on top of the benchmark.
 STARTUP_ALLOWANCE_S = 90.0
-PER_SCENARIO_ALLOWANCE_S = 5.0
-# Scenarios the page runs when not told which (renderer/src/spike/scenarios.ts).
-SCENARIO_COUNT_ESTIMATE = 14
+# Seconds allowed per scenario beyond its warm-up and measurement: the scene loads itself
+# again for each one and paints its first land before measuring.
+PER_SCENARIO_ALLOWANCE_S = {SCENE_PAGE: 20.0, SPIKE_PAGE: 5.0}
+# Scenarios each page runs when not told which (renderer/src/benchplan.ts,
+# renderer/src/spike/scenarios.ts); a page of neither kind is given the larger.
+SCENARIO_COUNT_ESTIMATE = {SCENE_PAGE: 9, SPIKE_PAGE: 14}
 
 # Flags every profile gets: a quiet, full-screen window that is never throttled.
 BASE_FLAGS = (
@@ -119,11 +137,29 @@ PROFILES: dict[str, Profile] = {
 }
 
 
-def chosen_profiles(names: str, extra_flags: str | None) -> list[Profile]:
+# Profiles that ask the page for a backend only the spike has.
+SPIKE_ONLY_PROFILES = ("canvas",)
+
+
+def is_spike(page: str) -> bool:
+    """Whether ``page`` is the R0 spike rather than the scene."""
+    return Path(page).name == SPIKE_PAGE
+
+
+def default_profiles(page: str) -> str:
+    """Every profile the page can run, comma-separated."""
+    names = [n for n in PROFILES if is_spike(page) or n not in SPIKE_ONLY_PROFILES]
+    return ",".join(names)
+
+
+def chosen_profiles(names: str, extra_flags: str | None, page: str = SPIKE_PAGE) -> list[Profile]:
     """The profiles to run: named ones, plus ``custom`` for flags given on the command line."""
     unknown = [name for name in names.split(",") if name not in PROFILES]
     if unknown:
         raise ValueError(f"unknown profile: {', '.join(unknown)}")
+    spike_only = [n for n in names.split(",") if n in SPIKE_ONLY_PROFILES and not is_spike(page)]
+    if spike_only:
+        raise ValueError(f"{', '.join(spike_only)}: only the R0 spike ({SPIKE_PAGE}) has it")
     profiles = [PROFILES[name] for name in names.split(",")]
     if extra_flags:
         profiles.append(
@@ -437,9 +473,17 @@ def browser_command(
 
 
 def page_url(
-    port: int, page: str, profile: Profile, seconds: float, warmup: float, only: str | None
+    port: int,
+    page: str,
+    profile: Profile,
+    seconds: float,
+    warmup: float,
+    only: str | None,
+    fps_cap: float | None = None,
 ) -> str:
-    query: dict[str, str] = {
+    # The scene measures itself only when asked (`?bench`); the spike always does.
+    query: dict[str, str] = {} if is_spike(page) else {"bench": "1"}
+    query |= {
         "seconds": f"{seconds:g}",
         "warmup": f"{warmup:g}",
         "post": "/results",
@@ -448,6 +492,8 @@ def page_url(
     }
     if only:
         query["only"] = only
+    if fps_cap:
+        query["cap"] = f"{fps_cap:g}"
     return f"http://127.0.0.1:{port}/{page}?{urlencode(query)}"
 
 
@@ -634,15 +680,19 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
         if results.get("scenarios"):
             lines.append(f"  drawn by: {drawn_by(results)}")
             lines.append(
-                f"  {'scenario':<11}{'fps med':>8}{'1% low':>8}{'script ms':>10}"
+                f"  {'scenario':<13}{'fps med':>8}{'1% low':>8}{'over %':>8}{'script ms':>10}"
                 f"{'CPU %':>7}{'RAM MB':>8}"
             )
         for scenario in results.get("scenarios", []):
             usage = run["usage"].get(scenario["name"], {})
             memory = usage.get("pss_mb")
+            # Frames later than 30 fps allows: the scene's page says, the spike's does not.
+            late = scenario.get("over_budget_pct")
             lines.append(
-                f"  {scenario['name']:<11}{scenario['fps_median']:>8.1f}"
-                f"{scenario['fps_1pct_low']:>8.1f}{scenario['js_ms_median']:>10.2f}"
+                f"  {scenario['name']:<13}{scenario['fps_median']:>8.1f}"
+                f"{scenario['fps_1pct_low']:>8.1f}"
+                f"{late if late is not None else float('nan'):>8.1f}"
+                f"{scenario['js_ms_median']:>10.2f}"
                 f"{usage.get('cpu_pct', float('nan')):>7.0f}"
                 f"{memory if memory is not None else float('nan'):>8.0f}"
             )
@@ -661,13 +711,26 @@ def main(argv: list[str] | None = None) -> int:
         description="Benchmark a renderer page in Chromium kiosk mode and sample its CPU and RAM."
     )
     parser.add_argument(
-        "--dist", type=Path, required=True, help="the built renderer (npm run build)"
+        "--dist",
+        type=Path,
+        required=True,
+        help="the built renderer (npm run build:kiosk, or npm run build for the spike too)",
     )
-    parser.add_argument("--page", default="spike.html")
+    parser.add_argument(
+        "--page",
+        default=SCENE_PAGE,
+        help=f"{SCENE_PAGE}: the scene's benchmark (default); {SPIKE_PAGE}: the R0 spike's",
+    )
     parser.add_argument(
         "--profiles",
-        default=",".join(PROFILES),
-        help=f"comma-separated, from: {', '.join(PROFILES)} (default: all)",
+        help=f"comma-separated, from: {', '.join(PROFILES)} (default: all the page can run; "
+        "canvas is the spike's only)",
+    )
+    parser.add_argument(
+        "--fps-cap",
+        type=float,
+        help="hold the scene at this many frames a second, as the kiosk is (30 on the board); "
+        "Chromium has no such flag, so the page caps itself (?cap=)",
     )
     parser.add_argument(
         "--flags",
@@ -676,7 +739,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--seconds", type=float, default=8.0, help="measured per scenario")
     parser.add_argument("--warmup", type=float, default=2.0, help="discarded before each scenario")
-    parser.add_argument("--only", help="comma-separated scenario names (default: all)")
+    parser.add_argument(
+        "--only",
+        help="comma-separated scenario names (default: all); the scene also takes "
+        "'acceptance' and 'atmosphere' for its sets",
+    )
     parser.add_argument("--browser", help="Chromium binary (default: first found on PATH)")
     parser.add_argument("--out", type=Path, default=Path("kiosk-bench.json"))
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -693,8 +760,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if not (args.dist / args.page).is_file():
         parser.error(f"{args.dist / args.page} not found: build the renderer first")
+    if args.fps_cap is not None and (args.fps_cap <= 0 or is_spike(args.page)):
+        parser.error("--fps-cap takes a positive rate, and only the scene's page has a cap")
     try:
-        profiles = chosen_profiles(args.profiles, args.flags)
+        profiles = chosen_profiles(
+            args.profiles or default_profiles(args.page), args.flags, args.page
+        )
     except ValueError as error:
         parser.error(str(error))
     browser = find_browser(args.browser)
@@ -706,9 +777,11 @@ def main(argv: list[str] | None = None) -> int:
     sandbox = not (args.no_sandbox or (hasattr(os, "geteuid") and os.geteuid() == 0))
     width, _, height = args.window.partition("x")
     window = (int(width), int(height))
+    kind = SPIKE_PAGE if is_spike(args.page) else SCENE_PAGE
     timeout_s = args.timeout or (
         STARTUP_ALLOWANCE_S
-        + SCENARIO_COUNT_ESTIMATE * (args.seconds + args.warmup + PER_SCENARIO_ALLOWANCE_S)
+        + SCENARIO_COUNT_ESTIMATE[kind]
+        * (args.seconds + args.warmup + PER_SCENARIO_ALLOWANCE_S[kind])
     )
 
     server, inbox = serve(args.dist, args.port)
@@ -724,6 +797,7 @@ def main(argv: list[str] | None = None) -> int:
             "seconds": args.seconds,
             "warmup": args.warmup,
             "only": args.only,
+            "fps_cap": args.fps_cap,
             "window": list(window),
             "headless": args.headless,
             "virtual_display": virtual_display(os.environ),
@@ -738,7 +812,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     try:
         for profile in profiles:
-            url = page_url(port, args.page, profile, args.seconds, args.warmup, args.only)
+            url = page_url(
+                port, args.page, profile, args.seconds, args.warmup, args.only, args.fps_cap
+            )
             print(f"[{profile.name}] {profile.about} …", flush=True)
             run = run_profile(
                 browser,

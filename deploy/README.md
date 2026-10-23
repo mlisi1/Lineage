@@ -3,57 +3,88 @@
 OS notes, `setup.sh` for a fresh SD card, systemd units, kiosk, display timings,
 backups, Tailscale, log rotation and SD-wear settings. Built in S6.
 
-## Measuring the renderer spike on the device (R0)
+## Measuring the renderer on the device (R5; R0 before it)
 
 **Starting from a board in its box: [`board-setup.md`](board-setup.md)**, which goes from
 flashing the card to the result on the PC, without a keyboard on the board. What follows
 is the procedure itself, for a board that already has a session on its screen.
+
+The runner measures the real scene by default (R5): `index.html?bench` plays the
+committed recordings in the desk's own build and runs nine scenarios, the four views
+judged (`map`, `middle`, `middle-crowd`, `local`; ADR 0010) and what the atmosphere costs
+(`night`, `rain`, `fire`, `apocalypse`, `shore`; `renderer/src/benchplan.ts`). The R0
+spike's page is still there for R0's history: `--page spike.html` with the full build
+(`npm run build`).
 
 What the board needs: a graphical session on the 7" screen at 1024×600 (or a larger
 monitor standing in for it, ADR 0008), Chromium
 (`chromium` or `chromium-browser`), and Python 3.9 or newer. Nothing is installed by the
 benchmark and nothing of the project needs to be on the board.
 
-1. **On the PC**, build the page and copy it over with the runner:
+1. **On the PC**, build the desk's page and copy it over with the runner:
 
    ```sh
-   cd renderer && npm ci && npm run build && cd ..
-   scp -r renderer/dist tools/kiosk_bench.py <user>@<board>:lineage-r0/
+   cd renderer && npm ci && npm run build:kiosk && cd ..
+   ssh <user>@<board> mkdir -p lineage-r5
+   scp -r renderer/dist-kiosk tools/kiosk_bench.py <user>@<board>:lineage-r5/
    ```
+
+   (For the R0 spike, `npm run build` and copy `renderer/dist` instead.)
 
 2. **On the board**, from a terminal in its desktop session:
 
    ```sh
-   cd ~/lineage-r0 && python3 kiosk_bench.py --dist dist
+   cd ~/lineage-r5 && python3 kiosk_bench.py --dist dist-kiosk --fps-cap 30
    ```
+
+   `--fps-cap 30` holds the scene at 30 frames a second, as the kiosk runs on the board
+   (no fan; ADR 0022). Chromium has no flag that caps a page below the display's refresh
+   (its flags only take the limit off: `--disable-gpu-vsync`, `--disable-frame-rate-limit`),
+   so the runner asks the page (`?cap=30`), which drives its drawing from every other
+   refresh of the 60 Hz screen (`renderer/src/framecap.ts`). Without it the scene draws
+   at the refresh rate, which shows how much headroom there is above the cap.
 
    Over SSH the display has to be named: prefix the command with `DISPLAY=:0` (X11), or
    with `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/$(id -u)` (Wayland).
 
-   Where there is no desktop, `lineage-r0@.service` runs it full screen under `cage`,
-   from SSH: `sudo systemctl start lineage-r0@<user>` (see the unit's own comments).
+   Where there is no desktop, `lineage-r5@.service` runs it full screen under `cage`,
+   from SSH: `sudo systemctl start lineage-r5@<user>` (see the unit's own comments);
+   `lineage-r0@.service` the same for the spike, from `~/lineage-r0/`.
 
    With no display attached at all, `WLR_BACKENDS=headless cage -- python3 kiosk_bench.py
    …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
    the report marks as not the R0 measurement.
 
-   The screen belongs to the benchmark for about twenty minutes: five browser
-   profiles, fourteen scenarios each, 2 s of warm-up and 8 s measured per scenario. It prints a table
-   per profile and writes `kiosk-bench.json` (rewritten after every profile, so an
-   interrupted run keeps what it had) and one `chromium-<profile>.log` per profile.
+   The screen belongs to the benchmark for about ten minutes: four browser profiles
+   (`default`, `gpu`, `gpu-gles`, `software`; `canvas` is the spike's only), nine
+   scenarios each, 2 s of warm-up and 8 s measured per scenario, plus a few seconds for
+   each scenario's page to load: the scene loads itself again for every scenario, so the
+   screen flashes between them. It prints a table per profile and writes `kiosk-bench.json`
+   (rewritten after every profile, so an interrupted run keeps what it had) and one
+   `chromium-<profile>.log` per profile. (The spike, `--page spike.html --dist dist`:
+   five profiles, fourteen scenarios, about twenty minutes.)
 
-3. **Back on the PC**, build the report:
+3. **Back on the PC**, fetch the evidence:
 
    ```sh
-   mkdir -p runs/r0-device && scp <user>@<board>:lineage-r0/kiosk-bench.json runs/r0-device/
-   uv run python -m tools.report R0 --runs runs/r0-device
+   mkdir -p runs/r5-device && scp <user>@<board>:lineage-r5/kiosk-bench.json runs/r5-device/
    ```
 
-   This writes `reports/R0-renderer-spike/`, evidence file included. It passes when the
-   best profile holds 30 fps median in each of the three views and the crowded middle
-   one (ADR 0010); the result of 2026-10-18 is there.
+   The table already says whether the four views hold the cap. For the spike's file,
+   `uv run python -m tools.report R0 --runs runs/r0-device` writes
+   `reports/R0-renderer-spike/`, evidence file included; it passes when the best profile
+   holds 30 fps median in each of the three views and the crowded middle one (ADR 0010);
+   the result of 2026-10-18 is there.
 
 Reading the table on the board:
+
+- **fps med and 1% low** under a 30 fps cap read 30.0 and a little under when the scene
+  holds it. **over %** is the share of frames that came later than 30 fps allows (more
+  than 33.3 ms after the one before, give or take 2 ms): a frame that missed its refresh.
+  The page's own results (`kiosk-bench.json`, `runs[].results.scenarios[]`) add the
+  frame-time headroom (what the page's script leaves of the 33.3 ms, median and 99th
+  percentile; the GPU's time is not in it), draw calls and sprites a frame, the JS heap,
+  the animals in sight and the atmosphere's sprite counts.
 
 - **"drawn by"** is the line that matters first. `WebGL on <a Mali driver>` means
   Chromium is using the GPU. `(software, on the CPU)` or `2D canvas … (WebGL was not
@@ -64,16 +95,20 @@ Reading the table on the board:
   `chromium-<profile>.log`. `No usable sandbox` there means the run needs `--no-sandbox`
   (always the case as root).
 - **Trying other flags** needs no edit: `--flags='--use-gl=egl'` adds them as one more
-  profile named `custom`. `--profiles gpu --only spec-1x,map-1x --seconds 5` narrows a
-  run down while experimenting.
+  profile named `custom`. `--profiles gpu --only middle-crowd,fire --seconds 5` narrows a
+  run down while experimenting; the scene also takes `--only acceptance` (the four
+  views) and `--only atmosphere`.
 - **The GPU hanging** does not show in the table, only as a low frame rate: the kernel
   kills a GPU job after half a second. `sudo dmesg | grep -c "gpu sched timeout"` before
   and after a run counts them. On this board the spec scenes (a sprite in every cell)
   hang on every frame; the three views do not (ADR 0010).
 
-To look at the scene instead of measuring it, serve `dist` (`python3 -m http.server
---directory dist 8137`) and open `http://127.0.0.1:8137/spike.html?demo=close-2x` in the
-board's browser; any scenario name works. Where there is no desktop, the same under
+To run the scene's benchmark by hand, serve the build (`python3 -m http.server
+--directory dist-kiosk 8137`) and open `http://127.0.0.1:8137/index.html?bench&cap=30` in
+the board's browser (`&only=fire&seconds=5`, …): it ends on a table of its results. The
+desk's build without `?bench` waits for the server's stream (`ws://<host>/stream`, S1),
+so it shows nothing yet. To look at the spike instead, serve `dist` and open
+`http://127.0.0.1:8137/spike.html?demo=close-2x`; any scenario name works. Where there is no desktop, the same under
 `cage`, as a one-off unit with the benchmark unit's settings, from SSH:
 
 ```sh
