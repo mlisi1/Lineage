@@ -63,6 +63,33 @@ const FOLLOWS = {
   drowned: { query: "view=local&x=190&y=14&quiet", seconds: 10, presses: 0, crop: 2, advance: 16 },
   oldAge: { query: "view=local&x=217&y=97&quiet", seconds: 10, presses: 0, crop: 2, advance: 120 },
   killed: { query: "view=local&x=66&y=105&quiet", seconds: 10, presses: 0, crop: 2, advance: 540 },
+  // Staged by hand round one bush (foot 91.5, 124; top 122.75) in the creatures'
+  // recording: three animals of three sizes (Shepisu, Malevo, Devuga) put on one side and
+  // sent to the other, so the film shows them going round and behind it.
+  stagedBehind: {
+    query: "view=local&x=92&y=124&quiet&seed=1",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: STAGE_THROUGH(1.0, 122.85),
+  },
+  stagedFront: {
+    query: "view=local&x=92&y=124&quiet&seed=1",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: STAGE_THROUGH(122.85 - 124, 125.0),
+  },
+  stagedAcross: {
+    query: "view=local&x=92&y=124&quiet&seed=1",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      [2048, 2184, 2220].forEach((id, k) => window.__pin?.(id, 89.6, 123.3 + k * 0.5, 0));
+      [2048, 2184, 2220].forEach((id, k) => window.__send?.(id, 93.6, 123.3 + k * 0.5));
+    })()`,
+  },
   // Animals of five sizes living among bushes, from the largest to the smallest, the
   // middle of the screen enlarged twice (the camera keeps the animal followed there).
   bush2: { query: "seed=2&follow=60&quiet", seconds: 12, crop: 2 },
@@ -73,6 +100,17 @@ const FOLLOWS = {
 };
 /** Seconds the scene moves on a frame while it is run on to a film's start. */
 const ADVANCE_STEP_S = 0.25;
+/**
+ * A staged walk (R5): three animals put `from` cells below the bush's foot (negative:
+ * above it) and sent to row `to`, side by side across the bush.
+ */
+function STAGE_THROUGH(from, to) {
+  return `(() => {
+    const ids = [2048, 2184, 2220];
+    ids.forEach((id, k) => window.__pin?.(id, 90.9 + k * 0.6, 124 + ${from}, ${from} > 0 ? -Math.PI / 2 : Math.PI / 2));
+    ids.forEach((id, k) => window.__send?.(id, 90.9 + k * 0.6, ${to}));
+  })()`;
+}
 /** Where the name card stands (R5), in art pixels of a still: the top-left corner. */
 const CARD_CORNER = [0, 0, 200, 44];
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
@@ -153,8 +191,18 @@ async function still(page, address, query) {
 }
 
 /** Press the view button twice (map → middle → local) and film `seconds` of the follow. */
-async function follow(page, address, name, { query, seconds, presses = 2, crop = 1, advance = 0 }) {
+async function follow(
+  page,
+  address,
+  name,
+  { query, seconds, presses = 2, crop = 1, advance = 0, stage = null },
+) {
   await open(page, address, query);
+  // A scene staged by hand (R5): animals put and sent where the film is to look.
+  if (stage !== null) {
+    await skip(page, 2);
+    await page.evaluate(stage);
+  }
   // Run the scene on to just before what the film is for, a quarter of a second a frame.
   for (let done = 0; done < advance; done += ADVANCE_STEP_S * 40) {
     await page.evaluate((step) => {
@@ -262,6 +310,8 @@ try {
       console.log(`${side}: ${name}`);
     }
     for (const [name, spec] of Object.entries(FOLLOWS)) {
+      // The scene before R5 cannot be staged: it has no hooks to put animals by hand.
+      if (spec.stage !== undefined && side === "before") continue;
       films[side][name] = await follow(page, address, `${name}-${side}`, spec);
       console.log(`${side}: ${name}`);
       if (side === "after" && name === "follow4") {
@@ -534,8 +584,17 @@ ${filmPair("follow2", ["Before: a lizard followed", "After: its feet in turn, it
 <div class="notes">
 <div><span class="label">Was</span><p>Between the simulation's ticks an animal strolled anywhere that was land, so it walked through bushes and stood on trunks, and seemed to walk over the vegetation.</p></div>
 <div><span class="label">Now</span><p>Each tree and bush leaves a footprint (a tree's trunk and roots, a bush's lower puffs). Strolls pick clear goals and stop before a plant; the walk to where the simulation has the animal steers round them; a place the simulation puts inside a bush is drawn beside it, without changing the simulation's data. Grass and flowers are still walked through. In the middle view at (64, 64), 1–3 of about 14 animals were in a footprint at any moment before, and almost always none after.</p></div>
-<div><span class="label">Depth</span><p>Round 2 (the owner: parts of the creatures still seemed above the bushes), after how top-down games sort: by the base of each thing, a sprite that spans depths split so that each piece sorts by its own. A body was drawn whole in the row of its lowest joint, so an animal walking up the screen had its head over a bush that stood in front of it. Now a body a tree or bush stands across is drawn in two, the part behind under the plant and the rest in front. The fade in front of the animal followed is lighter (bushes 60 %, grass 50 %), so a bush in front still reads as in front.</p></div>
+<div><span class="label">Depth</span><p>Rounds 2–3 (the owner: parts of the creatures still seemed above the bushes). Top-down games sort by the base of each thing, which suits characters drawn from the side; ours are drawn from above, so one in front of a bush, or across it, seemed to lie on its leaves. Now the leaves of every tree and bush are over any animal they overlap, whichever side its feet are, and a bush's footprint is a band along its whole foot: animals go round a bush or behind it, never across its front.</p></div>
 </div>
+<p class="meta">Staged by hand round one bush (the owner: put the animals where they are to be seen rather than wait for them): three animals of three sizes sent from in front of it to behind it, from behind to in front, and past it sideways. The leaves are over any animal they overlap; a bush's foot is a band no animal stands across. The fade in front of the animal followed is off. Enlarged twice; there is no "before" (the scene before R5 has no hooks to stage it).</p>
+${["stagedBehind", "stagedFront", "stagedAcross"]
+  .map((name) => films.after[name])
+  .filter((film) => film !== undefined)
+  .map(
+    (film) =>
+      `<figure><video src="films/${film.file}" poster="${uri(film.poster)}" autoplay loop muted playsinline controls></video><figcaption><span class="meta">${film.frames} frames at ${FPS} fps, <code>films/${film.file}</code></span></figcaption></figure>`,
+  )
+  .join("")}
 <p class="meta">Five animals of different sizes followed among bushes, 12 s each, the middle of the screen enlarged twice: before left, after right.</p>
 ${filmPair("bush2", ["Before: Shepisu, the largest (SIZE 0.97)", "After"])}
 ${filmPair("bush21", ["Before: Maleha (SIZE 0.51)", "After"])}
