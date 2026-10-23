@@ -112,7 +112,7 @@ CRITERIA = [
         "R5.2",
         "Most frames over the 33.3 ms budget in any of "
         + ", ".join(ACCEPTANCE_SCENARIOS)
-        + f" with the best browser profile (%; band ≤ {OVER_BUDGET_MAX_PCT:g}, the owner's, 2026-10-23)",
+        + f" with the best browser profile (%; band ≤ {OVER_BUDGET_MAX_PCT:g}, the owner's)",
         "best.acceptance.over_budget_pct_max",
         high=OVER_BUDGET_MAX_PCT,
     ),
