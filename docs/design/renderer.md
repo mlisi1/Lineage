@@ -984,6 +984,22 @@ Round 1, items 1–7:
   under a splash of drops, with rings spreading in a wet patch round its feet that dries
   in a few seconds; the ark's newcomers keep its light too. On the map the dot of the dead
   only fades.
+- **The place of an entry** (the owner, 2026-10-23). A chronicle entry carries a place
+  (cells; -1 for none) and a species. While a notable entry with a place is on the scroll,
+  from unrolling to rolled up, a small marker stands there (`src/marker.ts`): a rose
+  diamond ringed in the scroll's paper and ink, with a paper ring between ink bands
+  swelling from it every 1.6 s and fading by steps at the end, in whole art pixels over
+  the light and weather, a little larger closer in. It shows on the map, and in the middle
+  and local views when the place is in sight. In the local view the camera visits the
+  place (`Scene.place` in `src/director.ts`): it leaves the animal it follows, glides there
+  on a spring (period 2.4 s, critically damped, at most 16 cells a second; it dips and cuts
+  if the place is more than three views away) and holds; when the scroll rolls up it
+  glides, or cuts, back to the same animal and follows it again, the time on the animal
+  paused meanwhile. Entries are visited in turn; one that comes during a visit takes the
+  camera straight on. No visit during a dip, while a world ends, for an entry without a
+  place, or for an entry already out when the view arrives. The view button ends a visit
+  and steps the view as usual. `window.__camera()` reads motion `visit` or `return` and the
+  place visited.
 - **The name card** (`src/card.ts`, the owner's choices, 2026-10-22). While the local
   view follows an animal, a small parchment scroll in the top-left corner (clear of the
   chronicle's scroll at the foot) gives its species' name beside a swatch of its own body

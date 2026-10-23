@@ -202,9 +202,9 @@ below was taken in scope by the owner. Tests wait until the look is called final
   `landed` on the wire (from `CreaturesArrived`)
 - [x] 10. Wading has no look (after M11 reaches main): drawn from the depth, ready for
   M11's shelf (`WADE_DEPTH` = its `wading_depth`)
-- [ ] 11. Chronicle entries carry a place and a species the scroll does not use.
+- [x] 11. Chronicle entries carry a place and a species the scroll does not use.
   The owner (2026-10-23): map and middle views mark the place; the local view's camera
-  visits it while the scroll is out
+  visits it while the scroll is out. Done: `marker.ts`, `Scene.place` in `director.ts`
 
 **Rough edges**
 - [ ] 12. The scroll and the dip stay daylight-bright at night and in an apocalypse.

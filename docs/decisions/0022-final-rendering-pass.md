@@ -127,6 +127,18 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Chronicle places, wet feet, off the spike (2026-10-23)
+
+The owner chose, by view: the map and the middle view mark an entry's place while its
+scroll is out, and the local view's camera visits it and comes back to the animal it
+follows (the time on the animal paused). This brings back a camera move made by the
+chronicle, which R3 had dropped for dawn shots and recaps, but only while an entry is on
+the scroll and only in the local view. At high tide the swash runs over the beach, and an
+animal it reaches gets wet feet (the shore shader's swash replayed in
+`Landscape.swashCovers`). It doesn't move away. The real scene no longer imports from the R0
+spike: the creature layer, its atlas, habitat, seed type and the views' sizes moved to
+`creatures/`.
+
 ### Deaths and landings (2026-10-22)
 
 The owner chose deaths shown by cause, plus a carcass, and a splash only for landings
