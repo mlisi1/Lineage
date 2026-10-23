@@ -251,10 +251,41 @@ kind, a new anchor every 3 s), joints of non-neighbouring segments came within 1
 spacings in 16–26 % of frames before, and none after. Arc-turning bodies spend more time
 beyond their leash in that test (about 40 % of frames against 26–30 %), which looks minor
 at the scene's pace.
+### Animations and bushes in pieces (2026-10-23 night to 2026-10-24)
+
+The owner: "Eating is good. The bushes still do not satisfy me but honestly I don't know
+how to solve it. Go on and implement the next animations." Four worktrees in parallel,
+merged into `r5-final` on 2026-10-24: hunting and births, plants in the wind, sleep and
+small life, and bushes in pieces as an experiment beside the whole bushes.
+
+- **Hunting and births need two facts the stream lacked**: who killed and who bore. The
+  sim already knew both at the moment; they leave as outputs (`CreaturesDied.killers`,
+  `CreaturesBorn`) and on the wire (`died[].by`, `born[].parent`). Nothing saved
+  changes, no draw is added or moved; the re-recorded streams equal the old ones but for
+  the two fields. The hunt is not the sim's stalk, which spanned hours between messages:
+  the scene shows its end, a run and a spring, and holds the prey until the strike.
+- **Wind by whole pixels, not a shader**: a shader over the plant layer would move the
+  animals sorted into its rows, one per sprite would break batching. Lean frames drawn
+  lazily cost one small page instead of 50 MB of GPU memory up front.
+- **Sleep is drawn only**: the sim has no sleep, so the scene lays animals down by the
+  light, never against the sim's place (moved far, they get up and walk).
+- **Small life** stays out of the sim and off the map, on a random stream of its own.
+- **Bushes in pieces**: sorting a whole bush by one base cannot be right for an animal
+  partly in front of it and partly behind; cutting it into puffs, each sorted and
+  footprinted on its own (the forum's "split a sprite spanning depths"), lets an animal
+  stand among them. Kept behind `?bushes=pieces` until the owner compares the films.
+  Open: legs overlap the bush's lower edge when an animal is in front; sprouts are still
+  walked over; a rare-gene overlay stays whole over the pieces.
+- **Open points from the four**: the prey stands frozen up to 1.4 s before a strike; the
+  middle view's hunt is quick (about 0.75 s); hearts and eggs are drawn over a canopy; a
+  sleeper's shadow stays a full oval; the director still follows sleepers at night;
+  butterflies use meadow cells for flowers; calm days barely stir the plants
+  (`CALM_WIND`, `BREEZE` if the owner wants more); autumn leaves are not done.
 
 ## Consequences
 
-- The wire gains `young` (additive). S1 sends it as `tools/stream.py` does. M11's merge
+- The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and
+  `born[].parent` (additive). S1 sends it as `tools/stream.py` does. M11's merge
   regenerates the recordings as usual.
 - Colours now depend on which species are alive, not only on an animal's own genes. A
   species keeps its place in the order but not an exact hue across the years.

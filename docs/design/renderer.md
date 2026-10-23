@@ -603,7 +603,7 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
 | `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
 | `fauna` | on connect | creature gene names, the phenotype's config keys, and the config drawing rare genes needs (`rare_config`: GIANT's mass factor) (R2, M7) |
-| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`); who ate plants or algae and who ate meat in the last tick (`grazing`, `feeding`, from `Population.eating`) (R5) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`); who ate plants or algae and who ate meat in the last tick (`grazing`, `feeding`, from `Population.eating`); who killed each of the dead (`died[].by`, the hunter's id, from `CreaturesDied.killers`) and the mother of each newborn (`born[].parent`, from `CreaturesBorn`) (R5) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
 | `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
@@ -1128,6 +1128,67 @@ Round 1, items 1–7:
   far so that it stays on; the chain the body follows is left as it was. The flecks are
   three art pixels, pooled (48), rising and fading in 0.45 s. `window.__feed(id, food)`
   sets an animal eating by hand for staging.
+- **Hunting** (`creatures/hunting.ts`, the owner's second animation, 2026-10-24). A death
+  `by` a hunter that still lives is shown as the end of a hunt in the view on screen. The
+  sim's hunter stalked its prey over the hours between two messages, which the scene
+  cannot replay, so the hunter runs to where its prey was last drawn: at least 2.5 times
+  its walking pace, for 0.4 to 1.2 s, round trees and bushes as any walk is. It stops half
+  its length short (crouching facing the prey if early), then springs, its head going at
+  the prey's nearest joint quicker and quicker for 0.32 s, thrust a spacing ahead, puffs
+  of dust from its hind feet. At the strike the prey dies as a kill does; until then it
+  stands, and its remains wait with it. A hunter more than 12 cells off, torpid, arriving,
+  staged by hand, or on the map does not hunt: the prey dies at once. Afterwards the
+  hunter goes to where the sim has it. `window.__hunt(hunter, prey)` stages a hunt.
+- **Births** (`creatures/nursery.ts`). A newborn whose mother the stream names (`parent`)
+  comes into being beside her head, facing her, where its whole body is clear of trees
+  and bushes (ahead of her first, then more and more to either side); the rest of a brood
+  lie beside it. She stands over them 2.6 s and lowers her head to them twice while three
+  pixel hearts rise. A mother of large broods (`BROOD` of 3 or more young) lays: each
+  young is first an egg on dry land that rocks, cracks and after 1.6 s comes apart, bits
+  of shell thrown off. Anything that does not fit (the map, the mother torpid or busy, no
+  room) fades in where the sim put it, as before. `window.__birth(mother, child, egg?)`.
+- **Sleep at night** (`creatures/sleep.ts`). Drawn only: the sim does not sleep. As the
+  light goes (depth = 1 − daylight) each animal lies down at its own moment, from a hash
+  of its genome, between depths 0.45 and 0.9; it wakes 0.12 below its moment, and none
+  lies down while the light rises. Animals with glow, with SENSE ≥ 0.8, and swimmers stay
+  up. A sleeper eases over 1.6 s into a curl as far as its body bends (1.8 times its
+  walking bend, at most 0.6 turns), feet tucked to 0.3 of their reach, eyes shut to a
+  one-pixel slit, breathing 1.8 times slower and 1.6 times deeper. It lies down only
+  paused and dry, and does not eat lying. Moved two leashes off by the sim, or reached by
+  the water, it is up in 0.3 s and walks, and stays up 3–7 s. A small "z" rises over the
+  animal followed every 2.4 s. A hunter, or a mother tending her young, does not lie
+  down. `window.__sleep(id)`.
+- **Small life about the island** (`atmosphere/ambient.ts`). Decoration only, on its own
+  random stream (seed + 3), pooled sprites, never in rain, on the map or in a world's
+  end: fireflies (12 in the middle view, 8 in the local) over grass and shrub at night,
+  stepped warm-green glows added over the tint, blinking half of a 2.2–4.6 s cycle; pale
+  puffs of dust from the hind feet of an animal hurrying on dry land; by day a V of one to
+  four pale gulls crossing the middle view every 25–70 s, with a faint shadow; in spring
+  and summer three butterflies over the local view's meadows (grass with biomass ≥ 128).
+  `window.__ambient()`.
+- **Plants in the wind** (`plants/wind.ts`). Grass, flowers, ferns, reeds, bushes and the
+  crowns of trees lean with the wind by whole art pixels. A drawing that bends is drawn
+  again leaning one pixel against the wind and one to three with it: its rows slide
+  sideways, none below a hinge (the trunk, the foot of a tuft), more toward the top, and
+  above its stiff height (a crown, a bush's top) all as one piece, so nothing smears and
+  trunks stay put. These drawings are made the first time a plant built in view needs
+  them, into pages of their own (one 2048×1024 page holds the local view's), and
+  `PlantLayer.blow` swaps each visible plant's drawing when its lean changes (≤ 0.2 ms a
+  frame on the PC). The wind is a steady breeze, gusts rolling east-south-east at 2.2
+  cells a second (value noise 7 cells long, 5 wide) and a ripple rolling with them, so
+  neighbours move together. It blows harder in rain (+0.9) and in a thunderstorm (+1.5),
+  eased with the rain, and up to 30 % softer at night (`Atmosphere.wind`). A tall tree
+  leans at most three pixels, a tuft at most a fifth of its height; the middle view's
+  plants move little. With `?still` everything stands straight. Stones, logs, mushrooms,
+  stumps, snags and mangrove roots do not move, nor do bushes drawn in pieces.
+- **Bushes in pieces** (`plants/pieces.ts`, an experiment behind `?bushes=pieces`, the
+  default unchanged). Each puff of a local-view bush is a sprite of its own, cut from the
+  same drawing (each pixel to the puff painted last over it, else the nearest), so a bush
+  with no animal near looks as before. A piece is sorted by its puff's foot and keeps a
+  footprint of its own (0.85 of its radius across, 0.5 deep): together they block the
+  lower two-thirds of the bush, so animals pass behind its top puffs and between bushes.
+  A piece is over an animal only where a joint of the animal is behind its foot and under
+  its drawing. Trees, sprouts and fire pines stay whole. Awaiting the owner's choice.
 - **Wet feet at high tide.** The swash runs up the beach in the shore's shader, so
   `Landscape.swashCovers(x, y)` replays it: the tide's level (`tideLevel`, shared with the
   shader), the place's own wave (`tidePhase`), up for 0.3 of a wave and back by 0.8

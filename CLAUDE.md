@@ -94,10 +94,12 @@ lineage/
 │   │   │                     #   (generated), stream.ts, landscape.ts, looks.ts, director.ts (R3:
 │   │   │                     #   the view button's camera), herd.ts (the stream's animals),
 │   │   │                     #   pixelfont.ts (the captions' font), atmosphere/ (R4: light,
-│   │   │                     #   glow, weather of events, the apocalypse sequence),
-│   │   │                     #   creatures/ (R5: the creature layer `layer.ts`, its atlas,
-│   │   │                     #   `habitat.ts`, `views.ts`, colours from the genes, the map's
-│   │   │                     #   dots, wading, remains, portraits), card.ts (the name card),
+│   │   │                     #   glow, weather of events, the apocalypse sequence; R5:
+│   │   │                     #   `ambient.ts`, fireflies, gulls, dust), plants/ (R5: `wind.ts`,
+│   │   │                     #   `pieces.ts`), creatures/ (R5: the creature layer `layer.ts`,
+│   │   │                     #   its atlas, `habitat.ts`, `views.ts`, colours from the genes,
+│   │   │                     #   the map's dots, wading, remains, portraits, eating, hunting,
+│   │   │                     #   nursery, sleep), card.ts (the name card),
 │   │   │                     #   marker.ts (a chronicle entry's place), bench.ts and
 │   │   │                     #   benchplan.ts (R5: the scene's benchmark), framecap.ts (the
 │   │   │                     #   30 fps cap), gpu.ts, framestats.ts

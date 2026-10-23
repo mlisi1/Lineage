@@ -21,7 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
-| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): rounds 1–4 of the owner's review in (gene colours, map dots, calmer ground, grass after references, the young drawn small; ADR 0022); checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
+| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 21, 22 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); left: the report regenerated, the owner's verdicts (bushes in pieces), the board run, tests; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
@@ -134,23 +134,41 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 ### R5 in progress (handoff)
 
 - **Where**: worktree `/home/elechim/Lineage-r5`, branch `r5-final` (from main 80e4a4c);
-  ADR 0022 (decisions round by round, references); coordination board `r5.md`.
-- **Done**: rounds 1–4 of the owner's review, checklist items 1–7 and the demo clicks
-  (below). Report: `cd renderer && npm run final` → `reports/R5-final/` (before/after
-  stills and films; films committed). Regenerate and commit it after each round.
-- **How a round goes**: change, look at the scene (`npm run dev`; `?view=local&seed=3&still&quiet`
-  for the upland grass, `?seed=9&follow=60` then press V twice to follow an animal),
-  regenerate the report, show the owner. No tests until the owner calls the look final.
-- **Pitfalls**: Vite's dev server does not reload the paint worker when
-  `terrain/ground.ts` changes (restart it, or `?painter=inline`). The wire's `young` is
-  additive; re-record `life`, `office` and `end` after a stream change (CLAUDE.md §5).
-- **Done 2026-10-22**: animals in the water, bushes and trees, bodies folding and legs in
-  turn (the last three in parallel worktrees, merged into `r5-final`).
-- **Done 2026-10-22 (afternoon)**: depth among plants (a body split where a plant stands
-  across it), the name card (`card.ts`), deaths by cause with bones and landings with a
-  splash (`remains.ts`; `died`, `landed` on the wire; the sim's `CreaturesDied` output).
-- **Next**: items 11–20 (chronicle places, the scroll at night, the tide's line, demo code,
-  off the spike, the benchmark).
+  ADR 0022 (decisions round by round, references); coordination board `r5.md`. No other
+  R5 worktree is open: hunting, wind, sleep and the bush pieces were built in their own
+  (`r5-hunt`, `r5-wind`, `r5-sleep`, `r5-puffs`) and merged into `r5-final` on 2026-10-24.
+- **Done**: checklist items 1–16, 21 and 22 (below). The last report on disk
+  (`reports/R5-final/`, 724c04b) stops at eating.
+- **Next session, in order**:
+  1. Regenerate the report: `cd renderer && npm run final` (about 15 minutes, `ffmpeg`;
+     films committed). `scripts/final-report.mjs` already has the new films (hunt, birth,
+     egg, sleep, sleepFollow, fireflies, gulls, dust, windCalm, windStorm and the three
+     staged walks with `bushes=pieces`) and their sections; none has been rendered yet,
+     so look at each before committing (the gulls' `advance: 28` and default middle view
+     may miss the flock: `window.__ambient().flock` tells where it is).
+  2. Show the owner, who decides: bushes in pieces (`?bushes=pieces`) or whole (today's
+     default; the fade in front of the animal followed is still off, `FADED = 1`); the
+     new animations (each agent's open points are in ADR 0022, round 9).
+  3. Items 17–19 on the board with the owner; item 20, the tests, once the look is final.
+  4. Merge into `main` (M11 re-records the streams if it merges after: `by`, `parent`,
+     `grazing`, `feeding`, `died`, `landed`, `young` are new on the creatures message).
+- **How a round goes**: change, look at the scene (`npm run dev -- --force`;
+  `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V
+  twice to follow an animal), stage by hand what is to be seen (below), regenerate the
+  report, show the owner. No tests until the owner calls the look final.
+- **Staging by hand** (`?film&view=local&x=64&y=71&quiet&seed=1`, step with
+  `window.__frame(1/30)`): `__pin(id,x,y,heading)` then `__send(id,x,y)` puts an animal and
+  holds it there; `__feed(id,"plants"|"meat")`, `__hunt(hunter,prey)`,
+  `__birth(mother,child,egg?)`, `__sleep(id)`, `__ambient()`, `__standing`, `__swash`,
+  `__screenOf`, `__blocked`, `__card`, `__colours`. Ids 2048 (a large lizard), 2184,
+  2220 live in the creatures' recording; the bush cluster at (92, 124) is the one staged.
+- **Pitfalls**: Vite shares its `.vite` cache across worktrees: start it with `--force`
+  or pages fail with "504 Outdated Optimize Dep". It does not reload the paint worker
+  when `terrain/ground.ts` changes (restart it, or `?painter=inline`); a screenshot taken
+  before the worker has painted shows blue squares of unpainted ground. Re-record `life`,
+  `office` and `end` after a stream change (CLAUDE.md §5). `test_golden_hash_from_bare_rock`
+  already fails on main 80e4a4c (told to M11; not R5's). Never `pkill -f` a pattern that
+  is in your own command line: kill dev servers by PID.
 
 ### R5 checklist (the owner, 2026-10-21)
 
@@ -198,10 +216,16 @@ below was taken in scope by the owner. Tests wait until the look is called final
   with a portrait of the animal itself, its name as a heading, its traits and icons. Done:
   `illumination.ts` + `HAND_FONT`; `card.ts` + `creatures/portrait.ts`
 
-- [x] 22. Animations the owner asked for after the look (2026-10-23): eating first (grazing
-  nibbles, feeding tugs, flecks; `grazing`/`feeding` on the wire). Proposed next: hunting
-  (a chase and a lunge), plants in the wind, births by a parent, sleep at night, ambient
-  touches
+- [x] 22. Animations the owner asked for after the look (2026-10-23): eating (grazing
+  nibbles, feeding tugs, flecks; `grazing`/`feeding` on the wire); then (2026-10-24)
+  hunting, a run and a spring (`creatures/hunting.ts`, `died[].by`), births beside the
+  mother with hearts, eggs for large broods (`creatures/nursery.ts`, `born[].parent`),
+  plants leaning in the wind by whole pixels (`plants/wind.ts`), sleep at night
+  (`creatures/sleep.ts`), fireflies, gulls, butterflies and dust (`atmosphere/ambient.ts`).
+  Owner's verdict pending (report first). Not done: autumn leaves blown off trees
+- [ ] 23. Bushes in pieces, an experiment (2026-10-24, the owner: "maybe draw the bushes
+  in pieces"): each puff its own sprite and footprint (`plants/pieces.ts`), behind
+  `?bushes=pieces`; the owner chooses it or the whole bushes, then the fade is decided
 
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)
