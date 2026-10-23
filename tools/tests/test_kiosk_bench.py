@@ -215,6 +215,23 @@ def test_profiles_and_page_url() -> None:
     ):
         assert part in url
     assert "backend" not in kb.page_url(1, "spike.html", PROFILES["gpu"], 1.0, 0.0, None)
+    assert "bench" not in url  # the spike always measures itself
+
+
+def test_the_scene_page_is_asked_for_its_benchmark_and_cap() -> None:
+    url = kb.page_url(8137, kb.SCENE_PAGE, PROFILES["gpu"], 8.0, 2.0, "acceptance", 30.0)
+    assert url.startswith("http://127.0.0.1:8137/index.html?bench=1&")
+    for part in ("seconds=8", "warmup=2", "post=%2Fresults", "only=acceptance", "cap=30"):
+        assert part in url
+    assert "cap" not in kb.page_url(1, kb.SCENE_PAGE, PROFILES["gpu"], 1.0, 0.0, None)
+    assert kb.is_spike("spike.html")
+    assert not kb.is_spike("index.html")
+    # The scene has no canvas backend: it is not run by default, nor taken when asked.
+    assert kb.default_profiles(kb.SCENE_PAGE) == "default,gpu,gpu-gles,software"
+    assert kb.default_profiles(kb.SPIKE_PAGE) == ",".join(PROFILES)
+    with pytest.raises(ValueError, match="canvas: only the R0 spike"):
+        kb.chosen_profiles("gpu,canvas", None, kb.SCENE_PAGE)
+    assert [p.name for p in kb.chosen_profiles("gpu", None, kb.SCENE_PAGE)] == ["gpu"]
 
 
 def test_choosing_profiles() -> None:
@@ -285,6 +302,13 @@ def test_summary_table() -> None:
                             "fps_1pct_low": 30.5,
                             "js_ms_median": 6.4,
                         },
+                        {
+                            "name": "middle-crowd",
+                            "fps_median": 30.0,
+                            "fps_1pct_low": 29.4,
+                            "over_budget_pct": 2.5,
+                            "js_ms_median": 9.1,
+                        },
                     ],
                     "acceptance": {
                         "scenarios": ["mid-view", "local-view"],
@@ -310,6 +334,10 @@ def test_summary_table() -> None:
     assert "mid-view, local-view: 41.2 fps median at the lowest, target 30: PASS" in text
     assert "87" in text
     assert "301" in text
+    # The scene's page also says how many frames came later than 30 fps allows.
+    assert any(
+        line.split()[:4] == ["middle-crowd", "30.0", "29.4", "2.5"] for line in text.splitlines()
+    )
     assert "[software] timeout no results after 210 s" in text
 
 
