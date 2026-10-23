@@ -33,7 +33,17 @@ import {
 import type { CreatureSeed } from "./seed";
 import type { Footprints, Passable } from "./habitat";
 import { dotOf, dotSize } from "./markers";
-import { RIPPLES, bobAt, effortOf, paceIn, rippleAt, ringTexture, wetOf, type Wet } from "./wading";
+import {
+  RIPPLES,
+  SWASH_SEA,
+  bobAt,
+  effortOf,
+  paceIn,
+  rippleAt,
+  ringTexture,
+  wetOf,
+  type Wet,
+} from "./wading";
 import { MAP_TILE } from "../terrain/ground";
 import type { Random } from "../rng";
 
@@ -226,6 +236,8 @@ interface Departing {
 }
 
 export class CreatureLayer {
+  /** Whether the swash covers the beach at a place now (R5, wet feet); none, never. */
+  swash: ((x: number, y: number) => boolean) | null = null;
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
   /** Creatures that died, going where they fell. */
@@ -955,14 +967,18 @@ export class CreatureLayer {
    * much as the water is hard for it.
    */
   private wade(creature: Creature, head: Point): void {
-    const sea = this.sea?.(head.x, head.y) ?? null;
-    const wet = wetOf(sea?.below ?? 0);
+    const water = this.sea?.(head.x, head.y) ?? null;
+    const inWater = wetOf(water?.below ?? 0);
+    // On the beach, the swash may run over its feet (R5, the owner: wet feet at high tide).
+    const wet: Wet = inWater === "dry" && this.swash?.(head.x, head.y) === true ? "feet" : inWater;
+    const sea = wet === "feet" ? SWASH_SEA : water;
     const { effort } = creature;
     creature.wet = wet;
     creature.waterPace = paceIn(wet, effort);
     if (wet === "dry" && creature.ripples === null) return;
     // Colours change only when the water does.
-    const key = wet === "dry" ? -1 : (wet === "shallow" ? 1000 : 2000) + seaKey(sea);
+    const key =
+      wet === "dry" ? -1 : (wet === "feet" ? 500 : wet === "shallow" ? 1000 : 2000) + seaKey(sea);
     if (key !== creature.seaKey) {
       creature.seaKey = key;
       creature.legSprites ??= new Set(

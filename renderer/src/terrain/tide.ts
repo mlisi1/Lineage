@@ -82,3 +82,33 @@ export function swellAt(x: number, y: number, spacing: number): { phase: number;
   const dash = smooth(x / (spacing * SWELL_DASH_ACROSS), y / (spacing * SWELL_DASH_DOWN), 43);
   return { phase: turn - Math.floor(turn), dash };
 }
+
+/** Seconds of a tide, which sets how far the swash runs (its least and most share). */
+export const TIDE_S = 60;
+export const TIDE_LOW = 0.55;
+
+/** How far the tide is in at `timeS` (wall seconds): from `TIDE_LOW` to 1. */
+export function tideLevel(timeS: number): number {
+  return TIDE_LOW + (1 - TIDE_LOW) * (0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / TIDE_S));
+}
+
+/** The swash's share of a wave that it runs up the sand, and back down by. */
+const SWASH_RISES = 0.3;
+const SWASH_FALLS = 0.8;
+const ease = (t: number): number => {
+  const c = Math.min(Math.max(t, 0), 1);
+  return c * c * (3 - 2 * c);
+};
+
+/**
+ * How far up the beach (art pixels) the swash is at `timeS` at a place (cells), when it
+ * runs at most `top` art pixels up: as the shore's shader draws it (`sea.ts`), each place
+ * on its own wave (`tidePhase`), rising for the first 0.3 of the wave and back by 0.8.
+ */
+export function swashUp(timeS: number, x: number, y: number, top: number): number {
+  const turn = ((((timeS + tidePhase(x, y)) / BREATH_S) % 1) + 1) % 1;
+  if (turn < SWASH_RISES) return top * ease(turn / SWASH_RISES);
+  if (turn < SWASH_FALLS)
+    return top * (1 - ease((turn - SWASH_RISES) / (SWASH_FALLS - SWASH_RISES)));
+  return 0;
+}

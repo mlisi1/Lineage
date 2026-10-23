@@ -131,6 +131,11 @@ export class Herd {
   private signatures: Signatures = new Map();
   /** The rare-gene bits whose look is glow (R4: they shine in the dark). */
   private glowBits = 0;
+  /** Whether the swash covers the beach at a place now, from the scene's sea (R5, wet feet). */
+  set swash(covers: ((x: number, y: number) => boolean) | null) {
+    for (const layer of Object.values(this.layers)) layer.swash = covers;
+  }
+
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
   /**

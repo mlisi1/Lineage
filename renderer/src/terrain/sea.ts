@@ -32,13 +32,10 @@ import {
 } from "pixi.js";
 import type { CellRect, Land } from "./land";
 import { cellHash } from "./pixels";
-import { BREATH_S, shoreSizes, swellSizes } from "./tide";
+import { BREATH_S, shoreSizes, swellSizes, tideLevel } from "./tide";
 
 export { BREATH_S, tidePhase } from "./tide";
 
-/** Seconds of a tide, which sets how far the swash runs (its least and most). */
-const TIDE_S = 60;
-const TIDE_LOW = 0.55;
 /** The swash's colours: foam, and how dark the sand it leaves is (share of black). */
 const FOAM = 0xf2fbff;
 const WET_SAND = 0.18;
@@ -328,8 +325,7 @@ export class Sea {
         antialias: "off",
       });
       if (!(filters?.includes(this.shore) ?? false)) layer.filters = [this.shore];
-      const tide =
-        TIDE_LOW + (1 - TIDE_LOW) * (0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / TIDE_S));
+      const tide = tideLevel(timeS);
       const shallow = land.relief.seaBands[0]?.colour ?? "#8ecbe6";
       const uniforms = this.shoreUniforms.uniforms as unknown as ShoreUniforms;
       uniforms.uTime = timeS / BREATH_S;

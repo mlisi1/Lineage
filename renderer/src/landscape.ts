@@ -24,6 +24,8 @@ import { FADE_S, PieceGround, WholeGround } from "./terrain/grounds";
 import type { CellRect, Land } from "./terrain/land";
 import type { Painter } from "./terrain/painter";
 import { Sea } from "./terrain/sea";
+import { shoreSizes, swashUp, tideLevel } from "./terrain/tide";
+import { heightAt } from "./creatures/habitat";
 
 export const VIEWS = ["map", "middle", "local"] as const;
 export type ViewName = (typeof VIEWS)[number];
@@ -38,6 +40,19 @@ export const TILES: Readonly<Record<ViewName, number>> = {
  * view does), so that cover lies in patches instead of a patchwork cell by cell (R5).
  */
 const MIDDLE_CALM = 1;
+/** Land higher than this above the sea (height units) is never reached by the swash. */
+const SWASH_BEACH = 0.03;
+/** Where to look for the water round a place, to know if the swash reaches it: eight ways. */
+const SWASH_LOOKS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [Math.SQRT1_2, Math.SQRT1_2],
+  [-Math.SQRT1_2, Math.SQRT1_2],
+  [Math.SQRT1_2, -Math.SQRT1_2],
+  [-Math.SQRT1_2, -Math.SQRT1_2],
+];
 /** How each view's ground reads the cells (ADR 0007): the map cut, the closer views dithered. */
 const STYLES: Readonly<Record<ViewName, GroundStyle>> = {
   map: "smooth",
@@ -167,6 +182,26 @@ export class Landscape {
   /** The current land, once one has come. */
   get current(): Land | null {
     return this.land;
+  }
+
+  /**
+   * Whether the swash covers the beach at a place (cells) in the view shown, now (R5: an
+   * animal there gets wet feet): the place is land, and the water lies no further off than
+   * the swash has run up the sand at this moment, as the shore's shader draws it.
+   */
+  swashCovers(x: number, y: number): boolean {
+    const land = this.land;
+    if (land === null || this.view === "map") return false;
+    const above = heightAt(land, x, y) - land.seaLevel;
+    if (above <= 0 || above > SWASH_BEACH) return false;
+    const tile = TILES[this.view];
+    const top = shoreSizes(tile).swash * tideLevel(this.seaTime);
+    const up = swashUp(this.seaTime, x, y, top) / tile;
+    if (up <= 0) return false;
+    for (const [dx, dy] of SWASH_LOOKS) {
+      if (heightAt(land, x + dx * up, y + dy * up) <= land.seaLevel) return true;
+    }
+    return false;
   }
 
   /** The plants of the view being shown, for creatures to be sorted among (R2). */

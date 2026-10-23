@@ -1050,6 +1050,13 @@ Round 1, items 1–7:
   insect, tortoise, beetle, spider, crab) turn on the spot about their middle joint.
   Looking about during a pause turns the head, not the body. A torpid animal still lies
   curled; waking, its body straightens over about a tenth of a second.
+- **Wet feet at high tide.** The swash runs up the beach in the shore's shader, so
+  `Landscape.swashCovers(x, y)` replays it: the tide's level (`tideLevel`, shared with the
+  shader), the place's own wave (`tidePhase`), up for 0.3 of a wave and back by 0.8
+  (`swashUp`), and the water no further off than that. A walker it covers is "feet" in
+  `wading.ts`: its legs tinted by the shallowest sea's blue for the moment, a ring round
+  them, no slower; it does not move away (the owner, 2026-10-23). `window.__swash(x, y)`
+  reads it out.
 - **Nothing stands on the water.** A plant's foot must be on the land as painted (heights
   between cells, `heightAt`, as animals read them) and as far from the waterline as the
   swash runs up the beach at high tide in that view; otherwise it, and its shadow, is left

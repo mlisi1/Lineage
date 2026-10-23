@@ -116,6 +116,7 @@ declare global {
     /** What the atmosphere shows (tests). */
     __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
     __colours?: () => ReturnType<Herd["colourTable"]>;
+    __swash?: (x: number, y: number) => boolean;
     /** The land drawn at cell (x, y): height, cover class, biomass and scorch (tests). */
     __landAt?: (
       x: number,
@@ -189,6 +190,7 @@ async function start(): Promise<void> {
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const herd = new Herd(creatureAtlas(), mulberry32(seed + 1), () => landscape.current);
+  herd.swash = (x, y) => landscape.swashCovers(x, y);
   world.addChild(...herd.containers);
   const still = params.get("still") !== null;
 
@@ -327,6 +329,7 @@ async function start(): Promise<void> {
   let advance = 0;
   window.__atmosphere = () => ({ ...atmosphere.state, ...atmosphere.counts });
   window.__colours = () => herd.colourTable();
+  window.__swash = (x, y) => landscape.swashCovers(x, y);
   window.__landAt = (x, y) => {
     const land = landscape.current;
     if (land === null) return null;

@@ -7,6 +7,8 @@
  * nothing. The renderer shows what the simulation says, never moves an animal out of the
  * water, and draws how hard it is going:
  *
+ *   feet      on the beach, when the swash runs over it at high tide (R5, the owner: wet
+ *             feet): its legs under the water for a moment, a ring round them; no slower
  *   shallows  (no deeper than `WADE_DEPTH` below the sea) its legs are under the water,
  *             it slows, and ripples spread from it
  *   deep      its legs are gone from sight, its body sunk but for its head, it slows more,
@@ -19,7 +21,7 @@ import { CanvasSource, Rectangle, Texture } from "pixi.js";
 import { SWIMS_FROM } from "./body";
 
 /** How the water holds an animal: not at all, wading in the shallows, or out of its depth. */
-export type Wet = "dry" | "shallow" | "deep";
+export type Wet = "dry" | "feet" | "shallow" | "deep";
 
 /** Below the sea (height units) a walker still wades: M11's shallow shelf (`[fauna] wading_depth`). */
 export const WADE_DEPTH = 0.03;
@@ -30,13 +32,15 @@ const DEEP_SLOWS = 0.7;
 const BOB_CELLS = 0.035;
 const BOB_PER_S = 1.6;
 /** Ripples: seconds one takes to spread wading and out of its depth, and how far, in body lengths. */
-const RIPPLE_S = { shallow: 1.6, deep: 0.9 } as const;
-const RIPPLE_REACH = { shallow: 1.8, deep: 2.4 } as const;
+const RIPPLE_S = { feet: 1.2, shallow: 1.6, deep: 0.9 } as const;
+const RIPPLE_REACH = { feet: 1.3, shallow: 1.8, deep: 2.4 } as const;
 /** A ripple starts this share of its reach across, and is this opaque at its start. */
 const RIPPLE_FROM = 0.45;
 const RIPPLE_ALPHA = 0.7;
 /** Ripples are seen at a slant from above: this much shorter than wide. */
 const RIPPLE_SLANT = 0.6;
+/** The swash's water over the sand, as wet feet are tinted by it: the shallowest sea's blue. */
+export const SWASH_SEA = { colour: 0x8ecbe6, depth: 0 } as const;
 /** The ripples round one animal, each this share of a spread behind the one before. */
 export const RIPPLES = 2;
 
@@ -52,7 +56,7 @@ export function effortOf(aquatic: number): number {
 
 /** How fast it goes in `wet` against on land, for its `effort`. */
 export function paceIn(wet: Wet, effort: number): number {
-  if (wet === "dry") return 1;
+  if (wet === "dry" || wet === "feet") return 1;
   return 1 - (wet === "shallow" ? WADE_SLOWS : DEEP_SLOWS) * effort;
 }
 
