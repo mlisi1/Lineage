@@ -1,32 +1,29 @@
 /**
- * The name card (R5): while the local view follows an animal, a small parchment scroll in
+ * The name card (R5): while the local view follows an animal, a small field-guide card in
  * the screen's top-left corner gives its species' name and what its genes make of it. The
  * owner's choices (2026-10-22): its traits in words where words read well (size, build,
  * diet: "large long-legged grazer", at most three words), and small pixel icons for what
- * words do badly (at home in the water, each rare gene it carries); a swatch of its own
- * colours beside the name. The phone's follow-a-creature (S3) shows the same card.
+ * words do badly (at home in the water, each rare gene it carries). The phone's
+ * follow-a-creature (S3) shows the same card.
+ *
+ * The look (the owner, 2026-10-23: the card and the chronicle's scroll different, both
+ * better): not parchment but a naturalist's card. Cream card in a thin wooden frame lit
+ * from the upper left, the species' name on a sage heading band, and below it a plate
+ * with a portrait of the animal itself, drawn from its genes in its own colours by the
+ * scene's own creature layer (`creatures/portrait.ts`), its trait words beside it one to a
+ * ruled line, the icons under them. It slides in from the screen's left edge when
+ * following starts and back out when the view leaves the animal, turns to another, or
+ * goes to visit the place of a chronicle entry (it would name an animal off screen).
  *
  * The corner: the chronicle's scroll (`captions.ts`) unrolls at the foot of the screen,
- * across its middle, so the top is free; the left, because the card unrolls from its left
- * roll, which stays by the screen's edge, as a page is read.
+ * across its middle, so the top is free; the left, the side a page is read from.
  *
- * The scroll is R3's (`captions.ts`): warm paper, wooden rolls lit from the upper left,
- * the caption font (`pixelfont.ts`). Icons are hand-made bitmaps, seven art pixels square,
- * in the cosy palette. The words and icons are pure (`describe`), and so is the painting
- * (`paintCard`); `NameCard` puts it on screen, unrolling when following starts and rolling
- * up when the view leaves the animal or the camera turns to another. It is lit by the
- * same lantern as the chronicle's scroll (`lantern` in `captions.ts`): dim and warm at
- * night, a little red in the end of a world.
+ * The words and icons are pure (`describe`), and so is the painting (`paintCard`);
+ * `NameCard` puts it on screen. It is lit by the same lantern as the chronicle's scroll
+ * (`lantern` in `captions.ts`): dim and warm at night, a little red in the end of a world.
+ * It is painted once per animal and lantern step, and slides as a whole.
  */
 import {
-  FADED_INK,
-  INK,
-  KNOB_RAMP,
-  PAPER,
-  PAPER_EDGE,
-  PAPER_SHADE,
-  ROLL,
-  ROLL_EDGE,
   DAYLIGHT,
   SHADOW_ALPHA,
   SHADOW_COLOUR,
@@ -35,10 +32,11 @@ import {
   type Picture,
 } from "./captions";
 import type { Rgb } from "./atmosphere/light";
-import { blend } from "./creatures/body";
+import { PORTRAIT_SIZE } from "./creatures/portrait";
 import { geneOf, type Genome } from "./creatures/genome";
-import { GOLD, PLUM, SUNLIT } from "./palette";
-import { draw, measure } from "./pixelfont";
+import { SUNLIT } from "./palette";
+import { GLYPH_ROWS, draw, measure } from "./pixelfont";
+import type { Pixels } from "./terrain/pixels";
 
 /** What the scene knows of the animal followed (`Herd.cardOf`). */
 export interface CardFacts {
@@ -56,6 +54,11 @@ export interface CardFacts {
   /** Its body and marking colours as drawn (0xRRGGBB). */
   body: number;
   mark: number;
+  /**
+   * Its portrait, drawn by the scene's creature layer (`creatures/portrait.ts`),
+   * `PORTRAIT_SIZE` square; none, an empty plate. The same object while it looks the same.
+   */
+  portrait?: Pixels | null;
 }
 
 // --- Words ---------------------------------------------------------------------------
@@ -218,60 +221,90 @@ export function describe(facts: CardFacts): Card {
   return { id: facts.id, name: facts.name, traits: words.join(" "), icons };
 }
 
-/** Art pixels of paper round the writing, and between the name and the traits. */
-const MARGIN_X = 6;
-const MARGIN_Y = 4;
-const LINE_GAP = 2;
-/** The swatch of the animal's colours: art pixels across, and before the name. */
-const SWATCH = 7;
-const SWATCH_GAP = 4;
-/** Art pixels between the name and its icons. */
-const ICONS_GAP = 5;
-/** The rolls: art pixels across, how far they reach above and below the paper, their knobs. */
-const ROLL_WIDTH = 7;
-const ROLL_OVER = 2;
-const KNOB = 2;
-const KNOB_WIDTH = 4;
-/** Which columns of the caption's roll (ten across) make the card's narrower one. */
-const ROLL_COLUMNS = [0, 1, 2, 3, 5, 7, 9] as const;
+// --- Its colours -----------------------------------------------------------------------
+
+/** The frame: its dark outer edge, and the wood lit (top, left), as cut, and in shade (bottom, right). */
+const FRAME_EDGE = 0x3e2418;
+const FRAME_LIT = 0xc48c52;
+const FRAME_WOOD = 0x9a6236;
+const FRAME_SHADE = 0x6b3f22;
+/** The card, and its shade under the frame's top and left edges. */
+const CARD = 0xfaf3e1;
+const CARD_SHADE = 0xe7dabd;
+/** The heading band: sage, lit along its top, a dark rule along its foot; the name on it. */
+const BAND = 0x5b8259;
+const BAND_LIT = 0x7ca372;
+const BAND_RULE = 0x3b5a3f;
+const NAME_INK = SUNLIT;
+/** The plate the portrait lies on: a pale wash in a hairline border. */
+const PLATE_WASH = 0xe5ebd0;
+const PLATE_EDGE = 0xae9c74;
+/** The trait words, and the faint rules they stand on. */
+const WORD_INK = 0x4a2c26;
+const RULE = 0xe2d3b3;
+
+// --- Its measures (art pixels) -----------------------------------------------------------
+
+/** The frame: the dark edge, then the wood. */
+const EDGE = 1;
+const WOOD = 2;
+const FRAME = EDGE + WOOD;
+/** The band: its lit row, the room above and below the name, its rule. */
+const BAND_LIT_ROWS = 1;
+const BAND_ABOVE = 2;
+const BAND_BELOW = 1;
+const BAND_RULE_ROWS = 1;
+const BAND_HEIGHT = BAND_LIT_ROWS + BAND_ABOVE + GLYPH_ROWS + BAND_BELOW + BAND_RULE_ROWS;
+/** Card round what is written and drawn on it. */
+const MARGIN = 4;
+/** The plate: the portrait in a one-pixel border. */
+const PLATE_BORDER = 1;
+const PLATE = PORTRAIT_SIZE + 2 * PLATE_BORDER;
+/** Between the plate and the words. */
+const COLUMN_GAP = 5;
+/** Rows between one word's line and the next, and from a word's top to its rule. */
+const WORD_PITCH = GLYPH_ROWS + 2;
+const RULE_BELOW = GLYPH_ROWS;
+/** Between the last word and the icons. */
+const ICONS_ABOVE = 3;
+/** The narrowest the column of words is, so that a short card is not a stub. */
+const COLUMN_MIN = 44;
 /** The card's shadow falls this far down and right. */
 const SHADOW = 2;
-/** Columns of shaded paper where it curls into a roll. */
-const CURL = 2;
-/** Glyph rows of a line of text (capitals 7, descenders 2). */
-const LINE = 9;
-/** How far the swatch's body colour is lit toward gold, and its outline taken toward plum. */
-const SWATCH_LIT = 0.45;
-const SWATCH_OUTLINE = 0.6;
+/** What the heading says before a name has come. */
+const NAMELESS = "Unnamed";
 
-/** The swatch: the body colour (b), lit at the upper left (L), a marking across (m). */
-const SWATCH_ROWS = [".kkkkk.", "kLLbbbk", "kLbbbmk", "kbbbmmk", "kbbmmbk", "kbmmbbk", ".kkkkk."];
+// --- The card ------------------------------------------------------------------------
 
-/** Art pixels across the name line's swatch, name and icons, and across the traits. */
-function contentWidth(card: Card): number {
-  const icons =
-    card.icons.length === 0 ? 0 : ICONS_GAP + card.icons.length * (ICON_SIZE + ICON_GAP) - ICON_GAP;
-  return SWATCH + SWATCH_GAP + Math.max(measure(card.name) + icons, measure(card.traits));
+/** The trait words, one to a line. */
+function wordsOf(card: Card): string[] {
+  return card.traits.split(" ").filter((word) => word !== "");
 }
 
-/** The size of the card, fully open, in art pixels. */
+/** Art pixels across the row of icons. */
+function iconsWidth(card: Card): number {
+  return card.icons.length === 0 ? 0 : card.icons.length * (ICON_SIZE + ICON_GAP) - ICON_GAP;
+}
+
+/** Rows the words and icons take, below the band. */
+function columnHeight(card: Card): number {
+  const words = wordsOf(card).length * WORD_PITCH;
+  return card.icons.length === 0 ? words : words + ICONS_ABOVE + ICON_SIZE;
+}
+
+/** The size of the card, its shadow included, in art pixels. */
 export function cardSize(card: Card): { width: number; height: number } {
-  const paper = 2 * MARGIN_Y + 2 * LINE + LINE_GAP;
-  return {
-    width: contentWidth(card) + 2 * MARGIN_X + 2 * ROLL_WIDTH + SHADOW,
-    height: paper + 2 * (ROLL_OVER + KNOB) + SHADOW,
-  };
+  const column = Math.max(COLUMN_MIN, iconsWidth(card), ...wordsOf(card).map(measure));
+  const inner = Math.max(
+    MARGIN + PLATE + COLUMN_GAP + column + MARGIN,
+    2 * MARGIN + measure(card.name === "" ? NAMELESS : card.name),
+  );
+  const body = MARGIN + Math.max(PLATE, columnHeight(card)) + MARGIN;
+  return { width: inner + 2 * FRAME + SHADOW, height: BAND_HEIGHT + body + 2 * FRAME + SHADOW };
 }
 
-/**
- * Paint the card, `open` of the way open (0–1), at its full size: its left roll stays at
- * the left and the right one moves out, the paper showing between them.
- */
-export function paintCard(
-  card: Card,
-  colours: { body: number; mark: number },
-  open: number,
-): Picture {
+/** The card, painted whole, with `portrait` (`PORTRAIT_SIZE` square) on its plate, if any. */
+export function paintCard(card: Card, portrait: Pixels | null = null): Picture {
   const { width, height } = cardSize(card);
   const rgba = new Uint8ClampedArray(width * height * 4);
   const put = (x: number, y: number, colour: number, alpha = 255): void => {
@@ -283,72 +316,77 @@ export function paintCard(
     rgba[at + 3] = alpha;
   };
   const outer = { width: width - SHADOW, height: height - SHADOW };
-  const paperTop = ROLL_OVER + KNOB;
-  const paperBottom = outer.height - ROLL_OVER - KNOB - 1;
-  const left = ROLL_WIDTH;
-  const fullPaper = outer.width - 2 * ROLL_WIDTH;
-  const right = left + Math.round(fullPaper * Math.min(Math.max(open, 0), 1));
-
-  // The shadow: the paper and the rolls, moved down and right, see-through.
-  for (let x = SHADOW; x < right + ROLL_WIDTH + SHADOW; x++) {
-    const roll = x < left + SHADOW || x >= right + SHADOW;
-    const top = (roll ? KNOB : paperTop) + SHADOW;
-    const bottom = (roll ? outer.height - KNOB - 1 : paperBottom) + SHADOW;
-    for (let y = top; y <= bottom; y++) put(x, y, SHADOW_COLOUR, SHADOW_ALPHA);
-  }
-  // The paper, as the caption's: an edge top and bottom, shaded where it curls.
-  for (let x = left; x < right; x++) {
-    const curl = x < left + CURL || x >= right - CURL;
-    for (let y = paperTop; y <= paperBottom; y++) {
-      const edge = y === paperTop || y === paperBottom;
-      const shade = curl || y >= paperBottom - 2 || y === paperTop + 1;
-      put(x, y, edge ? PAPER_EDGE : shade ? PAPER_SHADE : PAPER);
-    }
-  }
-  // What is written and drawn on it, shown where the paper is.
-  const onPaper = (x: number, y: number, colour: number): void => {
-    if (x >= left && x < right) put(x, y, colour);
-  };
-  const ink = (colour: number) => (x: number, y: number) => onPaper(x, y, colour);
-  const x0 = left + MARGIN_X;
-  const y0 = paperTop + MARGIN_Y;
-  const swatch: Readonly<Record<string, number>> = {
-    k: blend(blend(colours.body, 0, 0.5), PLUM, SWATCH_OUTLINE),
-    b: colours.body,
-    L: blend(colours.body, GOLD, SWATCH_LIT),
-    m: colours.mark,
-  };
-  bitmap(SWATCH_ROWS, swatch, x0, y0, onPaper);
-  const textLeft = x0 + SWATCH + SWATCH_GAP;
-  const nameWidth = draw(card.name, textLeft, y0, ink(INK));
-  let iconLeft = textLeft + nameWidth + ICONS_GAP;
-  for (const name of card.icons) {
-    const icon: Icon = ICONS[name];
-    bitmap(icon.rows, icon.colours, iconLeft, y0, onPaper);
-    iconLeft += ICON_SIZE + ICON_GAP;
-  }
-  draw(card.traits, textLeft, y0 + LINE + LINE_GAP, ink(FADED_INK));
-
-  // The rolls, with knobs above and below.
-  for (const rollLeft of [0, right]) {
-    const top = KNOB;
-    const bottom = outer.height - KNOB - 1;
-    ROLL_COLUMNS.forEach((source, column) => {
-      const x = rollLeft + column;
-      const inset = column === 0 || column === ROLL_WIDTH - 1 ? 1 : 0;
-      for (let row = top + inset; row <= bottom - inset; row++) {
-        const end = row === top + inset || row === bottom - inset;
-        put(x, row, end ? ROLL_EDGE : (ROLL[source] ?? ROLL_EDGE));
+  // The shadow: the card moved down and right, see-through.
+  for (let y = SHADOW; y < height; y++)
+    for (let x = SHADOW; x < width; x++) put(x, y, SHADOW_COLOUR, SHADOW_ALPHA);
+  // The frame: a dark edge, then wood lit on the top and left pieces, shaded on the others;
+  // its inner row is the plain wood.
+  for (let y = 0; y < outer.height; y++) {
+    for (let x = 0; x < outer.width; x++) {
+      const ring = Math.min(x, y, outer.width - 1 - x, outer.height - 1 - y);
+      if (ring >= FRAME) continue;
+      if (ring < EDGE) {
+        put(x, y, FRAME_EDGE);
+        continue;
       }
-    });
-    const knob = rollLeft + Math.floor((ROLL_WIDTH - KNOB_WIDTH) / 2);
-    for (let k = 0; k < KNOB; k++) {
-      KNOB_RAMP.forEach((colour, column) => {
-        const tip = k === 0 && column > 0 && column < KNOB_WIDTH - 1;
-        put(knob + column, k, tip ? (KNOB_RAMP[0] ?? colour) : colour);
-        put(knob + column, outer.height - 1 - k, tip ? (KNOB_RAMP[0] ?? colour) : colour);
-      });
+      const lit = Math.min(x, y) === ring;
+      put(x, y, ring < FRAME - 1 ? (lit ? FRAME_LIT : FRAME_SHADE) : FRAME_WOOD);
     }
+  }
+  // The card inside it, shaded a column along the frame's left piece and a row under the band.
+  const left = FRAME;
+  const top = FRAME;
+  const right = outer.width - FRAME;
+  const bottom = outer.height - FRAME;
+  for (let y = top; y < bottom; y++)
+    for (let x = left; x < right; x++)
+      put(x, y, x === left || y === top + BAND_HEIGHT ? CARD_SHADE : CARD);
+  // The heading band and the name on it.
+  for (let y = top; y < top + BAND_HEIGHT; y++) {
+    const row = y - top;
+    const colour =
+      row < BAND_LIT_ROWS ? BAND_LIT : row >= BAND_HEIGHT - BAND_RULE_ROWS ? BAND_RULE : BAND;
+    for (let x = left; x < right; x++) put(x, y, colour);
+  }
+  const name = card.name === "" ? NAMELESS : card.name;
+  draw(name, left + MARGIN, top + BAND_LIT_ROWS + BAND_ABOVE, (x, y) => put(x, y, NAME_INK));
+  // The plate, and the portrait on it, its shadow laid over the wash.
+  const plateLeft = left + MARGIN;
+  const plateTop = top + BAND_HEIGHT + MARGIN;
+  for (let y = 0; y < PLATE; y++) {
+    for (let x = 0; x < PLATE; x++) {
+      const border = Math.min(x, y, PLATE - 1 - x, PLATE - 1 - y) < PLATE_BORDER;
+      put(plateLeft + x, plateTop + y, border ? PLATE_EDGE : PLATE_WASH);
+    }
+  }
+  if (portrait !== null) {
+    const ox = plateLeft + PLATE_BORDER;
+    const oy = plateTop + PLATE_BORDER;
+    for (let y = 0; y < Math.min(portrait.height, PORTRAIT_SIZE); y++) {
+      for (let x = 0; x < Math.min(portrait.width, PORTRAIT_SIZE); x++) {
+        const from = 4 * (y * portrait.width + x);
+        const alpha = (portrait.rgba[from + 3] ?? 0) / 255;
+        if (alpha <= 0) continue;
+        const to = 4 * ((oy + y) * width + ox + x);
+        for (let channel = 0; channel < 3; channel++) {
+          const under = rgba[to + channel] ?? 0;
+          rgba[to + channel] = under + ((portrait.rgba[from + channel] ?? 0) - under) * alpha;
+        }
+      }
+    }
+  }
+  // The words, one to a ruled line, and the icons under them.
+  const columnLeft = plateLeft + PLATE + COLUMN_GAP;
+  wordsOf(card).forEach((word, line) => {
+    const y = plateTop + line * WORD_PITCH;
+    for (let x = columnLeft; x < right - MARGIN; x++) put(x, y + RULE_BELOW, RULE);
+    draw(word, columnLeft, y, (x, y) => put(x, y, WORD_INK));
+  });
+  let iconLeft = columnLeft;
+  const iconTop = plateTop + wordsOf(card).length * WORD_PITCH + ICONS_ABOVE;
+  for (const icon of card.icons) {
+    bitmap(ICONS[icon].rows, ICONS[icon].colours, iconLeft, iconTop, put);
+    iconLeft += ICON_SIZE + ICON_GAP;
   }
   return { width, height, rgba };
 }
@@ -369,13 +407,13 @@ function bitmap(
   });
 }
 
-/** Seconds to unroll the card, and to roll it up. */
-export const CARD_UNROLL_S = 0.7;
-export const CARD_ROLL_UP_S = 0.45;
+/** Seconds for the card to slide in, and back out. */
+export const CARD_IN_S = 0.7;
+export const CARD_OUT_S = 0.45;
 /** Art pixels between the card and the screen's top and left edges. */
 const CORNER = 6;
 
-export type CardPhase = "hidden" | "unrolling" | "open" | "rolling-up";
+export type CardPhase = "hidden" | "sliding-in" | "open" | "sliding-out";
 
 /** Eased both ways, so that a card turned back half-way does not jump. */
 function smooth(t: number): number {
@@ -384,15 +422,18 @@ function smooth(t: number): number {
 
 /**
  * The card on screen: a canvas of its own laid over the scene (`element`), placed and
- * sized in shares of the screen's art pixels, as the captions' scroll.
+ * sized in shares of the screen's art pixels, as the captions' scroll. It is painted once
+ * per animal, portrait and lantern step, and slides as a whole, by whole art pixels.
  */
 export class NameCard {
   readonly element = document.createElement("canvas");
-  private shown: { card: Card; key: string; body: number; mark: number } | null = null;
-  /** How far open, before easing (0–1), and whether it is opening. */
+  private shown: { card: Card; key: string; portrait: Pixels | null } | null = null;
+  /** How far in, before easing (0–1), and whether it is coming in. */
   private progress = 0;
   private opening = false;
-  private painted: { key: string; open: number; lamp: number } | null = null;
+  private painted: { key: string; portrait: Pixels | null; lamp: number } | null = null;
+  /** The art pixel its left edge was last put at. */
+  private placedAt: number | null = null;
   private lamp: Rgb = DAYLIGHT;
 
   constructor(
@@ -408,19 +449,26 @@ export class NameCard {
   }
 
   /**
-   * What the card shows now (`window.__card`, tests, S3), and the lamp it is lit by
-   * (0xRRGGBB, 0xffffff by day).
+   * What the card shows now (`window.__card`, tests, S3): how far in, the lamp it is lit
+   * by (0xRRGGBB, 0xffffff by day), and whether a portrait is on its plate.
    */
-  get state(): { phase: CardPhase; open: number; lamp: number } & Partial<Card> {
+  get state(): { phase: CardPhase; open: number; lamp: number; portrait: boolean } & Partial<Card> {
     const open = smooth(this.progress);
     const lamp = lampKey(this.lamp);
-    if (this.shown === null) return { phase: "hidden", open: 0, lamp };
+    if (this.shown === null) return { phase: "hidden", open: 0, lamp, portrait: false };
     const phase: CardPhase = this.opening
       ? this.progress >= 1
         ? "open"
-        : "unrolling"
-      : "rolling-up";
-    return { phase, open, lamp, ...this.shown.card, icons: [...this.shown.card.icons] };
+        : "sliding-in"
+      : "sliding-out";
+    return {
+      phase,
+      open,
+      lamp,
+      portrait: this.shown.portrait !== null,
+      ...this.shown.card,
+      icons: [...this.shown.card.icons],
+    };
   }
 
   /** Move on by `dtS` with `facts` the animal to show, or null for none, lit by `lamp`. */
@@ -429,20 +477,19 @@ export class NameCard {
     const wanted = facts === null ? null : describe(facts);
     const key = wanted === null ? null : JSON.stringify(wanted);
     if (this.shown !== null && this.shown.key !== key) {
-      // Another animal, or none: roll this one up first.
+      // Another animal, or none: this one slides out first.
       this.opening = false;
-      this.progress = Math.max(this.progress - dtS / CARD_ROLL_UP_S, 0);
+      this.progress = Math.max(this.progress - dtS / CARD_OUT_S, 0);
       if (this.progress <= 0) this.shown = null;
     } else if (this.shown === null && wanted !== null && facts !== null && key !== null) {
-      this.shown = { card: wanted, key, body: facts.body, mark: facts.mark };
+      this.shown = { card: wanted, key, portrait: facts.portrait ?? null };
       this.opening = true;
       this.progress = 0;
     } else if (this.shown !== null && facts !== null) {
-      // The same card: its colours may have been ranked anew.
-      this.shown.body = facts.body;
-      this.shown.mark = facts.mark;
+      // The same card: its portrait may have been drawn anew (colours ranked, growth).
+      this.shown.portrait = facts.portrait ?? null;
       this.opening = true;
-      this.progress = Math.min(this.progress + dtS / CARD_UNROLL_S, 1);
+      this.progress = Math.min(this.progress + dtS / CARD_IN_S, 1);
     }
     this.paint();
   }
@@ -452,29 +499,35 @@ export class NameCard {
     if (this.shown === null || open <= 0) {
       this.element.style.display = "none";
       this.painted = null;
+      this.placedAt = null;
       return;
     }
-    const { card, key, body, mark } = this.shown;
-    const painted = `${key} ${body} ${mark}`;
+    const { card, key, portrait } = this.shown;
     const lamp = lampKey(this.lamp);
     const last = this.painted;
-    if (last?.key === painted && last.open === open && last.lamp === lamp) return;
-    this.painted = { key: painted, open, lamp };
-    const picture = paintCard(card, { body, mark }, open);
-    lightPicture(picture, this.lamp);
     const { element } = this;
-    if (element.width !== picture.width || element.height !== picture.height) {
-      element.width = picture.width;
-      element.height = picture.height;
-      const share = (value: number, of: number): string => `${(100 * value) / of}%`;
-      element.style.left = share(CORNER, this.screenWidth);
-      element.style.top = share(CORNER, this.screenHeight);
-      element.style.width = share(picture.width, this.screenWidth);
-      element.style.height = share(picture.height, this.screenHeight);
+    const share = (value: number, of: number): string => `${(100 * value) / of}%`;
+    if (last?.key !== key || last.portrait !== portrait || last.lamp !== lamp) {
+      this.painted = { key, portrait, lamp };
+      const picture = paintCard(card, portrait);
+      lightPicture(picture, this.lamp);
+      if (element.width !== picture.width || element.height !== picture.height) {
+        element.width = picture.width;
+        element.height = picture.height;
+        element.style.top = share(CORNER, this.screenHeight);
+        element.style.width = share(picture.width, this.screenWidth);
+        element.style.height = share(picture.height, this.screenHeight);
+      }
+      element
+        .getContext("2d")
+        ?.putImageData(new ImageData(picture.rgba, picture.width, picture.height), 0, 0);
     }
-    element
-      .getContext("2d")
-      ?.putImageData(new ImageData(picture.rgba, picture.width, picture.height), 0, 0);
+    // In from past the screen's left edge, by whole art pixels.
+    const at = Math.round(CORNER - (1 - open) * (element.width + CORNER));
+    if (at !== this.placedAt) {
+      this.placedAt = at;
+      element.style.left = share(at, this.screenWidth);
+    }
     element.style.display = "block";
   }
 }

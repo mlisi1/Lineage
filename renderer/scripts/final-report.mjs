@@ -112,7 +112,7 @@ function STAGE_THROUGH(from, to) {
   })()`;
 }
 /** Where the name card stands (R5), in art pixels of a still: the top-left corner. */
-const CARD_CORNER = [0, 0, 200, 44];
+const CARD_CORNER = [0, 0, 200, 80];
 /** Close-ups, in art pixels of a still (512×300): x, y, wide, tall. */
 const ZOOMS = {
   map: [320, 40, 110, 80],
@@ -608,7 +608,7 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 <div class="head"><span class="n">·</span><h2>The name card of the animal followed</h2></div>
 <div class="notes">
 <div><span class="label">The owner's choice</span><p>While the local view follows an animal: its species' name, its traits in words where words do well, pixel icons where they don't, always on, in a corner of the screen. The phone's follow-a-creature (S3) shows the same card.</p></div>
-<div><span class="label">Now</span><p>R3's parchment, smaller, top-left (the chronicle's scroll unrolls at the foot). The name beside a swatch of the animal's own colours; at most three words for size (by mass: small, mid-sized, large), build (armoured, finned, swift, sluggish, legless, two-, six-, eight-legged, long- or short-legged) and diet (grazer, omnivore, hunter: the sim's own classes); icons for water-loving and each rare gene (fangs, warning sign, up arrow for giant, hourglass, frog, snowflake, leaf, sparkle for glow). It unrolls when the camera settles on the animal and rolls up when it leaves (<code>src/card.ts</code>, <code>window.__card()</code>).</p></div>
+<div><span class="label">Now</span><p>A field-guide card, top-left (the chronicle's scroll unrolls at the foot): cream in a thin wooden frame, the species' name on a sage heading band, a portrait of the animal itself on a plate, drawn from its genes in its own colours by the scene's creature layer, posed straight and facing right; beside it at most three words, one to a ruled line, for size (by mass: small, mid-sized, large), build (armoured, finned, swift, sluggish, legless, two-, six-, eight-legged, long- or short-legged) and diet (grazer, omnivore, hunter: the sim's own classes); under them icons for water-loving and each rare gene (fangs, warning sign, up arrow for giant, hourglass, frog, snowflake, leaf, sparkle for glow). It slides in when the camera settles on the animal and out when it leaves or visits an entry's place (<code>src/card.ts</code>, <code>src/creatures/portrait.ts</code>, <code>window.__card()</code>).</p></div>
 </div>
 <div class="pair zoom">${["follow2", "follow4", "follow9", "bush21", "bush10", "bush32", "bush15"]
   .map((name) => films.after[name])
