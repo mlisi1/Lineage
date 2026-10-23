@@ -543,8 +543,17 @@ needs a note in `docs/decisions/`.
   capped at 30 fps for want of a fan, "≥ 30 fps" read as holding the cap. Rounds 1–4:
   colours from six genes ranked among the living species, no olive; round map dots; a
   calmer ground; grass as small unoutlined tufts after references, nine sizes, random
-  tints; snow only from the sim; the young drawn small, `young` on the wire. Checklist and
-  handoff in `docs/milestones.md`; report `reports/R5-final/`.)
+  tints; snow only from the sim; the young drawn small, `young` on the wire. Later rounds
+  to 2026-10-24: plants off the water; animals wading or struggling in the sea, wet feet
+  at high tide; legs in turn, no folding; animals round and behind trees and bushes, the
+  leaves over them (the fade off; bushes in pieces as an experiment, `?bushes=pieces`,
+  awaiting the owner); deaths by cause with bones, landings with a splash; a field-guide
+  name card with a portrait, an illuminated chronicle scroll lit like a lantern at night,
+  chronicle places marked and visited; eating, hunting, births, sleep at night, plants
+  in the wind, fireflies, gulls, butterflies and dust; the scene's benchmark
+  (`?bench`, `?cap=30`) and the desk's build (`npm run build:kiosk`). Left: the report
+  regenerated, the owner's verdicts, the board run, tests. Checklist and handoff in
+  `docs/milestones.md`; report `reports/R5-final/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
