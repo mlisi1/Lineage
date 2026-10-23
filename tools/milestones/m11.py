@@ -52,6 +52,7 @@ MECHANISMS: dict[str, tuple[str, ...]] = {
     "nutrients": ("fauna.dung_fertility=0.0", "fauna.carrion_fertility=0.0"),
     # Off, fruit goes far by the stand-in it had before (as if wind-borne).
     "gut seeds": ("fauna.gut_seeds_per_hour=0.0", "flora.fruit_by_wind=true"),
+    "hunters from the herd": ("fauna.prey_diet_gap=1.0",),
 }
 # The tuned island with the owner pressing the god-power button weekly (2026-10-21).
 PRESSES = "weekly presses"

@@ -119,10 +119,15 @@ def smell_food(
 
 
 def can_kill(genes: Genes, body: Phenotype, compatible: Flags, cfg: FaunaConfig) -> Flags:
-    """Matrix [i, j]: creature i hunts and could kill creature j (never its own kind)."""
-    hunts = genes[:, Gene.DIET] >= cfg.attack_min_diet
+    """Matrix [i, j]: creature i hunts and could kill creature j. Never its own kind (those
+    it could mate with), unless j eats far more plants than i: a diet gene at least
+    prey_diet_gap below i's (M11, the cannibal morphs of spadefoot and salamander larvae),
+    so that hunters can arise again from an island's herd."""
+    diet = genes[:, Gene.DIET]
+    hunts = diet >= cfg.attack_min_diet
     strong = body.attack[:, None] >= _WORTH_ATTACKING * body.defence[None, :]
-    kills = hunts[:, None] & strong & ~compatible
+    kin = compatible & (diet[:, None] - diet[None, :] < cfg.prey_diet_gap)
+    kills = hunts[:, None] & strong & ~kin
     np.fill_diagonal(kills, False)  # nobody hunts itself
     return kills
 

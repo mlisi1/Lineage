@@ -323,6 +323,22 @@ def test_who_can_kill_whom(config: Config) -> None:
     assert not kills[0, 1]  # never its own kind
     assert not kills[2].any()  # grazers do not hunt
     assert not kills[0, 3]  # too big to tackle
+    # Its own kind, if it eats far more plants (M11): a meat-eating morph of the herd.
+    jaw = _with(GRAZER, Gene.JAW, 0.8)  # strong enough for prey of its own size
+    morph = _with(jaw, Gene.DIET, GRAZER[Gene.DIET] + cfg.prey_diet_gap + 0.05)
+    mild = _with(jaw, Gene.DIET, GRAZER[Gene.DIET] + cfg.prey_diet_gap - 0.05)
+    herd = _genes(morph, mild, GRAZER)
+    herd_body = phenotype(cfg, herd)
+    kin = gn.distance_matrix(herd) <= cfg.compat_distance
+    np.fill_diagonal(kin, False)
+    assert kin[0, 2]
+    assert kin[1, 2]
+    morphs = creature.can_kill(herd, herd_body, kin, cfg)
+    assert morphs[0, 2]  # the morph hunts the grazers it could mate with
+    assert not morphs[1, 2]  # too small a gap: still its own kind
+    assert not morphs[2, 0]  # never the other way
+    off = creature.can_kill(herd, herd_body, kin, replace(cfg, prey_diet_gap=1.0))
+    assert not off[0, 2]
     easy = creature.kill_chance(cfg, body, np.array([0]), np.array([2]))
     hard = creature.kill_chance(cfg, body, np.array([0]), np.array([3]))
     assert float(easy[0]) > 0.8 > 0.2 > float(hard[0])

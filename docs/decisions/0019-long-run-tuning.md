@@ -424,6 +424,36 @@ So levers raise the hunters' first stay but cannot bring them back: on the islan
 predators end with their pack. Open for the owner: rely on the weekly presses, or a
 mechanism by which hunters arise from the herd.
 
+### Hunters from the herd (the owner, 2026-10-23)
+
+The owner: the weekly presses cannot be relied on to keep predators. Why no herbivore
+lineage ever became a hunter: a hunter never attacks its own kind, and its own kind is
+everyone it could mate with (`compat_distance` 0.10, mean gene difference). On a closed
+island the herd is one interbreeding cloud, and a lineage drifting toward meat moves one
+gene of fourteen (even 0.15 → 0.65 is a mean difference of 0.036), so it stays kin to the
+whole herd and finds nothing it may hunt: meat never pays on the way, and selection has
+no gradient to follow. The pack and strangers worked only because they were never kin.
+
+**Decision**: a hunter may attack kin that eat far more plants, a diet gene at least
+`[fauna] prey_diet_gap` (0.3) below its own; similar diets still spare each other.
+Nature has it: the carnivore morph of spadefoot toad tadpoles and the cannibal morph of
+tiger salamander larvae eat their own, more herbivorous kin. No saved state changes. Off
+with `prey_diet_gap = 1.0` (the M11 report's "hunters from the herd" off run).
+
+To measure: whether hunters arise again after the pack dies out (10 years, 5 seeds, no
+presses, against `m11-closed-10y`), and M4.3/D3 on 20 seeds over 3 years (against
+`closed-1` p000); risks: cannibal booms crashing the herd, omnivores everywhere, fewer
+species (M6).
+
+### References
+
+- Pfennig, D. W. (1990). The adaptive significance of an environmentally-cued
+  developmental switch in an anuran tadpole. *Oecologia* 85, 101–107 (spadefoot carnivore
+  morphs).
+- Collins, J. P., & Cheek, J. E. (1983). Effect of food and density on development of
+  typical and cannibalistic salamander larvae in *Ambystoma tigrinum nebulosum*.
+  *American Zoologist* 23, 77–84.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of

@@ -504,6 +504,12 @@ defence_toxicity = 0.5
 # (1 + armour_strength × armour gene). A hit kills with probability
 # sigmoid(log(power / defence) / attack_softness) × min(1, hunter speed / prey speed).
 attack_min_diet = 0.15
+# A hunter spares its own kind (those it could mate with) unless they eat far more plants:
+# a diet gene at least prey_diet_gap below its own (M11; cannibal morphs, as in spadefoot
+# toad and tiger salamander larvae). Without it a lineage drifting toward meat finds no
+# prey within its own interbreeding herd, and hunters never arise again on an island
+# closed to strangers. 1 or more turns it off.
+prey_diet_gap = 0.3
 # A hunter only looks for prey and attacks while its reserve is below this share of its
 # capacity: fed predators leave the herd alone.
 hunt_below_energy_share = 0.8

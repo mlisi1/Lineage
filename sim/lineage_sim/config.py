@@ -369,6 +369,7 @@ class FaunaConfig:
     hunter_wave_count: int
     hunter_landing_cells: float
     hunter_size_margin: float
+    prey_diet_gap: float
     mass_min: float
     mass_max: float
     limb_pairs_max: int
