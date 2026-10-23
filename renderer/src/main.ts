@@ -49,6 +49,13 @@
  *                              `benchplan.ts` on the recordings, the results POSTed to
  *                              `?post=` (`tools/kiosk_bench.py`)
  *
+ * The desk's build (`npm run build:kiosk`, into `dist-kiosk/`) leaves the demo paths out:
+ * with no `?source=` it takes the server's stream from the host that served the page,
+ * `ws://<host>/stream` (S1), and `?film`, `?file=`, `?show=` and `?recording=` do
+ * nothing, but for `?bench`, whose scenarios play the committed recordings and make up
+ * what they lack as `?show=` does: the one way off the server the desk keeps, so that the
+ * board can be measured from the build it runs.
+ *
  * Over the scene the atmosphere (R4, `atmosphere/`): the light of the moment, what glows,
  * the weather of events, and the end of a world, during which the camera stays on the map
  * and the button does nothing.
@@ -99,12 +106,23 @@ const RECORDINGS: Readonly<Record<string, string>> = {
 const LIVING = ["life", "office", "end"];
 /** Sim-seconds a wall second, playing the creatures' recording: two sim-hours in 4 s. */
 const LIFE_SPEED = 1800;
+/**
+ * The desk's build (`vite build --mode kiosk`): the demo paths are compiled out (the
+ * bundler drops every branch behind `!KIOSK`) and the page takes the server's stream.
+ */
+const KIOSK = import.meta.env.MODE === "kiosk";
 /** Each view's size in cells. */
 const VIEW_CELLS: Readonly<Record<ViewName, { width: number; height: number }>> = {
   map: { width: WIDTH / TILES.map, height: HEIGHT / TILES.map },
   middle: { width: WIDTH / TILES.middle, height: HEIGHT / TILES.middle },
   local: { width: WIDTH / TILES.local, height: HEIGHT / TILES.local },
 };
+
+/** The server's stream (S1), from the host that served the page. */
+function serverStream(): string {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${window.location.host}/stream`;
+}
 
 declare global {
   interface Window {
@@ -300,11 +318,13 @@ async function start(): Promise<void> {
   const receive = (message: Message): void => {
     if (!atmosphere.hold(message)) deliver(message);
   };
-  const shows = showsOf(params.get("show"));
+  // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
+  const shows = KIOSK && bench === null ? [] : showsOf(params.get("show"));
 
-  const socket = params.get("source");
+  // The desk's build takes the server's stream unless benchmarked.
+  const socket = params.get("source") ?? (KIOSK && bench === null ? serverStream() : null);
   // `?file=` plays any recording under `stream/` (the report's, R4), as a creatures' one.
-  const file = params.get("file");
+  const file = KIOSK ? null : params.get("file");
   const name = file === null ? (params.get("recording") ?? "life") : "life";
   const recording =
     file !== null && /^[\w/-]+\.json$/.test(file)
@@ -314,7 +334,7 @@ async function start(): Promise<void> {
   const speed = Number(
     params.get("speed") ?? (every === null && LIVING.includes(name) ? LIFE_SPEED : 0),
   );
-  const film = params.get("film") !== null;
+  const film = !KIOSK && params.get("film") !== null;
   const source: Source =
     socket !== null
       ? new SocketSource(socket)
