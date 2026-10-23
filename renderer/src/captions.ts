@@ -6,8 +6,16 @@
  * text in the caption font (`pixelfont.ts`), in the cosy palette: warm paper, wooden
  * rolls, outlines in each thing's own darkest tone leaning to plum.
  *
+ * The scroll is a page element over the canvas, so the scene's tint does not reach it: it
+ * is lit like a lantern instead (the owner, 2026-10-23, R5). By day it is as painted; as
+ * the light falls the paper dims and warms like parchment by a candle, with a touch of the
+ * sky's own colour (rose at dusk, moonlit blue at night), and in the end of a world it
+ * takes a little of the fires' red. Every colour of the painting is multiplied by the same
+ * lamp, so the ink keeps its contrast with the paper and the entry stays readable.
+ *
  * The queue and the painting are pure; `Captions` puts the painting on screen.
  */
+import { daylight, mixRgb, multiplyRgb, packRgb, type Rgb } from "./atmosphere/light";
 import { GLYPH_ROWS, draw, measure, wrap } from "./pixelfont";
 import type { ChronicleMessage } from "./protocol";
 
@@ -54,6 +62,85 @@ export const KNOB_RAMP = [0x4a2420, 0xb5733f, 0x8a4e2a, 0x4a2420] as const;
 /** The shadow under the scroll: the scene's ground shadow, see-through. */
 export const SHADOW_COLOUR = 0x10081c;
 export const SHADOW_ALPHA = 90;
+
+// --- The lantern ---------------------------------------------------------------------
+
+/** The lamp of a daylit scroll: its colours as painted. */
+export const DAYLIGHT: Rgb = [1, 1, 1];
+/** Candlelight on the paper on the darkest night: dimmer, and warm (red, green, blue multipliers). */
+export const CANDLE: Rgb = [0.8, 0.62, 0.42];
+/** How much of the sky's own hue (its tint at full strength) tinges the lamp: a touch. */
+export const SKY_HUE_SHARE = 0.12;
+/** In the end of a world, how much of the sky's hue (the fires' red) it takes instead. */
+export const END_HUE_SHARE = 0.3;
+/**
+ * The sky's brightness (its tint's luma) that counts as full day, and as the darkest:
+ * in the end of a world the scroll darkens with the red and black sky rather than the hour.
+ */
+const DAY_LUMA = 0.95;
+const DARK_LUMA = 0.3;
+/**
+ * In the end of a world the fires light the scroll as a candle would: how far toward
+ * candlelight it goes under the reddest sky, and how red a sky that is (its red less its
+ * blue, as R4's blood-red tint has it).
+ */
+const FIRELIT = 0.7;
+const REDDEST = 0.7;
+/** The lamp is kept in this many steps a channel: the scroll is repainted only when one is crossed. */
+export const LAMP_LEVELS = 64;
+
+function luma(rgb: Rgb): number {
+  return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+}
+
+function smoothstep(t: number): number {
+  const x = Math.min(Math.max(t, 0), 1);
+  return x * x * (3 - 2 * x);
+}
+
+/**
+ * The lamp the scrolls are lit by (red, green and blue multipliers, in `LAMP_LEVELS`
+ * steps), from the atmosphere's light of the moment: the sim's `light` (eased, as the
+ * scene shows it), the `tint` laid over the scene (0xRRGGBB), and whether a world is
+ * `ending`. Darker as the light falls (or, in the end of a world, as the sky does), from
+ * the painted colours by day to candlelight at night.
+ */
+export function lantern(light: number, tint: number, ending: boolean): Rgb {
+  const sky: Rgb = [((tint >> 16) & 255) / 255, ((tint >> 8) & 255) / 255, (tint & 255) / 255];
+  let dark = 1 - smoothstep(daylight(light));
+  if (ending) {
+    const dim = smoothstep((DAY_LUMA - luma(sky)) / (DAY_LUMA - DARK_LUMA));
+    const fire = FIRELIT * smoothstep((sky[0] - sky[2]) / REDDEST);
+    dark = Math.max(dark, dim, fire);
+  }
+  const brightest = Math.max(...sky);
+  const hue: Rgb =
+    brightest > 0 ? [sky[0] / brightest, sky[1] / brightest, sky[2] / brightest] : DAYLIGHT;
+  const share = (ending ? END_HUE_SHARE : SKY_HUE_SHARE) * dark;
+  const lamp = multiplyRgb(mixRgb(DAYLIGHT, CANDLE, dark), mixRgb(DAYLIGHT, hue, share));
+  const step = (value: number): number => Math.round(value * LAMP_LEVELS) / LAMP_LEVELS;
+  return [step(lamp[0]), step(lamp[1]), step(lamp[2])];
+}
+
+/** The lamp as 0xRRGGBB (read-outs, and to tell one step from the next). */
+export function lampKey(lamp: Rgb): number {
+  return packRgb(lamp);
+}
+
+/**
+ * Light `picture` by `lamp`, in place: every solid pixel's colour multiplied by it. The
+ * see-through shadow is left as it is, a shadow on the scene, which has its own light.
+ */
+export function lightPicture(picture: Picture, lamp: Rgb): void {
+  if (lamp[0] >= 1 && lamp[1] >= 1 && lamp[2] >= 1) return;
+  const { rgba } = picture;
+  for (let at = 0; at < rgba.length; at += 4) {
+    if (rgba[at + 3] !== 255) continue;
+    rgba[at] = (rgba[at] ?? 0) * lamp[0];
+    rgba[at + 1] = (rgba[at + 1] ?? 0) * lamp[1];
+    rgba[at + 2] = (rgba[at + 2] ?? 0) * lamp[2];
+  }
+}
 
 /** A notable entry as the scroll shows it. */
 export interface Caption {
@@ -310,7 +397,8 @@ const FOOT = 6;
 export class Captions {
   readonly element = document.createElement("canvas");
   private readonly queue = new CaptionQueue();
-  private painted: { number: number; open: number } | null = null;
+  private painted: { number: number; open: number; lamp: number } | null = null;
+  private lamp: Rgb = DAYLIGHT;
 
   constructor(
     private readonly screenWidth: number,
@@ -328,20 +416,29 @@ export class Captions {
     this.queue.take(message, date);
   }
 
-  get state(): { phase: Phase; caption: Caption | null; waiting: number } {
-    return { ...this.queue.state, waiting: this.queue.length };
+  /** What the scroll shows, and the lamp it is lit by (0xRRGGBB, 0xffffff by day). */
+  get state(): { phase: Phase; caption: Caption | null; waiting: number; lamp: number } {
+    return { ...this.queue.state, waiting: this.queue.length, lamp: lampKey(this.lamp) };
   }
 
-  update(dtS: number): void {
+  /** Move on by `dtS`, the scroll lit by `lamp` (`lantern`). */
+  update(dtS: number, lamp: Rgb = DAYLIGHT): void {
+    this.lamp = lamp;
     const { caption, open } = this.queue.update(dtS);
     if (caption === null || open <= 0) {
       this.element.style.display = "none";
       this.painted = null;
       return;
     }
-    if (this.painted?.number === caption.number && this.painted.open === open) return;
-    this.painted = { number: caption.number, open };
-    this.show(paintScroll(caption, open));
+    const key = lampKey(lamp);
+    const painted = this.painted;
+    if (painted?.number === caption.number && painted.open === open && painted.lamp === key) {
+      return;
+    }
+    this.painted = { number: caption.number, open, lamp: key };
+    const picture = paintScroll(caption, open);
+    lightPicture(picture, lamp);
+    this.show(picture);
   }
 
   private show(picture: Picture): void {

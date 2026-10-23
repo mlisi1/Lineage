@@ -14,7 +14,9 @@
  * the caption font (`pixelfont.ts`). Icons are hand-made bitmaps, seven art pixels square,
  * in the cosy palette. The words and icons are pure (`describe`), and so is the painting
  * (`paintCard`); `NameCard` puts it on screen, unrolling when following starts and rolling
- * up when the view leaves the animal or the camera turns to another.
+ * up when the view leaves the animal or the camera turns to another. It is lit by the
+ * same lantern as the chronicle's scroll (`lantern` in `captions.ts`): dim and warm at
+ * night, a little red in the end of a world.
  */
 import {
   FADED_INK,
@@ -25,10 +27,14 @@ import {
   PAPER_SHADE,
   ROLL,
   ROLL_EDGE,
+  DAYLIGHT,
   SHADOW_ALPHA,
   SHADOW_COLOUR,
+  lampKey,
+  lightPicture,
   type Picture,
 } from "./captions";
+import type { Rgb } from "./atmosphere/light";
 import { blend } from "./creatures/body";
 import { geneOf, type Genome } from "./creatures/genome";
 import { GOLD, PLUM, SUNLIT } from "./palette";
@@ -386,7 +392,8 @@ export class NameCard {
   /** How far open, before easing (0–1), and whether it is opening. */
   private progress = 0;
   private opening = false;
-  private painted: { key: string; open: number } | null = null;
+  private painted: { key: string; open: number; lamp: number } | null = null;
+  private lamp: Rgb = DAYLIGHT;
 
   constructor(
     private readonly screenWidth: number,
@@ -400,20 +407,25 @@ export class NameCard {
     this.element.dataset.testid = "card";
   }
 
-  /** What the card shows now (`window.__card`, tests, S3). */
-  get state(): { phase: CardPhase; open: number } & Partial<Card> {
+  /**
+   * What the card shows now (`window.__card`, tests, S3), and the lamp it is lit by
+   * (0xRRGGBB, 0xffffff by day).
+   */
+  get state(): { phase: CardPhase; open: number; lamp: number } & Partial<Card> {
     const open = smooth(this.progress);
-    if (this.shown === null) return { phase: "hidden", open: 0 };
+    const lamp = lampKey(this.lamp);
+    if (this.shown === null) return { phase: "hidden", open: 0, lamp };
     const phase: CardPhase = this.opening
       ? this.progress >= 1
         ? "open"
         : "unrolling"
       : "rolling-up";
-    return { phase, open, ...this.shown.card, icons: [...this.shown.card.icons] };
+    return { phase, open, lamp, ...this.shown.card, icons: [...this.shown.card.icons] };
   }
 
-  /** Move on by `dtS` with `facts` the animal to show, or null for none. */
-  update(dtS: number, facts: CardFacts | null): void {
+  /** Move on by `dtS` with `facts` the animal to show, or null for none, lit by `lamp`. */
+  update(dtS: number, facts: CardFacts | null, lamp: Rgb = DAYLIGHT): void {
+    this.lamp = lamp;
     const wanted = facts === null ? null : describe(facts);
     const key = wanted === null ? null : JSON.stringify(wanted);
     if (this.shown !== null && this.shown.key !== key) {
@@ -444,9 +456,12 @@ export class NameCard {
     }
     const { card, key, body, mark } = this.shown;
     const painted = `${key} ${body} ${mark}`;
-    if (this.painted?.key === painted && this.painted.open === open) return;
-    this.painted = { key: painted, open };
+    const lamp = lampKey(this.lamp);
+    const last = this.painted;
+    if (last?.key === painted && last.open === open && last.lamp === lamp) return;
+    this.painted = { key: painted, open, lamp };
     const picture = paintCard(card, { body, mark }, open);
+    lightPicture(picture, this.lamp);
     const { element } = this;
     if (element.width !== picture.width || element.height !== picture.height) {
       element.width = picture.width;
