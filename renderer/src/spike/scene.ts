@@ -2,7 +2,8 @@
  * The benchmark's scene: ground, plants, creatures and a full-screen tint, in the spike's
  * first look or in the look proposed since, as the scenario asks.
  */
-import { Application, Container, Sprite, type WebGLRenderer } from "pixi.js";
+import { Application, Container, Sprite } from "pixi.js";
+import { gpuInfo, type GpuInfo } from "../gpu";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "../scene";
 import type { BodyOptions } from "../creatures/body";
 import { viewAt, type View } from "./camera";
@@ -17,18 +18,7 @@ import { GROUND, LOCAL_PIXELS, MAP_GROUND, MID_BODY, localBody } from "./proposa
 import { mulberry32 } from "../rng";
 import type { Scenario } from "./scenarios";
 
-export interface GpuInfo {
-  /** "webgl", "webgpu" or "canvas": what PixiJS ended up using. */
-  api: string;
-  webgl_version: string;
-  vendor: string;
-  renderer: string;
-  unmasked_vendor: string;
-  unmasked_renderer: string;
-  max_texture_size: number;
-  /** A guess from the renderer string: drawn by the CPU, not a GPU. */
-  software: boolean;
-}
+export type { GpuInfo } from "../gpu";
 
 export interface Applied {
   internal: [number, number];
@@ -275,32 +265,7 @@ export class SpikeScene {
   }
 
   gpu(): GpuInfo {
-    const info: GpuInfo = {
-      api: this.app.renderer.name,
-      webgl_version: "",
-      vendor: "",
-      renderer: "",
-      unmasked_vendor: "",
-      unmasked_renderer: "",
-      max_texture_size: 0,
-      software: false,
-    };
-    const gl = (this.app.renderer as Partial<WebGLRenderer>).gl;
-    if (gl !== undefined) {
-      const text = (parameter: number): string => String(gl.getParameter(parameter) ?? "");
-      info.webgl_version = text(gl.VERSION);
-      info.vendor = text(gl.VENDOR);
-      info.renderer = text(gl.RENDERER);
-      info.max_texture_size = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE));
-      const debug = gl.getExtension("WEBGL_debug_renderer_info");
-      if (debug !== null) {
-        info.unmasked_vendor = text(debug.UNMASKED_VENDOR_WEBGL);
-        info.unmasked_renderer = text(debug.UNMASKED_RENDERER_WEBGL);
-      }
-    }
-    const names = `${info.renderer} ${info.unmasked_renderer}`;
-    info.software = info.api === "canvas" || /swiftshader|llvmpipe|softpipe|software/i.test(names);
-    return info;
+    return gpuInfo(this.app.renderer);
   }
 
   /** Stretch the canvas over the viewport, whatever its internal size, with hard pixels. */
