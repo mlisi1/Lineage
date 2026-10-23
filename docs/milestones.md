@@ -192,10 +192,11 @@ below was taken in scope by the owner. Tests wait until the look is called final
   redrawn as a texture of small unoutlined tufts after references, nine sizes, random tints
 - [x] 6. A snow cap on a low bare summit in August (the renderer's own snow line)
 
-- [ ] 21. The two scrolls differ and are better (the owner, 2026-10-23): the chronicle an
+- [x] 21. The two scrolls differ and are better (the owner, 2026-10-23): the chronicle an
   illuminated scroll (an icon for the kind of event, an illuminated initial in the
   species' colour, the date on a ribbon, a larger font); the name card a field-guide card
-  with a portrait of the animal itself, its name as a heading, its traits and icons
+  with a portrait of the animal itself, its name as a heading, its traits and icons. Done:
+  `illumination.ts` + `HAND_FONT`; `card.ts` + `creatures/portrait.ts`
 
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)

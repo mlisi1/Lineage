@@ -49,6 +49,39 @@ const STILLS = {
   winter: "view=middle&recording=winter&every=0&quiet",
   shore: "view=local&x=244&y=110&quiet",
 };
+/**
+ * The chronicle's scroll (R5: illuminated), shown by handing the page an entry of each kind
+ * in the middle view, by day and at night; the scroll is cut from the foot of the screen.
+ */
+const SCROLLS = {
+  speciation: {
+    kind: "speciation",
+    text: "A new species, the Maleno, splits from the Malesha.",
+    species: 1,
+    night: false,
+  },
+  crash: {
+    kind: "crash",
+    text: "Hard times for the Malesha: only 92 are left of 198.",
+    species: 1,
+    night: false,
+  },
+  fire: {
+    kind: "fire",
+    text: "A wildfire burns across the eastern scrub.",
+    species: 0,
+    night: true,
+  },
+  record: {
+    kind: "record",
+    text: "The Shepisu grow larger than any animal before them.",
+    species: 6,
+    night: true,
+  },
+};
+/** Where the scroll unrolls, in art pixels of a still: the foot of the screen. */
+const SCROLL_BOX = [0, 220, 512, 80];
+
 /** Films: following an animal from the camera's seed, for `seconds` after two presses. */
 const FOLLOWS = {
   follow9: { query: "seed=9&follow=60&quiet", seconds: 6 },
@@ -287,6 +320,7 @@ rmSync(FILMS, { recursive: true, force: true });
 
 const shots = { before: {}, after: {} };
 const films = { before: {}, after: {} };
+const scrolls = { before: {}, after: {} };
 let colours = [];
 const youngAt = youngPlace();
 const browser = await chromium.launch();
@@ -308,6 +342,33 @@ try {
     for (const [name, query] of Object.entries(stills)) {
       shots[side][name] = await still(page, address, query);
       console.log(`${side}: ${name}`);
+    }
+    for (const [name, entry] of Object.entries(SCROLLS)) {
+      await open(page, address, `view=middle&x=170&y=40&quiet${entry.night ? "&show=night" : ""}`);
+      await skip(page, 1);
+      await page.evaluate((entry) => {
+        window.__receive?.({
+          type: "chronicle",
+          protocol: 1,
+          notable_importance: 3,
+          major_importance: 4,
+          entries: [
+            {
+              number: 900,
+              t_ms: 0,
+              kind: entry.kind,
+              importance: 3,
+              text: entry.text,
+              species: entry.species,
+              x: -1,
+              y: -1,
+            },
+          ],
+        });
+      }, entry);
+      await skip(page, 3);
+      scrolls[side][name] = cropBox(shrink(decodePng(await frame(page, 0)), 2), SCROLL_BOX);
+      console.log(`${side}: scroll ${name}`);
     }
     for (const [name, spec] of Object.entries(FOLLOWS)) {
       // The scene before R5 cannot be staged: it has no hooks to put animals by hand.
@@ -457,7 +518,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -622,6 +683,27 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 </section>
 <hr>
 
+<section id="scroll">
+<div class="head"><span class="n">21</span><h2>The chronicle's scroll, illuminated</h2></div>
+<div class="notes">
+<div><span class="label">The owner's choice</span><p>The two scrolls different, both better: the chronicle stays parchment (it is the island's history) but illuminated; the name card becomes a field-guide card (above).</p></div>
+<div><span class="label">Now</span><p>An icon for the kind of event (a seedling for a new species, a skull for an extinction, a crown for a record, a flame, a volcano, a boat for newcomers, a heart for a boom, an arrow down for a crash…), an initial two lines tall in the species' own colour (vermilion when it names none), the date on a red ribbon pinned across the top, a larger hand in balanced lines, the scroll as wide as its text. Lit like a lantern at night. (<code>src/illumination.ts</code>, <code>HAND_FONT</code>.)</p></div>
+</div>
+${Object.keys(SCROLLS)
+  .map((name) =>
+    scrolls.before[name] === undefined || scrolls.after[name] === undefined
+      ? ""
+      : `<div class="pair zoom">${["before", "after"]
+          .map(
+            (side) =>
+              `<figure><img src="${uri(scrolls[side][name])}" alt="The scroll, ${name}, ${side}" width="${SCROLL_BOX[2]}" height="${SCROLL_BOX[3]}"><figcaption>${side === "before" ? "Before" : "After"}: ${escape(name)}${SCROLLS[name].night ? ", at night" : ""}</figcaption></figure>`,
+          )
+          .join("")}</div>`,
+  )
+  .join("")}
+</section>
+<hr>
+
 <section id="deaths">
 <div class="head"><span class="n">8·9</span><h2>Deaths by cause, bones, and landings from the sea</h2></div>
 <div class="notes">
@@ -640,13 +722,9 @@ ${filmPair("killed", ["Before: one killed by a hunter, cell (66, 105)", "After: 
 <div class="head"><h2>Open</h2></div>
 <p>The rest of the R5 checklist (<code>docs/milestones.md</code>, "R5 checklist"):</p>
 <ul class="open">
-
-<li>Plants popping in over animals at row lines</li>
-
-<li>Chronicle places and species</li>
-<li>The scroll and dip at night, the tide's water line, the demo code behind a flag</li>
-<li>The scene off the spike, a benchmark mode, per-frame costs, the board run on the 7" screen at a 30 fps cap</li>
-<li>Tests, once the owner calls the look final</li>
+<li>Items 17–19: the board run on the 7" screen at the 30 fps cap (<code>npm run build:kiosk</code>, <code>kiosk_bench.py --fps-cap 30</code>), per-frame costs fixed where it shows they matter, the device report</li>
+<li>The fade in front of the animal followed is off while the owner judges animals among bushes</li>
+<li>Item 20: tests for all of the above once the owner calls the look final</li>
 </ul>
 </section>
 </main>

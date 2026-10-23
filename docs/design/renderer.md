@@ -996,6 +996,27 @@ Round 1, items 1–7:
   the see-through shadow is left as it is. The lamp is kept in 64 steps a channel and a
   scroll is repainted only when a step is crossed. `__captions()` and `__card()` give the
   lamp. The dip between views is unchanged: it goes to dark anyway.
+- **The illuminated scroll** (`src/illumination.ts`, the owner's choice, 2026-10-23). The
+  chronicle's scroll stays parchment, unlike the name card, but is illuminated. Each entry
+  opens with a 15-art-pixel icon of its kind of event, from the chronicle's `kind`
+  (`ICON_OF_KIND`): a seedling for a new species, an egg for the first life, a medal for a
+  first, a skull for an extinction, a gravestone for the last creature, a red sun setting
+  over a dark sea for a world's end, an island rising for a new one, a boat for newcomers
+  landing, a crown for a record, a heart for a boom, an arrow down for a crash, footprints
+  for a migration, two islands for a split, a land bridge for a rejoin, a flame, a volcano,
+  broken ground for a quake, a meteor, the sun for any god power, a cake for an
+  anniversary, the moon for a dark age, a sunrise for the dawn after it, a quill for
+  anything else; hand-made bitmaps in the cosy palette, lit from the upper left, outlined in
+  the scroll's ink. The entry's first letter (or a number of up to three digits it opens
+  with) is an initial two lines tall: the scroll's hand doubled, knocked out in paper from
+  a square of the species' body colour as the herd draws it, or vermilion when the entry
+  names no species, with an ink frame, a lit and a shaded edge and gold corners. The date
+  is lettered in capitals on a red ribbon with notched tails pinned across the paper's top
+  edge. The text is in the scroll's hand (`HAND_FONT`: capitals 9 art pixels, lower case 6),
+  in balanced lines, two or three (an ellipsis beyond), the first two beside the initial;
+  the scroll is as wide as its longest line. Painted once per entry and per lantern step.
+  `__captions()` gives the kind, the icon and the initial's colour. (This replaces R3's
+  date in words above the entry and its four lines.)
 - **The place of an entry** (the owner, 2026-10-23). A chronicle entry carries a place
   (cells; -1 for none) and a species. While a notable entry with a place is on the scroll,
   from unrolling to rolled up, a small marker stands there (`src/marker.ts`): a rose
