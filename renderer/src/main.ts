@@ -54,9 +54,10 @@ import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
 import { Captions } from "./captions";
 import { NameCard, type CardPhase } from "./card";
-import { Director, TIMINGS, type Scene, type Shot } from "./director";
+import { Director, TIMINGS, type Scene, type Shot, type Visit } from "./director";
 import { Herd } from "./herd";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
+import { PlaceMarker } from "./marker";
 import type { CreaturesMessage, Message } from "./protocol";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
@@ -77,6 +78,8 @@ const DARK = "#10081c";
 const MARGIN = 1;
 /** The name card waits until a dip between views is this clear before it unrolls (0–1). */
 const CARD_DIM = 0.5;
+/** The places of this many of the latest notable entries are kept, for the scroll to mark. */
+const PLACES_KEPT = 16;
 /** The committed recordings (`tools/stream.py`). */
 const RECORDINGS: Readonly<Record<string, string>> = {
   life: "stream/life.json",
@@ -101,7 +104,7 @@ declare global {
     /** Press the view button (tests; S2's hardware button reaches the page this way too). */
     __press?: () => void;
     /** What the camera shows and does (tests). */
-    __camera?: () => Shot & { motion: string; dipping: boolean };
+    __camera?: () => Shot & { motion: string; dipping: boolean; visit: Visit | null };
     /** What the scroll shows (tests). */
     __captions?: () => { phase: string; text: string | null; waiting: number };
     /** What the name card of the animal followed shows (tests; S3 shows the same card). */
@@ -206,6 +209,23 @@ async function start(): Promise<void> {
   const card = new NameCard(WIDTH, HEIGHT);
   frame.append(dim, captions.element, card.element);
 
+  // Where each notable entry happened, by its number, for the marker and the local view's
+  // visit while its scroll is out (R5); entries with no one place are not kept.
+  const places = new Map<number, Visit>();
+  const placeOf = (message: Message): void => {
+    if (message.type !== "chronicle") return;
+    for (const entry of message.entries) {
+      if (entry.importance < message.notable_importance || entry.x < 0 || entry.y < 0) continue;
+      places.set(entry.number, { entry: entry.number, x: entry.x, y: entry.y });
+    }
+    // The oldest go first: a Map keeps the order they came in.
+    for (const number of places.keys()) {
+      if (places.size <= PLACES_KEPT) break;
+      places.delete(number);
+    }
+  };
+  const marker = new PlaceMarker();
+
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
   let lastMs = 0;
@@ -214,7 +234,10 @@ async function start(): Promise<void> {
     if (message.type === "clock") date = message.date;
     if (message.type === "creatures") lastCreatures = message;
     if ("t_ms" in message) lastMs = message.t_ms;
-    if (message.type === "chronicle") captions.take(message, date);
+    if (message.type === "chronicle") {
+      captions.take(message, date);
+      placeOf(message);
+    }
     landscape.receive(message);
     herd.receive(message);
     atmosphere.receive(message);
@@ -245,6 +268,7 @@ async function start(): Promise<void> {
     atmosphere.tint,
     atmosphere.weather,
     atmosphere.lights,
+    marker.container,
     atmosphere.sky,
   );
   // An animal burnt to death (or, in streams without causes, that dies in a burning
@@ -381,10 +405,18 @@ async function start(): Promise<void> {
       return;
     }
     const dtS = deltaMS / 1000;
+    // The entry on the scroll, and where it happened: marked while the scroll is out,
+    // visited by the local view while it is open (as the scroll was last frame).
+    const scroll = captions.state;
+    const entry =
+      scroll.caption === null || scroll.phase === "gap"
+        ? null
+        : (places.get(scroll.caption.number) ?? null);
     if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
       scene.ready = landscape.settled;
+      scene.place = scroll.phase === "roll-up" || atmosphere.ending ? null : entry;
       shot = director.update(dtS, scene);
     } else {
       // The map shows the whole world whatever is asked.
@@ -450,6 +482,7 @@ async function start(): Promise<void> {
     world.position.set(Math.floor(x) + MARGIN + shake.x, Math.floor(y) + MARGIN + shake.y);
     atmosphere.lights.scale.set(tile);
     atmosphere.lights.position.copyFrom(world.position);
+    marker.update(stepS, entry, shot.view, cells, tile, world.position);
     // In whole device pixels: a browser smooths a picture placed between them.
     const device = window.devicePixelRatio || 1;
     const slide = (value: number): number =>
