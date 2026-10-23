@@ -232,6 +232,10 @@ Do not create directories outside this layout without updating this file.
     benchmark, `index.html?bench`, R5; `--page spike.html --dist dist` for the R0 spike;
     procedure in `deploy/README.md`, from a board in its box `deploy/board-setup.md`), then
     for the spike `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
+  - `uv run python -m tools.report R5 --runs runs/r5-device` — R5's device report from the
+    `kiosk-bench.json` the scene's benchmark wrote on the board (`python3 kiosk_bench.py
+    --dist dist-kiosk --fps-cap 30`, procedure in `deploy/README.md`) → `reports/R5-device/`,
+    the evidence file committed in place of `config.toml`
   - `cd renderer && npm test && npx playwright test` (`PLAYWRIGHT_PORT=…` when another
     worktree's tests may run at the same time)
   - `cd renderer && npm run typecheck && npm run lint`

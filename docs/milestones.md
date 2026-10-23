@@ -231,7 +231,8 @@ below was taken in scope by the owner. Tests wait until the look is called final
   `tools/kiosk_bench.py` pointed at it. Done: `index.html?bench` (`bench.ts`,
   `benchplan.ts`), nine scenarios (the four judged, night, rain, fire, apocalypse, shore),
   `?cap=30`, `kiosk_bench.py --fps-cap 30`; on the PC all four hold 30 fps capped.
-  Open: an R5 report module (`tools/milestones/r5.py`) for the board's run
+  The board's run becomes `reports/R5-device/` (`tools.report R5`, `tools/milestones/r5.py`:
+  R5.1 the cap held, R5.2 over budget ≤ [5 %], R5.3 PSS ≤ [800 MB], R5.4 as specified)
 - [ ] 17. Per-frame costs, fixed where the board shows they matter: a filter pass per
   animal fading in or out (`depart`, `materialise`), the grade matrix rebuilt every frame
   and the cloud's full-screen filter, the shore shader's colours re-parsed each frame,

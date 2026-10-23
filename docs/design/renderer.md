@@ -1161,6 +1161,20 @@ default, and keeps `?bench` as its one way off the server, so the board is measu
 build it runs. On this PC (SwiftShader, loaded) the four judged views hold the cap: 30.0
 fps median, 29.9 at the 1 % low, no frame over budget, 0.8–2 ms of script a frame.
 
+The file the board writes becomes `reports/R5-device/` through `tools.report R5`
+(`tools/milestones/r5.py`), the evidence file kept in the report as R0's is. The report
+judges the best profile, the one the kiosk would run (among those holding the cap, the
+fewest frames over budget, then the least CPU). R5.1: the four views hold the cap (the
+lowest median ≥ 29.5 fps). R5.2: frames over budget in them ≤ [5 %]. R5.3: Chromium's peak
+PSS over the run ≤ [800 MB], which leaves the simulation and server their 300 MB of the
+board's 2 GB (§4.8) with room for the system (R0's spike took about 540 MB). R5.4:
+measured as specified: the ARM board, kiosk on the 7" screen at exactly 1024×600 (ADR
+0022: no stand-in display), the desk's build, capped at 30. The atmosphere's five
+scenarios, the 1 % low, headroom, script time, CPU, temperature and GPU hangs (the
+kernel's `gpu sched timeout` lines counted by the runner before and after each profile,
+where the log can be read) are reported without a band. A file from a PC builds a report
+marked as not the measurement. The bands in brackets await the owner.
+
 ## What the spike stands in for
 
 (R5: the real scene no longer imports from `src/spike/`. The creature layer is
