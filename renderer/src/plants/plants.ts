@@ -45,6 +45,7 @@ import {
   type Small,
   type WinterHabit,
 } from "./plantart";
+import { piecesOf } from "./pieces";
 import {
   GROWTHS,
   coldRamp,
@@ -125,6 +126,11 @@ export interface Placed {
    * are widened by to lean in (`added`), which are no part of the plant.
    */
   sway?: { frames: readonly Texture[]; lowest: number; reach: number; added: number };
+  /**
+   * A piece of a bush drawn in pieces (R5, `?bushes=pieces`): its leaves are over an
+   * animal only where some part of the animal is behind its foot (`PlantLayer.over`).
+   */
+  piece?: boolean;
 }
 
 /** A plant that bends in the wind, as the layer moves it (`PlantLayer.blow`). */
@@ -184,6 +190,8 @@ export class PlantLayer {
   private readonly feet: (number[] | undefined)[];
   /** The drawings of trees and bushes (those with a footprint): what is drawn over animals. */
   private readonly leafy = new WeakSet<Sprite>();
+  /** Of those, the pieces of bushes drawn in pieces, each sorted by its own foot. */
+  private readonly pieced = new WeakSet<Sprite>();
   /** The largest half width or height of a footprint so far: how far round a place to look. */
   private widest = 0;
 
@@ -414,8 +422,19 @@ export class PlantLayer {
    * plant's drawing reaches; -1 if none (R5: an animal is drawn under every tree and bush
    * that overlaps it, its leaves being over it, `CreatureLayer.hostIn`). Only trees and
    * bushes count, young ones too; grass, flowers and small things do not.
+   *
+   * A piece of a bush drawn in pieces is over the animal only where one of its `joints`
+   * (with `radii`, cells) lies behind the piece's foot and reaches into its drawing: an
+   * animal in front of a puff is drawn over it, as top-down games sort by the feet, and
+   * one between the puffs of a clump is behind the back ones and under the front ones.
    */
-  over(box: CellRect, from: number, to: number): number {
+  over(
+    box: CellRect,
+    from: number,
+    to: number,
+    joints?: readonly { x: number; y: number }[],
+    radii?: readonly number[],
+  ): number {
     const reach = Math.ceil(this.tall * this.rowsPerCell);
     const first = Math.max(from - reach, 0);
     const last = Math.min(to + reach, this.rows.length - 1);
@@ -432,6 +451,18 @@ export class PlantLayer {
           if (left > box.x1 || left + wide < box.x0) continue;
           // The drawing's own edges, not its foot: leaves and their outline hang below it.
           if (top > box.y1 || top + high < box.y0) continue;
+          if (joints !== undefined && this.pieced.has(sprite)) {
+            const behind = joints.some((joint, k) => {
+              const r = radii?.[k] ?? 0;
+              return (
+                joint.y < sprite.y &&
+                joint.y + r > top &&
+                joint.x + r > left &&
+                joint.x - r < left + wide
+              );
+            });
+            if (!behind) continue;
+          }
           return index;
         }
       }
@@ -557,6 +588,7 @@ export class PlantLayer {
         if (placed.footprint !== undefined) {
           this.tread(footX, footY, placed.footprint);
           this.leafy.add(sprite);
+          if (placed.piece === true) this.pieced.add(sprite);
         }
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
         const at = Math.min(
@@ -605,6 +637,18 @@ interface Drawing {
    * pixels to lean in, `left` of them on the left and `added` in all.
    */
   leaning?: { frames: Texture[]; lowest: number; left: number; added: number };
+  /** A piece of a bush drawn in pieces: where it stands from the whole drawing's foot. */
+  piece?: PieceAt;
+}
+
+/**
+ * Where a piece of a bush stands (R5, `?bushes=pieces`): its foot's offset from the
+ * whole drawing's foot, in pixels, and its puff's radius.
+ */
+interface PieceAt {
+  dx: number;
+  dy: number;
+  r: number;
 }
 
 /**
@@ -665,7 +709,7 @@ function strip(
     return { context, source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) };
   });
   const drawings = new Map<string, Drawing>();
-  arts.forEach(({ key, art, ramp, accent, wood }, index) => {
+  arts.forEach(({ key, art, ramp, accent, wood, piece }, index) => {
     const at = places[index] ?? { page: 0, left: 1, top: 1 };
     const sheet = contexts[at.page];
     if (sheet === undefined) return;
@@ -677,12 +721,13 @@ function strip(
       at.top,
     );
     const frame = new Rectangle(at.left, at.top, art.width, art.height);
-    drawings.set(key, {
-      texture: new Texture({ source: sheet.source, frame }),
-      art,
-      bend: bendOf(key),
-      colour,
-    });
+    const texture = new Texture({ source: sheet.source, frame });
+    // A piece of a bush stands still: its puffs leaning apart would tear the bush.
+    const bend = piece === undefined ? bendOf(key) : null;
+    drawings.set(
+      key,
+      piece === undefined ? { texture, art, bend, colour } : { texture, art, bend, colour, piece },
+    );
   });
   for (const { source } of contexts) source.update();
   return { drawings, sources: contexts.map(({ source }) => source) };
@@ -867,6 +912,12 @@ const FOOTPRINT_SHARE = { tree: 0.13, bush: 0.45 } as const;
 /** A bush's footprint: this share of its drawing's height, above and below its middle. */
 const BUSH_DEPTH_SHARE = 0.4;
 const FOOTPRINT_FLATTEN = 0.5;
+/**
+ * A piece of a bush drawn in pieces keeps a footprint of its own (R5, `?bushes=pieces`): an
+ * ellipse resting on its foot, this share of its puff's radius either side across and
+ * this share deep, the ground a ball of leaves sits on as the slanted view sees it.
+ */
+const PIECE_FOOTPRINT = { across: 0.85, deep: 0.5 } as const;
 
 /** Snow (0–255) on a cell from which the plants on it carry some. */
 const PLANT_SNOW_FROM = 96;
@@ -917,6 +968,11 @@ export interface StandingOptions {
   time?: YearTime;
   /** Cells something else covers (R4: a volcano's cone, a crater): nothing stands there. */
   covered?: (x: number, y: number) => boolean;
+  /**
+   * Draw the local view's bushes in pieces, a sprite for each puff (R5, an experiment the
+   * owner asked for, `?bushes=pieces`; `pieces.ts`).
+   */
+  pieces?: boolean;
 }
 
 /** A drawing the layer uses, by the name it is placed under, with what it is coloured in. */
@@ -926,6 +982,8 @@ export interface StandingArt {
   ramp: Ramp;
   accent?: string;
   wood?: string;
+  /** A piece of a bush drawn in pieces (`StandingOptions.pieces`). */
+  piece?: PieceAt;
 }
 
 /** Whether a small thing of the local view (by its name) is out in `season`. */
@@ -1060,6 +1118,24 @@ export function standingArts(
       }
     }
   }
+  // A bush's drawing again in pieces, a puff to each, named `key@k` (R5, `pieces.ts`).
+  if (close && options.pieces === true) {
+    for (const whole of [...arts]) {
+      if (!whole.key.startsWith("SHRUB/") || whole.key.includes("#")) continue;
+      (piecesOf(whole.art) ?? []).forEach(({ art, left, top, r }, k) => {
+        arts.push({
+          ...whole,
+          key: `${whole.key}@${k}`,
+          art,
+          piece: {
+            dx: left + art.footX - whole.art.footX,
+            dy: top + art.footY - whole.art.footY,
+            r,
+          },
+        });
+      });
+    }
+  }
   if (close) {
     const small = (
       kind: Small,
@@ -1157,6 +1233,7 @@ function sheetOf(
   shown: readonly Season[],
   snows: readonly boolean[],
   rare: readonly RareLook[],
+  pieces: boolean,
   arts: () => StandingArt[],
 ): Sheet {
   let byKey = SHEETS.get(land.palette);
@@ -1164,7 +1241,15 @@ function sheetOf(
     byKey = new Map();
     SHEETS.set(land.palette, byKey);
   }
-  const key = [tile, look.name, close, shown.join("+"), snows.join("+"), rare.join("+")].join("|");
+  const key = [
+    tile,
+    look.name,
+    close,
+    pieces,
+    shown.join("+"),
+    snows.join("+"),
+    rare.join("+"),
+  ].join("|");
   let shared = byKey.get(key);
   if (shared === undefined) {
     const drawn = arts();
@@ -1226,7 +1311,8 @@ export function standingPlants(
   const present = looksOf(carried, rareGenes);
   const looksAt = (x: number, y: number): RareLook[] =>
     land.plantRare === undefined ? [] : looksOf(land.plantRare[y * land.width + x] ?? 0, rareGenes);
-  const sheet = sheetOf(land, tile, look, close, shown, snows, present, () =>
+  const pieces = close && options.pieces === true;
+  const sheet = sheetOf(land, tile, look, close, shown, snows, present, pieces, () =>
     // Every drawing in each season some of the plants are in, with snow and without where
     // some lies: named "season:key" and "season+snow:key".
     shown.flatMap((when) =>
@@ -1480,6 +1566,44 @@ export function standingPlants(
     return plants;
   };
 
+  /**
+   * Drawing `name` (a bush's) in pieces with its foot at (dx, dy) from the foot of the cell,
+   * each with its own footprint; the whole drawing's shadow goes with the piece nearest its
+   * foot. Null if it has no pieces.
+   */
+  const inPieces = (name: string, dx: number, dy: number): Placed[] | null => {
+    const whole = drawings.get(name);
+    if (!pieces || whole === undefined) return null;
+    const out: Placed[] = [];
+    for (let k = 0; ; k++) {
+      const drawing = drawings.get(`${name}@${k}`);
+      if (drawing?.piece === undefined) break;
+      const { art, piece } = drawing;
+      out.push({
+        texture: drawing.texture,
+        anchorX: art.footX / art.width,
+        anchorY: art.footY / art.height,
+        scale: 1 / tile,
+        dx: dx + piece.dx / tile,
+        dy: dy + piece.dy / tile,
+        footprint: {
+          rx: (PIECE_FOOTPRINT.across * piece.r) / tile,
+          ry: (PIECE_FOOTPRINT.deep * piece.r) / tile,
+          raise: 1,
+        },
+        piece: true,
+      });
+    }
+    if (out.length === 0) return null;
+    const shadow = whole.art.shadow;
+    if (shadow !== undefined) {
+      const near = (one: Placed): number => Math.abs(one.dx - dx) + Math.abs(one.dy - dy);
+      const nearest = out.reduce((a, b) => (near(b) < near(a) ? b : a));
+      nearest.shadow = { rx: shadow.rx / tile, ry: shadow.ry / tile };
+    }
+    return out;
+  };
+
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
@@ -1560,14 +1684,24 @@ export function standingPlants(
       const habit = shown === "winter" ? habitOf(look.form, land.plantEvergreen?.[cell]) : null;
       const base = `${standingKey(look.form, growthOf(biomass), buildOf(x, y))}${habit === null ? "" : `/${habit}`}`;
       const tree = look.form === "BROADLEAF" || look.form === "CONIFER";
-      return [
-        ...out,
-        ...standing(
-          withLooks(shown, x, y, base, looks, tree, dx / SPRITE_WIDTH, dy / SPRITE_WIDTH),
-          tree ? "tree" : "bush",
-          growthOf(biomass) === "sprout",
-        ),
-      ];
+      const plants = withLooks(
+        shown,
+        x,
+        y,
+        base,
+        looks,
+        tree,
+        dx / SPRITE_WIDTH,
+        dy / SPRITE_WIDTH,
+      );
+      // A bush in pieces (`?bushes=pieces`): its pieces in place of its own drawing, its rare
+      // genes' overlays over them whole. A fire pine's bark is drawn whole.
+      const own =
+        tree || looks.includes("bark") || growthOf(biomass) === "sprout"
+          ? null
+          : inPieces(named(shown, x, y, base), dx / SPRITE_WIDTH, dy / SPRITE_WIDTH);
+      if (own !== null) return [...out, ...own, ...plants.slice(1)];
+      return [...out, ...standing(plants, tree ? "tree" : "bush", growthOf(biomass) === "sprout")];
     },
     {
       tall,

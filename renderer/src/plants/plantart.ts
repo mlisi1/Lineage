@@ -71,6 +71,12 @@ export interface PlantArt {
    * width and height in pixels. Left out by what is too small for one.
    */
   shadow?: { rx: number; ry: number };
+  /**
+   * The puffs a bush's dome is piled from (R5, the bushes in pieces), in the order they
+   * were painted: each one's middle and radius in pixels of the drawing. Left out by
+   * every other drawing.
+   */
+  puffs?: { x: number; y: number; r: number }[];
 }
 
 /** Width and height of a drawing's plant, in art pixels. */
@@ -481,17 +487,21 @@ export function trim(art: PlantArt, height: number): void {
     art.ink.fill(INK.none, y * art.width, (y + 1) * art.width);
 }
 
-/** Move a drawing down until its lowest pixel is on the line it stands on. */
-export function settle(art: PlantArt, height: number): void {
+/**
+ * Move a drawing down until its lowest pixel is on the line it stands on. Returns how
+ * many pixels it moved.
+ */
+export function settle(art: PlantArt, height: number): number {
   const foot = height + MARGIN - 1;
   let lowest = -1;
   for (let at = art.ink.length - 1; at >= 0 && lowest < 0; at--) {
     if (art.ink[at] !== INK.none) lowest = Math.floor(at / art.width);
   }
   const down = foot - lowest;
-  if (lowest < 0 || down <= 0) return;
+  if (lowest < 0 || down <= 0) return 0;
   art.ink.copyWithin(down * art.width, 0, (art.height - down) * art.width);
   art.ink.fill(INK.none, 0, down * art.width);
+  return down;
 }
 
 /** Where the plant's shadow falls: an ellipse under its foot. */
