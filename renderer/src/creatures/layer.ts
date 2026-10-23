@@ -180,6 +180,8 @@ interface Creature {
   torpid: boolean;
   /** Held where `pin` put it (debugging the look: an animal placed by hand), not moving. */
   pinned?: boolean;
+  /** Put or sent by hand (`pin`, `send`): the sim's places for it are ignored from then on. */
+  staged?: boolean;
   /** Every sprite of the body with its colour and opacity out of water. */
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
@@ -499,6 +501,8 @@ export class CreatureLayer {
    */
   anchor(index: number, x: number, y: number): void {
     const creature = this.creatures[index];
+    // One staged by hand keeps to what it was given, whatever the sim says meanwhile.
+    if (creature?.staged === true) return;
     const motion = creature?.motion;
     const head = creature?.joints[0];
     if (creature === undefined || motion === undefined || motion === null || head === undefined) {
@@ -601,6 +605,7 @@ export class CreatureLayer {
     const creature = this.creatures[index];
     if (creature === undefined) return;
     creature.pinned = true;
+    creature.staged = true;
     creature.heading = heading;
     creature.joints.forEach((joint, i) => {
       joint.x = x - Math.cos(heading) * creature.plan.spacing * i;
@@ -621,6 +626,7 @@ export class CreatureLayer {
     const creature = this.creatures[index];
     if (creature === undefined || creature.motion === null) return;
     creature.pinned = false;
+    creature.staged = true;
     creature.motion.anchor.x = x;
     creature.motion.anchor.y = y;
     creature.motion.mode = "travel";

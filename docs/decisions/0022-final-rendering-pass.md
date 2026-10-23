@@ -127,6 +127,18 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Round the bushes (2026-10-23, later)
+
+The owner: "creatures still are a bit weird when walking through bushes", with the leaves
+over them. A bush is a low mound seen from above, so being under its leaves is being in
+it. Its footprint became its whole drawing, and the walk to the sim's place became a
+planned way round trees and bushes (A* on a quarter-cell grid, pulled straight), not only
+a local steer that went straight on when it found no way. The staged tests had been
+misleading: the recording's next creatures message re-anchored the staged animals to the
+sim's places. Staged animals now ignore the sim's places. Splitting bush drawings into
+pieces, the owner's other idea, was kept in reserve: it matters for an animal between
+the puffs of one clump, which a footprint over the whole drawing rules out.
+
 ### The scene's benchmark and the desk's build (2026-10-23)
 
 The benchmark moved from the R0 spike to the real page (`index.html?bench`) and plays the

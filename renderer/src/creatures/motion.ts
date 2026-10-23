@@ -86,6 +86,13 @@ export interface Motion {
   side: number;
   /** No clear place was found near the anchor (`clearAnchor`): not looked for again until it moves. */
   hemmed: boolean;
+  /**
+   * The way round what is in its way to the goal it travels to (R5: through bushes it
+   * walked in, and was drawn inside them): the places to pass, the next first; planned
+   * for `routeFor`, planned again when the goal moves.
+   */
+  route: Point[];
+  routeFor: Point | null;
 }
 
 /** What `drive` needs of the body. */
@@ -120,6 +127,8 @@ export function newMotion(anchor: Point, heading: number): Motion {
     facing: heading,
     side: 0,
     hemmed: false,
+    route: [],
+    routeFor: null,
   };
 }
 
@@ -210,13 +219,16 @@ export function drive(
     return 0;
   }
 
-  const dx = motion.goal.x - head.x;
-  const dy = motion.goal.y - head.y;
-  const left = Math.hypot(dx, dy);
+  const left = Math.hypot(motion.goal.x - head.x, motion.goal.y - head.y);
   if (left <= ARRIVED_SHARE * length) {
     pause(motion, walker.heading, lerp(PAUSE_MIN_S, PAUSE_MAX_S, random()));
     return 0;
   }
+  // Going to where the sim has it, it follows a way planned round the trees and bushes
+  // (R5), from one place to pass to the next; with none found, it steers as it goes.
+  const target = motion.mode === "travel" ? waypoint(motion, head, free) : motion.goal;
+  const dx = target.x - head.x;
+  const dy = target.y - head.y;
   const direct = Math.atan2(dy, dx);
   const way =
     motion.mode === "travel"
@@ -263,6 +275,205 @@ export function drive(
   head.x = x;
   head.y = y;
   return stride;
+}
+
+/** The routes' grid: cells to a step, how far round the way it may go, the most it plans. */
+const ROUTE_STEP = 0.25;
+const ROUTE_MARGIN = 2;
+const ROUTE_MOST_CELLS = 8;
+/** A place to pass counts as passed this near (cells). */
+const WAYPOINT_REACHED = 0.2;
+/** Line of sight between two places is checked this often (cells). */
+const SIGHT_STEP = 0.12;
+
+/** The next place to go to on the way to the motion's goal, planning the way if it has none. */
+function waypoint(motion: Motion, head: Point, free: (x: number, y: number) => boolean): Point {
+  const { goal } = motion;
+  if (motion.routeFor === null || motion.routeFor.x !== goal.x || motion.routeFor.y !== goal.y) {
+    motion.route = route(head, goal, free) ?? [];
+    // A goal in a bush is moved to where the way ends, beside it.
+    const end = motion.route[motion.route.length - 1];
+    if (end !== undefined) {
+      goal.x = end.x;
+      goal.y = end.y;
+    }
+    motion.routeFor = { x: goal.x, y: goal.y };
+  }
+  while (motion.route.length > 0) {
+    const next = motion.route[0];
+    if (next === undefined || Math.hypot(next.x - head.x, next.y - head.y) > WAYPOINT_REACHED)
+      break;
+    motion.route.shift();
+  }
+  return motion.route[0] ?? goal;
+}
+
+/** The clear place nearest `p`, in rings `ROUTE_STEP` apart out to `ROUTE_MARGIN`; null if none. */
+function nearestFree(p: Point, free: (x: number, y: number) => boolean): Point | null {
+  for (let ring = ROUTE_STEP; ring <= ROUTE_MARGIN; ring += ROUTE_STEP) {
+    const around = Math.max(8, Math.round((2 * Math.PI * ring) / ROUTE_STEP));
+    for (let k = 0; k < around; k++) {
+      const angle = (2 * Math.PI * k) / around;
+      const x = p.x + Math.cos(angle) * ring;
+      const y = p.y + Math.sin(angle) * ring;
+      if (free(x, y)) return { x, y };
+    }
+  }
+  return null;
+}
+
+/** Whether the straight way from `a` to `b` is clear all along. */
+function inSight(a: Point, b: Point, free: (x: number, y: number) => boolean): boolean {
+  const far = Math.hypot(b.x - a.x, b.y - a.y);
+  const steps = Math.max(1, Math.ceil(far / SIGHT_STEP));
+  for (let k = 1; k <= steps; k++) {
+    const t = k / steps;
+    if (!free(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)) return false;
+  }
+  return true;
+}
+
+/**
+ * A way from `from` to `to` round what `free` says the body cannot stand on: an A* search
+ * over a grid of `ROUTE_STEP` cells about the two, in eight directions, then pulled
+ * straight where the places on it can see each other. The places to pass, the last the
+ * goal (or, if the goal cannot be stood on, the nearest place that can); null if there is
+ * no way within reach.
+ */
+export function route(
+  from: Point,
+  goal: Point,
+  free: (x: number, y: number) => boolean,
+): Point[] | null {
+  let to = goal;
+  // A goal that cannot be stood on (in a bush) is reached at the nearest place that can.
+  if (!free(to.x, to.y)) {
+    const near = nearestFree(to, free);
+    if (near === null) return null;
+    to = near;
+  }
+  if (inSight(from, to, free)) return [to];
+  if (Math.hypot(to.x - from.x, to.y - from.y) > ROUTE_MOST_CELLS) return null;
+  const x0 = Math.min(from.x, to.x) - ROUTE_MARGIN;
+  const y0 = Math.min(from.y, to.y) - ROUTE_MARGIN;
+  const wide = Math.ceil((Math.max(from.x, to.x) + ROUTE_MARGIN - x0) / ROUTE_STEP) + 1;
+  const tall = Math.ceil((Math.max(from.y, to.y) + ROUTE_MARGIN - y0) / ROUTE_STEP) + 1;
+  const at = (i: number): Point => ({
+    x: x0 + (i % wide) * ROUTE_STEP,
+    y: y0 + Math.floor(i / wide) * ROUTE_STEP,
+  });
+  const indexOf = (p: Point): number =>
+    Math.round((p.y - y0) / ROUTE_STEP) * wide + Math.round((p.x - x0) / ROUTE_STEP);
+  const start = indexOf(from);
+  const end = indexOf(to);
+  const open = new Uint8Array(wide * tall); // 0 unknown, 1 open, 2 blocked
+  const cost = new Float32Array(wide * tall).fill(Infinity);
+  const came = new Int32Array(wide * tall).fill(-1);
+  const done = new Uint8Array(wide * tall);
+  const passable = (i: number): boolean => {
+    if (i === start) return true;
+    if (open[i] === 0) {
+      const p = at(i);
+      open[i] = free(p.x, p.y) ? 1 : 2;
+    }
+    return open[i] === 1;
+  };
+  const guess = (i: number): number => {
+    const dx = Math.abs((i % wide) - (end % wide));
+    const dy = Math.abs(Math.floor(i / wide) - Math.floor(end / wide));
+    return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+  };
+  // A small binary heap of (score, index).
+  const heap: number[] = [];
+  const scores: number[] = [];
+  const push = (i: number, score: number): void => {
+    heap.push(i);
+    scores.push(score);
+    let k = heap.length - 1;
+    while (k > 0) {
+      const up = (k - 1) >> 1;
+      if ((scores[up] ?? 0) <= score) break;
+      [heap[k], heap[up]] = [heap[up] ?? 0, heap[k] ?? 0];
+      [scores[k], scores[up]] = [scores[up] ?? 0, scores[k] ?? 0];
+      k = up;
+    }
+  };
+  const pop = (): number => {
+    const top = heap[0] ?? -1;
+    const lastI = heap.pop() ?? -1;
+    const lastS = scores.pop() ?? 0;
+    if (heap.length > 0) {
+      heap[0] = lastI;
+      scores[0] = lastS;
+      let k = 0;
+      for (;;) {
+        const l = 2 * k + 1;
+        const r = l + 1;
+        let small = k;
+        if (l < heap.length && (scores[l] ?? 0) < (scores[small] ?? 0)) small = l;
+        if (r < heap.length && (scores[r] ?? 0) < (scores[small] ?? 0)) small = r;
+        if (small === k) break;
+        [heap[k], heap[small]] = [heap[small] ?? 0, heap[k] ?? 0];
+        [scores[k], scores[small]] = [scores[small] ?? 0, scores[k] ?? 0];
+        k = small;
+      }
+    }
+    return top;
+  };
+  cost[start] = 0;
+  push(start, guess(start));
+  while (heap.length > 0) {
+    const here = pop();
+    if (here === end) break;
+    if (done[here] === 1) continue;
+    done[here] = 1;
+    const hx = here % wide;
+    const hy = Math.floor(here / wide);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = hx + dx;
+        const ny = hy + dy;
+        if (nx < 0 || ny < 0 || nx >= wide || ny >= tall) continue;
+        const next = ny * wide + nx;
+        if (done[next] === 1 || !passable(next)) continue;
+        // No cutting a corner between two blocked steps.
+        if (dx !== 0 && dy !== 0 && (!passable(hy * wide + nx) || !passable(ny * wide + hx)))
+          continue;
+        const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
+        const through = (cost[here] ?? Infinity) + step;
+        if (through >= (cost[next] ?? Infinity)) continue;
+        cost[next] = through;
+        came[next] = here;
+        push(next, through + guess(next));
+      }
+    }
+  }
+  if (came[end] === -1) return null;
+  const path: Point[] = [];
+  for (let i = end; i !== start && i !== -1; i = came[i] ?? -1) path.push(at(i));
+  path.reverse();
+  path[path.length - 1] = { x: to.x, y: to.y };
+  // Pulled straight: from each place, on to the furthest one it can see.
+  const pulled: Point[] = [];
+  let from_ = from;
+  let k = 0;
+  while (k < path.length) {
+    let far = k;
+    for (let j = path.length - 1; j > k; j--) {
+      const p = path[j];
+      if (p !== undefined && inSight(from_, p, free)) {
+        far = j;
+        break;
+      }
+    }
+    const p = path[far];
+    if (p === undefined) break;
+    pulled.push(p);
+    from_ = p;
+    k = far + 1;
+  }
+  return pulled;
 }
 
 /** `heading`, as far round as the walker's neck lets it turn from its body. */

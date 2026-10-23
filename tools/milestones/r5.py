@@ -44,13 +44,12 @@ TARGET_FPS = 30.0
 TARGET_SLACK_FPS = 0.5
 # Frames over budget allowed in any judged scenario, in percent: a frame over budget came
 # more than 33.3 + 2 ms after the one before, so it missed its refresh and the one
-# before stayed on screen twice. An initial band, to be refined by the board's report.
+# before stayed on screen twice. The owner's band (2026-10-23).
 OVER_BUDGET_MAX_PCT = 5.0
 # Memory Chromium may take on the board, in MB of PSS (shared pages counted once), at its
 # peak over the run. The board has 2 GB (1974 MB usable); simulation and server have
 # 300 MB of it (CLAUDE.md §4.8), and the system, its compositor and the page cache need
-# several hundred more. R0's spike took about 540 MB. A band proposed for the owner to
-# confirm.
+# several hundred more. R0's spike took about 540 MB. The owner's band (2026-10-23).
 BROWSER_PSS_BUDGET_MB = 800.0
 # The 7" screen the kiosk fills (ADR 0022: the board is measured on it, not a stand-in).
 SCREEN = (1024, 600)
@@ -113,14 +112,14 @@ CRITERIA = [
         "R5.2",
         "Most frames over the 33.3 ms budget in any of "
         + ", ".join(ACCEPTANCE_SCENARIOS)
-        + f" with the best browser profile (%; band [≤ {OVER_BUDGET_MAX_PCT:g}] to be refined)",
+        + f" with the best browser profile (%; band ≤ {OVER_BUDGET_MAX_PCT:g}, the owner's, 2026-10-23)",
         "best.acceptance.over_budget_pct_max",
         high=OVER_BUDGET_MAX_PCT,
     ),
     Criterion(
         "R5.3",
         "Peak memory of Chromium's processes (PSS) over the best profile's run, within the "
-        f"board's budget (MB; band [≤ {BROWSER_PSS_BUDGET_MB:g}] for the owner to confirm)",
+        f"board's budget (MB; band ≤ {BROWSER_PSS_BUDGET_MB:g}, the owner's, 2026-10-23)",
         "best.peak.pss_mb",
         high=BROWSER_PSS_BUDGET_MB,
     ),
@@ -611,7 +610,7 @@ def _over_budget_section(evidence: dict[str, Any]) -> Section:
         ylabel="frames over budget (%)",
         caption="Share of frames that came more than 33.3 + 2 ms after the one before: a "
         f"refresh missed. The dashed line is R5.2's band for the judged views "
-        f"([≤ {OVER_BUDGET_MAX_PCT:g} %], to be refined)",
+        f"(≤ {OVER_BUDGET_MAX_PCT:g} %, the owner's)",
         reference=(OVER_BUDGET_MAX_PCT, f"R5.2 band {OVER_BUDGET_MAX_PCT:g} %"),
     )
 
@@ -855,7 +854,7 @@ def _memory_section(evidence: dict[str, Any]) -> Section:
     note = (
         '<p class="note">Memory of every Chromium process together, in MB. PSS counts pages '
         "shared between processes once and is the figure R5.3 budgets: its peak over the "
-        f"profile's whole run, against [≤ {BROWSER_PSS_BUDGET_MB:g}] MB. The sum of RSS counts "
+        f"profile's whole run, against ≤ {BROWSER_PSS_BUDGET_MB:g} MB. The sum of RSS counts "
         "shared pages once per process and is shown only because it is what top reports; "
         "the JS heap is the page's own, at the end of a scenario (0 where the browser hides "
         f"it). This machine has {_number(total, '.0f')} MB in all; on the board simulation "

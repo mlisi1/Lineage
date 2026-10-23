@@ -1070,16 +1070,22 @@ Round 1, items 1–7:
   and bush whose drawing overlaps an animal is drawn over it, whichever side of the plant
   its feet are: the animal goes in the row before the first such plant
   (`PlantLayer.over`, the drawing's own edges, young bushes too; grass, flowers and small
-  things keep to the rows of its feet). A bush's footprint is a band along its whole
-  foot, 0.12 cells either side (`BUSH_BAND_CELLS`), so an animal goes round a bush or
-  behind it, where the bush covers it, and never stands across its front. A tree keeps
+  things keep to the rows of its feet). A bush's footprint is its whole drawing (an
+  ellipse 0.45 of its width and 0.4 of its height either side of its middle): a bush is a
+  low mound seen from above, so anywhere it covers an animal would be inside it, and an
+  animal goes round it instead; the leaves cover what it brushes in passing. Walking to
+  where the sim has it, an animal follows a way planned round trees and bushes (`route`
+  in `creatures/motion.ts`: an A* search over a grid of quarter cells about the start and
+  the goal, out to 8 cells, a step open where its body fits, pulled straight where places
+  see each other; a goal in a bush is moved to the nearest place beside it). A tree keeps
   its trunk's footprint. The fade in front of the animal followed is off for now, while
   this is looked at (`FADED` 1). Staged by hand to look at it: `window.__pin(id, x, y,
-  heading)` holds an animal at a place, `window.__send(id, x, y)` sends it somewhere,
+  heading)` holds an animal at a place, `window.__send(id, x, y)` sends it somewhere (an
+  animal staged so ignores the sim's places for it from then on),
   `window.__standing(x0, y0, x1, y1)` lists the trees and bushes in a box.
 - **Animals keep clear of trees and bushes.** Each tree and bush the plant layer builds
   leaves a footprint: a tree's trunk with its roots (an ellipse 0.13 of the drawing's
-  width, half as deep as wide), a bush's whole foot (a band, above). The layer keeps
+  width, half as deep as wide), a bush's whole drawing (above). The layer keeps
   them by cell and answers whether a body of a given radius at a place overlaps one
   (`PlantLayer.blocked`). Only plants already built count (in and near the view): an animal
   far off walks as on open ground. Grass, flowers, stones, logs and sprouts are walked
@@ -1165,15 +1171,15 @@ The file the board writes becomes `reports/R5-device/` through `tools.report R5`
 (`tools/milestones/r5.py`), the evidence file kept in the report as R0's is. The report
 judges the best profile, the one the kiosk would run (among those holding the cap, the
 fewest frames over budget, then the least CPU). R5.1: the four views hold the cap (the
-lowest median ≥ 29.5 fps). R5.2: frames over budget in them ≤ [5 %]. R5.3: Chromium's peak
-PSS over the run ≤ [800 MB], which leaves the simulation and server their 300 MB of the
+lowest median ≥ 29.5 fps). R5.2: frames over budget in them ≤ 5 %. R5.3: Chromium's peak
+PSS over the run ≤ 800 MB, which leaves the simulation and server their 300 MB of the
 board's 2 GB (§4.8) with room for the system (R0's spike took about 540 MB). R5.4:
 measured as specified: the ARM board, kiosk on the 7" screen at exactly 1024×600 (ADR
 0022: no stand-in display), the desk's build, capped at 30. The atmosphere's five
 scenarios, the 1 % low, headroom, script time, CPU, temperature and GPU hangs (the
 kernel's `gpu sched timeout` lines counted by the runner before and after each profile,
 where the log can be read) are reported without a band. A file from a PC builds a report
-marked as not the measurement. The bands in brackets await the owner.
+marked as not the measurement. The bands were confirmed by the owner on 2026-10-23.
 
 ## What the spike stands in for
 

@@ -674,12 +674,13 @@ const CHARRED_FROM_SCORCH = 60;
 const CHARRED_TREE_HEIGHT = 153;
 /**
  * What animals keep out of (R5), as shares of the drawing's width: a tree's trunk with its
- * roots (this much less deep than wide, as the ground is seen); a bush's whole foot, half
- * its width either side (a band, `BUSH_BAND_CELLS` deep).
+ * roots (this much less deep than wide, as the ground is seen); a bush's whole drawing,
+ * an ellipse 0.45 of its width and `BUSH_DEPTH_SHARE` of its height either side of its
+ * middle.
  */
 const FOOTPRINT_SHARE = { tree: 0.13, bush: 0.45 } as const;
-/** A bush's footprint: a band this far (cells) either side of its foot line. */
-const BUSH_BAND_CELLS = 0.12;
+/** A bush's footprint: this share of its drawing's height, above and below its middle. */
+const BUSH_DEPTH_SHARE = 0.4;
 const FOOTPRINT_FLATTEN = 0.5;
 
 /** Snow (0–255) on a cell from which the plants on it carry some. */
@@ -1258,11 +1259,18 @@ export function standingPlants(
     const own = plants[0];
     if (own === undefined || sprout) return plants;
     const rx = (FOOTPRINT_SHARE[kind] * own.texture.width) / tile;
-    // A bush keeps a band along its foot, as wide as it is (R5): an animal drawn from above
-    // that overlapped a bush from in front seemed to lie on top of it. Behind it, past the
-    // band, the bush covers the animal, as it should.
-    own.footprint =
-      kind === "bush" ? { rx, ry: BUSH_BAND_CELLS, raise: 0 } : { rx, ry: rx * FOOTPRINT_FLATTEN };
+    if (kind === "bush") {
+      // A bush is a low mound, and animals are seen from above: anywhere its drawing covers,
+      // an animal would be inside it (R5, the owner: "avoid a creature entering inside a
+      // tree"). So a bush keeps its whole drawing, an ellipse about its middle, and animals
+      // go round it; what they brush in passing the leaves cover (`over`).
+      const high = own.texture.height / tile;
+      const ry = BUSH_DEPTH_SHARE * high;
+      const middle = (own.anchorY - 0.5) * high;
+      own.footprint = { rx, ry, raise: middle / ry };
+    } else {
+      own.footprint = { rx, ry: rx * FOOTPRINT_FLATTEN };
+    }
     return plants;
   };
 
