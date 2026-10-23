@@ -70,7 +70,23 @@ benchmark and nothing of the project needs to be on the board.
    mkdir -p runs/r5-device && scp <user>@<board>:lineage-r5/kiosk-bench.json runs/r5-device/
    ```
 
-   The table already says whether the four views hold the cap. For the spike's file,
+   The table already says whether the four views hold the cap. Then build the report:
+
+   ```sh
+   uv run python -m tools.report R5 --runs runs/r5-device
+   ```
+
+   writes `reports/R5-device/` (`report.html`, `metrics.json`, `README.md`, and the
+   evidence file itself, committed in place of `config.toml` since a PC cannot
+   regenerate it). It judges the best profile: the four views hold the cap (R5.1, 30 fps
+   median with 0.5 of slack), few frames over budget in them (R5.2), Chromium's peak
+   memory (PSS) within the board's budget (R5.3), and the run made as specified (R5.4:
+   the ARM board, kiosk on the 7" screen at 1024×600, the desk's build, `--fps-cap 30`).
+   The atmosphere's scenarios, headroom, CPU, temperature and GPU hangs are reported
+   without a band. A file from a PC builds a report marked as not the measurement: build
+   it into a scratch directory (`--out /tmp/r5`), never into `reports/`.
+
+   For the spike's file,
    `uv run python -m tools.report R0 --runs runs/r0-device` writes
    `reports/R0-renderer-spike/`, evidence file included; it passes when the best profile
    holds 30 fps median in each of the three views and the crowded middle one (ADR 0010);
@@ -98,9 +114,12 @@ Reading the table on the board:
   profile named `custom`. `--profiles gpu --only middle-crowd,fire --seconds 5` narrows a
   run down while experimenting; the scene also takes `--only acceptance` (the four
   views) and `--only atmosphere`.
-- **The GPU hanging** does not show in the table, only as a low frame rate: the kernel
-  kills a GPU job after half a second. `sudo dmesg | grep -c "gpu sched timeout"` before
-  and after a run counts them. On this board the spec scenes (a sprite in every cell)
+- **The GPU hanging** shows in the frame rate only as slow frames: the kernel kills a
+  GPU job after half a second. The runner counts the kernel's `gpu sched timeout` lines
+  before and after each profile (`gpu_timeouts` in the file, a line under the profile's
+  table). Debian lets only root read the kernel log, so it tries `dmesg`, then
+  `sudo -n dmesg` (no password asked); where neither works the count is not recorded and
+  `sudo dmesg | grep -c "gpu sched timeout"` before and after a run does it by hand. On this board the spec scenes (a sprite in every cell)
   hang on every frame; the three views do not (ADR 0010).
 
 To run the scene's benchmark by hand, serve the build (`python3 -m http.server

@@ -65,6 +65,9 @@ BROWSERS = ("chromium-browser", "chromium", "google-chrome", "google-chrome-stab
 # costlier to read than the rest, so it is sampled only every PSS_EVERY samples.
 SAMPLE_PERIOD_S = 1.0
 PSS_EVERY = 5
+# What the kernel logs when it kills a GPU job that ran past its limit (Panfrost on the
+# board: "gpu sched timeout"). Counted in the kernel log before and after each profile.
+GPU_TIMEOUT_MARK = "gpu sched timeout"
 # The scene's page, benchmarked with ?bench (R5), and the R0 spike's.
 SCENE_PAGE = "index.html"
 SPIKE_PAGE = "spike.html"
@@ -401,6 +404,27 @@ def usage_in_window(
     }
 
 
+def kernel_log() -> str | None:
+    """The kernel log, or None where it cannot be read.
+
+    Debian lets only root read it (``kernel.dmesg_restrict``): plain ``dmesg`` first, then
+    ``sudo -n``, which asks for no password and fails at once where one is needed.
+    """
+    for command in (["dmesg"], ["sudo", "-n", "dmesg"]):
+        try:
+            done = subprocess.run(command, capture_output=True, text=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if done.returncode == 0 and done.stdout:
+            return done.stdout
+    return None
+
+
+def count_gpu_timeouts(log: str | None) -> int | None:
+    """GPU jobs the kernel killed, as logged so far; None where the log is not readable."""
+    return None if log is None else log.count(GPU_TIMEOUT_MARK)
+
+
 # --- The page's side: a tiny web server ---------------------------------------------------
 
 
@@ -521,6 +545,8 @@ class Run:
     results: dict[str, Any] | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     peak: dict[str, Any] = field(default_factory=dict)
+    # GPU jobs the kernel killed during the run (the GPU hanging); None: log not readable.
+    gpu_timeouts: int | None = None
 
 
 def run_profile(
@@ -542,6 +568,7 @@ def run_profile(
     run = Run(profile.name, profile.about, command[1:-1], url)
     while not inbox.empty():
         inbox.get_nowait()  # nothing left over from a previous profile
+    timeouts_before = count_gpu_timeouts(kernel_log())
     started = time.monotonic()
     log_path = log_dir / f"chromium-{profile.name}.log"
     try:
@@ -576,6 +603,10 @@ def run_profile(
         stop(process)
         shutil.rmtree(user_data, ignore_errors=True)
     run.duration_s = round(time.monotonic() - started, 1)
+    timeouts_after = count_gpu_timeouts(kernel_log())
+    if timeouts_before is not None and timeouts_after is not None:
+        # A kernel log that wrapped round in between reads fewer: count none rather than less.
+        run.gpu_timeouts = max(timeouts_after - timeouts_before, 0)
 
     ticks_per_s = os.sysconf("SC_CLK_TCK")
     samples = sampler.samples
@@ -679,6 +710,8 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
         lines.append(f"\n[{run['profile']}] {run['status']} {run['detail']}".rstrip())
         if results.get("scenarios"):
             lines.append(f"  drawn by: {drawn_by(results)}")
+        if run.get("gpu_timeouts") is not None:
+            lines.append(f"  GPU jobs the kernel killed (hangs): {run['gpu_timeouts']}")
             lines.append(
                 f"  {'scenario':<13}{'fps med':>8}{'1% low':>8}{'over %':>8}{'script ms':>10}"
                 f"{'CPU %':>7}{'RAM MB':>8}"

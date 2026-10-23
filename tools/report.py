@@ -14,7 +14,7 @@ every recorded series. A milestone whose module sets ``NEEDS_BASELINE`` compares
 needs ``--baseline``: the run with the mechanism off (an ablation, M5), or, repeated, the
 runs under other presence schedules (M8).
 
-Milestones measured on the device (R0) are built from the file the device benchmark
+Milestones measured on the device (R0, R5) are built from the file the device benchmark
 wrote instead of a run: ``--runs`` is that file or the directory holding it. The file is
 copied into the report directory in place of ``config.toml``, since a PC cannot
 regenerate it.
@@ -33,7 +33,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4, m5, m6, m7, m8, m9, r0
+from tools.milestones import m2, m3, m4, m5, m6, m7, m8, m9, r0, r5
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -66,6 +66,7 @@ MILESTONES: dict[str, Milestone] = {
         Milestone("M10", "apocalypse", "Apocalypse and worlds"),
         Milestone("M11", "long-run", "Long-run tuning and stability"),
         Milestone("R0", "renderer-spike", "Renderer spike on the device"),
+        Milestone("R5", "device", "Final rendering pass: the scene measured on the device"),
     )
 }
 
@@ -83,7 +84,7 @@ MODULES: dict[str, ModuleType] = {
 
 # Milestones measured on the device rather than by fast-forward: the module reads its
 # own evidence file and provides the header, metrics and sections from it.
-DEVICE_MODULES: dict[str, ModuleType] = {"R0": r0}
+DEVICE_MODULES: dict[str, ModuleType] = {"R0": r0, "R5": r5}
 
 # Acceptance criteria per milestone; each milestone adds its own when it lands.
 CRITERIA: dict[str, list[Criterion]] = {
@@ -96,6 +97,7 @@ CRITERIA: dict[str, list[Criterion]] = {
     "M8": m8.CRITERIA,
     "M9": m9.CRITERIA,
     "R0": r0.CRITERIA,
+    "R5": r5.CRITERIA,
 }
 
 # Display names and units of recorded series; every series a milestone records goes here.
@@ -440,7 +442,7 @@ def main(argv: list[str] | None = None) -> None:
         "--runs",
         type=Path,
         required=True,
-        help="run directory, runs/<id>; for R0 the device benchmark file or its directory",
+        help="run directory, runs/<id>; for R0 and R5 the device benchmark file or its directory",
     )
     parser.add_argument(
         "--baseline",
