@@ -603,7 +603,7 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
 | `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
 | `fauna` | on connect | creature gene names, the phenotype's config keys, and the config drawing rare genes needs (`rare_config`: GIANT's mass factor) (R2, M7) |
-| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`) (R5) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`); who ate plants or algae and who ate meat in the last tick (`grazing`, `feeding`, from `Population.eating`) (R5) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
 | `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
@@ -1118,6 +1118,16 @@ Round 1, items 1–7:
   insect, tortoise, beetle, spider, crab) turn on the spot about their middle joint.
   Looking about during a pause turns the head, not the body. A torpid animal still lies
   curled; waking, its body straightens over about a tenth of a second.
+- **Eating** (`creatures/eating.ts`, the owner's first animation, 2026-10-23). The stream
+  says who ate plants or algae and who ate meat in the sim's last tick (`grazing`,
+  `feeding`; about half the animals graze at any moment, a kill or carrion now and then).
+  One that eats stands where it is, no stroll and no looking about, and its head works: a
+  grazer reaches to the ground in nibbles, three and a pause to chew, a flake of green at
+  its mouth every second one; one feeding on meat tugs from side to side and back, a
+  fleck of red now and then. The head is moved for the drawing only, the neck half as
+  far so that it stays on; the chain the body follows is left as it was. The flecks are
+  three art pixels, pooled (48), rising and fading in 0.45 s. `window.__feed(id, food)`
+  sets an animal eating by hand for staging.
 - **Wet feet at high tide.** The swash runs up the beach in the shore's shader, so
   `Landscape.swashCovers(x, y)` replays it: the tide's level (`tideLevel`, shared with the
   shader), the place's own wave (`tidePhase`), up for 0.3 of a wave and back by 0.8

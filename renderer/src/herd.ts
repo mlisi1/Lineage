@@ -58,6 +58,8 @@ export class Roster {
   readonly where = new Map<number, { x: number; y: number }>();
   readonly species = new Map<number, number>();
   readonly torpid = new Set<number>();
+  /** What each ate in the sim's last tick (R5): plants (or algae), or meat. */
+  readonly food = new Map<number, "plants" | "meat">();
   /** The young by id: how far grown toward coming of age, in sixteenths (R5); the rest are grown. */
   readonly young = new Map<number, number>();
 
@@ -89,6 +91,9 @@ export class Roster {
     this.species.clear();
     this.torpid.clear();
     for (const id of message.torpid ?? []) this.torpid.add(id);
+    this.food.clear();
+    for (const id of message.grazing ?? []) this.food.set(id, "plants");
+    for (const id of message.feeding ?? []) this.food.set(id, "meat");
     this.young.clear();
     for (const [id, steps] of message.young ?? []) {
       if (id !== undefined && steps !== undefined) this.young.set(id, steps);
@@ -146,6 +151,14 @@ export class Herd {
     const slot = this.roster.slotOf(id);
     if (slot === undefined) return false;
     for (const layer of Object.values(this.layers)) layer.pin(slot, x, y, heading);
+    return true;
+  }
+
+  /** Set animal `id` eating `food` by hand, in both views (debugging the look). */
+  feed(id: number, food: "none" | "plants" | "meat"): boolean {
+    const slot = this.roster.slotOf(id);
+    if (slot === undefined) return false;
+    for (const layer of Object.values(this.layers)) layer.setFood(slot, food, true);
     return true;
   }
 
@@ -381,6 +394,7 @@ export class Herd {
       for (const layer of layers) {
         layer.anchor(slot, where.x, where.y);
         layer.setTorpid(slot, this.roster.torpid.has(id));
+        layer.setFood(slot, this.roster.food.get(id) ?? "none");
       }
     }
   }

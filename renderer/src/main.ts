@@ -169,6 +169,7 @@ declare global {
     __swash?: (x: number, y: number) => boolean;
     __pin?: (id: number, x: number, y: number, heading: number) => boolean;
     __send?: (id: number, x: number, y: number) => boolean;
+    __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
     __standing?: (
       x0: number,
       y0: number,
@@ -417,6 +418,7 @@ async function start(): Promise<void> {
   // Debugging the look: an animal placed by hand, and where the trees and bushes stand.
   window.__pin = (id, x, y, heading) => herd.pin(id, x, y, heading);
   window.__send = (id, x, y) => herd.send(id, x, y);
+  window.__feed = (id, food) => herd.feed(id, food);
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
   window.__landAt = (x, y) => {
     const land = landscape.current;

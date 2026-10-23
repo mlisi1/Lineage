@@ -127,6 +127,17 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Eating (2026-10-23, evening)
+
+The owner asked whether animations were missing. Animals walked, rested and looked about,
+but did nothing the simulation does, because no behaviour was on the wire. Eating came
+first. The sim's per-tick meal (`_meal`) gained a meat share (`_meat`) and a read-only
+`Population.eating` (0 nothing, 1 plants or algae, 2 meat). Both arrays are now kept in
+step at deaths and births, which nothing needed before; they are not saved and draw no
+random numbers, so the recordings are unchanged but for the new `grazing` and `feeding`
+lists. The fauna's bare-rock golden hash (`test_golden_hash_from_bare_rock`) was found
+failing already on `main` at R5's start (80e4a4c), not from R5; noted for M11.
+
 ### Round the bushes (2026-10-23, later)
 
 The owner: "creatures still are a bit weird when walking through bushes", with the leaves

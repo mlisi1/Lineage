@@ -202,6 +202,14 @@ export interface CreaturesMessage {
    * The creatures among `ids` that landed from the sea since the last creatures message (R5): founders, strangers, the ark's. Absent when none did, and from streams recorded before R5's arrivals.
    */
   landed?: number[];
+  /**
+   * Ids of the creatures that ate plants or algae in the last tick (R5: drawn grazing). Absent from streams recorded before.
+   */
+  grazing?: number[];
+  /**
+   * Ids of the creatures that ate meat, a kill or carrion, in the last tick (R5: drawn feeding). Absent from streams recorded before.
+   */
+  feeding?: number[];
 }
 /**
  * Every species that has lived (M6). Sent on connect and when a species is born or dies out.

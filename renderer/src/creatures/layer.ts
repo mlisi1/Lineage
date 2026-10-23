@@ -33,6 +33,7 @@ import {
 import type { CreatureSeed } from "./seed";
 import type { Footprints, Passable } from "./habitat";
 import { dotOf, dotSize } from "./markers";
+import { Flecks, bite, flecks, type Food } from "./eating";
 import {
   RIPPLES,
   SWASH_SEA,
@@ -182,6 +183,10 @@ interface Creature {
   pinned?: boolean;
   /** Put or sent by hand (`pin`, `send`): the sim's places for it are ignored from then on. */
   staged?: boolean;
+  /** What it ate in the sim's last tick (R5): it stands and eats while it is not walking. */
+  food: Food;
+  /** The phase of its last bite, to know when a fleck is thrown. */
+  bitePhase: number;
   /** Every sprite of the body with its colour and opacity out of water. */
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
@@ -204,6 +209,12 @@ interface Creature {
   arriving?: { age: number; lasts: number };
 }
 
+/** An eating animal's neck goes this share of the way its head does. */
+const NECK_FOLLOWS = 0.5;
+/** A fleck from an eating animal's mouth is this many art pixels across. */
+const FLECK_PIXELS = 3;
+/** An eating animal's pause is kept at least this long (seconds), so it does not stroll off. */
+const EAT_HOLD_S = 1;
 /** Ripples round a walker in the water: the foam's white. */
 const RIPPLE_TINT = 0xf4fbff;
 /**
@@ -236,6 +247,8 @@ export class CreatureLayer {
   swash: ((x: number, y: number) => boolean) | null = null;
   /** Creatures not standing among plants, and every marker. Add this to the world. */
   readonly container = new Container();
+  /** Flecks thrown by eating animals (R5), over them; made with the first animal placed. */
+  private flecks: Flecks | null = null;
   /** Creatures that died, going where they fell. */
   private departing: Departing[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
@@ -468,6 +481,13 @@ export class CreatureLayer {
   }
 
   /** Creature `index` lies torpid (curled up, still) or wakes. */
+  /** Slot `index`'s animal is eating `food` (R5), as the sim's last tick has it. */
+  setFood(index: number, food: Food, staged = false): void {
+    const creature = this.creatures[index];
+    if (creature === undefined || (creature.staged === true && !staged)) return;
+    creature.food = food;
+  }
+
   setTorpid(index: number, torpid: boolean): void {
     const creature = this.creatures[index];
     if (creature === undefined || creature.torpid === torpid) return;
@@ -691,6 +711,7 @@ export class CreatureLayer {
   update(dtS: number, view?: CellRect, posed = true): void {
     this.clock += dtS;
     this.depart(dtS);
+    this.flecks?.update(dtS);
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
@@ -710,7 +731,7 @@ export class CreatureLayer {
           head.y >= view.y0 - reach &&
           head.y <= view.y1 + reach);
       if (inView && posed) {
-        this.pose(creature, dtS);
+        this.eat(creature, dtS);
         if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
         else if (creature.motion !== null && creature.arriving === undefined) {
           this.wade(creature, head);
@@ -883,6 +904,8 @@ export class CreatureLayer {
       waterPace: 1,
       ripples: null,
       legSprites: null,
+      food: "none",
+      bitePhase: 0,
       pen: seed.pen,
       container,
       marker,
@@ -928,6 +951,64 @@ export class CreatureLayer {
       creature.container.filters = [creature.glass];
     } else {
       creature.container.filters = [];
+    }
+  }
+
+  /**
+   * Pose an animal, with its head at work if it stands eating (R5, `eating.ts`): moved
+   * for the drawing only, the chain put back after; a fleck now and then from its mouth.
+   */
+  private eat(creature: Creature, dtS: number): void {
+    const head = creature.joints[0];
+    const eating =
+      creature.food !== "none" &&
+      head !== undefined &&
+      creature.motion !== null &&
+      creature.motion.mode === "pause" &&
+      !creature.torpid &&
+      creature.arriving === undefined &&
+      creature.wet !== "deep";
+    if (!eating) {
+      this.pose(creature, dtS);
+      return;
+    }
+    const { forward, aside, phase, count } = bite(
+      creature.food,
+      this.clock,
+      creature.breathOffset,
+      creature.plan.spacing,
+    );
+    const cos = Math.cos(creature.heading);
+    const sin = Math.sin(creature.heading);
+    const dx = cos * forward - sin * aside;
+    const dy = sin * forward + cos * aside;
+    // The neck goes half as far, so the head stays on it as it reaches.
+    const neck = creature.joints[1];
+    head.x += dx;
+    head.y += dy;
+    if (neck !== undefined) {
+      neck.x += dx * NECK_FOLLOWS;
+      neck.y += dy * NECK_FOLLOWS;
+    }
+    this.pose(creature, dtS);
+    if (flecks(creature.food, creature.bitePhase, phase, count) && creature.inView) {
+      if (this.flecks === null) {
+        this.flecks = new Flecks(this.atlas.white, FLECK_PIXELS / this.body.pixels, WHITE_TEXELS);
+        this.container.addChild(this.flecks.container);
+      }
+      const reach = creature.plan.radii[0] ?? 0;
+      this.flecks.throw(
+        creature.food,
+        { x: head.x + cos * reach, y: head.y + sin * reach },
+        count % 2 === 0 ? 1 : -1,
+      );
+    }
+    creature.bitePhase = phase;
+    head.x -= dx;
+    head.y -= dy;
+    if (neck !== undefined) {
+      neck.x -= dx * NECK_FOLLOWS;
+      neck.y -= dy * NECK_FOLLOWS;
     }
   }
 
@@ -1015,6 +1096,13 @@ export class CreatureLayer {
       bend: stiff.neck,
       turning: stiff.turning,
     };
+    // Eating, it stands where it is and keeps its head down: no stroll, no looking about.
+    if (creature.food !== "none" && motion.mode !== "travel") {
+      motion.mode = "pause";
+      motion.timer = Math.max(motion.timer, EAT_HOLD_S);
+      motion.look = creature.heading;
+      motion.facing = creature.heading;
+    }
     const ground = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
     const free = (x: number, y: number): boolean => this.clear(creature, x, y);
     // Where the sim has it is drawn beside the plant it may be in, not on it (R5).

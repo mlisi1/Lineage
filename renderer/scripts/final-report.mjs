@@ -123,6 +123,18 @@ const FOLLOWS = {
       [2048, 2184, 2220].forEach((id, k) => window.__send?.(id, 93.6, 123.3 + k * 0.5));
     })()`,
   },
+  // Eating (R5), staged on open grass at (64, 71): the large lizard grazing, a smaller
+  // animal beside it feeding on meat, both held where they are put.
+  eating: {
+    query: "view=local&x=64&y=71&quiet&seed=1",
+    seconds: 6,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2048, 63.4, 71, 0); window.__send?.(2048, 63.4, 71); window.__feed?.(2048, "plants");
+      window.__pin?.(2184, 65.6, 71.3, Math.PI); window.__send?.(2184, 65.6, 71.3); window.__feed?.(2184, "meat");
+    })()`,
+  },
   // Animals of five sizes living among bushes, from the largest to the smallest, the
   // middle of the screen enlarged twice (the camera keeps the animal followed there).
   bush2: { query: "seed=2&follow=60&quiet", seconds: 12, crop: 2 },
@@ -518,7 +530,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -701,6 +713,16 @@ ${Object.keys(SCROLLS)
           .join("")}</div>`,
   )
   .join("")}
+</section>
+<hr>
+
+<section id="eating">
+<div class="head"><span class="n">22</span><h2>Eating</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>Animals walked, rested and looked about; nothing showed what they do. Half of them are grazing at any moment.</p></div>
+<div><span class="label">Now</span><p>The stream says who is grazing (plants or algae) and who is feeding on meat. One that eats stands where it is: a grazer reaches to the ground in nibbles, three and a pause to chew, a flake of green at its mouth; one on meat tugs side to side and back, flecks of red. Staged here on open grass, enlarged twice: the large lizard grazing, the animal on the right feeding on meat.</p></div>
+</div>
+${films.after.eating === undefined ? "" : `<figure><video src="films/${films.after.eating.file}" poster="${uri(films.after.eating.poster)}" autoplay loop muted playsinline controls></video><figcaption><span class="meta">${films.after.eating.frames} frames at ${FPS} fps</span></figcaption></figure>`}
 </section>
 <hr>
 

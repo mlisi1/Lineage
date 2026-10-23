@@ -172,6 +172,12 @@ def creatures_message(
         message["species"] = [int(label) for label in species.labels_now()]
     if torpid is not None:
         message["torpid"] = [ident for row, ident in enumerate(ids) if bool(torpid[row])]
+    # What each is eating (R5): plants or algae, or meat, as of the last tick.
+    eating = getattr(fauna, "eating", None)
+    if eating is not None:
+        food = np.asarray(eating)
+        message["grazing"] = [ident for row, ident in enumerate(ids) if int(food[row]) == 1]
+        message["feeding"] = [ident for row, ident in enumerate(ids) if int(food[row]) == 2]
     # The young (R5): how far each has grown toward coming of age, in sixteenths.
     maturity = getattr(fauna, "maturity", None)
     if maturity is not None:

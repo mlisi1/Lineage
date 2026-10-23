@@ -198,6 +198,11 @@ below was taken in scope by the owner. Tests wait until the look is called final
   with a portrait of the animal itself, its name as a heading, its traits and icons. Done:
   `illumination.ts` + `HAND_FONT`; `card.ts` + `creatures/portrait.ts`
 
+- [x] 22. Animations the owner asked for after the look (2026-10-23): eating first (grazing
+  nibbles, feeding tugs, flecks; `grazing`/`feeding` on the wire). Proposed next: hunting
+  (a chase and a lunge), plants in the wind, births by a parent, sleep at night, ambient
+  touches
+
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)
 - [x] 8. Deaths all look alike: no carcasses, no telling a kill from starving or drowning.

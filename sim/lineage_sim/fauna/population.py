@@ -155,6 +155,7 @@ class Fauna:
         self._kills: Flags = np.zeros((0, 0), dtype=np.bool_)
         self._in_water: Flags = np.zeros(0, dtype=np.bool_)  # where each stood this tick
         self._meal = np.zeros(0, dtype=np.float32)  # energy eaten this tick
+        self._meat = np.zeros(0, dtype=np.float32)  # of it, from meat (kills and carrion)
         self._leftover = np.zeros(0, dtype=np.float32)  # meat mass a kill left, per victim
         # Youths that ended and creatures that died this tick: outputs not yet handed on.
         self._grown: list[OutputEvent] = []
@@ -265,6 +266,17 @@ class Fauna:
         return np.clip(grown, 0.0, 1.0).astype(np.float32)
 
     @property
+    def eating(self) -> NDArray[np.int8]:
+        """What each creature ate in the last tick (R5, the renderer draws it): 0 nothing,
+        1 plants or algae, 2 meat (a kill or carrion), whichever gave it more."""
+        if self._meal.size != self.count:
+            return np.zeros(self.count, dtype=np.int8)
+        plants = self._meal - self._meat
+        return np.select(
+            [self._meat > np.maximum(plants, 0.0), self._meal > 0.0], [2, 1], 0
+        ).astype(np.int8)
+
+    @property
     def ready(self) -> Flags:
         """Adults with the energy to breed whose last brood is long enough ago."""
         cfg = self._cfg
@@ -316,6 +328,7 @@ class Fauna:
 
         before = self._energy.copy()
         self._meal = np.zeros(self.count, dtype=np.float32)
+        self._meat = np.zeros(self.count, dtype=np.float32)
         self._leftover = np.zeros(self.count, dtype=np.float32)
         self._torpid = rare.torpid(
             self._cfg, self._slots, self._energy, self._body.capacity,
@@ -558,6 +571,7 @@ class Fauna:
         creature.stamp(self._scent, rows[who], columns[who], -got, cfg.carrion_scent_cells)
         self._energy[who] += got * value
         self._meal[who] += got * value
+        self._meat[who] += got * value
 
     def _hunt(self, rng: Generator, hours: float) -> NDArray[np.int8]:
         """Hunters attack the nearest prey in reach. Returns each creature's cause of
@@ -589,6 +603,7 @@ class Fauna:
             eaten = min(meal, max(room, 0.0))
             self._energy[hunter] += np.float32(eaten)
             self._meal[hunter] += np.float32(eaten)
+            self._meat[hunter] += np.float32(eaten)
             # What the hunter could not eat is left for scavengers.
             self._leftover[victim] = np.float32(float(body.mass[victim]) - eaten / value)
         return dead
@@ -833,6 +848,9 @@ class Fauna:
         self._meal_value = self._meal_value[keep]
         self._competent_h = self._competent_h[keep]
         self._young_eaten, self._young_burnt = self._young_eaten[keep], self._young_burnt[keep]
+        # The tick's meals stay with their eaters, for what is read of them after the tick.
+        if self._meal.size == keep.size:
+            self._meal, self._meat = self._meal[keep], self._meat[keep]
         self._body = body_of(self._cfg, self._genes, self._slots)
         self._compatible = self._compatible[keep][:, keep]
         self._kills = self._kills[keep][:, keep]
@@ -884,6 +902,9 @@ class Fauna:
         zeros = np.zeros(count, dtype=np.float32)
         self._young_eaten = np.concatenate([self._young_eaten, zeros])
         self._young_burnt = np.concatenate([self._young_burnt, zeros])
+        if self._meal.size == old:
+            self._meal = np.concatenate([self._meal, zeros])
+            self._meat = np.concatenate([self._meat, zeros])
         # Extend the pair matrices with the newcomers' rows and columns only.
         near = gn.distance(self._genes[old:, None, :], self._genes[None, :, :])
         compatible = np.zeros((old + count, old + count), dtype=np.bool_)
@@ -904,6 +925,7 @@ class Fauna:
         self._in_water = np.zeros(self.count, dtype=np.bool_)
         self._torpid = np.zeros(self.count, dtype=np.bool_)
         self._meal = np.zeros(self.count, dtype=np.float32)
+        self._meat = np.zeros(self.count, dtype=np.float32)
         self._leftover = np.zeros(self.count, dtype=np.float32)
         self._apart = None
 

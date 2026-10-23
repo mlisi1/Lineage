@@ -411,6 +411,20 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "grazing": {
+          "description": "Ids of the creatures that ate plants or algae in the last tick (R5: drawn grazing). Absent from streams recorded before.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "feeding": {
+          "description": "Ids of the creatures that ate meat, a kill or carrion, in the last tick (R5: drawn feeding). Absent from streams recorded before.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
         }
       }
     },
