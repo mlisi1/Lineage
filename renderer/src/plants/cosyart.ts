@@ -76,7 +76,7 @@ export function rimAll(art: PlantArt, fromRow = 0): void {
 
 /** A puff's rim has this many scallops for each pixel of its radius, and bulges this much. */
 const SCALLOPS_PER_PIXEL = 0.9;
-const SCALLOP = 0.1;
+export const SCALLOP = 0.1;
 /** From this radius a puff carries flecks of leaves. */
 const FLECKS_FROM = 4;
 /** Where a puff's highlight is: this share of its radius toward the light. */
@@ -379,7 +379,10 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
         puffs.push({ x: width * (0.64 + 0.06 * random()), y: up + r * 0.2, r: r * 0.85 });
     }
     pile(art, puffs, width / 2, height / 2, salt);
-    settle(art, height);
+    const down = settle(art, height);
+    // Where each puff ended up, in the drawing's pixels, for drawing the bush in pieces.
+    const margin = (art.width - width) / 2;
+    art.puffs = puffs.map((p) => ({ x: p.x + margin, y: p.y + margin + down, r: p.r }));
     if (sprout) {
       // Too young to flower or fruit.
     } else if (look.season === "spring") {

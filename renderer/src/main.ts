@@ -45,6 +45,9 @@
  *                              atmosphere stands still too, moved on only by `__advance`
  *   ?cap=30                    R5: at most this many frames a second (`framecap.ts`): the
  *                              kiosk's cap on the board, which has no fan
+ *   ?bushes=pieces             R5: the local view's bushes drawn a sprite to each puff,
+ *                              each sorted by its own foot (`plants/pieces.ts`; an
+ *                              experiment to compare with the bushes drawn whole)
  *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
  *                              `benchplan.ts` on the recordings, the results POSTed to
  *                              `?post=` (`tools/kiosk_bench.py`)
@@ -176,6 +179,10 @@ declare global {
       x1: number,
       y1: number,
     ) => ReturnType<PlantLayer["standing"]>;
+    /** Where cell point (x, y) is on the screen, in CSS pixels (staging the look by hand). */
+    __screenOf?: (x: number, y: number) => { x: number; y: number };
+    /** Whether a body of radius `margin` at cell point (x, y) is in a plant's footprint. */
+    __blocked?: (x: number, y: number, margin: number) => boolean;
     /** The land drawn at cell (x, y): height, cover class, biomass and scorch (tests). */
     __landAt?: (
       x: number,
@@ -249,6 +256,7 @@ async function start(): Promise<void> {
     undefined,
     params.get("still") !== null,
   );
+  landscape.bushPieces = params.get("bushes") === "pieces";
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();
@@ -420,6 +428,8 @@ async function start(): Promise<void> {
   window.__send = (id, x, y) => herd.send(id, x, y);
   window.__feed = (id, food) => herd.feed(id, food);
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
+  window.__screenOf = (x, y) => world.toGlobal({ x, y });
+  window.__blocked = (x, y, margin) => landscape.hosts?.blocked(x, y, margin) ?? false;
   window.__landAt = (x, y) => {
     const land = landscape.current;
     if (land === null) return null;

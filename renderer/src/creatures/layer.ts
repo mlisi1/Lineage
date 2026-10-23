@@ -221,10 +221,17 @@ const RIPPLE_TINT = 0xf4fbff;
  * What the plants answer about where they stand (R5, `PlantLayer.over`): the row of the
  * first (backmost) tree or bush whose drawing overlaps `box`, among those whose foot lies
  * from as far behind row `from` to as far in front of row `to` as a plant's drawing
- * reaches; -1 if none.
+ * reaches; -1 if none. A bush drawn in pieces asks which of the animal's `joints` (with
+ * `radii`) are behind each piece.
  */
 export interface Occluders {
-  over(box: CellRect, from: number, to: number): number;
+  over(
+    box: CellRect,
+    from: number,
+    to: number,
+    joints?: readonly Point[],
+    radii?: readonly number[],
+  ): number;
 }
 
 /** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
@@ -695,7 +702,13 @@ export class CreatureLayer {
         !creature.plan.swims &&
         creature.arriving === undefined
       ) {
-        const under = occluders.over(this.box(index), highest, lowest);
+        const under = occluders.over(
+          this.box(index),
+          highest,
+          lowest,
+          creature.joints,
+          creature.plan.radii,
+        );
         if (under >= 0) row = Math.min(lowest, Math.max(under - 1, 0));
       }
       const host = guests[row] ?? this.container;

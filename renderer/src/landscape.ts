@@ -150,6 +150,11 @@ export class Landscape {
     local: new Sea(TILES.local),
   };
   private seaTime = 0;
+  /**
+   * Draw the local view's bushes in pieces, a sprite for each puff (R5, an experiment the
+   * owner asked for: `?bushes=pieces`). Set before the first land comes.
+   */
+  bushPieces = false;
 
   /** `still` keeps the sea as it is at its first moment: for pictures that must not change. */
   constructor(
@@ -361,6 +366,7 @@ export class Landscape {
       time,
       close: name === "local",
       lazy: name === "middle",
+      pieces: this.bushPieces,
     });
     performance.measure(`lineage:plants:${name}`, `lineage:plants:${name}`);
     if (name === "middle") {
