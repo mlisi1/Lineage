@@ -66,7 +66,7 @@ import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
 import { Captions, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
-import { Director, TIMINGS, type Scene, type Shot, type Visit } from "./director";
+import { Director, TIMINGS, type Motion, type Scene, type Shot, type Visit } from "./director";
 import { Herd } from "./herd";
 import type { PlantLayer } from "./plants/plants";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
@@ -75,6 +75,7 @@ import type { CreaturesMessage, Message } from "./protocol";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./creatures/atlas";
+import { Portraits } from "./creatures/portrait";
 import { heightAt } from "./creatures/habitat";
 import { Recording, SocketSource, type Source } from "./stream";
 import { InlinePainter, makePainter } from "./terrain/painter";
@@ -93,6 +94,8 @@ const DARK = "#10081c";
 const MARGIN = 1;
 /** The name card waits until a dip between views is this clear before it unrolls (0–1). */
 const CARD_DIM = 0.5;
+/** The camera's moves away from the animal followed, during which the card is put away. */
+const AWAY: ReadonlySet<Motion> = new Set<Motion>(["visit", "return"]);
 /** The places of this many of the latest notable entries are kept, for the scroll to mark. */
 const PLACES_KEPT = 16;
 /** The committed recordings (`tools/stream.py`). */
@@ -145,6 +148,8 @@ declare global {
       open: number;
       /** The lamp it is lit by (0xRRGGBB): 0xffffff by day, dim and warm at night. */
       lamp: number;
+      /** Whether the animal's portrait is on the card's plate. */
+      portrait: boolean;
       id?: number;
       name?: string;
       traits?: string;
@@ -237,7 +242,10 @@ async function start(): Promise<void> {
   );
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
-  const herd = new Herd(creatureAtlas(), mulberry32(seed + 1), () => landscape.current);
+  const atlas = creatureAtlas();
+  const herd = new Herd(atlas, mulberry32(seed + 1), () => landscape.current);
+  // The name card's portraits, drawn by the scene's own renderer (R5).
+  const portraits = new Portraits(app.renderer, atlas);
   herd.swash = (x, y) => landscape.swashCovers(x, y);
   world.addChild(...herd.containers);
   const still = params.get("still") !== null;
@@ -538,9 +546,18 @@ async function start(): Promise<void> {
     const { light, tint } = atmosphere.state;
     const lamp = lantern(light, tint, atmosphere.ending);
     captions.update(dtS, lamp);
-    // The card is out while the local view follows an animal and is not dipped to dark.
-    const following = shot.view === "local" && shot.dim < CARD_DIM ? shot.subject : null;
-    card.update(dtS, following === null ? null : herd.cardOf(following), lamp);
+    // The card is out while the local view follows an animal and is not dipped to dark,
+    // nor away visiting the place of an entry (or on its way back): it would name an
+    // animal off screen.
+    const away = AWAY.has(director.state.motion);
+    const following = shot.view === "local" && shot.dim < CARD_DIM && !away ? shot.subject : null;
+    const facts = following === null ? null : herd.cardOf(following);
+    const look = facts === null ? null : herd.portraitOf(facts.id);
+    card.update(
+      dtS,
+      facts === null ? null : { ...facts, portrait: look === null ? null : portraits.of(look) },
+      lamp,
+    );
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.
