@@ -170,6 +170,8 @@ declare global {
     __pin?: (id: number, x: number, y: number, heading: number) => boolean;
     __send?: (id: number, x: number, y: number) => boolean;
     __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
+    /** Animal `id`'s sleep (R5): night-active, asleep, how far lying down. */
+    __sleep?: (id: number) => ReturnType<Herd["sleepOf"]>;
     __standing?: (
       x0: number,
       y0: number,
@@ -419,6 +421,7 @@ async function start(): Promise<void> {
   window.__pin = (id, x, y, heading) => herd.pin(id, x, y, heading);
   window.__send = (id, x, y) => herd.send(id, x, y);
   window.__feed = (id, food) => herd.feed(id, food);
+  window.__sleep = (id) => herd.sleepOf(id);
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
   window.__landAt = (x, y) => {
     const land = landscape.current;
@@ -471,6 +474,8 @@ async function start(): Promise<void> {
   let shown = shows.length === 0;
   // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
   let later: Timed[] = [];
+  /** The light of the moment as last drawn (the animals sleep by it, R5). */
+  let sceneLight = 1;
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
     const size = landscape.size;
@@ -516,6 +521,8 @@ async function start(): Promise<void> {
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    // The animals sleep by the light of the moment (R5), as last drawn.
+    herd.nightfall(sceneLight);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
     const land = landscape.current;
     if (!shown && land !== null) {
@@ -567,6 +574,7 @@ async function start(): Promise<void> {
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
     const { light, tint } = atmosphere.state;
+    sceneLight = light;
     const lamp = lantern(light, tint, atmosphere.ending);
     captions.update(dtS, lamp);
     // The card is out while the local view follows an animal and is not dipped to dark,

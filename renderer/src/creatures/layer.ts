@@ -19,7 +19,28 @@ import {
   type Point,
   type Stiffness,
 } from "./chain";
-import { breath, clearAnchor, drive, newMotion, reanchor, stepOut, type Motion } from "./motion";
+import {
+  breath,
+  clearAnchor,
+  drive,
+  hurries,
+  newMotion,
+  reanchor,
+  stepOut,
+  type Motion,
+} from "./motion";
+import {
+  breathClock,
+  breathDepth,
+  carrySleep,
+  doze,
+  rouse,
+  sleeperOf,
+  tuckOf,
+  wakeNow,
+  type Night,
+  type Sleeper,
+} from "./sleep";
 import { DYING, TINT_STEPS, mixColour, type Dying } from "./remains";
 import { kindFor, speciesPlans, type SpeciesPlan } from "./species";
 import {
@@ -207,6 +228,10 @@ interface Creature {
   breathOffset: number;
   /** Arriving (R4, the ark): seconds into its arrival and how long it takes, while it lasts. */
   arriving?: { age: number; lasts: number };
+  /** Its sleep at night (R5, `creatures/sleep.ts`). */
+  sleep: Sleeper;
+  /** Hurrying to where the sim has it (R5): its feet kick up dust. */
+  hurried: boolean;
 }
 
 /** An eating animal's neck goes this share of the way its head does. */
@@ -267,6 +292,12 @@ export class CreatureLayer {
   private clock = 0;
   /** The trees and bushes anchored animals keep clear of (R5), if any. */
   private footprints: Footprints | null = null;
+  /** The night the animals sleep in (R5, `sleep.ts`). */
+  private night: Night = { depth: 0, rising: false };
+  /** Shown again after a time hidden: who sleeps is lying down at once, not settling now. */
+  private fresh = true;
+  /** Told where a foot of an animal hurrying on dry land comes down (R5: a puff of dust). */
+  footfall: ((x: number, y: number) => void) | null = null;
 
   constructor(
     private readonly atlas: Atlas,
@@ -341,6 +372,17 @@ export class CreatureLayer {
     creature.motion = old.motion;
     creature.inView = old.inView;
     if (old.arriving !== undefined) creature.arriving = old.arriving;
+    // Staged by hand, it stays as it was put (R5: else the sim's place took it away).
+    if (old.pinned !== undefined) creature.pinned = old.pinned;
+    if (old.staged !== undefined) creature.staged = old.staged;
+    // Asleep it sleeps on, lying as it lay (R5).
+    carrySleep(creature.sleep, old.sleep);
+    if (old.sleep.share > 0 && old.joints.length === creature.joints.length) {
+      creature.joints.forEach((joint, i) => {
+        joint.x = old.joints[i]?.x ?? joint.x;
+        joint.y = old.joints[i]?.y ?? joint.y;
+      });
+    }
     // Where the old one stood among the plants, the new one stands.
     const host = old.container.parent;
     if (host !== null && host !== creature.container.parent) {
@@ -566,9 +608,34 @@ export class CreatureLayer {
     this.refresh();
   }
 
+  /**
+   * How deep in the night it is and whether the light is rising (R5): animals fall asleep
+   * and wake by it (`sleep.ts`).
+   */
+  nightfall(depth: number, rising: boolean): void {
+    this.night.depth = depth;
+    this.night.rising = rising;
+  }
+
+  /** Slot `index`'s head while it lies asleep (R5: the "z" over the animal followed), or null. */
+  sleepingHead(index: number): Point | null {
+    const creature = this.creatures[index];
+    if (creature === undefined || !creature.sleep.asleep || creature.sleep.share < 1) return null;
+    return creature.joints[0] ?? null;
+  }
+
+  /** Slot `index`'s sleep (tests and staging): night-active, asleep, how far lying down. */
+  sleepOf(index: number): { owl: boolean; asleep: boolean; share: number } | null {
+    const sleep = this.creatures[index]?.sleep;
+    return sleep === undefined
+      ? null
+      : { owl: sleep.owl, asleep: sleep.asleep, share: sleep.share };
+  }
+
   /** Show the creatures as bodies, as dots, or not at all; `only` picks a single one. */
   show(showing: Showing, only: number | null = null): void {
     if (this.showing === showing && this.only === only) return;
+    if (this.showing === "hidden") this.fresh = true;
     this.showing = showing;
     this.only = only;
     this.refresh();
@@ -626,6 +693,7 @@ export class CreatureLayer {
     if (creature === undefined) return;
     creature.pinned = true;
     creature.staged = true;
+    wakeNow(creature.sleep);
     creature.heading = heading;
     creature.joints.forEach((joint, i) => {
       joint.x = x - Math.cos(heading) * creature.plan.spacing * i;
@@ -647,6 +715,7 @@ export class CreatureLayer {
     if (creature === undefined || creature.motion === null) return;
     creature.pinned = false;
     creature.staged = true;
+    rouse(creature.sleep);
     creature.motion.anchor.x = x;
     creature.motion.anchor.y = y;
     creature.motion.mode = "travel";
@@ -712,12 +781,24 @@ export class CreatureLayer {
     this.clock += dtS;
     this.depart(dtS);
     this.flecks?.update(dtS);
+    const fresh = this.fresh;
+    this.fresh = false;
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
+      // Asleep at night, or getting up (R5): it lies where it is.
+      const lying = doze(
+        creature,
+        this.night,
+        dtS,
+        creature.wet === "dry" || creature.wet === "feet",
+        creature.arriving !== undefined,
+        fresh,
+      );
+      if (lying) creature.hurried = false;
       // A torpid animal lies where it is; the others move.
       const head =
-        creature.torpid || creature.pinned
+        creature.torpid || creature.pinned || lying
           ? (creature.joints[0] ?? { x: 0, y: 0 })
           : creature.motion === null
             ? this.wander(creature, dtS)
@@ -871,6 +952,7 @@ export class CreatureLayer {
       return container.addChild(sprite);
     });
 
+    const stiff = stiffness(plan.kind, plan.joints, plan.spacing);
     // The dot that stands for it on the map: its colour, with a dark edge.
     const marker = new Container();
     // The young are the smallest dots, whatever they will grow to.
@@ -910,7 +992,15 @@ export class CreatureLayer {
       container,
       marker,
       joints,
-      stiffness: stiffness(plan.kind, plan.joints, plan.spacing),
+      stiffness: stiff,
+      sleep: sleeperOf(
+        seed.genome,
+        seed.rare ?? [],
+        { swims: plan.swims, joints: plan.joints, parts: plan.parts, stiffness: stiff },
+        sprites,
+        LAYER.face,
+      ),
+      hurried: false,
       heading,
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
@@ -963,6 +1053,7 @@ export class CreatureLayer {
     const eating =
       creature.food !== "none" &&
       head !== undefined &&
+      creature.sleep.share === 0 &&
       creature.motion !== null &&
       creature.motion.mode === "pause" &&
       !creature.torpid &&
@@ -1114,6 +1205,7 @@ export class CreatureLayer {
       if (!free(tail.x, tail.y) && free(head.x, head.y)) stepOut(motion, walker, free);
     }
     const stride = drive(motion, walker, dtS, this.random, free, ground);
+    creature.hurried = !plan.swims && creature.wet === "dry" && hurries(motion, head, plan.length);
     creature.heading = walker.heading;
     creature.walked += stride;
     if (stiff.pivots) pivot(joints, creature.heading, stiff.neck);
@@ -1200,10 +1292,14 @@ export class CreatureLayer {
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
       // The chest breathes: its masses (not what lies on them) widen and narrow.
       if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
-        const clock = creature.torpid ? this.clock / TORPID_BREATH : this.clock;
+        // Asleep it breathes slower and deeper (R5), on its own clock so that it does not jump.
+        const clock = creature.torpid
+          ? this.clock / TORPID_BREATH
+          : breathClock(creature.sleep, dtS);
         const full = breath(clock, creature.mass, creature.breathOffset);
         const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
-        sprite.scale.y = (part.across / texels) * (1 + BREATH_WIDENS * full);
+        const widens = BREATH_WIDENS * breathDepth(creature.sleep);
+        sprite.scale.y = (part.across / texels) * (1 + widens * full);
       }
     }
     this.step(creature, dtS);
@@ -1253,8 +1349,10 @@ export class CreatureLayer {
       }
       return;
     }
-    const out = Math.cos(aim) * length * 0.8;
-    const ahead = Math.sin(aim) * length * 0.8;
+    // Lying down to sleep (R5), its feet are tucked under it.
+    const tuck = tuckOf(creature.sleep);
+    const out = Math.cos(aim) * length * 0.8 * tuck;
+    const ahead = Math.sin(aim) * length * 0.8 * tuck;
     const restX = hip.x + sideX * out + forwardX * ahead;
     const restY = hip.y + sideY * out + forwardY * ahead;
     // A foot lands ahead of where it rests by half of what the body walks while it
@@ -1290,6 +1388,9 @@ export class CreatureLayer {
       // Down where it was going, firmly: it does not slide while it stands.
       leg.foot.x = leg.target.x;
       leg.foot.y = leg.target.y;
+      // Hurrying on dry ground, its hind feet kick up a little dust behind it (R5).
+      const hind = this.hindmost(creature, leg);
+      if (creature.hurried && hind) this.footfall?.(leg.foot.x, leg.foot.y);
     }
     leg.swinging = swinging;
     if (Math.hypot(leg.foot.x - landX, leg.foot.y - landY) > length * SETTLE_OFF) {
@@ -1316,6 +1417,12 @@ export class CreatureLayer {
       sprite.position.set(foot.x + Math.cos(shin) * reach, foot.y + Math.sin(shin) * reach);
       if (leg.webbed) sprite.rotation = shin;
     }
+  }
+
+  /** Whether `leg` is of the hindmost pair of `creature`'s legs. */
+  private hindmost(creature: Creature, leg: Leg): boolean {
+    const last = creature.legs[creature.legs.length - 1];
+    return last !== undefined && leg.plan.joint === last.plan.joint;
   }
 
   /** Stretch a white square from `from` to `to`. */

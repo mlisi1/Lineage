@@ -32,6 +32,7 @@ import type { Random } from "./rng";
 import type { Atlas } from "./creatures/atlas";
 import { CreatureLayer } from "./creatures/layer";
 import type { CreatureSeed } from "./creatures/seed";
+import { Snores, depthOf } from "./creatures/sleep";
 import type { Portrait } from "./creatures/portrait";
 import { kindFor } from "./creatures/species";
 import { passableIn, type Passable } from "./creatures/habitat";
@@ -138,6 +139,36 @@ export class Herd {
   private signatures: Signatures = new Map();
   /** The rare-gene bits whose look is glow (R4: they shine in the dark). */
   private glowBits = 0;
+  /** The "z"s over the animal followed while it sleeps (R5, `creatures/sleep.ts`). */
+  private readonly snores = new Snores();
+  /** The light last told (`nightfall`), and whether it was last rising. */
+  private light = 1;
+  private rising = false;
+
+  /**
+   * The scene's light of the moment (R5): the animals fall asleep as it goes and wake as
+   * it comes back (`creatures/sleep.ts`).
+   */
+  nightfall(light: number): void {
+    if (light > this.light) this.rising = true;
+    else if (light < this.light) this.rising = false;
+    this.light = light;
+    const depth = depthOf(light);
+    for (const layer of Object.values(this.layers)) layer.nightfall(depth, this.rising);
+  }
+
+  /** Animal `id`'s sleep in the view's layer (tests and staging), or null if it is not alive. */
+  sleepOf(id: number): ReturnType<CreatureLayer["sleepOf"]> {
+    const slot = this.roster.slotOf(id);
+    const layer = this.view === "local" ? this.layers.local : this.layers.middle;
+    return slot === undefined ? null : layer.sleepOf(slot);
+  }
+
+  /** Told where a foot of an animal hurrying on dry land comes down (R5: dust). */
+  set footfall(puff: ((x: number, y: number) => void) | null) {
+    for (const layer of Object.values(this.layers)) layer.footfall = puff;
+  }
+
   /** Whether the swash covers the beach at a place now, from the scene's sea (R5, wet feet). */
   set swash(covers: ((x: number, y: number) => boolean) | null) {
     for (const layer of Object.values(this.layers)) layer.swash = covers;
@@ -207,7 +238,12 @@ export class Herd {
 
   /** The containers to add to the world layer (in cells): the animals not among plants, and the dots. */
   get containers(): Container[] {
-    return [this.layers.middle.container, this.layers.local.container, this.remains.over];
+    return [
+      this.layers.middle.container,
+      this.layers.local.container,
+      this.remains.over,
+      this.snores.container,
+    ];
   }
 
   /** The latest land, and the sea read from it when it changes. */
@@ -537,6 +573,7 @@ export class Herd {
   ): void {
     if (view !== this.view) {
       this.view = view;
+      this.snores.clear();
       this.layers.middle.show(view === "middle" ? "bodies" : view === "map" ? "markers" : "hidden");
       this.layers.local.show(view === "local" ? "bodies" : "hidden");
     }
@@ -548,6 +585,9 @@ export class Herd {
     if (view === "map") return;
     layer.hostIn(plants?.guests ?? null, plants?.rowsPerCell, plants ?? null);
     const slot = subject === null ? undefined : this.roster.slotOf(subject);
+    // A "z" now and then over the animal followed while it sleeps, up close (R5).
+    const sleeping = view === "local" && slot !== undefined ? layer.sleepingHead(slot) : null;
+    this.snores.update(dtS, sleeping, 1 / TILES[view]);
     plants?.fade(
       slot === undefined ? null : layer.box(slot),
       slot === undefined ? 0 : layer.topOf(slot),
