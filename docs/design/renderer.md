@@ -1026,10 +1026,21 @@ Round 1, items 1–7:
   gene by its signature: fangs (venom), a warning sign, an up arrow (giant), an hourglass
   (elder), a frog (gills), a snowflake (coat), a leaf (leaves) and a sparkle on night blue
   (glow). The genome has no gene for night habits, so glow is the only night trait shown.
-  The card is R3's scroll, smaller: the same paper, rolls and font. It unrolls from its
-  left roll in 0.7 s once a dip is half clear, and rolls up in 0.45 s when the view leaves
-  the animal or turns to another. `window.__card()` reads it out; the phone's
-  follow-a-creature (S3) shows the same card.
+  The card is a naturalist's field-guide card, not parchment (the owner, 2026-10-23: the
+  card and the chronicle's scroll different, both better): cream in a thin wooden frame lit
+  from the upper left, the species' name in cream on a sage heading band, and below it a
+  plate with a portrait of the animal itself. The portrait is the scene's own drawing
+  (`src/creatures/portrait.ts`): a creature layer of its own holds the one animal, with the
+  local view's body options and species plans, posed straight and facing right (curled up
+  if torpid, as small as it is if young), and draws it into a texture whose pixels the card
+  paints, at the zoom that fits it into 40 of the plate's 44 art pixels (never more than
+  three times its local size, the outline one art pixel). Each portrait is drawn once and
+  kept (eight at most) by a key that changes when the drawing would (`Herd.portraitOf`).
+  Beside the plate the trait words stand one to a ruled line, the icons under them. The
+  card slides in from the screen's left edge in 0.7 s once a dip is half clear, and back
+  out in 0.45 s when the view leaves the animal, turns to another, or visits the place of a
+  chronicle entry. `window.__card()` reads it out; the phone's follow-a-creature (S3)
+  shows the same card.
 - **Animals under the leaves** (2026-10-23, after the owner: "it still seems like they
   walk over the bushes"). Plants and animals are drawn in rows by where they touch the
   ground, as top-down games sort by the feet. That is right for Stardew's characters,
@@ -1093,6 +1104,41 @@ Round 1, items 1–7:
   out.
 - **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
   its grown length with its head 35 % larger for its body, redrawn at each sixteenth.
+
+### Measuring the scene on the device (R5)
+
+The R0 spike's role passes to the real page. `index.html?bench` (`src/bench.ts`,
+scenarios in `src/benchplan.ts`) plays the committed creatures' recording
+(`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), there being no server yet,
+and measures nine scenarios, each on a fresh page load (the first load plans where the
+pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
+never `?film`'s.
+
+| Scenario | View | What it measures |
+|---|---|---|
+| `map` | map (director) | the whole island, every animal a dot |
+| `middle` | middle (button once) | the drifting middle view |
+| `middle-crowd` | middle, pinned | the window with the most animals in sight |
+| `local` | local (button twice) | following an animal |
+| `night` | middle, crowd | the moonlit tint and the glow pass, every animal made a glow carrier |
+| `rain` | middle, crowd | rain at full strength under grey cloud |
+| `fire` | middle, most fuel | 300 burning cells under the thunderstorm that lit them |
+| `apocalypse` | map | the world's end moved into the flood, repainted 10 times a second |
+| `shore` | local, pinned | the most coast a local view shows: the tide's shader |
+
+The first four are judged (ADR 0010): 30 fps median with 0.5 fps of slack. On the board
+the kiosk is capped at 30 fps (ADR 0022) and Chromium has no flag for that, so the page
+caps itself (`?cap=30`, `src/framecap.ts`): it drives Pixi's ticker from its own
+animation-frame loop and draws every other refresh of a 60 Hz screen. Besides the median
+and the 1 % low, each scenario reports the share of frames over budget (more than 33.3 + 2
+ms after the one before), the headroom the page's script leaves of the 33.3 ms (median and
+p99; GPU time is not in it), draw calls and sprites a frame, textures, JS heap, animals
+alive and in sight, and the atmosphere's counts. `tools/kiosk_bench.py` runs it by default
+(`--fps-cap 30`); the R0 spike stays at `--page spike.html`. The desk's build
+(`npm run build:kiosk`) compiles the demo paths out, takes `ws://<host>/stream` by
+default, and keeps `?bench` as its one way off the server, so the board is measured on the
+build it runs. On this PC (SwiftShader, loaded) the four judged views hold the cap: 30.0
+fps median, 29.9 at the 1 % low, no frame over budget, 0.8–2 ms of script a frame.
 
 ## What the spike stands in for
 

@@ -218,14 +218,19 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [x] 13. The tide moves the painted water line; plants and animals test a fixed sea level.
   The owner (2026-10-23): wet feet when the swash reaches an animal. Done:
   `Landscape.swashCovers` replays the shore shader's swash; `wading.ts` "feet"
-- [ ] 14. Demo code (`?show=`, the recordings) in the kiosk build: behind a dev flag
+- [x] 14. Demo code (`?show=`, the recordings) in the kiosk build: behind a dev flag.
+  Done: `npm run build:kiosk` (`dist-kiosk/`), demo paths compiled out, the server's stream
+  by default, `?bench` kept
 
 **For the benchmark**
 - [x] 15. The real scene off the spike: `CreatureLayer`, the atlas and the habitat into
   `creatures/` (where the legs, folding and bush fixes go). Done 2026-10-23: `layer.ts`,
   `atlas.ts`, `habitat.ts`, `seed.ts`, `views.ts`; the spike imports from them
-- [ ] 16. A benchmark mode on the real page (map, middle, crowded middle, local) and
-  `tools/kiosk_bench.py` pointed at it
+- [x] 16. A benchmark mode on the real page (map, middle, crowded middle, local) and
+  `tools/kiosk_bench.py` pointed at it. Done: `index.html?bench` (`bench.ts`,
+  `benchplan.ts`), nine scenarios (the four judged, night, rain, fire, apocalypse, shore),
+  `?cap=30`, `kiosk_bench.py --fps-cap 30`; on the PC all four hold 30 fps capped.
+  Open: an R5 report module (`tools/milestones/r5.py`) for the board's run
 - [ ] 17. Per-frame costs, fixed where the board shows they matter: a filter pass per
   animal fading in or out (`depart`, `materialise`), the grade matrix rebuilt every frame
   and the cloud's full-screen filter, the shore shader's colours re-parsed each frame,

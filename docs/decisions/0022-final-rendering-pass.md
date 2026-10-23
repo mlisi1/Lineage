@@ -127,6 +127,19 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### The scene's benchmark and the desk's build (2026-10-23)
+
+The benchmark moved from the R0 spike to the real page (`index.html?bench`) and plays the
+committed recordings, since there is no server yet. Besides the four views ADR 0010 judges,
+it measures the atmosphere's costs R4 left to R5: night with glow, rain, a big fire, the
+apocalypse's repaint and the shore's shader. Chromium has no flag that caps a page below
+the display's rate, so the page caps itself at 30 fps (`?cap=30`), and the report gives
+the share of frames over budget and the headroom left. The desk's build (`build:kiosk`)
+compiles the demo paths out and connects to `ws://<host>/stream` (S1's to provide), with
+`?bench` its one way to play recordings. The scrolls became two things: the chronicle an
+illuminated scroll, and the name card a field-guide card with the animal's portrait (the
+owner).
+
 ### Under the leaves (2026-10-23)
 
 The owner still saw animals walking over bushes, and asked for the fade to be switched

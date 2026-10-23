@@ -97,7 +97,10 @@ lineage/
 │   │   │                     #   glow, weather of events, the apocalypse sequence),
 │   │   │                     #   creatures/ (R5: the creature layer `layer.ts`, its atlas,
 │   │   │                     #   `habitat.ts`, `views.ts`, colours from the genes, the map's
-│   │   │                     #   dots, wading, remains), card.ts (the name card)
+│   │   │                     #   dots, wading, remains, portraits), card.ts (the name card),
+│   │   │                     #   marker.ts (a chronicle entry's place), bench.ts and
+│   │   │                     #   benchplan.ts (R5: the scene's benchmark), framecap.ts (the
+│   │   │                     #   30 fps cap), gpu.ts, framestats.ts
 │   │   ├── sheets/           # look sheets of the real scene (land.html, R1)
 │   │   └── spike/            # R0 spike: the scene, its in-page benchmark (spike.html),
 │   │                         #   the look sheet (look.html) and the creature sheet (R2);
@@ -117,7 +120,8 @@ lineage/
 │   └── lineage_device/       # presence.py, button.py, led.py, backlight.py, power.py, fake.py
 ├── app/                      # phone PWA shell, reuses renderer/
 ├── journal/                  # static site templates
-├── deploy/                   # os notes, systemd units, setup.sh, kiosk, backups, tailscale
+├── deploy/                   # os notes, systemd units (lineage-r0@, lineage-r5@: the board
+│                             #   benchmarks), setup.sh, kiosk, backups, tailscale
 ├── mockups/                  # HTML mockups and enclosure concepts (reference only)
 ├── reports/                  # committed milestone reports (HTML + metrics.json), see §7
 ├── runs/                     # gitignored raw fast-forward output
@@ -220,9 +224,14 @@ Do not create directories outside this layout without updating this file.
   - `cd renderer && npm run creatures` — write the creature sheet (phenotype port against
     the sim, creature styles side by side) to `reports/R2-creature-sheet/`; live at
     `/creatures.html`
-  - on the board: `python3 kiosk_bench.py --dist dist` (procedure in `deploy/README.md`;
-    from a board in its box, `deploy/board-setup.md`),
-    then `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
+  - `cd renderer && npm run build:kiosk` — the desk's build (`vite build --mode kiosk`) into
+    `renderer/dist-kiosk/`: the scene alone, demo paths compiled out (`?film`, `?file=`;
+    `?show=`/`?recording=` only under `?bench`), the server's stream `ws://<host>/stream` by
+    default
+  - on the board: `python3 kiosk_bench.py --dist dist-kiosk --fps-cap 30` (the scene's
+    benchmark, `index.html?bench`, R5; `--page spike.html --dist dist` for the R0 spike;
+    procedure in `deploy/README.md`, from a board in its box `deploy/board-setup.md`), then
+    for the spike `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
   - `cd renderer && npm test && npx playwright test` (`PLAYWRIGHT_PORT=…` when another
     worktree's tests may run at the same time)
   - `cd renderer && npm run typecheck && npm run lint`
