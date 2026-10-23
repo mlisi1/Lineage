@@ -545,6 +545,9 @@ async function start(): Promise<void> {
       rows: landscape.hosts,
     });
     advance = 0;
+    // The plants lean in the atmosphere's wind from the next frame on; a picture that must
+    // not change keeps them straight.
+    landscape.wind = still ? null : atmosphere.wind;
     world.scale.set(tile);
     // Under cloud the world is greyed (one filter pass); none on a clear day.
     if (atmosphere.graded !== graded) {

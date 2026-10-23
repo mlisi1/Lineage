@@ -19,7 +19,7 @@ import { DEFAULT_LOOK, type Look, type PlantInks } from "../looks";
 import { mulberry32 } from "../rng";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land, Ramp } from "../terrain/land";
-import { cellHash } from "../terrain/pixels";
+import { cellHash, type Pixels } from "../terrain/pixels";
 import { shoreSizes } from "../terrain/tide";
 import { heightAt } from "../creatures/habitat";
 import {
@@ -69,6 +69,7 @@ import {
   seasonsInPlay,
   type YearTime,
 } from "./turning";
+import { ROCK_JITTER, bendOf, gustAt, leanedPixels, leansOf, type Bend, type Wind } from "./wind";
 
 /** Cells per chunk of a row; whole chunks are built, and skipped, together. */
 const CHUNK_CELLS = 16;
@@ -95,6 +96,8 @@ const FADE_S = 0.25;
  * is the front of what stands on the ground, the trunk's base or the bush's lowest puffs.
  */
 const FOOTPRINT_RAISE = 0.6;
+/** The salt of each plant's own rocking in the wind, by where its foot is. */
+const PHASE_SALT = 977;
 
 export interface Placed {
   texture: Texture;
@@ -115,12 +118,35 @@ export interface Placed {
    * half its width and height in cells.
    */
   footprint?: { rx: number; ry: number; raise?: number };
+  /**
+   * For a plant that bends in the wind (`wind.ts`): its drawing leaning each whole pixel
+   * from `lowest` up (`texture` the one at lean 0), how many pixels of lean the wind gives
+   * it at strength 1 at the crest of a gust (`reach`), and the clear pixels the drawings
+   * are widened by to lean in (`added`), which are no part of the plant.
+   */
+  sway?: { frames: readonly Texture[]; lowest: number; reach: number; added: number };
+}
+
+/** A plant that bends in the wind, as the layer moves it (`PlantLayer.blow`). */
+interface Swaying {
+  sprite: Sprite;
+  frames: readonly Texture[];
+  lowest: number;
+  reach: number;
+  /** Where its foot is (cells), and how far out of step its rocking is (radians, `gustAt`). */
+  x: number;
+  y: number;
+  phase: number;
+  /** The lean it is drawn at now (art pixels). */
+  lean: number;
 }
 
 interface Row {
   container: Container;
   /** The plants of this row, by the first column of their chunk. */
   chunks: Map<number, Container>;
+  /** Those of each chunk's plants that bend in the wind, by the same column. */
+  swaying: Map<number, Swaying[]>;
   /** The creatures standing on this row, drawn over its plants. */
   guests: Container;
 }
@@ -132,6 +158,8 @@ export interface PlantLayerOptions {
   rowsPerCell?: number;
   /** Build every chunk at once instead of as the view reaches it. */
   eager?: boolean;
+  /** Called once chunks have been built: what they drew goes up to the GPU (`LeanSheet`). */
+  built?: () => void;
 }
 
 export class PlantLayer {
@@ -143,6 +171,7 @@ export class PlantLayer {
   private readonly rows: Row[] = [];
   private readonly built = new Set<number>();
   private readonly tall: number;
+  private readonly onBuilt: (() => void) | undefined;
   private sprites = 0;
   /** Plants see-through, or on their way there or back. */
   private readonly faded = new Set<Sprite>();
@@ -165,10 +194,16 @@ export class PlantLayer {
     options: PlantLayerOptions,
   ) {
     this.tall = options.tall;
+    this.onBuilt = options.built;
     this.rowsPerCell = options.rowsPerCell ?? 1;
     this.feet = new Array<number[] | undefined>(land.width * land.height);
     for (let row = 0; row < land.height * this.rowsPerCell; row++) {
-      const made: Row = { container: new Container(), chunks: new Map(), guests: new Container() };
+      const made: Row = {
+        container: new Container(),
+        chunks: new Map(),
+        swaying: new Map(),
+        guests: new Container(),
+      };
       made.container.addChild(made.guests);
       this.rows.push(made);
       this.container.addChild(made.container);
@@ -316,9 +351,11 @@ export class PlantLayer {
     // A plant shows from its foot up to its top, so rows below the view count too.
     const firstY = Math.max(Math.floor(view.y0) - 1 - REACH_CELLS, 0);
     const lastY = Math.min(Math.ceil(view.y1 + this.tall), height - 1);
+    const before = this.built.size;
     for (let y = firstY; y <= lastY; y++) {
       for (let chunk = firstChunk; chunk <= lastChunk; chunk++) this.build(y, chunk * CHUNK_CELLS);
     }
+    if (this.built.size !== before) this.onBuilt?.();
     let drawn = 0;
     this.rows.forEach((row, index) => {
       const top = index / this.rowsPerCell;
@@ -333,6 +370,42 @@ export class PlantLayer {
       }
     });
     return drawn;
+  }
+
+  /**
+   * Lean the plants in view with `wind` (`wind.ts`): each that bends is drawn in the lean
+   * the wind gives it where it stands, in whole art pixels; all straight without wind.
+   * Only the chunks `cull` left visible are looked at, and a drawing is swapped only when
+   * its lean changes.
+   */
+  blow(wind: Wind | null): void {
+    for (const row of this.rows) {
+      if (!row.container.visible) continue;
+      for (const [x, swaying] of row.swaying) {
+        if (row.chunks.get(x)?.visible !== true) continue;
+        for (const plant of swaying) {
+          const last = plant.lowest + plant.frames.length - 1;
+          const lean =
+            wind === null
+              ? 0
+              : Math.min(
+                  Math.max(
+                    Math.round(
+                      wind.strength *
+                        plant.reach *
+                        gustAt(plant.x, plant.y, wind.timeS, plant.phase),
+                    ),
+                    plant.lowest,
+                  ),
+                  last,
+                );
+          if (lean === plant.lean) continue;
+          plant.lean = lean;
+          const frame = plant.frames[lean - plant.lowest];
+          if (frame !== undefined) plant.sprite.texture = frame;
+        }
+      }
+    }
   }
 
   /**
@@ -501,14 +574,37 @@ export class PlantLayer {
         }
         chunk.addChild(sprite);
         this.sprites += 1;
+        if (placed.sway !== undefined) {
+          const { frames, lowest, reach } = placed.sway;
+          let swaying = row.swaying.get(left);
+          if (swaying === undefined) {
+            swaying = [];
+            row.swaying.set(left, swaying);
+          }
+          // Out of step by where its foot is: a plant and its overlays rock together.
+          const phase =
+            ROCK_JITTER * cellHash(Math.round(footX * tile), Math.round(footY * tile), PHASE_SALT);
+          swaying.push({ sprite, frames, lowest, reach, x: footX, y: footY, phase, lean: 0 });
+        }
       }
     }
   }
 }
 
 interface Drawing {
+  /** The drawing standing straight. */
   texture: Texture;
   art: PlantArt;
+  /** How it bends in the wind (`wind.ts`), if it does. */
+  bend: Bend | null;
+  /** Its pixels, coloured again: for drawing it leaning when a plant first needs it to. */
+  colour: () => Pixels;
+  /**
+   * Once a plant drawn so has been built (`leaningOf`): the drawing leaning each whole pixel
+   * from `lowest` (against the wind) up, lean 0 among them, every one widened by clear
+   * pixels to lean in, `left` of them on the left and `added` in all.
+   */
+  leaning?: { frames: Texture[]; lowest: number; left: number; added: number };
 }
 
 /**
@@ -517,6 +613,12 @@ interface Drawing {
  */
 const SHEET_WIDTH = 2048;
 const SHEET_HEIGHT = 2048;
+/**
+ * How tall each page of leaning drawings is (pixels, as wide as a sheet): they are drawn
+ * as the plants that need them are built, a page at a time, so a page is smaller than a
+ * sheet, not to hold memory for drawings never used.
+ */
+const LEAN_PAGE_HEIGHT = 1024;
 
 /** Draw `arts` into textures (pages), in rows, a clear pixel between them. */
 function strip(
@@ -567,17 +669,100 @@ function strip(
     const at = places[index] ?? { page: 0, left: 1, top: 1 };
     const sheet = contexts[at.page];
     if (sheet === undefined) return;
-    const pixels = colourArt(art, ramp, accent, wood, inks);
+    const colour = (): Pixels => colourArt(art, ramp, accent, wood, inks);
+    const pixels = colour();
     sheet.context.putImageData(
       new ImageData(pixels.rgba, pixels.width, pixels.height),
       at.left,
       at.top,
     );
     const frame = new Rectangle(at.left, at.top, art.width, art.height);
-    drawings.set(key, { texture: new Texture({ source: sheet.source, frame }), art });
+    drawings.set(key, {
+      texture: new Texture({ source: sheet.source, frame }),
+      art,
+      bend: bendOf(key),
+      colour,
+    });
   });
   for (const { source } of contexts) source.update();
   return { drawings, sources: contexts.map(({ source }) => source) };
+}
+
+/**
+ * Pages the leaning drawings go into (R5, `wind.ts`), filled as the plants that need them
+ * are built: along a row, then the next, then a new page. What is added since the last
+ * `flush` goes up to the GPU then, once a frame at most.
+ */
+class LeanSheet {
+  private readonly pages: { context: CanvasRenderingContext2D; source: CanvasSource }[] = [];
+  private left = 1;
+  private top = 1;
+  private rowTall = 0;
+  private readonly dirty = new Set<CanvasSource>();
+
+  /** Put `pixels` on a page; the texture it is drawn in. */
+  add(pixels: Pixels): Texture {
+    if (this.left + pixels.width + 1 > SHEET_WIDTH && this.left > 1) {
+      this.left = 1;
+      this.top += this.rowTall + 1;
+      this.rowTall = 0;
+    }
+    let page = this.pages[this.pages.length - 1];
+    if (page === undefined || this.top + pixels.height + 1 > LEAN_PAGE_HEIGHT) {
+      const canvas = document.createElement("canvas");
+      canvas.width = SHEET_WIDTH;
+      canvas.height = LEAN_PAGE_HEIGHT;
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("no 2D canvas for the plants");
+      page = { context, source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) };
+      this.pages.push(page);
+      this.left = 1;
+      this.top = 1;
+      this.rowTall = 0;
+    }
+    page.context.putImageData(
+      new ImageData(pixels.rgba, pixels.width, pixels.height),
+      this.left,
+      this.top,
+    );
+    const frame = new Rectangle(this.left, this.top, pixels.width, pixels.height);
+    this.left += pixels.width + 1;
+    this.rowTall = Math.max(this.rowTall, pixels.height);
+    this.dirty.add(page.source);
+    return new Texture({ source: page.source, frame });
+  }
+
+  /** Send what was added to the GPU. */
+  flush(): void {
+    for (const source of this.dirty) source.update();
+    this.dirty.clear();
+  }
+
+  destroy(): void {
+    for (const { source } of this.pages) source.destroy();
+    this.pages.length = 0;
+    this.dirty.clear();
+  }
+}
+
+/**
+ * Drawing `drawing` leaning each whole pixel it can (`leansOf`), drawn into `sheet` the
+ * first time a plant needs it; none for a drawing that does not bend.
+ */
+function leaningOf(drawing: Drawing, sheet: LeanSheet): Drawing["leaning"] {
+  if (drawing.leaning !== undefined || drawing.bend === null) return drawing.leaning;
+  const { bend, art } = drawing;
+  const { lowest, highest } = leansOf(bend, art.footY);
+  if (highest <= lowest) return undefined;
+  const pixels = drawing.colour();
+  const left = Math.max(-lowest, 0);
+  const right = Math.max(highest, 0);
+  const frames: Texture[] = [];
+  for (let lean = lowest; lean <= highest; lean++) {
+    frames.push(sheet.add(leanedPixels(pixels, art.footY, bend, lean, left, right)));
+  }
+  drawing.leaning = { frames, lowest, left, added: left + right };
+  return drawing.leaning;
 }
 
 const NO_RAMP: Ramp = ["#000000", "#000000", "#000000"];
@@ -943,12 +1128,15 @@ interface Sheet {
   drawings: Map<string, Drawing>;
   /** Height in cells of the tallest drawing. */
   tall: number;
+  /** Where its drawings go leaning, as plants that bend are first built (`leaningOf`). */
+  lean: LeanSheet;
   /** One layer fewer uses it: the last to go destroys its texture. */
   release: () => void;
 }
 interface SharedSheet {
   drawings: Map<string, Drawing>;
   sources: CanvasSource[];
+  lean: LeanSheet;
   tall: number;
   users: number;
 }
@@ -982,6 +1170,7 @@ function sheetOf(
     const drawn = arts();
     shared = {
       ...strip(drawn, look.plants),
+      lean: new LeanSheet(),
       tall: Math.max(...drawn.map(({ art }) => art.height)) / tile,
       users: 0,
     };
@@ -994,12 +1183,14 @@ function sheetOf(
   return {
     drawings: mine.drawings,
     tall: mine.tall,
+    lean: mine.lean,
     release: () => {
       if (released) return;
       released = true;
       mine.users -= 1;
       if (mine.users > 0) return;
       for (const source of mine.sources) source.destroy();
+      mine.lean.destroy();
       sheets.delete(key);
     },
   };
@@ -1082,14 +1273,28 @@ export function standingPlants(
     const drawing = drawings.get(key);
     if (drawing === undefined) return [];
     const { art } = drawing;
+    // A plant that bends is drawn in its leaning drawings, lean 0 to begin with.
+    const leaning = leaningOf(drawing, sheet.lean);
+    const left = leaning?.left ?? 0;
+    const added = leaning?.added ?? 0;
     return [
       {
-        texture: drawing.texture,
-        anchorX: art.footX / art.width,
+        texture: leaning?.frames[-leaning.lowest] ?? drawing.texture,
+        anchorX: (art.footX + left) / (art.width + added),
         anchorY: art.footY / art.height,
         scale: 1 / tile,
         dx,
         dy,
+        ...(leaning === undefined || drawing.bend === null
+          ? {}
+          : {
+              sway: {
+                frames: leaning.frames,
+                lowest: leaning.lowest,
+                reach: drawing.bend.flex * art.footY,
+                added,
+              },
+            }),
         ...(art.shadow === undefined
           ? {}
           : { shadow: { rx: art.shadow.rx / tile, ry: art.shadow.ry / tile } }),
@@ -1258,7 +1463,8 @@ export function standingPlants(
   const standing = (plants: Placed[], kind: "tree" | "bush", sprout: boolean): Placed[] => {
     const own = plants[0];
     if (own === undefined || sprout) return plants;
-    const rx = (FOOTPRINT_SHARE[kind] * own.texture.width) / tile;
+    // The plant's own width, not the room its drawings have to lean in.
+    const rx = (FOOTPRINT_SHARE[kind] * (own.texture.width - (own.sway?.added ?? 0))) / tile;
     if (kind === "bush") {
       // A bush is a low mound, and animals are seen from above: anywhere its drawing covers,
       // an animal would be inside it (R5, the owner: "avoid a creature entering inside a
@@ -1363,8 +1569,12 @@ export function standingPlants(
         ),
       ];
     },
-    // Close up, plants and animals are large enough to be sorted four rows to the cell.
-    close ? { tall, rowsPerCell: 4 } : { tall, eager: options.lazy !== true },
+    {
+      tall,
+      // Close up, plants and animals are large enough to be sorted four rows to the cell.
+      ...(close ? { rowsPerCell: 4 } : { eager: options.lazy !== true }),
+      built: () => sheet.lean.flush(),
+    },
   );
   layer.own({ destroy: () => sheet.release() });
   return layer;

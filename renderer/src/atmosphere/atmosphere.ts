@@ -71,6 +71,7 @@ import {
   type Sprites,
 } from "./sprites";
 import { VISIBLE_FROM } from "../plants/look";
+import { windStrength, type Wind } from "../plants/wind";
 import { FADE_S } from "../terrain/grounds";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
@@ -386,6 +387,8 @@ export class Atmosphere {
   private rain = 0;
   private storm = 0;
   private overcast = 0;
+  /** How dark it was at the last update (0–1): the wind drops a little at night. */
+  private dark = 0;
   /** How much of the fall is snow, 0–1, eased; and the view's snowy share, kept per land and view. */
   private snowfall = 0;
   private snowShare: { land: Land; key: string; share: number } | null = null;
@@ -612,6 +615,7 @@ export class Atmosphere {
     this.boltPool.begin();
     let shake = 0;
     const dark = this.darkness(moment);
+    this.dark = dark;
     this.watchSowing(view.land);
     this.drawSprouts(view);
     this.drawGlow(view, dark);
@@ -636,6 +640,14 @@ export class Atmosphere {
     if (shake <= 0 || dtS <= 0) return { x: 0, y: 0 };
     const jolt = (): number => Math.round((this.options.random() * 2 - 1) * shake);
     return { x: jolt(), y: jolt() };
+  }
+
+  /**
+   * The wind the plants lean in (R5, `plants/wind.ts`): on the atmosphere's clock, as hard
+   * as the rain and a thunderstorm make it, a little calmer at night.
+   */
+  get wind(): Wind {
+    return { timeS: this.timeS, strength: windStrength(this.rain, this.storm, this.dark) };
   }
 
   /** How dark it is (0–1): the night's, or the end of a world's. */

@@ -17,6 +17,7 @@ import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
 import { standingPlants, type PlantLayer } from "./plants/plants";
 import type { YearTime } from "./plants/turning";
+import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
 import { landOf, yearOf } from "./stream";
 import { MAP_TILE, MID_TILE, type GroundStyle } from "./terrain/ground";
@@ -93,10 +94,13 @@ class PlantFade {
     return coming ? (this.outgoing ?? this.current) : this.current;
   }
 
-  tick(dtS: number, view: CellRect): void {
+  /** Move the fade on by `dtS` for `view`, the plants leaning in `wind` (none: standing straight). */
+  tick(dtS: number, view: CellRect, wind: Wind | null): void {
     this.current?.cull(view);
+    this.current?.blow(wind);
     if (this.outgoing === null || this.current === null) return;
     this.outgoing.cull(view);
+    this.outgoing.blow(wind);
     this.age += dtS;
     const half = this.fadeS / 2;
     this.current.container.alpha = Math.min(this.age / half, 1);
@@ -137,6 +141,8 @@ export class Landscape {
   readonly floor = new Container();
   /** Cells a cone or crater covers (R4): no plant, stone or boulder is placed there. */
   covered: ((x: number, y: number) => boolean) | null = null;
+  /** The wind the plants of the view shown lean in (R5, `plants/wind.ts`); none: straight. */
+  wind: Wind | null = null;
   private readonly layers: Record<ViewName, Container> = {
     map: new Container(),
     middle: new Container(),
@@ -295,11 +301,11 @@ export class Landscape {
     }
     if (built.middle !== null) {
       built.middle.ground.tick(dtS);
-      built.middle.plants.tick(dtS, cells);
+      built.middle.plants.tick(dtS, cells, this.view === "middle" ? this.wind : null);
     }
     if (built.local !== null) {
       built.local.ground.tick(dtS);
-      built.local.plants.tick(dtS, cells);
+      built.local.plants.tick(dtS, cells, this.view === "local" ? this.wind : null);
       if (this.view === "local") built.local.ground.cover(cells);
     }
   }
