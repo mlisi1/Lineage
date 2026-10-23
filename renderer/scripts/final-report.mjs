@@ -135,6 +135,92 @@ const FOLLOWS = {
       window.__pin?.(2184, 65.6, 71.3, Math.PI); window.__send?.(2184, 65.6, 71.3); window.__feed?.(2184, "meat");
     })()`,
   },
+  // Hunting and births (R5), staged on the same grass: the large lizard runs at the
+  // animal put two cells off and springs; then a birth beside it, and one from an egg.
+  hunt: {
+    query: "view=local&x=64&y=71&quiet&seed=1",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2184, 66.2, 71.3, 2.8); window.__send?.(2184, 66.2, 71.3);
+      window.__pin?.(2048, 62.3, 70.8, 0); window.__send?.(2048, 62.3, 70.8);
+    })()`,
+    then: "window.__hunt?.(2048, 2184)",
+  },
+  birth: {
+    query: "view=local&x=64&y=71&quiet&seed=1",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+    stage: "(() => { window.__pin?.(2048, 63.4, 71, 0); window.__send?.(2048, 63.4, 71); })()",
+    then: "window.__birth?.(2048, 2220, false)",
+  },
+  egg: {
+    query: "view=local&x=64&y=71&quiet&seed=1",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+    stage: "(() => { window.__pin?.(2048, 63.4, 71, 0); window.__send?.(2048, 63.4, 71); })()",
+    then: "window.__birth?.(2048, 2220, true)",
+  },
+  // Sleep (R5): the lizard put down at night lies down; and an animal followed at night.
+  sleep: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=night",
+    seconds: 5,
+    presses: 0,
+    crop: 2,
+    stage: "(() => { window.__pin?.(2048, 64, 71, 0); window.__send?.(2048, 64, 71); })()",
+  },
+  sleepFollow: { query: "seed=1&follow=60&quiet&show=night", seconds: 6, crop: 2 },
+  // Small life about the island (R5): fireflies at night, gulls by day, dust underfoot.
+  fireflies: { query: "view=middle&quiet&seed=1&show=night", seconds: 6, presses: 0 },
+  gulls: { query: "view=middle&quiet&seed=1&show=day", seconds: 8, presses: 0, advance: 28 },
+  dust: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=day",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+    stage: "(() => { window.__pin?.(2048, 60, 71, 0); window.__send?.(2048, 70, 71); })()",
+  },
+  // Plants in the wind (R5): a calm day and a thunderstorm, enlarged twice.
+  windCalm: {
+    query: "view=local&x=52&y=97&quiet&seed=1&show=day",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+  },
+  windStorm: {
+    query: "view=local&x=52&y=97&quiet&seed=1&show=storm",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+  },
+  // Bushes in pieces (R5, an experiment behind `?bushes=pieces`): the staged walks again.
+  stagedBehindPieces: {
+    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: STAGE_THROUGH(1.0, 122.85),
+  },
+  stagedFrontPieces: {
+    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: STAGE_THROUGH(122.85 - 124, 125.0),
+  },
+  stagedAcrossPieces: {
+    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
+    seconds: 8,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      [2048, 2184, 2220].forEach((id, k) => window.__pin?.(id, 89.6, 123.3 + k * 0.5, 0));
+      [2048, 2184, 2220].forEach((id, k) => window.__send?.(id, 93.6, 123.3 + k * 0.5));
+    })()`,
+  },
   // Animals of five sizes living among bushes, from the largest to the smallest, the
   // middle of the screen enlarged twice (the camera keeps the animal followed there).
   bush2: { query: "seed=2&follow=60&quiet", seconds: 12, crop: 2 },
@@ -240,13 +326,18 @@ async function follow(
   page,
   address,
   name,
-  { query, seconds, presses = 2, crop = 1, advance = 0, stage = null },
+  { query, seconds, presses = 2, crop = 1, advance = 0, stage = null, then = null },
 ) {
   await open(page, address, query);
-  // A scene staged by hand (R5): animals put and sent where the film is to look.
+  // A scene staged by hand (R5): animals put and sent where the film is to look, and
+  // what they are to do once they stand there.
   if (stage !== null) {
     await skip(page, 2);
     await page.evaluate(stage);
+  }
+  if (then !== null) {
+    await skip(page, 0.5);
+    await page.evaluate(then);
   }
   // Run the scene on to just before what the film is for, a quarter of a second a frame.
   for (let done = 0; done < advance; done += ADVANCE_STEP_S * 40) {
@@ -435,6 +526,13 @@ function zoom(name, caption) {
 }
 
 /** A film before and after, side by side. */
+/** A film of the scene after R5 alone (one staged by hand, or new), with its caption. */
+function filmAfter(name, caption) {
+  const film = films.after[name];
+  if (film === undefined) return "";
+  return `<figure><video src="films/${film.file}" poster="${uri(film.poster)}" autoplay loop muted playsinline controls aria-label="${escape(caption)}"></video><figcaption>${caption} <span class="meta">${film.frames} frames at ${FPS} fps, ${(film.bytes / 1e6).toFixed(1)} MB, <code>films/${film.file}</code></span></figcaption></figure>`;
+}
+
 function filmPair(name, captions) {
   return `<div class="pair">${["before", "after"]
     .map((side, k) => {
@@ -530,7 +628,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -677,6 +775,19 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 </section>
 <hr>
 
+<section id="pieces">
+<div class="head"><span class="n">·</span><h2>An experiment: bushes in pieces (<code>?bushes=pieces</code>)</h2></div>
+<div class="notes">
+<div><span class="label">Why</span><p>The owner, still unsatisfied with animals among bushes: perhaps draw the bushes in pieces. The default is unchanged; the experiment is switched on with <code>?bushes=pieces</code>.</p></div>
+<div><span class="label">How</span><p>Each puff of a bush in the local view is a sprite of its own, cut from the same drawing (each pixel to the puff painted last over it), so a bush with no animal near looks as before. Each piece is sorted by the foot of its puff and keeps a small footprint of its own (0.85 of its radius across, 0.5 deep): together they block the lower two-thirds of the bush, so animals pass behind its top puffs and between bushes. A piece is over an animal only where a joint of the animal is behind its foot and under its drawing: in front of a puff an animal is drawn over it, between puffs it is behind the back ones and under the front ones. Trees, sprouts and fire pines stay whole; pieces do not lean in the wind (<code>src/plants/pieces.ts</code>).</p></div>
+</div>
+<p class="meta">The same three staged walks with the bushes in pieces: compare with the films above.</p>
+${filmAfter("stagedBehindPieces", "Pieces: from in front to behind")}
+${filmAfter("stagedFrontPieces", "Pieces: from behind to in front")}
+${filmAfter("stagedAcrossPieces", "Pieces: past it sideways")}
+</section>
+<hr>
+
 <section id="card">
 <div class="head"><span class="n">·</span><h2>The name card of the animal followed</h2></div>
 <div class="notes">
@@ -723,6 +834,49 @@ ${Object.keys(SCROLLS)
 <div><span class="label">Now</span><p>The stream says who is grazing (plants or algae) and who is feeding on meat. One that eats stands where it is: a grazer reaches to the ground in nibbles, three and a pause to chew, a flake of green at its mouth; one on meat tugs side to side and back, flecks of red. Staged here on open grass, enlarged twice: the large lizard grazing, the animal on the right feeding on meat.</p></div>
 </div>
 ${films.after.eating === undefined ? "" : `<figure><video src="films/${films.after.eating.file}" poster="${uri(films.after.eating.poster)}" autoplay loop muted playsinline controls></video><figcaption><span class="meta">${films.after.eating.frames} frames at ${FPS} fps</span></figcaption></figure>`}
+</section>
+<hr>
+
+<section id="hunting">
+<div class="head"><span class="n">·</span><h2>Hunting and births</h2></div>
+<div class="notes">
+<div><span class="label">Was</span><p>A kill was a scuffle where the prey stood, with no hunter near; a newborn faded in wherever the simulation put it.</p></div>
+<div><span class="label">Now</span><p>The sim tells who killed each prey and whose each newborn is (<code>died[].by</code>, <code>born[].parent</code> on the wire; outputs only). A hunter that still lives runs to its prey round trees and bushes, at least 2.5 times its walking pace for 0.4–1.2 s, stops half its length short, and springs, its head thrust at the prey, dust from its hind feet; at the strike the prey dies as a kill does. A newborn appears beside its mother's head, facing her, clear of trees and bushes; she stands over it 2.6 s and lowers her head to it twice while three pixel hearts rise. A mother of broods of three or more lays: the young is an egg that rocks, cracks and comes apart (<code>src/creatures/hunting.ts</code>, <code>nursery.ts</code>). Staged on open grass, enlarged twice.</p></div>
+</div>
+${filmAfter("hunt", "A hunt: the large lizard runs at the animal two cells off and springs")}
+${filmAfter("birth", "A birth beside the mother")}
+${filmAfter("egg", "A birth from an egg (a mother of large broods)")}
+</section>
+<hr>
+
+<section id="sleep">
+<div class="head"><span class="n">·</span><h2>Sleep at night</h2></div>
+<div class="notes">
+<div><span class="label">Now</span><p>Only drawn: the sim does not sleep. As the light goes each animal lies down at its own moment (from its genome), curled as far as its body bends, feet tucked, eyes shut to a slit, breathing slower and deeper; it wakes over the dawn. Animals with glow, keen senses (SENSE ≥ 0.8) and swimmers stay up. Moved far by the sim, or reached by the water, it gets up and walks, and settles again a few seconds later. A small "z" rises over the animal followed (<code>src/creatures/sleep.ts</code>).</p></div>
+</div>
+${filmAfter("sleep", "The lizard, put down at night, lies down")}
+${filmPair("sleepFollow", ["Before: an animal followed at night", "After: asleep, a z over it"])}
+</section>
+<hr>
+
+<section id="ambient">
+<div class="head"><span class="n">·</span><h2>Small life about the island</h2></div>
+<div class="notes">
+<div><span class="label">Now</span><p>Decoration only, on a random stream of its own, from pooled sprites: fireflies blinking over grass and shrub at night (middle and local views); a V of one to four gulls crossing the middle view by day, with a faint shadow; three butterflies over the meadows in the local view in spring and summer; puffs of dust from the hind feet of an animal hurrying on dry land. Nothing in rain, on the map or during a world's end (<code>src/atmosphere/ambient.ts</code>).</p></div>
+</div>
+${filmPair("fireflies", ["Before: the middle view at night", "After: fireflies"])}
+${filmPair("gulls", ["Before: the middle view by day", "After: gulls cross it"])}
+${filmAfter("dust", "Dust from the feet of an animal sent hurrying, enlarged twice")}
+</section>
+<hr>
+
+<section id="wind">
+<div class="head"><span class="n">·</span><h2>Plants in the wind</h2></div>
+<div class="notes">
+<div><span class="label">Now</span><p>Grass, flowers, ferns, reeds, bushes and the crowns of trees lean with the wind by whole art pixels, drawn again leaning one pixel back and up to three with it: rows slide, none below a hinge, a crown as one piece, so nothing smears and trunks stay put. Gusts of value noise roll east-south-east at 2.2 cells a second, so neighbours move together. It blows harder in rain and much harder in a thunderstorm, softer at night; <code>?still</code> keeps every plant straight (<code>src/plants/wind.ts</code>, <code>PlantLayer.blow</code>). Enlarged twice.</p></div>
+</div>
+${filmPair("windCalm", ["Before: a calm day", "After: a calm day, grass and crowns stir"])}
+${filmPair("windStorm", ["Before: a thunderstorm", "After: a thunderstorm, everything leans"])}
 </section>
 <hr>
 
