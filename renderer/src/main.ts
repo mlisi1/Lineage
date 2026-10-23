@@ -107,7 +107,15 @@ declare global {
     /** What the camera shows and does (tests). */
     __camera?: () => Shot & { motion: string; dipping: boolean; visit: Visit | null };
     /** What the scroll shows (tests). */
-    __captions?: () => { phase: string; text: string | null; waiting: number; lamp: number };
+    __captions?: () => {
+      phase: string;
+      text: string | null;
+      waiting: number;
+      lamp: number;
+      kind: string | null;
+      icon: string | null;
+      initial: number | null;
+    };
     /** What the name card of the animal followed shows (tests; S3 shows the same card). */
     __card?: () => {
       phase: CardPhase;
@@ -215,7 +223,12 @@ async function start(): Promise<void> {
   dim.style.background = DARK;
   dim.style.opacity = "0";
   dim.style.pointerEvents = "none";
-  const captions = new Captions(WIDTH, HEIGHT);
+  // The initial of an entry about a species is in the species' colour, as the herd draws it.
+  const captions = new Captions(
+    WIDTH,
+    HEIGHT,
+    (species) => herd.colourTable().find((row) => row.id === species)?.body ?? null,
+  );
   // The name card of the animal followed, in the top-left corner (R5).
   const card = new NameCard(WIDTH, HEIGHT);
   frame.append(dim, captions.element, card.element);
@@ -385,8 +398,16 @@ async function start(): Promise<void> {
   };
   window.__card = () => card.state;
   window.__captions = () => {
-    const { phase, caption, waiting, lamp } = captions.state;
-    return { phase, text: caption?.text ?? null, waiting, lamp };
+    const { phase, caption, waiting, lamp, icon, initial } = captions.state;
+    return {
+      phase,
+      text: caption?.text ?? null,
+      waiting,
+      lamp,
+      kind: caption?.kind ?? null,
+      icon,
+      initial,
+    };
   };
   // PixiJS leaves a freed texture's place empty (null) rather than taking it out: count the rest.
   window.__textures = () =>

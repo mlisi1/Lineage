@@ -2,9 +2,15 @@
  * Captions (R3, ADR 0020): the chronicle's notable entries, each on a parchment scroll
  * at the foot of the screen. A scroll unrolls from its middle, both rolls moving apart,
  * stays open for as long as the entry takes to read, and rolls up again; entries that
- * come together wait their turn. The scroll is pixel art at the scene's art pixels, its
- * text in the caption font (`pixelfont.ts`), in the cosy palette: warm paper, wooden
- * rolls, outlines in each thing's own darkest tone leaning to plum.
+ * come together wait their turn. The scroll is pixel art at the scene's art pixels, in the
+ * cosy palette: warm paper, wooden rolls, outlines in each thing's own darkest tone
+ * leaning to plum.
+ *
+ * It is illuminated (R5, the owner's choice, 2026-10-23; `illumination.ts`): the date is
+ * lettered on a red ribbon pinned across the paper's top edge, and the entry opens with
+ * an icon of its kind of event and an initial two lines tall in its species' colour (or
+ * vermilion), the rest in the scroll's hand (`HAND_FONT`, larger than the caption font),
+ * in balanced lines (at least two, at most three) so that a short entry has a short scroll.
  *
  * The scroll is a page element over the canvas, so the scene's tint does not reach it: it
  * is lit like a lantern instead (the owner, 2026-10-23, R5). By day it is as painted; as
@@ -16,7 +22,21 @@
  * The queue and the painting are pure; `Captions` puts the painting on screen.
  */
 import { daylight, mixRgb, multiplyRgb, packRgb, type Rgb } from "./atmosphere/light";
-import { GLYPH_ROWS, draw, measure, wrap } from "./pixelfont";
+import {
+  ICON_SIZE,
+  VERMILION,
+  iconOf,
+  initialHeight,
+  initialWidth,
+  paintIcon,
+  paintInitial,
+  paintRibbon,
+  ribbonHeight,
+  ribbonWidth,
+  splitInitial,
+  type IconName,
+} from "./illumination";
+import { HAND_FONT, HAND_ROWS } from "./pixelfont";
 import type { ChronicleMessage } from "./protocol";
 
 /** Seconds to unroll, to roll up, and between one scroll and the next. */
@@ -29,11 +49,26 @@ export const READ_PER_CHARACTER_S = 0.07;
 /** Entries waiting beyond this many: the least important (then the oldest) are dropped. */
 export const MOST_WAITING = 4;
 
-/** Art pixels of text to a line, the paper's margin round it, and between lines. */
-const TEXT_WIDTH = 264;
-const MARGIN_X = 9;
+/**
+ * Art pixels of the widest the writing may be (icon, initial and text; the screen is 512
+ * across), the paper's margin round it, and between one line of the hand and the next.
+ */
+const TEXT_WIDTH = 420;
+const MARGIN_X = 8;
 const MARGIN_Y = 5;
-const LINE_GAP = 1;
+const LINE_GAP = 2;
+/** Art pixels between the icon and the initial, and between the initial and its lines. */
+const ICON_GAP = 4;
+const INITIAL_GAP = 3;
+/** Lines of text beside the initial; the lines after them run under it. */
+const BESIDE_INITIAL = 2;
+/**
+ * The date's ribbon: art pixels from the paper's left to it, how far it rises above the
+ * paper's top edge (it is pinned across it), and the paper between it and the writing.
+ */
+const RIBBON_INDENT = 4;
+const RIBBON_RISE = 4;
+const RIBBON_GAP = 3;
 /** The rolls: art pixels across, how far they reach above and below the paper, and their knobs. */
 const ROLL_WIDTH = 10;
 const ROLL_OVER = 3;
@@ -44,7 +79,7 @@ const SHADOW = 2;
 /** Columns of shaded paper where it curls into a roll. */
 const CURL = 2;
 /** At most so many lines of text; an entry longer than that is cut with an ellipsis. */
-const MOST_LINES = 4;
+const MOST_LINES = 3;
 
 /** The scroll's colours (0xRRGGBB), the name card's too (`card.ts`). */
 export const INK = 0x5a3424;
@@ -147,6 +182,10 @@ export interface Caption {
   number: number;
   importance: number;
   text: string;
+  /** What kind of event it tells of (the chronicle's `kind`): its icon; a quill if none. */
+  kind?: string;
+  /** The species it is about; 0 or none for none. Its initial is in the species' colour. */
+  species?: number;
   /** The date it was written, as the clock gave it (YYYY-MM-DD); null if no clock came. */
   date: string | null;
 }
@@ -179,6 +218,8 @@ export class CaptionQueue {
         number: entry.number,
         importance: entry.importance,
         text: entry.text,
+        kind: entry.kind,
+        species: entry.species,
         date,
       });
     }
@@ -274,16 +315,96 @@ export function longDate(date: string): string {
   return `${Number(day)} ${MONTHS[Number(month) - 1] ?? month} ${year}`;
 }
 
-/** The lines a caption is written in: its date, then its text, at most `MOST_LINES` of it. */
-export function linesOf(caption: Caption): { date: string | null; lines: string[] } {
-  let lines = wrap(caption.text, TEXT_WIDTH);
+/** How a caption is laid out on the open scroll, in art pixels from the writing's top-left. */
+export interface Layout {
+  icon: IconName;
+  /** The date in capitals for its ribbon; null if no clock came. */
+  date: string | null;
+  /** The initial (a letter, or a short number; "" for none), and the lines after it. */
+  initial: string;
+  lines: string[];
+  /** Where the initial and each line start across. */
+  initialLeft: number;
+  lineLefts: number[];
+  /** How far the writing (with the ribbon) reaches across, and down below the ribbon. */
+  width: number;
+  height: number;
+}
+
+/** Captions laid out already: a scroll is painted every frame while it unrolls. */
+const layouts = new WeakMap<Caption, Layout>();
+
+/** The pitch of the hand's lines. */
+const LINE_PITCH = HAND_ROWS + LINE_GAP;
+
+/**
+ * How `caption` is written: its icon, its initial and the lines of the rest, beside the
+ * initial for the first `BESIDE_INITIAL` and under it after, at most `MOST_LINES`.
+ */
+export function layOut(caption: Caption): Layout {
+  const known = layouts.get(caption);
+  if (known !== undefined) return known;
+  const { initial, rest } = splitInitial(caption.text);
+  const initialLeft = ICON_SIZE + ICON_GAP;
+  const besideWidth = initial === "" ? 0 : initialWidth(initial) + INITIAL_GAP;
+  // Lines under the initial start where it does.
+  const text = rest.trimStart();
+  const wrapAt = (room: number): string[] =>
+    HAND_FONT.wrap(text, room, besideWidth, BESIDE_INITIAL);
+  let room = TEXT_WIDTH - initialLeft;
+  let lines = wrapAt(room);
+  // Balanced lines: the narrowest scroll that takes no more lines than the widest, and at
+  // least as many as stand beside the initial (an entry of a few words too), so that the
+  // initial has its lines beside it and a short entry a short scroll.
+  const words = text.split(/\s+/).filter((word) => word !== "").length;
+  const wanted = Math.min(Math.max(lines.length, BESIDE_INITIAL), MOST_LINES, words);
+  if (lines.length <= wanted) {
+    let fits = room;
+    let narrow = besideWidth;
+    while (fits - narrow > 1) {
+      const tried = Math.floor((fits + narrow) / 2);
+      if (wrapAt(tried).length <= wanted) fits = tried;
+      else narrow = tried;
+    }
+    room = fits;
+    lines = wrapAt(room);
+  }
   if (lines.length > MOST_LINES) {
     lines = lines.slice(0, MOST_LINES);
+    const lastRoom = MOST_LINES <= BESIDE_INITIAL ? room - besideWidth : room;
     let last = lines[MOST_LINES - 1] ?? "";
-    while (last.length > 0 && measure(`${last}...`) > TEXT_WIDTH) last = last.slice(0, -1);
+    while (last.length > 0 && HAND_FONT.measure(`${last}...`) > lastRoom) last = last.slice(0, -1);
     lines[MOST_LINES - 1] = `${last.trimEnd()}...`;
   }
-  return { date: caption.date === null ? null : longDate(caption.date), lines };
+  const lineLefts = lines.map((_, index) =>
+    index < BESIDE_INITIAL ? initialLeft + besideWidth : initialLeft,
+  );
+  const date = caption.date === null ? null : longDate(caption.date).toUpperCase();
+  let width = date === null ? 0 : RIBBON_INDENT + ribbonWidth(date) - MARGIN_X;
+  lines.forEach((line, index) => {
+    width = Math.max(width, (lineLefts[index] ?? 0) + HAND_FONT.measure(line));
+  });
+  width = Math.max(width, initialLeft + besideWidth);
+  const textHeight = (Math.max(lines.length, 1) - 1) * LINE_PITCH + HAND_ROWS;
+  const height = Math.max(textHeight, initial === "" ? ICON_SIZE : initialHeight(), ICON_SIZE);
+  const layout = {
+    icon: iconOf(caption.kind ?? ""),
+    date,
+    initial,
+    lines,
+    initialLeft,
+    lineLefts,
+    width,
+    height,
+  };
+  layouts.set(caption, layout);
+  return layout;
+}
+
+/** The lines a caption is written in: its date as on its ribbon, then the lines of its text after the initial. */
+export function linesOf(caption: Caption): { date: string | null; lines: string[] } {
+  const { date, lines } = layOut(caption);
+  return { date, lines };
 }
 
 export interface Picture {
@@ -292,19 +413,26 @@ export interface Picture {
   rgba: Uint8ClampedArray<ArrayBuffer>;
 }
 
+/** Art pixels from the paper's top edge to the writing: below the ribbon, if there is one. */
+function writingTop(layout: Layout): number {
+  return layout.date === null ? MARGIN_Y : ribbonHeight() - RIBBON_RISE + RIBBON_GAP;
+}
+
 /** The size of the scroll for `caption`, fully open, in art pixels. */
 export function scrollSize(caption: Caption): { width: number; height: number } {
-  const { date, lines } = linesOf(caption);
-  const rows = lines.length + (date === null ? 0 : 1);
-  const paper = 2 * MARGIN_Y + rows * GLYPH_ROWS + (rows - 1) * LINE_GAP;
+  const layout = layOut(caption);
+  const paper = writingTop(layout) + layout.height + MARGIN_Y;
   return {
-    width: TEXT_WIDTH + 2 * MARGIN_X + 2 * ROLL_WIDTH + SHADOW,
+    width: layout.width + 2 * MARGIN_X + 2 * ROLL_WIDTH + SHADOW,
     height: paper + 2 * (ROLL_OVER + KNOB) + SHADOW,
   };
 }
 
-/** Paint the scroll of `caption`, `open` of the way open (0–1), at its full size. */
-export function paintScroll(caption: Caption, open: number): Picture {
+/**
+ * Paint the scroll of `caption`, `open` of the way open (0–1), at its full size; its
+ * initial in `colour` (0xRRGGBB: its species', or vermilion when it names none).
+ */
+export function paintScroll(caption: Caption, open: number, colour = VERMILION): Picture {
   const { width, height } = scrollSize(caption);
   const rgba = new Uint8ClampedArray(width * height * 4);
   const put = (x: number, y: number, colour: number, alpha = 255): void => {
@@ -344,20 +472,23 @@ export function paintScroll(caption: Caption, open: number): Picture {
     }
   }
   // The writing, laid out for the open scroll and shown where the paper is.
-  const { date, lines } = linesOf(caption);
-  const ink = (colour: number) => (x: number, y: number) => {
+  const layout = layOut(caption);
+  const onPaper = (x: number, y: number, colour: number): void => {
     if (x >= left && x < right) put(x, y, colour);
   };
-  let y = paperTop + MARGIN_Y;
-  const textLeft = ROLL_WIDTH + MARGIN_X;
-  if (date !== null) {
-    draw(date, textLeft, y, ink(FADED_INK));
-    y += GLYPH_ROWS + LINE_GAP;
+  const ink = (colour: number) => (x: number, y: number) => onPaper(x, y, colour);
+  const x0 = ROLL_WIDTH + MARGIN_X;
+  const y0 = paperTop + writingTop(layout);
+  if (layout.date !== null) {
+    paintRibbon(layout.date, ROLL_WIDTH + RIBBON_INDENT, paperTop - RIBBON_RISE, INK, onPaper);
   }
-  for (const line of lines) {
-    draw(line, textLeft, y, ink(INK));
-    y += GLYPH_ROWS + LINE_GAP;
-  }
+  // The icon beside the initial, halfway down it (or the first line, if there is none).
+  const besideHeight = layout.initial === "" ? HAND_ROWS : initialHeight();
+  paintIcon(layout.icon, x0, y0 + Math.floor((besideHeight - ICON_SIZE) / 2), onPaper);
+  paintInitial(layout.initial, colour, x0 + layout.initialLeft, y0, INK, PAPER, onPaper);
+  layout.lines.forEach((line, index) => {
+    HAND_FONT.draw(line, x0 + (layout.lineLefts[index] ?? 0), y0 + index * LINE_PITCH, ink(INK));
+  });
 
   // The rolls at both ends of the paper shown, with knobs above and below.
   for (const rollLeft of [left - ROLL_WIDTH, right]) {
@@ -399,10 +530,17 @@ export class Captions {
   private readonly queue = new CaptionQueue();
   private painted: { number: number; open: number; lamp: number } | null = null;
   private lamp: Rgb = DAYLIGHT;
+  /** The colour of the initial of the caption shown, looked up once when it comes out. */
+  private initial: { number: number; colour: number } | null = null;
 
+  /**
+   * `colourOf` gives a species' colour as the herd draws it (0xRRGGBB), or null if the
+   * species is not known (gone, or not yet seen): the initial is then vermilion.
+   */
   constructor(
     private readonly screenWidth: number,
     private readonly screenHeight: number,
+    private readonly colourOf: (species: number) => number | null = () => null,
   ) {
     const style = this.element.style;
     style.position = "absolute";
@@ -416,9 +554,37 @@ export class Captions {
     this.queue.take(message, date);
   }
 
-  /** What the scroll shows, and the lamp it is lit by (0xRRGGBB, 0xffffff by day). */
-  get state(): { phase: Phase; caption: Caption | null; waiting: number; lamp: number } {
-    return { ...this.queue.state, waiting: this.queue.length, lamp: lampKey(this.lamp) };
+  /**
+   * What the scroll shows, the lamp it is lit by (0xRRGGBB, 0xffffff by day), the icon its
+   * entry opens with and the colour of its initial (null while none is shown).
+   */
+  get state(): {
+    phase: Phase;
+    caption: Caption | null;
+    waiting: number;
+    lamp: number;
+    icon: IconName | null;
+    initial: number | null;
+  } {
+    const { phase, caption } = this.queue.state;
+    return {
+      phase,
+      caption,
+      waiting: this.queue.length,
+      lamp: lampKey(this.lamp),
+      icon: caption === null ? null : iconOf(caption.kind ?? ""),
+      initial: caption === null ? null : this.initialColour(caption),
+    };
+  }
+
+  /** The colour of `caption`'s initial: its species', as first seen, or vermilion. */
+  private initialColour(caption: Caption): number {
+    if (this.initial?.number !== caption.number) {
+      const species = caption.species ?? 0;
+      const colour = species > 0 ? this.colourOf(species) : null;
+      this.initial = { number: caption.number, colour: colour ?? VERMILION };
+    }
+    return this.initial.colour;
   }
 
   /** Move on by `dtS`, the scroll lit by `lamp` (`lantern`). */
@@ -436,7 +602,7 @@ export class Captions {
       return;
     }
     this.painted = { number: caption.number, open, lamp: key };
-    const picture = paintScroll(caption, open);
+    const picture = paintScroll(caption, open, this.initialColour(caption));
     lightPicture(picture, lamp);
     this.show(picture);
   }
