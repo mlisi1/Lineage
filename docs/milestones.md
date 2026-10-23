@@ -207,8 +207,9 @@ below was taken in scope by the owner. Tests wait until the look is called final
   visits it while the scroll is out. Done: `marker.ts`, `Scene.place` in `director.ts`
 
 **Rough edges**
-- [ ] 12. The scroll and the dip stay daylight-bright at night and in an apocalypse.
-  The owner (2026-10-23): lit like a lantern (the name card too)
+- [x] 12. The scroll and the dip stay daylight-bright at night and in an apocalypse.
+  The owner (2026-10-23): lit like a lantern (the name card too). Done: `lantern` in
+  `captions.ts`; the dip unchanged (it goes to dark anyway)
 - [x] 13. The tide moves the painted water line; plants and animals test a fixed sea level.
   The owner (2026-10-23): wet feet when the swash reaches an animal. Done:
   `Landscape.swashCovers` replays the shore shader's swash; `wading.ts` "feet"

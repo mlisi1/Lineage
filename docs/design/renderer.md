@@ -984,6 +984,18 @@ Round 1, items 1–7:
   under a splash of drops, with rings spreading in a wet patch round its feet that dries
   in a few seconds; the ark's newcomers keep its light too. On the map the dot of the dead
   only fades.
+- **The scrolls by lantern light** (`lantern` in `src/captions.ts`, the owner's choice,
+  2026-10-23). The chronicle's scroll and the name card are page elements over the canvas,
+  out of the tint's reach, so they are lit like a lantern from the atmosphere's light of
+  the moment (the eased light and the tint) and change as smoothly as the scene. By day
+  they are as painted. As the light falls the paper dims and warms toward candlelight
+  (×0.8, 0.62, 0.42 on the darkest night), with a touch of the sky's own hue (12 %: rose
+  at dusk, moonlit blue at night). In the end of a world the fires light it at least 0.7
+  of the way to candlelight and it takes 30 % of the sky's red. Every solid pixel of the
+  painting is multiplied by the same lamp, so the ink keeps its contrast with the paper;
+  the see-through shadow is left as it is. The lamp is kept in 64 steps a channel and a
+  scroll is repainted only when a step is crossed. `__captions()` and `__card()` give the
+  lamp. The dip between views is unchanged: it goes to dark anyway.
 - **The place of an entry** (the owner, 2026-10-23). A chronicle entry carries a place
   (cells; -1 for none) and a species. While a notable entry with a place is on the scroll,
   from unrolling to rolled up, a small marker stands there (`src/marker.ts`): a rose
