@@ -52,7 +52,7 @@ import { Application, Container, WebGLRenderer } from "pixi.js";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
-import { Captions } from "./captions";
+import { Captions, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
 import { Director, TIMINGS, type Scene, type Shot, type Visit } from "./director";
 import { Herd } from "./herd";
@@ -106,11 +106,13 @@ declare global {
     /** What the camera shows and does (tests). */
     __camera?: () => Shot & { motion: string; dipping: boolean; visit: Visit | null };
     /** What the scroll shows (tests). */
-    __captions?: () => { phase: string; text: string | null; waiting: number };
+    __captions?: () => { phase: string; text: string | null; waiting: number; lamp: number };
     /** What the name card of the animal followed shows (tests; S3 shows the same card). */
     __card?: () => {
       phase: CardPhase;
       open: number;
+      /** The lamp it is lit by (0xRRGGBB): 0xffffff by day, dim and warm at night. */
+      lamp: number;
       id?: number;
       name?: string;
       traits?: string;
@@ -370,8 +372,8 @@ async function start(): Promise<void> {
   };
   window.__card = () => card.state;
   window.__captions = () => {
-    const { phase, caption, waiting } = captions.state;
-    return { phase, text: caption?.text ?? null, waiting };
+    const { phase, caption, waiting, lamp } = captions.state;
+    return { phase, text: caption?.text ?? null, waiting, lamp };
   };
   // PixiJS leaves a freed texture's place empty (null) rather than taking it out: count the rest.
   window.__textures = () =>
@@ -489,10 +491,14 @@ async function start(): Promise<void> {
       Math.round((value - Math.floor(value)) * artPixel * device) / device;
     canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     dim.style.opacity = String(shot.dim);
-    captions.update(dtS);
+    // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
+    // light of the moment instead (the same light the tint was made from this frame).
+    const { light, tint } = atmosphere.state;
+    const lamp = lantern(light, tint, atmosphere.ending);
+    captions.update(dtS, lamp);
     // The card is out while the local view follows an animal and is not dipped to dark.
     const following = shot.view === "local" && shot.dim < CARD_DIM ? shot.subject : null;
-    card.update(dtS, following === null ? null : herd.cardOf(following));
+    card.update(dtS, following === null ? null : herd.cardOf(following), lamp);
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.
