@@ -279,6 +279,16 @@ export class CreatureLayer {
     this.plans = speciesPlans(members);
   }
 
+  /** What each species is drawn as now (R5: the name card's portrait draws its animal so). */
+  get speciesPlans(): ReadonlyMap<number, SpeciesPlan> {
+    return this.plans;
+  }
+
+  /** Draw the species by `plans` from now on (R5: a portrait takes the scene's own). */
+  usePlans(plans: ReadonlyMap<number, SpeciesPlan>): void {
+    this.plans = plans;
+  }
+
   /**
    * Put `seed` in slot `index`, in place of whoever was there: a creature of the stream's
    * cast (R3), which comes and goes as the sim's animals are born and die. With anchored

@@ -32,6 +32,8 @@ import type { Random } from "./rng";
 import type { Atlas } from "./creatures/atlas";
 import { CreatureLayer } from "./creatures/layer";
 import type { CreatureSeed } from "./creatures/seed";
+import type { Portrait } from "./creatures/portrait";
+import { kindFor } from "./creatures/species";
 import { passableIn, type Passable } from "./creatures/habitat";
 import { CREATURE_SCALE, LOCAL_PIXELS, MID_BODY, WATER_LOOK, localBody } from "./creatures/views";
 import type { CellRect, Land } from "./terrain/land";
@@ -423,6 +425,26 @@ export class Herd {
       body: tint(colours.body),
       mark: tint(colours.mark),
     };
+  }
+
+  /**
+   * What the name card's portrait of animal `id` is drawn from (R5, `creatures/portrait.ts`):
+   * its seed as the local view draws it, the body options and species plans of that view,
+   * and a key that changes whenever the drawing would (its colours ranked anew, a step of
+   * growth, torpor, its species drawn as another kind); null if it is not known.
+   */
+  portraitOf(id: number): Portrait | null {
+    const seed = this.seedOf(id);
+    if (seed === null) return null;
+    const plans = this.layers.local.speciesPlans;
+    const key = JSON.stringify([
+      id,
+      kindFor(seed, plans),
+      seed.colours ?? null,
+      seed.growth ?? 1,
+      seed.torpid,
+    ]);
+    return { key, seed, plans, body: BODIES.local };
   }
 
   /** The animals alive, where the view's layer draws them (the local view's, when hidden). */
