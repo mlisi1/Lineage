@@ -20,7 +20,7 @@ import {
   type Stiffness,
 } from "./chain";
 import { breath, clearAnchor, drive, newMotion, reanchor, stepOut, type Motion } from "./motion";
-import { DYING, TINT_STEPS, mixColour, type Dying } from "./remains";
+import { DYING, TINT_STEPS, mixColour, roundTexture, type Dying } from "./remains";
 import { kindFor, speciesPlans, type SpeciesPlan } from "./species";
 import {
   opacityUnderWater,
@@ -34,6 +34,29 @@ import type { CreatureSeed } from "./seed";
 import type { Footprints, Passable } from "./habitat";
 import { dotOf, dotSize } from "./markers";
 import { Flecks, bite, flecks, type Food } from "./eating";
+import {
+  BITE_INTO,
+  DUST,
+  KICKED,
+  LUNGE_S,
+  LUNGE_STRETCH,
+  SPRING_SHARE,
+  chase,
+  lunge,
+  strikeAfter,
+  type Hunt,
+} from "./hunting";
+import {
+  BESIDE_ANGLES,
+  BESIDE_GAP,
+  EGG_S,
+  HATCH_S,
+  MOMENT_S,
+  NEWBORN_S,
+  NUZZLE_REACH,
+  NUZZLE_S,
+  Nursery,
+} from "./nursery";
 import {
   RIPPLES,
   SWASH_SEA,
@@ -207,12 +230,28 @@ interface Creature {
   breathOffset: number;
   /** Arriving (R4, the ark): seconds into its arrival and how long it takes, while it lasts. */
   arriving?: { age: number; lasts: number };
+  /** Hunting (R5, `hunting.ts`): running to its prey, then springing at it. */
+  hunt?: Hunt;
+  /** A newborn kept still beside its mother for its birth (R5, `nursery.ts`): seconds left. */
+  held?: number;
+  /**
+   * A mother standing over her newborn (R5): where the first of the brood lies, seconds
+   * since, how long, and where each of the brood lies.
+   */
+  tending?: { x: number; y: number; age: number; lasts: number; brood: Point[] };
+  /** Where the sim put it while a hunt or a birth held it, to go to once it is over. */
+  deferred?: Point;
 }
 
 /** An eating animal's neck goes this share of the way its head does. */
 const NECK_FOLLOWS = 0.5;
 /** A fleck from an eating animal's mouth is this many art pixels across. */
 const FLECK_PIXELS = 3;
+/** The young of one brood lie at least this many of their widest radii apart beside their mother. */
+const BROOD_APART = 2.2;
+/** A hunter's dust: puffs this many art pixels across, each this many body spacings behind the last. */
+const DUST_PIXELS = 5;
+const KICK_BACK = 0.6;
 /** An eating animal's pause is kept at least this long (seconds), so it does not stroll off. */
 const EAT_HOLD_S = 1;
 /** Ripples round a walker in the water: the foam's white. */
@@ -247,6 +286,8 @@ interface Departing {
   /** How many of `order` are gone, and the colour step it was last painted at. */
   gone: number;
   tinted: number;
+  /** Seconds it still stands as it was before it begins to go (R5: a prey until the strike). */
+  wait: number;
 }
 
 export class CreatureLayer {
@@ -256,6 +297,10 @@ export class CreatureLayer {
   readonly container = new Container();
   /** Flecks thrown by eating animals (R5), over them; made with the first animal placed. */
   private flecks: Flecks | null = null;
+  /** The dust a hunter kicks up as it springs (R5), over the animals; made with the first. */
+  private dust: Flecks | null = null;
+  /** The hearts, eggs and shells of births (R5), over the animals; made with the first. */
+  private nursery: Nursery | null = null;
   /** Creatures that died, going where they fell. */
   private departing: Departing[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
@@ -348,6 +393,12 @@ export class CreatureLayer {
     creature.motion = old.motion;
     creature.inView = old.inView;
     if (old.arriving !== undefined) creature.arriving = old.arriving;
+    // A hunt or a birth under way goes on.
+    if (old.hunt !== undefined) creature.hunt = old.hunt;
+    if (old.held !== undefined) creature.held = old.held;
+    if (old.tending !== undefined) creature.tending = old.tending;
+    if (old.deferred !== undefined) creature.deferred = old.deferred;
+    if (old.staged !== undefined) creature.staged = old.staged;
     // Where the old one stood among the plants, the new one stands.
     const host = old.container.parent;
     if (host !== null && host !== creature.container.parent) {
@@ -365,9 +416,10 @@ export class CreatureLayer {
    * Empty slot `index`: its creature is taken off the screen for good, at once, or (one
    * that died, `fade`) going where it fell, as `how` says (`creatures/remains.ts`): it lies
    * still, its colours turning, then its parts go in steps, legs first, then from the tail
-   * to the head. No filter: whole sprites go, so nothing shows through anything.
+   * to the head. No filter: whole sprites go, so nothing shows through anything. With
+   * `waitS` it first stands as it was for so many seconds (R5: a prey until the strike).
    */
-  remove(index: number, fade = false, how: Dying = DYING.unknown): void {
+  remove(index: number, fade = false, how: Dying = DYING.unknown, waitS = 0): void {
     const creature = this.creatures[index];
     if (creature === undefined) return;
     this.creatures[index] = undefined;
@@ -396,6 +448,7 @@ export class CreatureLayer {
         order: [...legs, ...body],
         gone: 0,
         tinted: 0,
+        wait: waitS,
       });
       return;
     }
@@ -420,6 +473,10 @@ export class CreatureLayer {
 
   /** Move `leaving` on by `dtS`: whether it is still there. */
   private going(leaving: Departing, dtS: number): boolean {
+    if (leaving.wait > 0) {
+      leaving.wait -= dtS;
+      return true;
+    }
     leaving.age += dtS;
     const { creature, how, order } = leaving;
     const lasts = how.still + how.goes;
@@ -467,9 +524,12 @@ export class CreatureLayer {
     const arriving = creature.arriving;
     if (arriving === undefined) return;
     const done = arriving.age >= arriving.lasts;
+    // Not yet begun (R5: a newborn still in its egg), it is not seen at all.
     const opacity = done
       ? 1
-      : (Math.floor((arriving.age / arriving.lasts) * ARRIVE_STEPS) + 1) / (ARRIVE_STEPS + 1);
+      : arriving.age < 0
+        ? 0
+        : (Math.floor((arriving.age / arriving.lasts) * ARRIVE_STEPS) + 1) / (ARRIVE_STEPS + 1);
     creature.marker.alpha = opacity;
     if (done) {
       creature.arriving = undefined;
@@ -493,6 +553,308 @@ export class CreatureLayer {
     const creature = this.creatures[index];
     if (creature === undefined || (creature.staged === true && !staged)) return;
     creature.food = food;
+  }
+
+  /**
+   * The animal in slot `hunterIndex` hunts the one in `preyIndex` (R5, `hunting.ts`): it
+   * runs to where the prey stands and springs at it. Returns the seconds until the strike,
+   * when the prey is to die; null if it does not hunt here (bodies not shown, the hunter
+   * torpid, arriving, busy, staged by hand unless `byHand`, or too far away).
+   */
+  hunt(hunterIndex: number, preyIndex: number, byHand = false): number | null {
+    const hunter = this.creatures[hunterIndex];
+    const prey = this.creatures[preyIndex];
+    const head = hunter?.joints[0];
+    const motion = hunter?.motion;
+    if (hunter === undefined || prey === undefined || head === undefined || !motion) return null;
+    if (this.showing !== "bodies" || hunter.torpid || hunter.arriving !== undefined) return null;
+    if (hunter.hunt !== undefined || hunter.held !== undefined || hunter.tending !== undefined) {
+      return null;
+    }
+    if (hunter.staged === true && !byHand) return null;
+    // It strikes at the prey's joint nearest it.
+    let nearest = 0;
+    let best = Infinity;
+    prey.joints.forEach((joint, i) => {
+      const distance = Math.hypot(joint.x - head.x, joint.y - head.y);
+      if (distance < best) {
+        best = distance;
+        nearest = i;
+      }
+    });
+    const at = prey.joints[nearest] ?? { x: head.x, y: head.y };
+    const reach = prey.plan.radii[nearest] ?? 0;
+    const spring = SPRING_SHARE * hunter.plan.length + reach;
+    const run = chase(Math.max(best - spring, 0), hunter.plan.pace);
+    if (run === null) return null;
+    // It runs to a place short of the prey, on the way to it; where the sim has it, it
+    // goes once the hunt is over.
+    const share = best > spring ? (best - spring) / best : 0;
+    hunter.deferred ??= { x: motion.anchor.x, y: motion.anchor.y };
+    if (hunter.staged === true) hunter.deferred = undefined;
+    hunter.pinned = false;
+    motion.anchor.x = head.x + (at.x - head.x) * share;
+    motion.anchor.y = head.y + (at.y - head.y) * share;
+    motion.goal.x = motion.anchor.x;
+    motion.goal.y = motion.anchor.y;
+    motion.mode = "travel";
+    hunter.hunt = {
+      prey: { x: at.x, y: at.y },
+      reach,
+      age: 0,
+      run: run.run,
+      speed: run.speed,
+      from: null,
+    };
+    return strikeAfter(run.run);
+  }
+
+  /**
+   * The animal in slot `childIndex` is born to the one in `motherIndex` (R5, `nursery.ts`):
+   * it comes into being beside her head, facing her, out of an egg if `egg` (on dry land),
+   * and she stands over it a while, hearts rising. False if it is not shown so (bodies not
+   * shown; she is torpid, arriving, busy, or staged by hand unless `byHand`; no room by
+   * her): the newborn is then left where it was placed.
+   */
+  nurse(childIndex: number, motherIndex: number, egg: boolean, byHand = false): boolean {
+    const child = this.creatures[childIndex];
+    const mother = this.creatures[motherIndex];
+    const head = mother?.joints[0];
+    if (child === undefined || mother === undefined || head === undefined) return false;
+    if (child.motion === null || mother.motion === null || this.showing !== "bodies") return false;
+    if (mother.torpid || mother.arriving !== undefined || mother.hunt !== undefined) return false;
+    if (mother.held !== undefined || child === mother) return false;
+    // The rest of a brood born together lie beside the first; a later one is not shown so.
+    const brood = mother.tending?.brood;
+    if (mother.tending !== undefined && mother.tending.age > 0) return false;
+    if (mother.staged === true && !byHand) return false;
+    // Its head by hers, its body away from her, where there is room for it all.
+    const away = (mother.plan.radii[0] ?? 0) + (child.plan.radii[0] ?? 0) + BESIDE_GAP;
+    const tail = child.plan.spacing * (child.joints.length - 1);
+    let spot: Point | null = null;
+    let angle = 0;
+    for (const turn of BESIDE_ANGLES) {
+      const a = mother.heading + turn;
+      const x = head.x + Math.cos(a) * away;
+      const y = head.y + Math.sin(a) * away;
+      if (!this.clear(child, x, y)) continue;
+      if (!this.clear(child, x + Math.cos(a) * tail, y + Math.sin(a) * tail)) continue;
+      const room = BROOD_APART * Math.max(...child.plan.radii);
+      if (brood?.some((at) => Math.hypot(at.x - x, at.y - y) < room) === true) continue;
+      spot = { x, y };
+      angle = a;
+      break;
+    }
+    if (spot === null) return false;
+    const { x, y } = spot;
+    child.heading = angle + Math.PI;
+    child.joints.forEach((joint, i) => {
+      joint.x = x + Math.cos(angle) * child.plan.spacing * i;
+      joint.y = y + Math.sin(angle) * child.plan.spacing * i;
+    });
+    for (const leg of child.legs) leg.planted = false;
+    child.motion.anchor.x = x;
+    child.motion.anchor.y = y;
+    child.motion.mode = "pause";
+    child.motion.timer = 0;
+    child.motion.look = child.heading;
+    child.motion.facing = child.heading;
+    child.marker.position.set(x, y);
+    if (byHand) child.staged = true;
+    const laid = egg && !child.plan.swims && (this.sea?.(x, y) ?? null) === null;
+    const moment = (laid ? EGG_S : 0) + MOMENT_S;
+    child.held = moment;
+    child.arriving = { age: laid ? -EGG_S : 0, lasts: laid ? HATCH_S : NEWBORN_S };
+    this.materialise(child);
+    const nursery = this.nurseryPool();
+    // The egg lies where its body will.
+    const middle = child.joints[child.chest] ?? spot;
+    if (laid) nursery.lay(middle, child.plan.length);
+    if (brood !== undefined) {
+      brood.push(spot);
+      return true;
+    }
+    mother.tending = { x, y, age: 0, lasts: moment, brood: [spot] };
+    nursery.love({ x: (head.x + x) / 2, y: (head.y + y) / 2 }, laid ? EGG_S : NEWBORN_S);
+    return true;
+  }
+
+  /** The flecks of the layer, made the first time they are needed. */
+  private fleckPool(): Flecks {
+    if (this.flecks === null) {
+      this.flecks = new Flecks(this.atlas.white, FLECK_PIXELS / this.body.pixels, WHITE_TEXELS);
+      this.container.addChild(this.flecks.container);
+    }
+    return this.flecks;
+  }
+
+  /** The births' hearts and eggs of the layer, made the first time they are needed. */
+  private nurseryPool(): Nursery {
+    if (this.nursery === null) {
+      this.nursery = new Nursery(this.body.pixels);
+      this.container.addChild(this.nursery.container);
+    }
+    return this.nursery;
+  }
+
+  /**
+   * A hunter on its hunt (R5): it runs to its place short of the prey (`live`, quicker),
+   * crouching there facing it if early; then it springs, its head going straight at the
+   * prey quicker and quicker, its body after it, and dust kicked up behind.
+   */
+  private chase(creature: Creature, hunt: Hunt, dtS: number): Point {
+    const { joints, plan, motion } = creature;
+    const head = joints[0] ?? { x: 0, y: 0 };
+    hunt.age += dtS;
+    if (hunt.age < hunt.run) {
+      this.live(creature, dtS);
+      if (motion !== null && motion.mode === "pause") {
+        const toward = Math.atan2(hunt.prey.y - head.y, hunt.prey.x - head.x);
+        motion.timer = Math.max(motion.timer, hunt.run - hunt.age);
+        motion.look = toward;
+        motion.facing = toward;
+      }
+      return head;
+    }
+    if (hunt.from === null) {
+      hunt.from = { x: head.x, y: head.y };
+      this.kick(creature);
+    }
+    const { travel } = lunge(Math.min((hunt.age - hunt.run) / LUNGE_S, 1));
+    const dx = hunt.prey.x - hunt.from.x;
+    const dy = hunt.prey.y - hunt.from.y;
+    const span = Math.hypot(dx, dy) || 1;
+    // The head goes until it is in the prey's body by part of its own radius.
+    const stop = hunt.reach + (1 - BITE_INTO) * (plan.radii[0] ?? 0);
+    const go = Math.max(span - stop, 0) * travel;
+    const x = hunt.from.x + (dx / span) * go;
+    const y = hunt.from.y + (dy / span) * go;
+    creature.walked += Math.hypot(x - head.x, y - head.y);
+    head.x = x;
+    head.y = y;
+    creature.heading = Math.atan2(dy, dx);
+    followChain(joints, plan.spacing, creature.stiffness, creature.heading, dtS);
+    creature.marker.position.set(head.x, head.y);
+    return head;
+  }
+
+  /**
+   * Dust kicked up from a hunter's hind feet as it springs (R5), round puffs thrown up
+   * behind them (from the end of its body if it has no feet).
+   */
+  private kick(creature: Creature): void {
+    if (!creature.inView) return;
+    const { joints, legs, plan } = creature;
+    const steppers = legs.filter((leg) => leg.plan.fin < 1);
+    const last = Math.max(-1, ...steppers.map((leg) => leg.plan.joint));
+    const tail = joints[joints.length - 1];
+    const feet: Point[] =
+      last >= 0
+        ? steppers.filter((leg) => leg.plan.joint === last).map((leg) => leg.foot)
+        : tail === undefined
+          ? []
+          : [tail];
+    if (this.dust === null) {
+      this.dust = new Flecks(
+        roundTexture(DUST_PIXELS),
+        DUST_PIXELS / this.body.pixels,
+        DUST_PIXELS,
+      );
+      this.container.addChild(this.dust.container);
+    }
+    const backX = -Math.cos(creature.heading) * plan.spacing * KICK_BACK;
+    const backY = -Math.sin(creature.heading) * plan.spacing * KICK_BACK;
+    for (const foot of feet) {
+      // One at the foot and one behind it, drifting away from the body's middle.
+      const middle = joints[creature.chest] ?? foot;
+      const side =
+        (foot.x - middle.x) * -Math.sin(creature.heading) +
+          (foot.y - middle.y) * Math.cos(creature.heading) <
+        0
+          ? -1
+          : 1;
+      for (let k = 0; k < KICKED; k++) {
+        this.dust.fling(DUST, { x: foot.x + backX * k, y: foot.y + backY * k }, side);
+      }
+    }
+  }
+
+  /**
+   * End what is over of a hunt or a birth, and send the animal on to where the sim has it
+   * meanwhile, if it said.
+   */
+  private endMoments(creature: Creature, index: number, dtS: number): void {
+    let ended = false;
+    const { hunt, motion } = creature;
+    if (hunt !== undefined && hunt.age >= hunt.run + LUNGE_S) {
+      creature.hunt = undefined;
+      // It stays where it struck.
+      const head = creature.joints[0];
+      if (motion !== null && head !== undefined) {
+        motion.anchor.x = head.x;
+        motion.anchor.y = head.y;
+        motion.mode = "pause";
+        motion.timer = 0;
+      }
+      ended = true;
+    }
+    if (creature.held !== undefined) {
+      creature.held -= dtS;
+      if (creature.held <= 0) {
+        creature.held = undefined;
+        ended = true;
+      }
+    }
+    if (creature.tending !== undefined) {
+      creature.tending.age += dtS;
+      if (creature.tending.age >= creature.tending.lasts) {
+        creature.tending = undefined;
+        ended = true;
+      }
+    }
+    const busy =
+      creature.hunt !== undefined || creature.held !== undefined || creature.tending !== undefined;
+    if (!ended || busy || creature.deferred === undefined) return;
+    const { x, y } = creature.deferred;
+    creature.deferred = undefined;
+    this.anchor(index, x, y);
+  }
+
+  /**
+   * Pose a hunter thrusting its head at its prey, or a mother lowering hers to her newborn
+   * (R5): the head moved for the drawing only, the neck half as far, as eating does.
+   */
+  private reach(creature: Creature, head: Point, dtS: number): void {
+    const { hunt, tending, plan } = creature;
+    let dx = 0;
+    let dy = 0;
+    if (hunt?.from != null) {
+      const { stretch } = lunge(Math.min((hunt.age - hunt.run) / LUNGE_S, 1));
+      dx = Math.cos(creature.heading) * LUNGE_STRETCH * plan.spacing * stretch;
+      dy = Math.sin(creature.heading) * LUNGE_STRETCH * plan.spacing * stretch;
+    } else if (tending !== undefined) {
+      const tx = tending.x - head.x;
+      const ty = tending.y - head.y;
+      const distance = Math.hypot(tx, ty) || 1;
+      const dip = 0.5 - 0.5 * Math.cos((2 * Math.PI * tending.age) / NUZZLE_S);
+      const amount = NUZZLE_REACH * plan.spacing * dip;
+      dx = (tx / distance) * amount;
+      dy = (ty / distance) * amount;
+    }
+    const neck = creature.joints[1];
+    head.x += dx;
+    head.y += dy;
+    if (neck !== undefined) {
+      neck.x += dx * NECK_FOLLOWS;
+      neck.y += dy * NECK_FOLLOWS;
+    }
+    this.pose(creature, dtS);
+    head.x -= dx;
+    head.y -= dy;
+    if (neck !== undefined) {
+      neck.x -= dx * NECK_FOLLOWS;
+      neck.y -= dy * NECK_FOLLOWS;
+    }
   }
 
   setTorpid(index: number, torpid: boolean): void {
@@ -530,6 +892,14 @@ export class CreatureLayer {
     const creature = this.creatures[index];
     // One staged by hand keeps to what it was given, whatever the sim says meanwhile.
     if (creature?.staged === true) return;
+    // One in a hunt or a birth goes there once that is over.
+    if (
+      creature !== undefined &&
+      (creature.hunt !== undefined || creature.held !== undefined || creature.tending !== undefined)
+    ) {
+      creature.deferred = { x, y };
+      return;
+    }
     const motion = creature?.motion;
     const head = creature?.joints[0];
     if (creature === undefined || motion === undefined || motion === null || head === undefined) {
@@ -725,16 +1095,26 @@ export class CreatureLayer {
     this.clock += dtS;
     this.depart(dtS);
     this.flecks?.update(dtS);
+    this.dust?.update(dtS);
+    this.nursery?.update(dtS);
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
-      // A torpid animal lies where it is; the others move.
-      const head =
-        creature.torpid || creature.pinned
-          ? (creature.joints[0] ?? { x: 0, y: 0 })
+      // A torpid animal lies where it is, and so do a newborn and its mother for its birth;
+      // a hunter hunts; the others move.
+      const still =
+        creature.torpid ||
+        creature.pinned === true ||
+        creature.held !== undefined ||
+        creature.tending !== undefined;
+      const head = still
+        ? (creature.joints[0] ?? { x: 0, y: 0 })
+        : creature.hunt !== undefined
+          ? this.chase(creature, creature.hunt, dtS)
           : creature.motion === null
             ? this.wander(creature, dtS)
             : this.live(creature, dtS);
+      this.endMoments(creature, index, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -973,6 +1353,11 @@ export class CreatureLayer {
    */
   private eat(creature: Creature, dtS: number): void {
     const head = creature.joints[0];
+    // A hunter thrusts its head at its prey, a mother lowers hers to her newborn (R5).
+    if (head !== undefined && (creature.hunt?.from != null || creature.tending !== undefined)) {
+      this.reach(creature, head, dtS);
+      return;
+    }
     const eating =
       creature.food !== "none" &&
       head !== undefined &&
@@ -980,6 +1365,7 @@ export class CreatureLayer {
       creature.motion.mode === "pause" &&
       !creature.torpid &&
       creature.arriving === undefined &&
+      creature.hunt === undefined &&
       creature.wet !== "deep";
     if (!eating) {
       this.pose(creature, dtS);
@@ -1005,12 +1391,8 @@ export class CreatureLayer {
     }
     this.pose(creature, dtS);
     if (flecks(creature.food, creature.bitePhase, phase, count) && creature.inView) {
-      if (this.flecks === null) {
-        this.flecks = new Flecks(this.atlas.white, FLECK_PIXELS / this.body.pixels, WHITE_TEXELS);
-        this.container.addChild(this.flecks.container);
-      }
       const reach = creature.plan.radii[0] ?? 0;
-      this.flecks.throw(
+      this.fleckPool().throw(
         creature.food,
         { x: head.x + cos * reach, y: head.y + sin * reach },
         count % 2 === 0 ? 1 : -1,
@@ -1102,7 +1484,8 @@ export class CreatureLayer {
     const walker = {
       head,
       heading: creature.heading,
-      pace: plan.pace * creature.waterPace,
+      // A hunter runs (R5, `hunting.ts`).
+      pace: plan.pace * creature.waterPace * (creature.hunt?.speed ?? 1),
       length: plan.length,
       // A body that turns on the spot lets its head turn as it likes, and comes round after.
       neck: stiff.pivots ? undefined : neckDirection(joints, creature.heading),
@@ -1110,7 +1493,7 @@ export class CreatureLayer {
       turning: stiff.turning,
     };
     // Eating, it stands where it is and keeps its head down: no stroll, no looking about.
-    if (creature.food !== "none" && motion.mode !== "travel") {
+    if (creature.food !== "none" && motion.mode !== "travel" && creature.hunt === undefined) {
       motion.mode = "pause";
       motion.timer = Math.max(motion.timer, EAT_HOLD_S);
       motion.look = creature.heading;

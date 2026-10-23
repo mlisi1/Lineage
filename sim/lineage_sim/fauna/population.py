@@ -28,6 +28,7 @@ from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
     CraterFormed,
     CreaturesArrived,
+    CreaturesBorn,
     CreaturesDied,
     InputEvent,
     JuvenileGrown,
@@ -157,6 +158,10 @@ class Fauna:
         self._meal = np.zeros(0, dtype=np.float32)  # energy eaten this tick
         self._meat = np.zeros(0, dtype=np.float32)  # of it, from meat (kills and carrion)
         self._leftover = np.zeros(0, dtype=np.float32)  # meat mass a kill left, per victim
+        # Read only, for the scene (R5): who killed each victim this tick (the hunter's id,
+        # -1 for none), and the mother of each newborn of this tick's broods, by id.
+        self._killer = np.zeros(0, dtype=np.int64)
+        self._mothers = np.zeros(0, dtype=np.int64)
         # Youths that ended and creatures that died this tick: outputs not yet handed on.
         self._grown: list[OutputEvent] = []
         # Pairwise offsets and distances for the current positions; None when stale.
@@ -344,9 +349,18 @@ class Fauna:
         in_fire = self._burn(hours)
         dead = self._expire(dead, in_fire)
         newborn = self._breed(rng, dead)
-        self._bury(dead, ctx.t_ms)
+        self._bury(dead, ctx.t_ms, killers=self._killer)
         if newborn is not None:
             self._append(*newborn)
+            # Who was born to whom (R5: the scene shows each newborn beside its mother).
+            born = self._ids[self.count - self._mothers.size :]
+            self._grown.append(
+                CreaturesBorn(
+                    ctx.t_ms,
+                    tuple(int(ident) for ident in born),
+                    tuple(int(ident) for ident in self._mothers),
+                )
+            )
         outputs += self._grown
         self._grown = []
         if self.count == 0:
@@ -578,6 +592,7 @@ class Fauna:
         death (-1: alive)."""
         cfg, body, n = self._cfg, self._body, self.count
         dead = np.full(n, -1, dtype=np.int8)
+        self._killer = np.full(n, -1, dtype=np.int64)
         attempt_roll = rng.random(n)
         kill_roll = rng.random(n)
         _, distance = self._separations()
@@ -597,6 +612,7 @@ class Fauna:
             if dead[hunter] >= 0 or dead[victim] >= 0 or kill_roll[hunter] >= chance[k]:
                 continue
             dead[victim] = Death.KILLED
+            self._killer[victim] = self._ids[hunter]
             value = cfg.meat_energy * float(body.meat_efficiency[hunter])
             meal = value * float(body.mass[victim])
             room = float(body.capacity[hunter]) - float(self._energy[hunter])
@@ -771,6 +787,7 @@ class Fauna:
         copied = newborn.social[:, None]
         forms = [_LOW_GAIN, _WOODY_GAIN]
         learned[:, forms] = (copied * self._learned[mother][:, forms]).astype(np.float32)
+        self._mothers = self._ids[mother].copy()
         return (
             positions, energy, genes, weights, slots, self._origin[mother], generation, learned,
         )  # fmt: skip
@@ -804,9 +821,17 @@ class Fauna:
                 cfg.carrion_scent_cells,
             )  # fmt: skip
 
-    def _bury(self, dead: NDArray[np.int8], t_ms: int, *, blast: bool = False) -> None:
+    def _bury(
+        self,
+        dead: NDArray[np.int8],
+        t_ms: int,
+        *,
+        blast: bool = False,
+        killers: NDArray[np.int64] | None = None,
+    ) -> None:
         """Remove the dead and count them by cause; tell who died of what (R5), the dead of
-        a ``blast`` as such."""
+        a ``blast`` as such, and who killed each victim of a hunter (``killers``: the
+        hunter's id by row, -1 for none)."""
         gone = dead >= 0
         if not gone.any():
             return
@@ -818,6 +843,9 @@ class Fauna:
                 tuple(
                     "blast" if blast else Death(int(cause)).name.lower() for cause in dead[which]
                 ),
+                ()
+                if killers is None or killers.size != dead.size
+                else tuple(int(ident) for ident in killers[which]),
             )
         )
         died_young = gone & (self._age_h < self._body.maturity_h)

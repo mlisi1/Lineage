@@ -16,6 +16,7 @@ from lineage_sim.events import (
     ChronicleEntry,
     CraterFormed,
     CreaturesArrived,
+    CreaturesBorn,
     CreaturesDied,
     EarthquakeStruck,
     FireEnded,
@@ -124,17 +125,31 @@ def creatures_message(
 ) -> Message:
     """Where every creature is; genomes of those not in ``sent``, which is then updated.
     ``news`` are the world's outputs since the last creatures message: who of those sent
-    died of what, and who landed from the sea (R5)."""
+    died of what (and by which hunter), who landed from the sea, and to whom each newborn
+    was born (R5)."""
     fauna = world.fauna
     ids = [int(value) for value in fauna.ids]
     known = sent if sent is not None else set()
-    died = [
-        {"id": int(ident), "cause": str(cause)}
+    died: list[dict[str, Any]] = []
+    for output in news:
+        if not isinstance(output, CreaturesDied):
+            continue
+        # Who killed each victim of a hunter (R5), when the sim says.
+        killers = output.killers or (-1,) * len(output.ids)
+        for ident, cause, killer in zip(output.ids, output.causes, killers, strict=True):
+            if ident not in known:
+                continue
+            death: dict[str, Any] = {"id": int(ident), "cause": str(cause)}
+            if cause == "killed" and killer >= 0:
+                death["by"] = int(killer)
+            died.append(death)
+    # The mother of each born on the island since the last message (R5).
+    mothers = {
+        ident: parent
         for output in news
-        if isinstance(output, CreaturesDied)
-        for ident, cause in zip(output.ids, output.causes, strict=True)
-        if ident in known
-    ]
+        if isinstance(output, CreaturesBorn)
+        for ident, parent in zip(output.ids, output.parents, strict=True)
+    }
     alive = set(ids)
     landed = [
         ident
@@ -157,6 +172,8 @@ def creatures_message(
         }
         if slots is not None:
             entry["slots"] = int(slots[row])
+        if ident in mothers:
+            entry["parent"] = int(mothers[ident])
         born.append(entry)
     known.update(ids)
     message: Message = {
