@@ -318,6 +318,7 @@ def test_summary_table() -> None:
                     },
                 },
                 "usage": {"spec-1x": {"cpu_pct": 87.0, "pss_mb": 301.0}},
+                "gpu_timeouts": 3,
             },
             {
                 "profile": "software",
@@ -339,6 +340,20 @@ def test_summary_table() -> None:
         line.split()[:4] == ["middle-crowd", "30.0", "29.4", "2.5"] for line in text.splitlines()
     )
     assert "[software] timeout no results after 210 s" in text
+    assert "GPU jobs the kernel killed (hangs): 3" in text
+    # Where the kernel log could not be read nothing is claimed.
+    assert text.count("GPU jobs") == 1
+
+
+def test_gpu_hangs_are_counted_from_the_kernel_log() -> None:
+    log = (
+        "[  12.5] panfrost 1800000.gpu: gpu sched timeout, js=0, status=0x8, head=0x0\n"
+        "[  12.6] panfrost 1800000.gpu: js fault, js=0, status=DATA_INVALID_FAULT\n"
+        "[  13.1] panfrost 1800000.gpu: gpu sched timeout, js=0, status=0x8, head=0x0\n"
+    )
+    assert kb.count_gpu_timeouts(log) == 2
+    assert kb.count_gpu_timeouts("") == 0
+    assert kb.count_gpu_timeouts(None) is None
 
 
 def test_the_runner_needs_only_the_standard_library() -> None:
