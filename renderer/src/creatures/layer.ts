@@ -178,6 +178,8 @@ interface Creature {
   mass: number;
   /** Lying torpid: curled up, still, breathing slowly. */
   torpid: boolean;
+  /** Held where `pin` put it (debugging the look: an animal placed by hand), not moving. */
+  pinned?: boolean;
   /** Every sprite of the body with its colour and opacity out of water. */
   paints: { sprite: Sprite; colour: number; alpha: number }[];
   /** The water it was last coloured for (`seaKey`), -1 for none. */
@@ -191,15 +193,6 @@ interface Creature {
   ripples: Sprite[] | null;
   /** Its legs' sprites and the joint each of its parts rides, made the first time it wades. */
   legSprites: Set<Sprite> | null;
-  /**
-   * Among plants (R5): the part of its body behind a tree or bush that stands between its
-   * head and its tail, drawn in a row of its own so that the plant covers it; null until
-   * first needed. `behind` says which joints are in it (a bit each), 0 when none is.
-   */
-  back: Container | null;
-  behind: number;
-  /** Its sprites in the order they are drawn, and the joint each rides, while split. */
-  order: Sprite[];
   /** Glass: what draws the body see-through, once it needs one. */
   glass?: AlphaFilter;
   /** The joint at its widest, which breathes; and how far into a breath it started. */
@@ -212,12 +205,13 @@ interface Creature {
 /** Ripples round a walker in the water: the foam's white. */
 const RIPPLE_TINT = 0xf4fbff;
 /**
- * What the plants answer about where they stand (R5, `PlantLayer.across`): the row of the
- * frontmost tree or bush whose foot lies after row `from` and no later than row `to` and
- * whose drawing overlaps `box`; -1 if none.
+ * What the plants answer about where they stand (R5, `PlantLayer.over`): the row of the
+ * first (backmost) tree or bush whose drawing overlaps `box`, among those whose foot lies
+ * from as far behind row `from` to as far in front of row `to` as a plant's drawing
+ * reaches; -1 if none.
  */
 export interface Occluders {
-  across(box: CellRect, from: number, to: number): number;
+  over(box: CellRect, from: number, to: number): number;
 }
 
 /** Steps of opacity an arriving creature comes into being in (and a dead one fades in). */
@@ -345,8 +339,6 @@ export class CreatureLayer {
     const creature = this.creatures[index];
     if (creature === undefined) return;
     this.creatures[index] = undefined;
-    // Whole again: the dead fade as one.
-    this.split(creature, 0);
     if (fade && (creature.container.visible || creature.marker.visible)) {
       const legs = new Set(
         creature.legs.flatMap((leg) => [
@@ -379,8 +371,6 @@ export class CreatureLayer {
   }
 
   private destroy(creature: Creature): void {
-    this.split(creature, 0);
-    creature.back?.destroy();
     creature.container.destroy({ children: true });
     creature.marker.destroy({ children: true });
     creature.glass?.destroy();
@@ -592,6 +582,42 @@ export class CreatureLayer {
     return highest;
   }
 
+  /**
+   * Put slot `index`'s animal at (x, y) facing `heading` (radians), its body straight
+   * behind its head, and hold it there (debugging the look: an animal placed exactly where
+   * it is to be seen, as among bushes). Its legs stand where they rest.
+   */
+  pin(index: number, x: number, y: number, heading: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined) return;
+    creature.pinned = true;
+    creature.heading = heading;
+    creature.joints.forEach((joint, i) => {
+      joint.x = x - Math.cos(heading) * creature.plan.spacing * i;
+      joint.y = y - Math.sin(heading) * creature.plan.spacing * i;
+    });
+    for (const leg of creature.legs) leg.planted = false;
+    if (creature.motion !== null) {
+      creature.motion.anchor.x = x;
+      creature.motion.anchor.y = y;
+    }
+  }
+
+  /**
+   * Let slot `index`'s animal go from where it is to (x, y) as it goes to where the sim has
+   * it, steering round plants on the way (debugging the look: a walk staged by hand).
+   */
+  send(index: number, x: number, y: number): void {
+    const creature = this.creatures[index];
+    if (creature === undefined || creature.motion === null) return;
+    creature.pinned = false;
+    creature.motion.anchor.x = x;
+    creature.motion.anchor.y = y;
+    creature.motion.mode = "travel";
+    creature.motion.goal.x = x;
+    creature.motion.goal.y = y;
+  }
+
   /** The lowest point of slot `index`'s body (cells): the row `hostIn` stands it in. */
   footOf(index: number): number {
     let lowest = -Infinity;
@@ -608,7 +634,6 @@ export class CreatureLayer {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
       if (guests === null) {
-        this.split(creature, 0);
         if (creature.container.parent !== this.container)
           this.container.addChild(creature.container);
         continue;
@@ -622,92 +647,24 @@ export class CreatureLayer {
         lowest = Math.max(lowest, row);
         highest = Math.min(highest, row);
       }
-      // A walker in sight that a tree or bush stands across (its foot between the
-      // animal's head and tail) is drawn in two: what lies behind the plant in a row
-      // before it, the rest in front, as top-down games sort a big tree's tiles (R5).
-      let behind = 0;
-      let backRow = lowest;
+      // An animal is seen from above, so a tree's or a bush's leaves are over it wherever
+      // the plant's drawing overlaps it, whichever side of the plant its feet are (R5:
+      // drawn by the row of its feet alone, an animal in front of a bush or across one
+      // seemed to lie on top of it). It goes in the row before the first plant that
+      // overlaps it; grass and small things keep to the rows of its feet.
+      let row = lowest;
       if (
         occluders !== null &&
-        lowest > highest &&
         creature.inView &&
         !creature.plan.swims &&
         creature.arriving === undefined
       ) {
-        const across = occluders.across(this.box(index), highest, lowest);
-        if (across >= 0) {
-          backRow = highest;
-          creature.joints.forEach((joint, i) => {
-            const row = rowOf(joint.y);
-            if (row < across) {
-              behind |= 1 << i;
-              backRow = Math.max(backRow, row);
-            }
-          });
-        }
+        const under = occluders.over(this.box(index), highest, lowest);
+        if (under >= 0) row = Math.min(lowest, Math.max(under - 1, 0));
       }
-      this.split(creature, behind);
-      const host = guests[lowest] ?? this.container;
+      const host = guests[row] ?? this.container;
       if (creature.container.parent !== host) host.addChild(creature.container);
-      const { back } = creature;
-      if (back !== null && behind !== 0) {
-        const behindHost = guests[backRow] ?? this.container;
-        if (back.parent !== behindHost) behindHost.addChild(back);
-        // The part behind is shown, faded and lifted as the rest is.
-        back.visible = creature.container.visible;
-        back.alpha = creature.container.alpha;
-        back.y = creature.container.y;
-      }
     }
-  }
-
-  /**
-   * Put the sprites of the joints in `behind` (a bit each) into the creature's back part
-   * and the rest into its container, each in the order the body is drawn; 0 makes it whole.
-   */
-  private split(creature: Creature, behind: number): void {
-    if (behind === creature.behind) return;
-    const { container } = creature;
-    if (creature.behind === 0) {
-      // Whole until now: its container holds every sprite, in order.
-      creature.order = container.children.filter(
-        (child): child is Sprite => child instanceof Sprite,
-      );
-    } else {
-      // Anything added while split (a ripple) goes first, as it was added.
-      const known = new Set(creature.order);
-      const added = [...container.children, ...(creature.back?.children ?? [])].filter(
-        (child): child is Sprite => child instanceof Sprite && !known.has(child),
-      );
-      creature.order = [...added, ...creature.order];
-    }
-    creature.behind = behind;
-    if (behind !== 0) creature.back ??= new Container();
-    const { back } = creature;
-    const jointOf = this.jointsOf(creature);
-    container.removeChildren();
-    back?.removeChildren();
-    for (const sprite of creature.order) {
-      const joint = jointOf.get(sprite) ?? 0;
-      if (back !== null && (behind & (1 << joint)) !== 0) back.addChild(sprite);
-      else container.addChild(sprite);
-    }
-    if (behind === 0) back?.removeFromParent();
-  }
-
-  /** The joint each sprite of a creature rides: its parts', its legs' (the hip's), its ripples' (the chest's). */
-  private jointsOf(creature: Creature): Map<Sprite, number> {
-    const jointOf = new Map<Sprite, number>();
-    creature.sprites.forEach((sprite, i) =>
-      jointOf.set(sprite, creature.plan.parts[i]?.joint ?? 0),
-    );
-    for (const leg of creature.legs) {
-      for (const sprite of [leg.upper, leg.lower, leg.sole, ...leg.edges]) {
-        if (sprite !== null) jointOf.set(sprite, leg.plan.joint);
-      }
-    }
-    for (const ring of creature.ripples ?? []) jointOf.set(ring, creature.chest);
-    return jointOf;
   }
 
   /**
@@ -722,11 +679,12 @@ export class CreatureLayer {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
       // A torpid animal lies where it is; the others move.
-      const head = creature.torpid
-        ? (creature.joints[0] ?? { x: 0, y: 0 })
-        : creature.motion === null
-          ? this.wander(creature, dtS)
-          : this.live(creature, dtS);
+      const head =
+        creature.torpid || creature.pinned
+          ? (creature.joints[0] ?? { x: 0, y: 0 })
+          : creature.motion === null
+            ? this.wander(creature, dtS)
+            : this.live(creature, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -909,9 +867,6 @@ export class CreatureLayer {
       waterPace: 1,
       ripples: null,
       legSprites: null,
-      back: null,
-      behind: 0,
-      order: [],
       pen: seed.pen,
       container,
       marker,

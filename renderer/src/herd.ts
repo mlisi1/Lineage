@@ -136,6 +136,25 @@ export class Herd {
     for (const layer of Object.values(this.layers)) layer.swash = covers;
   }
 
+  /**
+   * Put animal `id` at (x, y) facing `heading` and hold it there, in both views (debugging
+   * the look, `CreatureLayer.pin`); false if it is not alive.
+   */
+  pin(id: number, x: number, y: number, heading: number): boolean {
+    const slot = this.roster.slotOf(id);
+    if (slot === undefined) return false;
+    for (const layer of Object.values(this.layers)) layer.pin(slot, x, y, heading);
+    return true;
+  }
+
+  /** Send animal `id` to (x, y), in both views (debugging the look, `CreatureLayer.send`). */
+  send(id: number, x: number, y: number): boolean {
+    const slot = this.roster.slotOf(id);
+    if (slot === undefined) return false;
+    for (const layer of Object.values(this.layers)) layer.send(slot, x, y);
+    return true;
+  }
+
   /** Species names by id, from the `species` messages. */
   readonly names = new Map<number, string>();
   /**

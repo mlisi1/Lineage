@@ -79,9 +79,11 @@ const REACH_CELLS = 1;
  * things too (R5: a small animal was lost under the tufts). Only partly: a bush or a tree
  * nearly gone made the animal seem to stand on it (the owner, 2026-10-22), so it stays
  * clearly in front. Smaller than `FADES_FROM_CELLS` (pebbles) nothing hides it.
+ * Off for now (1: whole), the owner, 2026-10-23: to see plainly how animals stand among
+ * bushes while that is put right.
  */
-const FADED = 0.6;
-const FADED_SMALL = 0.5;
+const FADED = 1;
+const FADED_SMALL = 1;
 const SMALL_BELOW_CELLS = 0.9;
 const FADES_FROM_CELLS = 0.2;
 /** A plant's foot keeps this far (cells) beyond where the swash reaches. */
@@ -112,7 +114,7 @@ export interface Placed {
    * What animals keep out of (R5), for a tree or a bush: an ellipse about its foot, as
    * half its width and height in cells.
    */
-  footprint?: { rx: number; ry: number };
+  footprint?: { rx: number; ry: number; raise?: number };
 }
 
 interface Row {
@@ -151,6 +153,8 @@ export class PlantLayer {
    * in: four numbers each, the middle and the half width and height, in cells.
    */
   private readonly feet: (number[] | undefined)[];
+  /** The drawings of trees and bushes (those with a footprint): what is drawn over animals. */
+  private readonly leafy = new WeakSet<Sprite>();
   /** The largest half width or height of a footprint so far: how far round a place to look. */
   private widest = 0;
 
@@ -213,6 +217,44 @@ export class PlantLayer {
       }
     }
     return false;
+  }
+
+  /**
+   * The trees and bushes built in `cells` (debugging the look): each one's foot, its
+   * drawing's box (cells) and its footprint, if it keeps one.
+   */
+  standing(cells: CellRect): {
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    wide: number;
+    high: number;
+  }[] {
+    const out: { x: number; y: number; left: number; top: number; wide: number; high: number }[] =
+      [];
+    const first = Math.max(Math.floor(cells.y0 * this.rowsPerCell), 0);
+    const last = Math.min(Math.ceil(cells.y1 * this.rowsPerCell), this.rows.length - 1);
+    for (let index = first; index <= last; index++) {
+      for (const [, chunk] of this.rows[index]?.chunks ?? []) {
+        for (const child of chunk.children) {
+          const sprite = child as Sprite;
+          const wide = sprite.texture.width * sprite.scale.x;
+          const high = sprite.texture.height * sprite.scale.y;
+          if (high < SMALL_BELOW_CELLS) continue;
+          if (sprite.x < cells.x0 || sprite.x > cells.x1) continue;
+          out.push({
+            x: sprite.x,
+            y: sprite.y,
+            left: sprite.x - sprite.anchor.x * wide,
+            top: sprite.y - sprite.anchor.y * high,
+            wide,
+            high,
+          });
+        }
+      }
+    }
+    return out;
   }
 
   /** Number of plant sprites built so far: all of them for an eager layer. */
@@ -294,25 +336,29 @@ export class PlantLayer {
   }
 
   /**
-   * The row of the frontmost tree or bush whose foot lies after row `from` and no later
-   * than row `to`, and whose drawing overlaps `box` (cells); -1 if none (R5: an animal it
-   * stands across is drawn in two, `CreatureLayer.hostIn`). Grass and small things do not
-   * count.
+   * The row of the backmost tree or bush whose drawing overlaps `box` (cells), among those
+   * whose foot lies from as far behind row `from` to as far in front of row `to` as a
+   * plant's drawing reaches; -1 if none (R5: an animal is drawn under every tree and bush
+   * that overlaps it, its leaves being over it, `CreatureLayer.hostIn`). Only trees and
+   * bushes count, young ones too; grass, flowers and small things do not.
    */
-  across(box: CellRect, from: number, to: number): number {
-    const last = Math.min(to, this.rows.length - 1);
-    for (let index = last; index > from; index--) {
+  over(box: CellRect, from: number, to: number): number {
+    const reach = Math.ceil(this.tall * this.rowsPerCell);
+    const first = Math.max(from - reach, 0);
+    const last = Math.min(to + reach, this.rows.length - 1);
+    for (let index = first; index <= last; index++) {
       for (const [x, chunk] of this.rows[index]?.chunks ?? []) {
         if (x + CHUNK_CELLS + REACH_CELLS < box.x0 || x - REACH_CELLS > box.x1) continue;
         for (const child of chunk.children) {
           const sprite = child as Sprite;
-          const wide = sprite.texture.width * sprite.scale.x;
+          if (!this.leafy.has(sprite)) continue;
           const high = sprite.texture.height * sprite.scale.y;
-          if (high < SMALL_BELOW_CELLS) continue;
+          const wide = sprite.texture.width * sprite.scale.x;
           const left = sprite.x - sprite.anchor.x * wide;
           const top = sprite.y - sprite.anchor.y * high;
           if (left > box.x1 || left + wide < box.x0) continue;
-          if (top > box.y1 || sprite.y < box.y0) continue;
+          // The drawing's own edges, not its foot: leaves and their outline hang below it.
+          if (top > box.y1 || top + high < box.y0) continue;
           return index;
         }
       }
@@ -388,9 +434,13 @@ export class PlantLayer {
   }
 
   /** Keep a footprint about the foot at (x, y) (cells) for `blocked`. */
-  private tread(x: number, y: number, { rx, ry }: { rx: number; ry: number }): void {
+  private tread(
+    x: number,
+    y: number,
+    { rx, ry, raise = FOOTPRINT_RAISE }: { rx: number; ry: number; raise?: number },
+  ): void {
     const { width, height } = this.land;
-    const middle = y - ry * FOOTPRINT_RAISE;
+    const middle = y - ry * raise;
     const column = Math.min(Math.max(Math.floor(x), 0), width - 1);
     const row = Math.min(Math.max(Math.floor(middle), 0), height - 1);
     const cell = row * width + column;
@@ -431,7 +481,10 @@ export class PlantLayer {
           continue;
         }
         sprite.position.set(footX, footY);
-        if (placed.footprint !== undefined) this.tread(footX, footY, placed.footprint);
+        if (placed.footprint !== undefined) {
+          this.tread(footX, footY, placed.footprint);
+          this.leafy.add(sprite);
+        }
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
         const at = Math.min(
           Math.max(Math.ceil(footY * this.rowsPerCell) - 1, 0),
@@ -621,9 +674,12 @@ const CHARRED_FROM_SCORCH = 60;
 const CHARRED_TREE_HEIGHT = 153;
 /**
  * What animals keep out of (R5), as shares of the drawing's width: a tree's trunk with its
- * roots, a bush's lower puffs; each this much less deep than wide, as the ground is seen.
+ * roots (this much less deep than wide, as the ground is seen); a bush's whole foot, half
+ * its width either side (a band, `BUSH_BAND_CELLS` deep).
  */
-const FOOTPRINT_SHARE = { tree: 0.13, bush: 0.4 } as const;
+const FOOTPRINT_SHARE = { tree: 0.13, bush: 0.45 } as const;
+/** A bush's footprint: a band this far (cells) either side of its foot line. */
+const BUSH_BAND_CELLS = 0.12;
 const FOOTPRINT_FLATTEN = 0.5;
 
 /** Snow (0–255) on a cell from which the plants on it carry some. */
@@ -1202,7 +1258,11 @@ export function standingPlants(
     const own = plants[0];
     if (own === undefined || sprout) return plants;
     const rx = (FOOTPRINT_SHARE[kind] * own.texture.width) / tile;
-    own.footprint = { rx, ry: rx * FOOTPRINT_FLATTEN };
+    // A bush keeps a band along its foot, as wide as it is (R5): an animal drawn from above
+    // that overlapped a bush from in front seemed to lie on top of it. Behind it, past the
+    // band, the bush covers the animal, as it should.
+    own.footprint =
+      kind === "bush" ? { rx, ry: BUSH_BAND_CELLS, raise: 0 } : { rx, ry: rx * FOOTPRINT_FLATTEN };
     return plants;
   };
 

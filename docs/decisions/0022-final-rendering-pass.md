@@ -127,6 +127,20 @@ animals in a footprint at any moment to almost always none. The footprint sizes 
 guesses. In dense scrub in the middle view an animal sits in the gaps, or goes straight
 through when there is no way round.
 
+### Under the leaves (2026-10-23)
+
+The owner still saw animals walking over bushes, and asked for the fade to be switched
+off and for scenes staged by hand rather than waited for. With animals pinned round a
+bush (`__pin`, `__send`), the split of round 1 worked for a body lying across a bush.
+What remained was an animal in front of a bush, its body over the bush's lower edge. Top-down games put a
+character in front of a plant whose base it is in front of, and that suits characters
+drawn from the side. Our animals are drawn from above, so in front of a bush they seemed
+to lie on its leaves. The rule now is that the leaves of a tree or bush are over any
+animal they overlap. The animal is drawn in the row before the first plant whose drawing
+overlaps it, and the two-part split is gone. A bush's footprint became a band along its
+whole foot, so animals go round bushes or behind them and never stand across their
+fronts. The fade in front of the animal followed is off for now.
+
 ### Chronicle places, wet feet, off the spike (2026-10-23)
 
 The owner chose, by view: the map and the middle view mark an entry's place while its

@@ -1018,22 +1018,24 @@ Round 1, items 1–7:
   left roll in 0.7 s once a dip is half clear, and rolls up in 0.45 s when the view leaves
   the animal or turns to another. `window.__card()` reads it out; the phone's
   follow-a-creature (S3) shows the same card.
-- **Bodies sorted where a plant stands across them.** Plants and animals are drawn in
-  rows by where they touch the ground, a quarter of a cell tall up close. A body was put
-  in the row of its lowest joint, so a lizard walking up the screen was drawn whole in
-  front of a bush whose foot lay between its tail and its head, its head over the leaves.
-  Top-down games solve this by sorting each piece of a big sprite by its own base (a tree
-  drawn as several tiles). Here a walker in sight that a tree or bush stands across
-  (`PlantLayer.across`: its foot between the head's row and the tail's, its drawing over
-  the body) is drawn in two: the joints behind the plant, with their legs, in a row before
-  it, the rest in front. Each part keeps the body's own drawing order. Only two parts, and
-  only then, so no seam shows where nothing stands between them. The fade in front of the
-  animal followed starts from its head (anything covering any part of it fades) and is
-  lighter: bushes and trees to 60 %, grass to 50 %; nearly gone, a bush made the animal
-  seem to stand on it.
+- **Animals under the leaves** (2026-10-23, after the owner: "it still seems like they
+  walk over the bushes"). Plants and animals are drawn in rows by where they touch the
+  ground, as top-down games sort by the feet. That is right for Stardew's characters,
+  drawn from the side, but our animals are drawn from above: one overlapping a bush from
+  in front, or lying across one, looked as if it lay on top of the leaves. So every tree
+  and bush whose drawing overlaps an animal is drawn over it, whichever side of the plant
+  its feet are: the animal goes in the row before the first such plant
+  (`PlantLayer.over`, the drawing's own edges, young bushes too; grass, flowers and small
+  things keep to the rows of its feet). A bush's footprint is a band along its whole
+  foot, 0.12 cells either side (`BUSH_BAND_CELLS`), so an animal goes round a bush or
+  behind it, where the bush covers it, and never stands across its front. A tree keeps
+  its trunk's footprint. The fade in front of the animal followed is off for now, while
+  this is looked at (`FADED` 1). Staged by hand to look at it: `window.__pin(id, x, y,
+  heading)` holds an animal at a place, `window.__send(id, x, y)` sends it somewhere,
+  `window.__standing(x0, y0, x1, y1)` lists the trees and bushes in a box.
 - **Animals keep clear of trees and bushes.** Each tree and bush the plant layer builds
-  leaves a footprint: an ellipse about its foot, a tree's trunk with its roots (0.13 of
-  the drawing's width) or a bush's lower puffs (0.4), half as deep as wide. The layer keeps
+  leaves a footprint: a tree's trunk with its roots (an ellipse 0.13 of the drawing's
+  width, half as deep as wide), a bush's whole foot (a band, above). The layer keeps
   them by cell and answers whether a body of a given radius at a place overlaps one
   (`PlantLayer.blocked`). Only plants already built count (in and near the view): an animal
   far off walks as on open ground. Grass, flowers, stones, logs and sprouts are walked
