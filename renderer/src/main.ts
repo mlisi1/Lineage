@@ -45,6 +45,9 @@
  *                              atmosphere stands still too, moved on only by `__advance`
  *   ?cap=30                    R5: at most this many frames a second (`framecap.ts`): the
  *                              kiosk's cap on the board, which has no fan
+ *   ?season=autumn:0.8         R5: the stream's clock says this season, this far into it
+ *                              (0–1, 0.5 if left out): the land, the plants and the
+ *                              leaves blown off the trees as in that season
  *   ?bushes=whole              R5: the local view's bushes drawn whole, as before the owner
  *                              chose them in pieces (`plants/pieces.ts`), to compare
  *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
@@ -64,6 +67,7 @@
  */
 import { Application, Container, WebGLRenderer } from "pixi.js";
 import { Ambient } from "./atmosphere/ambient";
+import { Leaves } from "./atmosphere/leaves";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
@@ -74,7 +78,7 @@ import { Herd } from "./herd";
 import type { PlantLayer } from "./plants/plants";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
 import { PlaceMarker } from "./marker";
-import type { CreaturesMessage, Message } from "./protocol";
+import type { CreaturesMessage, Message, SkyMessage } from "./protocol";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./creatures/atlas";
@@ -179,6 +183,10 @@ declare global {
     __sleep?: (id: number) => ReturnType<Herd["sleepOf"]>;
     /** What the small life about the island shows (R5): fireflies lit, dust, birds, butterflies. */
     __ambient?: () => Ambient["state"];
+    /** Autumn leaves in the air and on the ground (R5). */
+    __leaves?: () => Leaves["state"];
+    /** What falls from the sky from now on (R5, staging the animals in rain): a sky message as the last, with `rain`. */
+    __rain?: (rain: SkyMessage["rain"]) => boolean;
     __standing?: (
       x0: number,
       y0: number,
@@ -275,6 +283,8 @@ async function start(): Promise<void> {
   const ambient = new Ambient(seed + 3);
   herd.footfall = (x, y) => ambient.dust(x, y);
   world.addChild(ambient.over);
+  // Autumn leaves blown off the trees (R5), among the plants of the view.
+  const leaves = new Leaves(seed + 4, ambient.over);
   const still = params.get("still") !== null;
 
   // Over the scene: the dip between views, then the captions above it.
@@ -315,8 +325,10 @@ async function start(): Promise<void> {
   let date: string | null = null;
   let lastMs = 0;
   let lastCreatures: CreaturesMessage | null = null;
+  let lastSky: SkyMessage | null = null;
   const deliver = (message: Message): void => {
     if (message.type === "clock") date = message.date;
+    if (message.type === "sky") lastSky = message;
     if (message.type === "creatures") lastCreatures = message;
     if ("t_ms" in message) lastMs = message.t_ms;
     if (message.type === "chronicle") {
@@ -327,6 +339,7 @@ async function start(): Promise<void> {
     herd.receive(message);
     atmosphere.receive(message);
     ambient.receive(message);
+    leaves.receive(message);
   };
   // The director comes later; a world's end sends the camera to the map through this.
   let toMap = (): void => undefined;
@@ -393,8 +406,19 @@ async function start(): Promise<void> {
       ? new SocketSource(socket)
       : await Recording.load(recording, Number(every ?? 1000), speed);
   if (film && source instanceof Recording) source.playManually();
+  // `?season=autumn:0.8` (staging, R5): the clock says that season, so far into it.
+  const [seasonAsked, seasonShare] = (KIOSK ? "" : (params.get("season") ?? "")).split(":");
+  const seasonNamed = ["spring", "summer", "autumn", "winter"].find((one) => one === seasonAsked);
   source.listen((message) => {
     if (quiet && message.type === "chronicle") return;
+    if (seasonNamed !== undefined && message.type === "clock") {
+      const progress = Number(seasonShare ?? 0.5);
+      message = {
+        ...message,
+        season: seasonNamed as typeof message.season,
+        season_progress: Number.isFinite(progress) ? Math.min(Math.max(progress, 0), 1) : 0.5,
+      };
+    }
     // Shown on demand, the light is the one asked for, not the recording's.
     if (shows.length > 0 && message.type === "sky") return;
     receive(message);
@@ -443,6 +467,12 @@ async function start(): Promise<void> {
   window.__birth = (motherId, childId, egg) => herd.birth(motherId, childId, egg);
   window.__sleep = (id) => herd.sleepOf(id);
   window.__ambient = () => ambient.state;
+  window.__leaves = () => leaves.state;
+  window.__rain = (rain) => {
+    if (lastSky === null) return false;
+    receive({ ...lastSky, rain });
+    return true;
+  };
   window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
   window.__screenOf = (x, y) => world.toGlobal({ x, y });
   window.__blocked = (x, y, margin) => landscape.hosts?.blocked(x, y, margin) ?? false;
@@ -583,6 +613,14 @@ async function start(): Promise<void> {
       land,
       light: sceneLight,
       raining: sceneRain !== "none",
+      ending: atmosphere.ending,
+    });
+    leaves.update(stepS, {
+      view: shot.view,
+      cells,
+      tile,
+      plants: landscape.hosts,
+      wind: still ? null : atmosphere.wind,
       ending: atmosphere.ending,
     });
     advance = 0;

@@ -129,7 +129,7 @@ const BUTTERFLY_FRAMES = [
 const GLOW_ALPHA: Readonly<Record<string, number>> = { "#": 1, o: 0.6, "+": 0.3, ",": 0.12 };
 
 /** A texture of `rows`: `#` white (to tint), `b` dark, the glow's steps as alpha. */
-function texture(rows: readonly string[]): Texture {
+export function texture(rows: readonly string[]): Texture {
   const width = Math.max(...rows.map((row) => row.length));
   const canvas = document.createElement("canvas");
   canvas.width = width;

@@ -131,6 +131,23 @@ export interface Placed {
    * animal only where some part of the animal is behind its foot (`PlantLayer.over`).
    */
   piece?: boolean;
+  /**
+   * A broadleaf's crown in autumn (R5, `atmosphere/leaves.ts`): where on it leaves come
+   * loose, as its half width and the heights of its lower and upper edge above the foot
+   * (cells), and the colours they come off in (0xRRGGBB, dark to light).
+   */
+  crown?: Crown;
+}
+
+/** A broadleaf's crown that drops its leaves in autumn (`Placed.crown`), and where it stands. */
+export interface Crown {
+  half: number;
+  bottom: number;
+  top: number;
+  colours: readonly number[];
+  /** Where its foot is (cells), once built. */
+  x: number;
+  y: number;
 }
 
 /** A plant that bends in the wind, as the layer moves it (`PlantLayer.blow`). */
@@ -194,6 +211,8 @@ export class PlantLayer {
   private readonly pieced = new WeakSet<Sprite>();
   /** The largest half width or height of a footprint so far: how far round a place to look. */
   private widest = 0;
+  /** The crowns of the broadleaves built so far that drop leaves (R5), by the cell of their foot. */
+  private readonly crowns: (Crown | undefined)[];
 
   /** `place` says what stands on a cell (whose plant, if any, is `look`). */
   constructor(
@@ -205,6 +224,7 @@ export class PlantLayer {
     this.onBuilt = options.built;
     this.rowsPerCell = options.rowsPerCell ?? 1;
     this.feet = new Array<number[] | undefined>(land.width * land.height);
+    this.crowns = new Array<Crown | undefined>(land.width * land.height);
     for (let row = 0; row < land.height * this.rowsPerCell; row++) {
       const made: Row = {
         container: new Container(),
@@ -298,6 +318,16 @@ export class PlantLayer {
       }
     }
     return out;
+  }
+
+  /**
+   * The crown of a broadleaf dropping its leaves whose foot is on cell (x, y), if one is
+   * built there (R5, `atmosphere/leaves.ts`).
+   */
+  crownAt(x: number, y: number): Crown | undefined {
+    const { width, height } = this.land;
+    if (x < 0 || y < 0 || x >= width || y >= height) return undefined;
+    return this.crowns[Math.floor(y) * width + Math.floor(x)];
   }
 
   /** Number of plant sprites built so far: all of them for an eager layer. */
@@ -585,6 +615,10 @@ export class PlantLayer {
           continue;
         }
         sprite.position.set(footX, footY);
+        if (placed.crown !== undefined) {
+          const cell = Math.floor(footY - 1e-6) * land.width + Math.floor(footX);
+          this.crowns[cell] = { ...placed.crown, x: footX, y: footY };
+        }
         if (placed.footprint !== undefined) {
           this.tread(footX, footY, placed.footprint);
           this.leafy.add(sprite);
@@ -882,6 +916,11 @@ function keySalt(key: string): number {
  */
 const BARE_BELOW = 100;
 const LEAFY_FROM = 77;
+/**
+ * Where a broadleaf's leaves come loose: its crown, as shares of the drawing's height above
+ * the foot (from its lower edge to near its top) and of its width either side of the trunk.
+ */
+const CROWN = { from: 0.45, to: 0.92, across: 0.38 };
 /** `EVERGREEN` from which the simulation makes a tree a conifer (`form_conifer_min_evergreen`, 0.5). */
 const CONIFER_FROM = 128;
 
@@ -1604,6 +1643,18 @@ export function standingPlants(
     return out;
   };
 
+  /** The colours a broadleaf of build `variant` drops its leaves in, as it turns in autumn. */
+  const leafRamps = new Map<number, readonly number[]>();
+  const leafColours = (variant: number): readonly number[] => {
+    let colours = leafRamps.get(variant);
+    if (colours === undefined) {
+      const ramp = seasonRamp(land.palette, "BROADLEAF", "autumn", variant, look.seasons);
+      colours = ramp.map((hex) => Number.parseInt(hex.slice(1), 16));
+      leafRamps.set(variant, colours);
+    }
+    return colours;
+  };
+
   const layer = new PlantLayer(
     land,
     (look, x, y) => {
@@ -1694,6 +1745,26 @@ export function standingPlants(
         dx / SPRITE_WIDTH,
         dy / SPRITE_WIDTH,
       );
+      // A broadleaf in autumn, not one that keeps its leaves, drops a few (R5, `leaves.ts`).
+      const own0 = plants[0];
+      if (
+        look.form === "BROADLEAF" &&
+        shown === "autumn" &&
+        growthOf(biomass) !== "sprout" &&
+        (land.plantEvergreen?.[cell] ?? 0) < LEAFY_FROM &&
+        own0 !== undefined
+      ) {
+        const high = (own0.anchorY * own0.texture.height) / tile;
+        const wide = (own0.texture.width - (own0.sway?.added ?? 0)) / tile;
+        own0.crown = {
+          half: CROWN.across * wide,
+          bottom: CROWN.from * high,
+          top: CROWN.to * high,
+          colours: leafColours(buildOf(x, y)),
+          x: 0,
+          y: 0,
+        };
+      }
       // A bush in pieces (`?bushes=pieces`): its pieces in place of its own drawing, its rare
       // genes' overlays over them whole. A fire pine's bark is drawn whole.
       const own =
