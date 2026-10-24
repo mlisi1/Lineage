@@ -196,6 +196,48 @@ const FOLLOWS = {
     presses: 0,
     crop: 2,
   },
+  // Autumn leaves (R5): a wood of broadleaves late in autumn (`?season=`), on a calm day
+  // and in a thunderstorm, up close and in the middle view.
+  leavesCalm: {
+    query: "view=local&x=234&y=97&quiet&seed=1&season=autumn:0.9&show=day",
+    seconds: 6,
+    presses: 0,
+  },
+  leavesStorm: {
+    query: "view=local&x=234&y=97&quiet&seed=1&season=autumn:0.9&show=storm",
+    seconds: 6,
+    presses: 0,
+  },
+  leavesMiddle: {
+    query: "view=middle&x=225&y=97&quiet&seed=1&season=autumn:0.9&show=day",
+    seconds: 6,
+    presses: 0,
+  },
+  // Animals in the rain (R5): three animals put out in a shower, which then stops (they
+  // shake it off one after another); and two walking in a thunderstorm, hunched.
+  shake: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=rain",
+    seconds: 6,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2048, 63, 71, 0); window.__send?.(2048, 63, 71);
+      window.__pin?.(2184, 65.6, 71.3, Math.PI); window.__send?.(2184, 65.6, 71.3);
+      window.__pin?.(2220, 64.5, 72.5, 1); window.__send?.(2220, 64.5, 72.5);
+    })()`,
+    then: 'window.__rain?.("none")',
+  },
+  huddle: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=storm",
+    seconds: 5,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2048, 61, 71, 0); window.__send?.(2048, 61, 71);
+      window.__pin?.(2184, 67, 71.3, Math.PI); window.__send?.(2184, 67, 71.3);
+    })()`,
+    then: "(() => { window.__send?.(2048, 67, 71); window.__send?.(2184, 61, 71.3); })()",
+  },
   // Bushes in pieces (R5, an experiment behind `?bushes=pieces`): the staged walks again.
   stagedBehindPieces: {
     query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
@@ -628,7 +670,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#weather">Leaves and rain</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -877,6 +919,19 @@ ${filmAfter("dust", "Dust from the feet of an animal sent hurrying, enlarged twi
 </div>
 ${filmPair("windCalm", ["Before: a calm day", "After: a calm day, grass and crowns stir"])}
 ${filmPair("windStorm", ["Before: a thunderstorm", "After: a thunderstorm, everything leans"])}
+</section>
+<hr>
+
+<section id="weather">
+<div class="head"><span class="n">·</span><h2>Autumn leaves, and animals in the rain</h2></div>
+<div class="notes">
+<div><span class="label">Now</span><p>Drawn only. In autumn a few leaves come loose from the crowns of broadleaves shown in autumn (not those evergreen enough to keep their leaves, no conifers), in the colour each tree has turned, and fall with the plants' wind, swinging and flipping, to lie a moment by the tree and go: more late in autumn, in gusts, in rain and most in a thunderstorm; a tree drops one every ten seconds or so on a calm day. Whole art pixels (a pixel in the middle view, a small leaf in the plants' two-pixel texels up close), pooled, sorted among the plants; none on the map (<code>src/atmosphere/leaves.ts</code>, <code>PlantLayer.crownAt</code>). When a rain spell ends, each animal that was out in it stops and shakes once, a shiver down its body from head to tail and a spray of drops either side, at its own moment within four seconds; in a thunderstorm animals hunch, lower, feet drawn in, heads back, in shorter, slower steps. Swimmers, the torpid, sleepers and animals in deep water are left alone (<code>src/creatures/weather.ts</code>). Staged with <code>?season=autumn:0.9</code> and <code>__rain("none")</code>.</p></div>
+</div>
+${filmAfter("leavesCalm", "Late autumn, a calm day: a few leaves drift off the crowns")}
+${filmAfter("leavesStorm", "Late autumn, a thunderstorm: more leaves, blown further")}
+${filmAfter("leavesMiddle", "Late autumn in the middle view: a pixel a leaf")}
+${filmAfter("shake", "A shower stops: the three shake it off one after another, enlarged twice")}
+${filmAfter("huddle", "A thunderstorm: two animals walk hunched, enlarged twice")}
 </section>
 <hr>
 
