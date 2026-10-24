@@ -127,6 +127,13 @@ export interface Placed {
    */
   sway?: { frames: readonly Texture[]; lowest: number; reach: number; added: number };
   /**
+   * For a piece of a bush drawn in pieces, which bends with its bush (R5): it slides sideways
+   * by whole art pixels, from `lowest` to `highest`, `reach` at strength 1 at the crest of a
+   * gust, the share of its bush's lean at its height; its bush's foot is (`dx`, `dy`) cells
+   * from its own, and the gust and the rocking are its bush's.
+   */
+  slide?: { lowest: number; highest: number; reach: number; dx: number; dy: number };
+  /**
    * A piece of a bush drawn in pieces (R5, `?bushes=pieces`): its leaves are over an
    * animal only where some part of the animal is behind its foot (`PlantLayer.over`).
    */
@@ -145,6 +152,11 @@ interface Swaying {
   phase: number;
   /** The lean it is drawn at now (art pixels). */
   lean: number;
+  /**
+   * For a piece of a bush, which slides rather than leans: where it stands at lean 0, and
+   * an art pixel (cells); its `frames` are all its one drawing.
+   */
+  slide?: { x: number; pixel: number };
 }
 
 interface Row {
@@ -409,6 +421,10 @@ export class PlantLayer {
                 );
           if (lean === plant.lean) continue;
           plant.lean = lean;
+          if (plant.slide !== undefined) {
+            plant.sprite.x = plant.slide.x + lean * plant.slide.pixel;
+            continue;
+          }
           const frame = plant.frames[lean - plant.lowest];
           if (frame !== undefined) plant.sprite.texture = frame;
         }
@@ -617,6 +633,22 @@ export class PlantLayer {
           const phase =
             ROCK_JITTER * cellHash(Math.round(footX * tile), Math.round(footY * tile), PHASE_SALT);
           swaying.push({ sprite, frames, lowest, reach, x: footX, y: footY, phase, lean: 0 });
+        } else if (placed.slide !== undefined) {
+          const { lowest, highest, reach } = placed.slide;
+          // Its bush's foot: every piece of a bush rocks with the same gust, in step.
+          const x = footX + placed.slide.dx;
+          const y = footY + placed.slide.dy;
+          let swaying = row.swaying.get(left);
+          if (swaying === undefined) {
+            swaying = [];
+            row.swaying.set(left, swaying);
+          }
+          const phase =
+            ROCK_JITTER * cellHash(Math.round(x * tile), Math.round(y * tile), PHASE_SALT);
+          // No drawings to swap: `frames` stands for the leans it may take.
+          const frames = new Array<Texture>(highest - lowest + 1).fill(sprite.texture);
+          const slide = { x: footX, pixel: placed.scale };
+          swaying.push({ sprite, frames, lowest, reach, x, y, phase, lean: 0, slide });
         }
       }
     }
@@ -1575,10 +1607,27 @@ export function standingPlants(
     const whole = drawings.get(name);
     if (!pieces || whole === undefined) return null;
     const out: Placed[] = [];
+    // The bush bends as a whole drawing would (`wind.ts`): a piece slides by its lean at
+    // the height of its middle, none below the hinge, all of it from where it is stiff up.
+    const bend = whole.bend;
+    const high = whole.art.footY;
+    const leans = leansOf(bend, high);
     for (let k = 0; ; k++) {
       const drawing = drawings.get(`${name}@${k}`);
       if (drawing?.piece === undefined) break;
       const { art, piece } = drawing;
+      const middle = -piece.dy + art.footY - art.height / 2;
+      const share =
+        bend === null
+          ? 0
+          : Math.min(
+              Math.max(
+                (middle - high * bend.hinge) / Math.max(high * (bend.stiff - bend.hinge), 1),
+                0,
+              ),
+              1,
+            );
+      const highest = Math.round(leans.highest * share);
       out.push({
         texture: drawing.texture,
         anchorX: art.footX / art.width,
@@ -1592,6 +1641,17 @@ export function standingPlants(
           raise: 1,
         },
         piece: true,
+        ...(bend === null || highest < 1
+          ? {}
+          : {
+              slide: {
+                lowest: leans.lowest,
+                highest,
+                reach: bend.flex * high * share,
+                dx: -piece.dx / tile,
+                dy: -piece.dy / tile,
+              },
+            }),
       });
     }
     if (out.length === 0) return null;
