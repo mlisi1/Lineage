@@ -282,6 +282,24 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
   butterflies use meadow cells for flowers; calm days barely stir the plants
   (`CALM_WIND`, `BREEZE` if the owner wants more); autumn leaves are not done.
 
+### Seasons, family and rare genes (2026-10-24)
+
+- **Family life, drawn only** (`creatures/family.ts`): the sim has no families beyond
+  `born[].parent`, so the scene remembers the mother of each young animal it sees born
+  (a page loaded mid-life has no pairs until the next births) and forgets her when the
+  young one comes of age or either dies. While the sim has the two within 3 cells, the
+  young one's strolls make for a spot behind her tail and a little to one side, trotting
+  to catch up; the spot is kept within its leash of where the sim has it (`motion.trail`),
+  so it is never drawn off its own place. A brood trails in a line, each behind the one
+  born before it. At a birth the grown one of her kind nearest her head (within 2.2 cells
+  and a 2.5 s trot) comes to the side of her head away from her young; their heads lean
+  together for 1.4 s under two hearts, then the young are born as before. Staged at the
+  birth, not predicted: the newborn comes that much later than the message. Open: young
+  pass through each other and their mother's legs (animals never avoid one another);
+  slow species rarely find a mate near enough, so most births have no nuzzle; on the
+  recordings' fast clock the sim's places move every third of a second and the trailing
+  shows mostly while the young walk to them.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and
