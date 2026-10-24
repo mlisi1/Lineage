@@ -222,9 +222,11 @@ below was taken in scope by the owner. Tests wait until the look is called final
   mother with hearts, eggs for large broods (`creatures/nursery.ts`, `born[].parent`),
   plants leaning in the wind by whole pixels (`plants/wind.ts`), sleep at night
   (`creatures/sleep.ts`), fireflies, gulls, butterflies and dust (`atmosphere/ambient.ts`).
-  Owner's verdict pending (report first). Then (2026-10-24) autumn leaves blown off
-  broadleaves, animals shaking off the rain and hunching in thunderstorms
-  (`atmosphere/leaves.ts`, `creatures/weather.ts`; films `leaves*`, `shake`, `huddle`)
+  The owner approved them all on 2026-10-24. Then, the owner's last pass on what was missing
+  (2026-10-24, drawn only, nothing in the sim): autumn leaves blown off broadleaves, animals
+  shaking off the rain and hunching in thunderstorms (`atmosphere/leaves.ts`,
+  `creatures/weather.ts`); photosynthesisers bask, venom's green strike, swimmers' wakes
+  (`creatures/basking.ts`, `venom.ts`, `wake.ts`; `__grant` to stage)
 - [ ] 23. Bushes in pieces, an experiment (2026-10-24, the owner: "maybe draw the bushes
   in pieces"): each puff its own sprite and footprint (`plants/pieces.ts`), behind
   `?bushes=pieces`; the owner chooses it or the whole bushes, then the fade is decided

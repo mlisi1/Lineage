@@ -650,6 +650,11 @@ export class Atmosphere {
     return { timeS: this.timeS, strength: windStrength(this.rain, this.storm, this.dark) };
   }
 
+  /** How overcast the sky is now (0–1, eased): R5's photosynthesisers bask only under a clear one. */
+  get overcastNow(): number {
+    return this.overcast;
+  }
+
   /** How dark it is (0–1): the night's, or the end of a world's. */
   private darkness(moment: Moment | null): number {
     const night = darkness(this.ease.value);

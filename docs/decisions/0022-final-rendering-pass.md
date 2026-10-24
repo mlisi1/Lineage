@@ -301,6 +301,27 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
   checked on three animals at 30 fps, never on the board; drops are 1 art pixel, small in
   the middle view; a huddled animal's shadow is unchanged.
 
+### Seasons, family and rare genes (2026-10-24)
+
+- **Rare genes in action, drawn only** (worktree `r5-genes`): the rare genes come on the
+  wire already (`born[].slots`, `rare` signatures), so nothing new is sent and the sim is
+  unchanged. A photosynthesiser (`leaves`) standing about in daylight on dry land, under
+  a clear sky, settles and spreads out flat to the sun (wider, parts further out and
+  lower, legs straight out), a star of sunlight glinting on its back now and then, and
+  gets up when it moves on, at dusk or under cloud (`creatures/basking.ts`; the
+  atmosphere's eased `overcastNow` reaches the layer with the light). A venomous hunter's
+  strike adds a lime flash and drips at the bite, green in the prey's scuffle and green
+  wisps (`venom.ts`, `remains.ts`). A swimmer, or an amphibian (`gills`) in the water,
+  leaves a V of foam dashes while it moves, none standing still (`wake.ts`, on
+  `Landscape.floor` under the plants and animals). All are pooled marks of whole art
+  pixels moved by whole pixels (`sparks.ts`), timed from the scene's clock and each
+  animal's own offset, with no random draws. Staged with `window.__grant(id, look)`,
+  a debug hook that draws an animal with a rare gene it lacks.
+  Open: no recording has a true swimmer (AQUATIC ≥ 0.6), so the wake was seen on an
+  amphibian only; the middle view's wake is a narrow line rather than a V; "open land"
+  is read as dry land, not as out from under a canopy; a basker caught by the sim's
+  move flattens back up in a third of a second while it already walks.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

@@ -22,6 +22,7 @@ import {
   rareLooks,
   withRare,
   type RareConfig,
+  type RareLook,
   type Signatures,
 } from "./creatures/rare";
 import type { SeaAt } from "./creatures/water";
@@ -140,20 +141,37 @@ export class Herd {
   private glowBits = 0;
   /** The "z"s over the animal followed while it sleeps (R5, `creatures/sleep.ts`). */
   private readonly snores = new Snores();
+  /** Rare genes granted by hand to animals by id (`grant`, staging the look). */
+  private readonly granted = new Map<number, RareLook[]>();
   /** The light last told (`nightfall`), and whether it was last rising. */
   private light = 1;
   private rising = false;
 
   /**
    * The scene's light of the moment (R5): the animals fall asleep as it goes and wake as
-   * it comes back (`creatures/sleep.ts`).
+   * it comes back (`creatures/sleep.ts`); a photosynthesiser basks in it while the sky is
+   * not `overcast` (0–1, `creatures/basking.ts`).
    */
-  nightfall(light: number): void {
+  nightfall(light: number, overcast = 0): void {
     if (light > this.light) this.rising = true;
     else if (light < this.light) this.rising = false;
     this.light = light;
     const depth = depthOf(light);
-    for (const layer of Object.values(this.layers)) layer.nightfall(depth, this.rising);
+    for (const layer of Object.values(this.layers)) layer.nightfall(depth, this.rising, overcast);
+  }
+
+  /**
+   * Draw animal `id` with the rare gene drawn by `look` too, in both views (debugging the
+   * look, R5: a gene in action staged on an animal that lacks it); false if it is not alive.
+   */
+  grant(id: number, look: RareLook): boolean {
+    const slot = this.roster.slotOf(id);
+    const granted = this.granted.get(id) ?? [];
+    if (!granted.includes(look)) this.granted.set(id, [...granted, look]);
+    const seed = this.seedOf(id);
+    if (slot === undefined || seed === null) return false;
+    for (const layer of Object.values(this.layers)) layer.rebuild(slot, seed);
+    return true;
   }
 
   /**
@@ -213,7 +231,7 @@ export class Herd {
     if (hunter === undefined || prey === undefined || layer === null) return false;
     const wait = layer.hunt(hunter, prey, true);
     if (wait === null) return false;
-    this.remains.died("killed", this.laid(prey), wait);
+    this.remains.died("killed", this.laid(prey), wait, layer.venomous(hunter));
     for (const each of Object.values(this.layers)) {
       each.remove(prey, true, DYING.killed, each === layer ? wait : 0);
     }
@@ -294,12 +312,19 @@ export class Herd {
     for (const each of Object.values(this.layers)) each.show("hidden");
   }
 
+  /** What lies on the water under the animals (R5: wakes): add these to `Landscape.floor`. */
+  get floors(): Container[] {
+    return [this.layers.middle.floor, this.layers.local.floor];
+  }
+
   /** The containers to add to the world layer (in cells): the animals not among plants, and the dots. */
   get containers(): Container[] {
     return [
       this.layers.middle.container,
       this.layers.local.container,
       this.remains.over,
+      this.layers.middle.over,
+      this.layers.local.over,
       this.snores.container,
     ];
   }
@@ -416,7 +441,11 @@ export class Herd {
       species,
       slots: known.slots,
       torpid: this.roster.torpid.has(id),
-      ...withRare(look, rareLooks(known.slots, this.signatures), this.rareConfig),
+      ...withRare(
+        look,
+        [...rareLooks(known.slots, this.signatures), ...(this.granted.get(id) ?? [])],
+        this.rareConfig,
+      ),
     };
   }
 
@@ -441,7 +470,9 @@ export class Herd {
         cause === "killed" && hunter !== undefined && shown !== null
           ? (shown.hunt(hunter, slot) ?? 0)
           : 0;
-      if (cause !== undefined && laid !== null) this.remains.died(cause, laid, wait);
+      // A venomous hunter's kill puffs green (R5, `creatures/venom.ts`).
+      const venom = wait > 0 && hunter !== undefined && shown?.venomous(hunter) === true;
+      if (cause !== undefined && laid !== null) this.remains.died(cause, laid, wait, venom);
       for (const layer of layers) {
         layer.remove(slot, true, DYING[cause ?? "unknown"], layer === shown ? wait : 0);
       }

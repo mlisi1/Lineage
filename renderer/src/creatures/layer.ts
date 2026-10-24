@@ -105,6 +105,23 @@ import {
   type Wet,
 } from "./wading";
 import { MAP_TILE } from "../terrain/ground";
+import {
+  BASK_LOWERS,
+  BASK_REACH,
+  BASK_SPREADS,
+  BASK_WIDENS,
+  GLINT_COLOUR,
+  bask,
+  glintDue,
+  glintKind,
+  glintPlace,
+  newBasker,
+  sunny,
+  type Basker,
+} from "./basking";
+import { Sparks } from "./sparks";
+import { envenom } from "./venom";
+import { WAKE_EVERY_PX, WAKE_FROM, wakePair } from "./wake";
 import type { Random } from "../rng";
 
 /** Wandering: how fast the turn rate drifts and settles (per second). */
@@ -283,6 +300,19 @@ interface Creature {
   hurried: boolean;
   /** Out in the rain, shaking it off, hunched in a thunderstorm (R5, `weather.ts`). */
   drench: Drench;
+  /**
+   * Its rare genes in action (R5): it basks in the sun (photosynthesis, "leaves"), its
+   * strike is venomous ("venom"), it leaves a wake swimming (a swimmer, or "gills").
+   */
+  basks: boolean;
+  venomous: boolean;
+  wakes: boolean;
+  /** Its basking (`basking.ts`), and whether its parts were last drawn spread out. */
+  basker: Basker;
+  spread: boolean;
+  /** Where its head was last frame, and the cells swum since its wake's last dashes. */
+  swamFrom: Point;
+  swum: number;
 }
 
 /** An eating animal's neck goes this share of the way its head does. */
@@ -300,6 +330,8 @@ const KICK_BACK = 0.6;
 const EAT_HOLD_S = 1;
 /** Ripples round a walker in the water: the foam's white. */
 const RIPPLE_TINT = 0xf4fbff;
+/** The most foam dashes of swimmers' wakes out at once (R5, `wake.ts`). */
+const WAKE_MARKS = 192;
 /**
  * What the plants answer about where they stand (R5, `PlantLayer.over`): the row of the
  * first (backmost) tree or bush whose drawing overlaps `box`, among those whose foot lies
@@ -345,6 +377,20 @@ export class CreatureLayer {
   private dust: Flecks | null = null;
   /** The hearts, eggs and shells of births (R5), over the animals; made with the first. */
   private nursery: Nursery | null = null;
+  /**
+   * The glints of basking and the marks of venom (R5), made with the first: over the
+   * animals and what deaths leave (a kill's scuffle), in `over`.
+   */
+  private sparks: Sparks | null = null;
+  readonly over = new Container();
+  /**
+   * What lies on the water under the animals (R5: the swimmers' wakes): add it to the
+   * scene's floor (`Landscape.floor`), under the plants and the animals.
+   */
+  readonly floor = new Container();
+  private foam: Sparks | null = null;
+  /** How overcast the sky is (0–1, R4's): no animal basks under cloud. */
+  private overcast = 0;
   /** Creatures that died, going where they fell. */
   private departing: Departing[] = [];
   /** By slot; a slot the stream's cast has emptied (`remove`) is undefined. */
@@ -459,6 +505,10 @@ export class CreatureLayer {
     // Staged by hand, it stays as it was put (R5: else the sim's place took it away).
     if (old.pinned !== undefined) creature.pinned = old.pinned;
     if (old.staged !== undefined) creature.staged = old.staged;
+    // Basking it basks on (R5); its wake goes on from where it was.
+    creature.basker = old.basker;
+    creature.swamFrom = old.swamFrom;
+    creature.swum = old.swum;
     // Asleep it sleeps on, lying as it lay (R5).
     carrySleep(creature.sleep, old.sleep);
     creature.drench = old.drench;
@@ -609,6 +659,11 @@ export class CreatureLayer {
     creature.glass ??= new AlphaFilter();
     creature.glass.alpha = opacity;
     creature.container.filters = [creature.glass];
+  }
+
+  /** Whether slot `index`'s animal is venomous (R5: its kill's scuffle puffs green). */
+  venomous(index: number): boolean {
+    return this.creatures[index]?.venomous === true;
   }
 
   /** Whether slot `index` holds a creature. */
@@ -804,7 +859,93 @@ export class CreatureLayer {
     creature.heading = Math.atan2(dy, dx);
     followChain(joints, plan.spacing, creature.stiffness, creature.heading, dtS);
     creature.marker.position.set(head.x, head.y);
+    // A venomous hunter's bite (R5, `venom.ts`): at the strike, where its head is thrust.
+    const strike = strikeAfter(hunt.run);
+    if (creature.venomous && creature.inView && hunt.age >= strike && hunt.age - dtS < strike) {
+      const thrust = LUNGE_STRETCH * plan.spacing;
+      const bite = {
+        x: head.x + Math.cos(creature.heading) * thrust,
+        y: head.y + Math.sin(creature.heading) * thrust,
+      };
+      envenom(this.sparkPool(), bite, hunt.prey, dx < 0 ? -1 : 1, this.body.pixels);
+    }
     return head;
+  }
+
+  /** The glints and the venom's marks of the layer, made the first time they are needed. */
+  private sparkPool(): Sparks {
+    if (this.sparks === null) {
+      this.sparks = new Sparks(this.body.pixels);
+      this.over.addChild(this.sparks.container);
+    }
+    return this.sparks;
+  }
+
+  /**
+   * A photosynthesiser in the sun (R5, `basking.ts`): standing about on dry land, it
+   * settles and spreads out flat (drawn by `pose` and `walk`), and does not stroll off
+   * while it basks; a glint runs over its back now and then.
+   */
+  private sunbathe(creature: Creature, sun: boolean, dtS: number): void {
+    const { motion } = creature;
+    const wants =
+      sun &&
+      motion !== null &&
+      (creature.pinned === true || motion.mode === "pause") &&
+      creature.food === "none" &&
+      !creature.torpid &&
+      creature.sleep.share === 0 &&
+      creature.arriving === undefined &&
+      creature.wet === "dry";
+    if (wants) {
+      motion.timer = Math.max(motion.timer, EAT_HOLD_S);
+      motion.look = creature.heading;
+      motion.facing = creature.heading;
+    }
+    bask(creature.basker, wants, dtS);
+    if (!creature.inView || !glintDue(creature.basker, dtS, creature.breathOffset)) return;
+    // On its back, between its head and its tail, where the light falls on it.
+    const { joints, plan } = creature;
+    const along = Math.max(joints.length - 2, 1);
+    const at = 1 + glintPlace(creature.basker, along, creature.breathOffset);
+    const joint = joints[Math.min(at, joints.length - 1)];
+    if (joint === undefined) return;
+    const lift = (plan.radii[at] ?? 0) * 0.4 * LIGHT;
+    this.sparkPool().emit(glintKind(), GLINT_COLOUR, joint.x - lift, joint.y - lift);
+  }
+
+  /**
+   * A swimmer's wake (R5, `wake.ts`): a pair of foam dashes beside it every few art
+   * pixels it swims in the water, none while it stands still or out of the water.
+   */
+  private wake(creature: Creature, head: Point, dtS: number): void {
+    const from = creature.swamFrom;
+    const moved = Math.hypot(head.x - from.x, head.y - from.y);
+    from.x = head.x;
+    from.y = head.y;
+    if (dtS <= 0) return;
+    const swimming =
+      (creature.plan.swims || creature.wet === "shallow" || creature.wet === "deep") &&
+      creature.inView &&
+      this.showing === "bodies" &&
+      creature.arriving === undefined &&
+      moved / dtS >= WAKE_FROM &&
+      moved < creature.plan.length;
+    if (!swimming) {
+      creature.swum = 0;
+      return;
+    }
+    creature.swum += moved;
+    const every = WAKE_EVERY_PX / this.body.pixels;
+    if (creature.swum < every) return;
+    creature.swum = Math.min(creature.swum - every, every);
+    if (this.foam === null) {
+      this.foam = new Sparks(this.body.pixels, WAKE_MARKS);
+      this.floor.addChild(this.foam.container);
+    }
+    const widest = creature.joints[creature.chest] ?? head;
+    const radius = creature.plan.radii[creature.chest] ?? 0;
+    wakePair(this.foam, widest, creature.heading, radius, this.body.pixels);
   }
 
   /**
@@ -1016,9 +1157,10 @@ export class CreatureLayer {
    * How deep in the night it is and whether the light is rising (R5): animals fall asleep
    * and wake by it (`sleep.ts`).
    */
-  nightfall(depth: number, rising: boolean): void {
+  nightfall(depth: number, rising: boolean, overcast = 0): void {
     this.night.depth = depth;
     this.night.rising = rising;
+    this.overcast = overcast;
   }
 
   /**
@@ -1050,6 +1192,9 @@ export class CreatureLayer {
     if (this.showing === "hidden") this.fresh = true;
     this.showing = showing;
     this.only = only;
+    this.floor.visible = showing === "bodies";
+    this.over.visible = showing === "bodies";
+    if (showing !== "bodies") this.foam?.clear();
     this.refresh();
   }
 
@@ -1201,6 +1346,9 @@ export class CreatureLayer {
     this.flecks?.update(dtS);
     this.dust?.update(dtS);
     this.nursery?.update(dtS);
+    this.sparks?.update(dtS);
+    this.foam?.update(dtS);
+    const sun = sunny(this.night.depth, this.overcast);
     const fresh = this.fresh;
     this.fresh = false;
     for (let index = 0; index < this.active; index++) {
@@ -1224,6 +1372,8 @@ export class CreatureLayer {
         );
       if (lying) creature.hurried = false;
       this.rain(creature, busy, dtS);
+      // A photosynthesiser standing about in the sun on dry land basks (R5, `basking.ts`).
+      if (creature.basks) this.sunbathe(creature, sun && !busy && !lying, dtS);
       // A torpid animal lies where it is, and so do a sleeper, a newborn and its mother for
       // its birth; a hunter hunts; the others move.
       const still =
@@ -1240,6 +1390,7 @@ export class CreatureLayer {
             ? this.wander(creature, dtS)
             : this.live(creature, dtS);
       this.endMoments(creature, index, dtS);
+      if (creature.wakes) this.wake(creature, head, dtS);
       // In sight, with room for the whole body to stick into the picture.
       const reach = creature.plan.length + 1;
       const inView =
@@ -1484,6 +1635,13 @@ export class CreatureLayer {
       ),
       hurried: false,
       drench: drenchOf(),
+      basks: seed.rare?.includes("leaves") === true,
+      venomous: seed.rare?.includes("venom") === true,
+      wakes: plan.swims || seed.rare?.includes("gills") === true,
+      basker: newBasker(),
+      spread: false,
+      swamFrom: { x, y },
+      swum: 0,
       heading,
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
@@ -1757,6 +1915,14 @@ export class CreatureLayer {
     // only, put back after.
     const moved = this.weathered(creature);
     const low = 1 - HUDDLE_LOW * creature.drench.huddle;
+    // Basking (R5), it is pressed flat and spread out: wider, its parts further out to its
+    // sides, lower toward the ground; drawn back as it was once it is up.
+    const flat = creature.basker.share * creature.basker.share * (3 - 2 * creature.basker.share);
+    const widen = flat > 0 || creature.spread;
+    creature.spread = flat > 0;
+    const spreads = 1 + BASK_SPREADS * flat;
+    const lowers = 1 - BASK_LOWERS * flat;
+    const widens = 1 + BASK_WIDENS * flat;
     // Which way the body points at each joint: the head where it is going, the others
     // toward the joint in front.
     this.dirX[0] = Math.cos(creature.heading);
@@ -1780,11 +1946,19 @@ export class CreatureLayer {
       const forwardX = this.dirX[part.joint] ?? 1;
       const forwardY = this.dirY[part.joint] ?? 0;
       // To the body's left is its direction turned a quarter.
+      const side = part.side * spreads;
+      const lift = part.lift * lowers;
       sprite.position.set(
-        joint.x + forwardX * part.forward - forwardY * part.side - part.lift * LIGHT * low,
-        joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT * low,
+        joint.x + forwardX * part.forward - forwardY * side - lift * LIGHT * low,
+        joint.y + forwardY * part.forward + forwardX * side - lift * LIGHT * low,
       );
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
+      // Its eyes keep their size (sleep narrows them), its shadow too (pressed to the
+      // ground, it casts no more of one); the rest widens.
+      if (widen && part.layer !== LAYER.face && part.layer !== LAYER.ground) {
+        const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
+        sprite.scale.y = (part.across / texels) * widens;
+      }
       // The chest breathes: its masses (not what lies on them) widen and narrow.
       if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
         // Asleep it breathes slower and deeper (R5), on its own clock so that it does not jump.
@@ -1793,8 +1967,8 @@ export class CreatureLayer {
           : breathClock(creature.sleep, dtS);
         const full = breath(clock, creature.mass, creature.breathOffset);
         const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
-        const widens = BREATH_WIDENS * breathDepth(creature.sleep);
-        sprite.scale.y = (part.across / texels) * (1 + widens * full);
+        const deeper = BREATH_WIDENS * breathDepth(creature.sleep);
+        sprite.scale.y = (part.across / texels) * (1 + deeper * full) * widens;
       }
     }
     this.step(creature, dtS);
@@ -1881,7 +2055,9 @@ export class CreatureLayer {
     const forwardY = this.dirY[at] ?? 0;
     const sideX = -forwardY * side;
     const sideY = forwardX * side;
-    const radius = creature.plan.radii[at] ?? 0;
+    // Basking (R5), its body is wider and its legs go straight out to the sides.
+    const splay = creature.basker.share;
+    const radius = (creature.plan.radii[at] ?? 0) * (1 + BASK_WIDENS * splay);
     const hip = this.hip;
     hip.x = joint.x + sideX * radius * 0.7;
     hip.y = joint.y + sideY * radius * 0.7;
@@ -1897,10 +2073,15 @@ export class CreatureLayer {
       return;
     }
     // Lying down to sleep (R5), its feet are tucked under it.
-    // Hunched in a thunderstorm, its feet are drawn in under it too (R5).
-    const tuck = tuckOf(creature.sleep) * (1 - HUDDLE_TUCK * creature.drench.huddle);
-    const out = Math.cos(aim) * length * 0.8 * tuck;
-    const ahead = Math.sin(aim) * length * 0.8 * tuck;
+    // Hunched in a thunderstorm, its feet are drawn in under it too; basking, they reach out
+    // to its sides (R5).
+    const tuck =
+      tuckOf(creature.sleep) *
+      (1 - HUDDLE_TUCK * creature.drench.huddle) *
+      (0.8 + (BASK_REACH - 0.8) * splay);
+    const splayed = aim * (1 - splay);
+    const out = Math.cos(splayed) * length * tuck;
+    const ahead = Math.sin(splayed) * length * tuck;
     const restX = hip.x + sideX * out + forwardX * ahead;
     const restY = hip.y + sideY * out + forwardY * ahead;
     // A foot lands ahead of where it rests by half of what the body walks while it

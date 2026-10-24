@@ -100,6 +100,9 @@ const DIRECTIONS = 16;
 const SCUFFLE_S = 0.9;
 const SCUFFLE_PUFFS = 12;
 const DUST = 0xcbb998;
+/** A venomous kill's scuffle (R5, `venom.ts`): every so many puffs a pale toxic green. */
+const VENOM_PUFF = 0xa8dc5a;
+const VENOM_EVERY = 2;
 /** The drowned's bubbles: seconds, how many, their white. */
 const BUBBLES_S = 2.6;
 const BUBBLES = 7;
@@ -123,6 +126,8 @@ interface Remain {
   bornS: number;
   bornMs: number;
   salt: number;
+  /** Killed by a venomous hunter (R5): green in its scuffle. */
+  venom: boolean;
 }
 
 interface Landing {
@@ -294,11 +299,12 @@ export class Remains {
 
   /**
    * An animal died of `cause`, lying as `at` says in each view; what it leaves shows
-   * `waitS` seconds from now (R5: a prey's, once its hunter strikes).
+   * `waitS` seconds from now (R5: a prey's, once its hunter strikes); a kill by a
+   * `venom`ous hunter puffs green.
    */
-  died(cause: Cause, at: Record<BodyView, Laid>, waitS = 0): void {
+  died(cause: Cause, at: Record<BodyView, Laid>, waitS = 0, venom = false): void {
     const bornS = this.timeS + waitS;
-    this.remains.push({ cause, at, bornS, bornMs: this.simMs, salt: ++this.salts });
+    this.remains.push({ cause, at, bornS, bornMs: this.simMs, salt: ++this.salts, venom });
     if (this.remains.length > MOST_REMAINS) this.remains.shift();
   }
 
@@ -383,7 +389,7 @@ export class Remains {
         if (puff.alpha <= 0.02) continue;
         const sprite = this.overPool.next(roundTexture(Math.round(puff.size)));
         placeCentred(sprite, puff.x, puff.y, tile, puff.size);
-        sprite.tint = DUST;
+        sprite.tint = remain.venom && slot % VENOM_EVERY === 0 ? VENOM_PUFF : DUST;
         sprite.alpha = Math.ceil(puff.alpha * 3) / 3;
       }
     }

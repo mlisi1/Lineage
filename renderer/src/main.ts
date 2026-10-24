@@ -84,6 +84,7 @@ import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./creatures/atlas";
 import { Portraits } from "./creatures/portrait";
 import { heightAt } from "./creatures/habitat";
+import type { RareLook } from "./creatures/rare";
 import { Recording, SocketSource, type Source } from "./stream";
 import { InlinePainter, makePainter } from "./terrain/painter";
 import { Bench } from "./bench";
@@ -179,6 +180,8 @@ declare global {
     __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
     __hunt?: (hunterId: number, preyId: number) => boolean;
     __birth?: (motherId: number, childId: number, egg?: boolean) => boolean;
+    /** Draw animal `id` with a rare gene by its look too (R5: rare genes in action, staged). */
+    __grant?: (id: number, look: RareLook) => boolean;
     /** Animal `id`'s sleep (R5): night-active, asleep, how far lying down. */
     __sleep?: (id: number) => ReturnType<Herd["sleepOf"]>;
     /** What the small life about the island shows (R5): fireflies lit, dust, birds, butterflies. */
@@ -360,7 +363,7 @@ async function start(): Promise<void> {
   });
   world.addChild(atmosphere.ground);
   atmosphere.lights.addChild(ambient.lights);
-  landscape.floor.addChild(atmosphere.floor, herd.remains.floor);
+  landscape.floor.addChild(atmosphere.floor, herd.remains.floor, ...herd.floors);
   // Nothing stands on a cone or in a crater the scene draws.
   landscape.covered = (x, y) => atmosphere.covers(x, y);
   app.stage.addChild(
@@ -465,6 +468,7 @@ async function start(): Promise<void> {
   window.__feed = (id, food) => herd.feed(id, food);
   window.__hunt = (hunterId, preyId) => herd.hunt(hunterId, preyId);
   window.__birth = (motherId, childId, egg) => herd.birth(motherId, childId, egg);
+  window.__grant = (id, look) => herd.grant(id, look);
   window.__sleep = (id) => herd.sleepOf(id);
   window.__ambient = () => ambient.state;
   window.__leaves = () => leaves.state;
@@ -577,7 +581,7 @@ async function start(): Promise<void> {
     landscape.show(shot.view, cells);
     landscape.update(dtS);
     // The animals sleep by the light of the moment (R5), as last drawn.
-    herd.nightfall(sceneLight);
+    herd.nightfall(sceneLight, atmosphere.overcastNow);
     // Out in the rain they shake it off when it ends, and hunch in a thunderstorm (R5).
     herd.weather(sceneRain);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
