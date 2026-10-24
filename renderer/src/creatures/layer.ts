@@ -41,6 +41,21 @@ import {
   type Night,
   type Sleeper,
 } from "./sleep";
+import {
+  HUDDLE_HEAD,
+  HUDDLE_LOW,
+  HUDDLE_SLOW,
+  HUDDLE_STRIDE,
+  HUDDLE_TUCK,
+  Spray,
+  drench,
+  drenchOf,
+  huddleToward,
+  shiverAt,
+  sprays,
+  type Downpour,
+  type Drench,
+} from "./weather";
 import { DYING, TINT_STEPS, mixColour, roundTexture, type Dying } from "./remains";
 import { kindFor, speciesPlans, type SpeciesPlan } from "./species";
 import {
@@ -266,6 +281,8 @@ interface Creature {
   sleep: Sleeper;
   /** Hurrying to where the sim has it (R5): its feet kick up dust. */
   hurried: boolean;
+  /** Out in the rain, shaking it off, hunched in a thunderstorm (R5, `weather.ts`). */
+  drench: Drench;
 }
 
 /** An eating animal's neck goes this share of the way its head does. */
@@ -274,6 +291,8 @@ const NECK_FOLLOWS = 0.5;
 const FLECK_PIXELS = 3;
 /** The young of one brood lie at least this many of their widest radii apart beside their mother. */
 const BROOD_APART = 2.2;
+/** Drops shaken off a wet animal are this many art pixels across. */
+const DROP_PIXELS = 1;
 /** A hunter's dust: puffs this many art pixels across, each this many body spacings behind the last. */
 const DUST_PIXELS = 5;
 const KICK_BACK = 0.6;
@@ -350,6 +369,14 @@ export class CreatureLayer {
   private fresh = true;
   /** Told where a foot of an animal hurrying on dry land comes down (R5: a puff of dust). */
   footfall: ((x: number, y: number) => void) | null = null;
+  /** What falls from the sky now and what fell last frame (R5, `weather.ts`). */
+  private falling: Downpour = "dry";
+  private fell: Downpour = "dry";
+  /** The drops shaken off wet animals (R5); made the first time one shakes in sight. */
+  private spray: Spray | null = null;
+  /** Each joint's place before a shake or a hunch moved it for the drawing (scratch). */
+  private readonly heldX = new Float32Array(16);
+  private readonly heldY = new Float32Array(16);
 
   constructor(
     private readonly atlas: Atlas,
@@ -434,6 +461,7 @@ export class CreatureLayer {
     if (old.staged !== undefined) creature.staged = old.staged;
     // Asleep it sleeps on, lying as it lay (R5).
     carrySleep(creature.sleep, old.sleep);
+    creature.drench = old.drench;
     if (old.sleep.share > 0 && old.joints.length === creature.joints.length) {
       creature.joints.forEach((joint, i) => {
         joint.x = old.joints[i]?.x ?? joint.x;
@@ -993,6 +1021,14 @@ export class CreatureLayer {
     this.night.rising = rising;
   }
 
+  /**
+   * What falls from the sky now (R5, `weather.ts`): animals out in rain shake it off when
+   * it ends, and hunch in a thunderstorm.
+   */
+  weather(falling: Downpour): void {
+    this.falling = falling;
+  }
+
   /** Slot `index`'s head while it lies asleep (R5: the "z" over the animal followed), or null. */
   sleepingHead(index: number): Point | null {
     const creature = this.creatures[index];
@@ -1187,6 +1223,7 @@ export class CreatureLayer {
           fresh,
         );
       if (lying) creature.hurried = false;
+      this.rain(creature, busy, dtS);
       // A torpid animal lies where it is, and so do a sleeper, a newborn and its mother for
       // its birth; a hunter hunts; the others move.
       const still =
@@ -1212,6 +1249,7 @@ export class CreatureLayer {
           head.y >= view.y0 - reach &&
           head.y <= view.y1 + reach);
       if (inView && posed) {
+        this.shakeOff(creature, dtS);
         this.eat(creature, dtS);
         if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
         else if (creature.motion !== null && creature.arriving === undefined) {
@@ -1227,6 +1265,50 @@ export class CreatureLayer {
         this.reveal(creature, index);
       }
     }
+    this.spray?.update(dtS);
+    this.fell = this.falling;
+  }
+
+  /**
+   * An animal in the weather (R5, `weather.ts`): soaked while out in rain, shaking it off
+   * once the spell is over (it stops where it is unless the sim moves it on), hunched in a
+   * thunderstorm. Swimmers, the torpid, sleepers and those in deep water are left alone.
+   */
+  private rain(creature: Creature, busy: boolean, dtS: number): void {
+    const { drench: state, motion } = creature;
+    const exposed =
+      !creature.plan.swims &&
+      !creature.torpid &&
+      creature.sleep.share === 0 &&
+      creature.wet !== "deep" &&
+      creature.arriving === undefined &&
+      !busy;
+    const moment = (creature.breathOffset * 7.919) % 1;
+    const shaking = drench(state, this.falling, this.fell, exposed, moment, dtS);
+    if (shaking && motion !== null && motion.mode !== "travel") {
+      motion.mode = "pause";
+      motion.timer = Math.max(motion.timer, 0.1);
+      motion.look = creature.heading;
+      motion.facing = creature.heading;
+    }
+    huddleToward(state, this.falling === "storm" && exposed ? 1 : 0, dtS);
+  }
+
+  /** Drops flung off a shaking animal in sight, from one joint after another, either side. */
+  private shakeOff(creature: Creature, dtS: number): void {
+    const { age } = creature.drench;
+    if (age < 0 || !sprays(age - dtS, age)) return;
+    const { joints, plan } = creature;
+    const k = Math.floor(age * 97) % Math.max(joints.length - 1, 1);
+    const joint = joints[k];
+    if (joint === undefined) return;
+    if (this.spray === null) {
+      this.spray = new Spray(this.atlas.white, DROP_PIXELS / this.body.pixels, WHITE_TEXELS);
+      this.container.addChild(this.spray.container);
+    }
+    const reach = plan.radii[k] ?? 0;
+    this.spray.throw(joint, creature.heading, 1, reach);
+    this.spray.throw(joint, creature.heading, -1, reach);
   }
 
   private refresh(): void {
@@ -1401,6 +1483,7 @@ export class CreatureLayer {
         LAYER.face,
       ),
       hurried: false,
+      drench: drenchOf(),
       heading,
       turn: 0,
       avoid: random() < 0.5 ? 1 : -1,
@@ -1583,7 +1666,12 @@ export class CreatureLayer {
       head,
       heading: creature.heading,
       // A hunter runs (R5, `hunting.ts`).
-      pace: plan.pace * creature.waterPace * (creature.hunt?.speed ?? 1),
+      // Hunched in a thunderstorm it goes slower (R5, `weather.ts`).
+      pace:
+        plan.pace *
+        creature.waterPace *
+        (creature.hunt?.speed ?? 1) *
+        (1 - HUDDLE_SLOW * creature.drench.huddle),
       length: plan.length,
       // A body that turns on the spot lets its head turn as it likes, and comes round after.
       neck: stiff.pivots ? undefined : neckDirection(joints, creature.heading),
@@ -1665,6 +1753,10 @@ export class CreatureLayer {
   /** Put every part and leg of the body where the chain now is. */
   private pose(creature: Creature, dtS: number): void {
     const { plan, joints } = creature;
+    // Shaking off the rain, or hunched in a storm (R5): its joints moved for the drawing
+    // only, put back after.
+    const moved = this.weathered(creature);
+    const low = 1 - HUDDLE_LOW * creature.drench.huddle;
     // Which way the body points at each joint: the head where it is going, the others
     // toward the joint in front.
     this.dirX[0] = Math.cos(creature.heading);
@@ -1689,8 +1781,8 @@ export class CreatureLayer {
       const forwardY = this.dirY[part.joint] ?? 0;
       // To the body's left is its direction turned a quarter.
       sprite.position.set(
-        joint.x + forwardX * part.forward - forwardY * part.side - part.lift * LIGHT,
-        joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT,
+        joint.x + forwardX * part.forward - forwardY * part.side - part.lift * LIGHT * low,
+        joint.y + forwardY * part.forward + forwardX * part.side - part.lift * LIGHT * low,
       );
       sprite.rotation = (this.angle[part.joint] ?? 0) + part.turn;
       // The chest breathes: its masses (not what lies on them) widen and narrow.
@@ -1708,6 +1800,56 @@ export class CreatureLayer {
     this.step(creature, dtS);
     creature.unsettled = false;
     for (const leg of creature.legs) this.walk(creature, leg);
+    if (moved) {
+      for (let i = 0; i < joints.length && i < this.heldX.length; i++) {
+        const joint = joints[i];
+        if (joint === undefined) continue;
+        joint.x = this.heldX[i] ?? joint.x;
+        joint.y = this.heldY[i] ?? joint.y;
+      }
+    }
+  }
+
+  /**
+   * Move `creature`'s joints for the drawing as the weather has it (R5, `weather.ts`): a
+   * shiver aside down its body as it shakes; its head and neck drawn back, hunched in a
+   * storm. Their places are kept to be put back. Returns whether any moved.
+   */
+  private weathered(creature: Creature): boolean {
+    const { joints, plan, drench: state } = creature;
+    const shaking = state.age >= 0;
+    if (!shaking && state.huddle <= 0) return false;
+    for (let i = 0; i < joints.length && i < this.heldX.length; i++) {
+      const joint = joints[i];
+      if (joint === undefined) continue;
+      this.heldX[i] = joint.x;
+      this.heldY[i] = joint.y;
+    }
+    const cos = Math.cos(creature.heading);
+    const sin = Math.sin(creature.heading);
+    if (state.huddle > 0) {
+      const back = HUDDLE_HEAD * plan.spacing * state.huddle;
+      const head = joints[0];
+      const neck = joints[1];
+      if (head !== undefined) {
+        head.x -= cos * back;
+        head.y -= sin * back;
+      }
+      if (neck !== undefined && joints.length > 2) {
+        neck.x -= (cos * back) / 2;
+        neck.y -= (sin * back) / 2;
+      }
+    }
+    if (shaking) {
+      for (let i = 0; i < joints.length; i++) {
+        const joint = joints[i];
+        if (joint === undefined) continue;
+        const aside = shiverAt(state.age, i) * (plan.radii[i] ?? 0);
+        joint.x -= sin * aside;
+        joint.y += cos * aside;
+      }
+    }
+    return true;
   }
 
   /**
@@ -1715,7 +1857,9 @@ export class CreatureLayer {
    * of place at least at a settling pace, so a body that stops still brings its feet in.
    */
   private step(creature: Creature, dtS: number): void {
-    const walked = creature.stride > 0 ? creature.walked / creature.stride : 0;
+    // Hunched in a thunderstorm it takes shorter steps, more of them (R5).
+    const stride = creature.stride * (1 - HUDDLE_STRIDE * creature.drench.huddle);
+    const walked = stride > 0 ? creature.walked / stride : 0;
     creature.walked = 0;
     const settling = creature.unsettled ? dtS / SETTLE_CYCLE_S : 0;
     const advance = Math.min(Math.max(walked, settling), MAX_ADVANCE);
@@ -1753,14 +1897,20 @@ export class CreatureLayer {
       return;
     }
     // Lying down to sleep (R5), its feet are tucked under it.
-    const tuck = tuckOf(creature.sleep);
+    // Hunched in a thunderstorm, its feet are drawn in under it too (R5).
+    const tuck = tuckOf(creature.sleep) * (1 - HUDDLE_TUCK * creature.drench.huddle);
     const out = Math.cos(aim) * length * 0.8 * tuck;
     const ahead = Math.sin(aim) * length * 0.8 * tuck;
     const restX = hip.x + sideX * out + forwardX * ahead;
     const restY = hip.y + sideY * out + forwardY * ahead;
     // A foot lands ahead of where it rests by half of what the body walks while it
     // stands, so it is as far behind when it lifts again.
-    const lead = ((1 - SWING_SHARE) * creature.stride * creature.striding) / 2;
+    const lead =
+      ((1 - SWING_SHARE) *
+        creature.stride *
+        creature.striding *
+        (1 - HUDDLE_STRIDE * creature.drench.huddle)) /
+      2;
     const landX = restX + forwardX * lead;
     const landY = restY + forwardY * lead;
     if (!leg.planted || Math.hypot(leg.foot.x - restX, leg.foot.y - restY) > length * SNAP_LEGS) {

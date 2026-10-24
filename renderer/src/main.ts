@@ -530,7 +530,7 @@ async function start(): Promise<void> {
   /** The light of the moment as last drawn (the animals sleep by it, R5). */
   let sceneLight = 1;
   /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
-  let sceneRain = "none";
+  let sceneRain: SkyMessage["rain"] = "none";
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
     const size = landscape.size;
@@ -578,6 +578,8 @@ async function start(): Promise<void> {
     landscape.update(dtS);
     // The animals sleep by the light of the moment (R5), as last drawn.
     herd.nightfall(sceneLight);
+    // Out in the rain they shake it off when it ends, and hunch in a thunderstorm (R5).
+    herd.weather(sceneRain);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
     const land = landscape.current;
     if (!shown && land !== null) {
