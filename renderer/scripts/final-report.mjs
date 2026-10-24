@@ -39,7 +39,7 @@ const BEFORE = env.R5_REPORT_BEFORE ?? "80e4a4c";
  * headings; emptied once the owner has looked (`R5_REPORT_NEW=family,rare` to choose).
  */
 const NEW = new Set(
-  (env.R5_REPORT_NEW ?? "pieces,family,rare,weather").split(",").filter((id) => id !== ""),
+  (env.R5_REPORT_NEW ?? "").split(",").filter((id) => id !== ""),
 );
 /** The desk's screen (CLAUDE.md §2). */
 const WIDTH = 1024;
