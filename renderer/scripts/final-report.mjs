@@ -196,6 +196,51 @@ const FOLLOWS = {
     presses: 0,
     crop: 2,
   },
+  // Rare genes in action (R5), each granted by hand (`__grant`) to the large lizard: it
+  // basks in the sun with photosynthesis, strikes with venom, leaves a wake swimming with
+  // gills off the north coast.
+  bask: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=day",
+    seconds: 5,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__grant?.(2048, "leaves");
+      window.__pin?.(2048, 64, 71, 0); window.__send?.(2048, 64, 71);
+    })()`,
+  },
+  venom: {
+    query: "view=local&x=64&y=71&quiet&seed=1&show=day",
+    seconds: 4,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__grant?.(2048, "venom");
+      window.__pin?.(2184, 66.2, 71.3, 2.8); window.__send?.(2184, 66.2, 71.3);
+      window.__pin?.(2048, 62.3, 70.8, 0); window.__send?.(2048, 62.3, 70.8);
+    })()`,
+    then: "window.__hunt?.(2048, 2184)",
+  },
+  wake: {
+    query: "view=local&x=183&y=10&quiet&seed=1&show=day",
+    seconds: 6,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__grant?.(2048, "gills");
+      window.__pin?.(2048, 179, 10, 0); window.__send?.(2048, 187, 10.5);
+    })()`,
+  },
+  wakeMiddle: {
+    query: "view=middle&x=183&y=14&quiet&seed=1&show=day",
+    seconds: 6,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__grant?.(2048, "gills");
+      window.__pin?.(2048, 176, 10, 0); window.__send?.(2048, 190, 10.5);
+    })()`,
+  },
   // Bushes in pieces (R5, an experiment behind `?bushes=pieces`): the staged walks again.
   stagedBehindPieces: {
     query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
@@ -628,7 +673,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#rare">Rare genes</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -846,6 +891,19 @@ ${films.after.eating === undefined ? "" : `<figure><video src="films/${films.aft
 ${filmAfter("hunt", "A hunt: the large lizard runs at the animal two cells off and springs")}
 ${filmAfter("birth", "A birth beside the mother")}
 ${filmAfter("egg", "A birth from an egg (a mother of large broods)")}
+</section>
+<hr>
+
+<section id="rare">
+<div class="head"><span class="n">·</span><h2>Rare genes in action</h2></div>
+<div class="notes">
+<div><span class="label">Why</span><p>Rare genes were only marks on the body (fangs, leaves, gills); the owner asked to see them at work. Only drawn: nothing new on the wire, the sim unchanged.</p></div>
+<div><span class="label">How</span><p>A photosynthesiser (leaves) standing about in daylight on dry land, not eating, asleep or busy, settles after 1.2 s and spreads out flat to the sun over 1.4 s: body 40 % wider and its parts further out, pressed lower, legs straight out to the sides; a star of sunlight glints on its back every 1.2–2.8 s. It gets up in a third of a second when it moves on, at dusk, or under cloud or rain (<code>src/creatures/basking.ts</code>). A venomous hunter's hunt is as any other's but for the strike: a lime star at the bite, two drips falling from it, every other puff of the prey's scuffle green, and green wisps rising as the dust settles (<code>venom.ts</code>, <code>remains.ts</code>). A swimmer, or an amphibian (gills) in the water, leaves a V of foam while it moves: every 4 art pixels a pair of 3-pixel dashes beside it at its widest, laid along the V's arms, drifting out, shortening and fading over 1.5 s; none standing still (<code>wake.ts</code>). All are marks of whole art pixels (<code>sparks.ts</code>). Staged by hand on the large lizard, each gene granted with <code>window.__grant</code>; enlarged twice.</p></div>
+</div>
+${filmAfter("bask", "Photosynthesis: the lizard stands, then spreads out flat to the sun; a glint on its back")}
+${filmAfter("venom", "Venom: the strike's green flash and drips, the prey's green dust")}
+${filmAfter("wake", "Gills: a wake behind the lizard swimming off the north coast")}
+${filmAfter("wakeMiddle", "The same wake in the middle view")}
 </section>
 <hr>
 
