@@ -463,7 +463,9 @@ needs a note in `docs/decisions/`.
   only for harm; god-power entries stay major. 2026-10-23, the owner: presses cannot be
   relied on for predators; hunters may prey on kin that eat far more plants
   (`prey_diet_gap`), so they can arise from the herd; a gentler diet trade-off brings them
-  back but turns herds omnivore; next, the hunting levers.)
+  back but turns herds omnivore. 2026-10-24: the hunting levers do not help; both hard
+  caps bind for years and the capped pack starves when the herd dips; next, a predator
+  mechanism, the owner's choice.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

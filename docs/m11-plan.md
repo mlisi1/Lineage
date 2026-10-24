@@ -295,3 +295,10 @@ do: seeds settle as grazers without hunters or omnivores with hunters. Pure meat
 starve among grazers (too few kills), so the next lever family is hunting itself (chase
 instinct, strike reach, attack rate and cost); a mechanism only with the owner.
 
+**2026-10-24** (ADR 0019, "The hunting levers, and what replays show instead"): the
+hunting levers (chase instinct, strike reach, attack rate and cost, sight at night), one
+at a time over 10 years, keep hunters beside grazers in 0–1 seeds of 10, no better than
+before. Replays show the hunters are not short of kills while the herd is full: both
+hard caps bind for years (herd 200, hunters 16), the herd evolves larger and faster, and
+when it dips the capped pack starves out. Next is a mechanism, the owner's choice: soft
+caps, hunters that wait out lean times, or a hunting reach apart from mating.

@@ -15,7 +15,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; mechanisms complete (food at sea and wading, reach, cover, nutrients, seeds in guts v13; R4 merged, v12); the island closed to strangers, hunters land once by the herd, may prey on kin that eat far more plants, the ark brings them back; criteria judged without presses; defaults fail only M4.3 (predators do not last); best diet setting brings hunters back but turns herds omnivore; next: the hunting levers (ADR 0019) | — |
+| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; mechanisms complete (food at sea and wading, reach, cover, nutrients, seeds in guts v13; R4 merged, v12); the island closed to strangers, hunters land once by the herd, may prey on kin that eat far more plants, the ark brings them back; criteria judged without presses; defaults fail only M4.3 (predators do not last); best diet setting brings hunters back but turns herds omnivore; the hunting levers do not help (both hard caps bind, the capped pack starves when the herd dips); next: a predator mechanism, waiting on the owner (ADR 0019) | — |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -32,10 +32,11 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M11 in progress (branch `m11-tuning`, paused 2026-10-24 ~01:00)
+### M11 in progress (branch `m11-tuning`, paused 2026-10-24 evening)
 
 **Start here, on a fresh start.** This section is self-contained. For every number and
-decision read ADR 0019 (newest sections: "Hunters from the herd", "Two islands, and why");
+decision read ADR 0019 (newest sections: "Two islands, and why", "The hunting levers, and what
+replays show instead");
 for the plan, `docs/m11-plan.md` §7; for the owner's answers, also the memory notes.
 
 **State.** Branch `m11-tuning` at the commit that adds this note, clean; the worktree
@@ -88,19 +89,18 @@ after the owner approves them**.
   on 0.3 % of their ticks.
 
 **Next steps, in order**:
-1. **Hunting levers** (numbers, no approval needed): 10-year runs on seeds 0–9, office, no
-   presses, `--set fauna.diet_exponent=0.6 --set fauna.prey_diet_gap=0.2` plus, one at a
-   time and then together: `fauna.instinct_prey` 2.0–2.5, `fauna.reach_cells` 1.6–2.0,
-   `fauna.attack_rate`, `fauna.attack_cost` lower. Command pattern:
-   `env -u PYTHONPATH uv run python -m tools.fastforward --years 10 --seeds 10 --save-days 30
-   --schedule office --jobs 6 --set ... --out runs/m11-hunt-<name>`. Judge each by, per
-   seed: hunters present (predators > 0) on the days after year 3; grazers' share
-   (`herbivores / population`) after year 5; worlds ended. **The aim: hunters on most
-   days after year 3, with more than 30 % grazers, in most seeds.** Until now: at most
-   1 of 10 seeds (`runs/m11-grid-e0.6-g0.2`, seed 7).
-2. If no lever does it, propose a mechanism to the owner (hunters' energy between kills,
-   e.g. lower resting burn for hunters, or prey learning slower to flee) **before building
-   it**.
+1. **Done (2026-10-24): the hunting levers do not help.** `instinct_prey`, `reach_cells`,
+   `attack_rate`, `attack_cost` and `night_sight`, one at a time on `diet_exponent` 0.6 /
+   `prey_diet_gap` 0.2 (`runs/m11-hunt-*`, 10 years × seeds 0–9): 0–1 of 10 seeds keep
+   hunters beside more than 30 % grazers, as the baseline (1 of 10). Replays show why
+   (ADR 0019, "The hunting levers, and what replays show instead"): both hard caps bind
+   for years (herd 200, hunters 16), the herd evolves larger and faster, and when it
+   dips the capped pack starves out within a quarter or two.
+2. **Waiting on the owner: a mechanism for predators.** Proposed in ADR 0019, none built:
+   soft caps (births slowed by crowding instead of hard stops at 200 and 16), hunters
+   that wait out lean times (lower resting burn, or torpor when hungry), and a hunting
+   reach apart from the mating distance. Build only what the owner approves, with tests
+   and an on/off 10-year run judged as in step 1 (`runs/m11-hunt-judge.py`, below).
 3. With the predator setting chosen: a short sweep of the other levers around it (3 years
    × 20 seeds, `tools/tune/sweep.py`), to keep M3.5, M6.1/M6.2, M7.2 passing; then set the
    defaults.
@@ -116,8 +116,14 @@ after the owner approves them**.
 **Runs kept in `runs/`** (gitignored; read with `tools.runs.read_run`, score with
 `tools.tune.score.score`): `sweep-closed-1` (23 points), `m11-closed-10y`,
 `m11-closed-presses-2`, `m11-kin-10y`(`-b`), `m11-kin-office`, `m11-diet-*`,
-`m11-diet-office`, `m11-diet-10y-b`, `m11-grid-*`, `m11-meat-*`, `m11-meat-office`.
+`m11-diet-office`, `m11-diet-10y-b`, `m11-grid-*`, `m11-meat-*`, `m11-meat-office`,
+`m11-hunt-*` (the hunting levers, 2026-10-24).
 Detached chain scripts that made them: `runs/m11-chain-*.sh`, log `runs/m11-chain.log`.
+Scripts of 2026-10-24 (in `runs/`, not committed): `m11-hunt-judge.py <run>...` (per
+seed: hunters after year 3, grazers after year 5, worlds ended) and
+`m11-hunt-replay.py <seed> <years> key=value...` (per quarter: hunters' deaths by cause,
+kills, prey in reach, distance, energy; herd size, diets, speed and mass). Run both with
+`PYTHONPATH=. uv run python ...` from the repo root.
 
 **What exists**: `tools/tune/` (`score.py` every criterion of a run, `sweep.py` Latin
 hypercube or grid, resumable, `--max-load`; `sensitivity.py` rank correlations); sweeps in

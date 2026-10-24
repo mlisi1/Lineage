@@ -501,6 +501,61 @@ short (`reach_cells` 1.2) and a strike costs energy (`attack_cost`). No sweep ha
 these hunting levers yet. **Next**: 10-year runs on the hunting levers, combined with the
 best diet setting (one exponent 0.6, gap 0.2), aiming at hunters that live on grazers.
 
+### The hunting levers, and what replays show instead (2026-10-24)
+
+**Levers, one at a time** (`m11-hunt-*`, 10 years × seeds 0–9, office, no presses, on
+`diet_exponent` 0.6 and `prey_diet_gap` 0.2, at `86452c5`; chains
+`runs/m11-chain-2026-10-24{,b}.sh`). Judged per seed: hunters present on at least half
+the days after year 3, and grazers more than 30 % of the creatures after year 5. The
+baseline (`m11-grid-e0.6-g0.2`) passes in 1 seed of 10 (seed 7).
+
+| Run | Change | Seeds passing | Worlds ended |
+|---|---|---|---|
+| `prey2.0`, `prey2.5` | `instinct_prey` 2.0, 2.5 | 0, 1 (seed 8) | 1, 2 |
+| `reach1.6`, `reach2.0` | `reach_cells` 1.6, 2.0 | 0, 0 | 0, 1 |
+| `rate5` | `attack_rate` 5.0 | 0 | 1 |
+| `cost0.5` | `attack_cost` 0.5 | 0 | 0 |
+| `night0.6`, `night1.0` | `night_sight` 0.6, 1.0 | 0, 0 | 0, 4 |
+
+No lever helps; stronger hunting tends to end more worlds. Two levers are weaker than
+they look: `instinct_prey` only shapes the brains of creatures that land (the pack, the
+ark; `founder_weights`), not hunters born in the herd; and `reach_cells` is also the
+mating distance, so it changes breeding across the herd too. `night_sight` 1.0 (no
+darkness at all) was a diagnostic: blindness at night is not the block.
+
+**Replays** (seeds 0, 6, 7 for 5 years, with `attack_cost` 0.5; hunters are creatures
+with diet ≥ `predator_min_diet`, tallied per quarter-year by wrapping `Fauna._bury` and
+`Fauna._hunt`):
+
+- A hungry hunter has prey within striking reach on about 1 % of its ticks (0.2–3 %),
+  the nearest prey a median 10–30 cells away, and most hunters die starved (the rest of
+  old age). Yet the hunters' mean energy stays at 0.7–0.8 of capacity: with a diet
+  near 0.7 they graze between kills.
+- **Both hard caps bind for years.** In seeds 6 and 7 the herd sits at
+  `population_cap` 200 and the hunters at `predator_cap` 16 from the first year to
+  the fourth: births, not food, set both numbers, and the pack (16 of 216, 7 %) is
+  far too small to buffer a bad season.
+- **The herd evolves larger and faster under the hunters**: grazers' mean mass 0.4 → 2–4,
+  and in seed 7 their speed (2.2 → 3.0 cells an hour) catches the hunters' (about 3).
+  Kill chance falls with the prey's defence (mass × armour) and with its speed.
+- **The end is the same in both**: kills rise two- to threefold for a few quarters, the
+  herd falls (200 → 82 in seed 6, 200 → 78 in seed 7), and the hunters starve out
+  within a quarter or two. Seed 0's pack never reached its cap and was gone in the
+  second year.
+
+**Reading.** Hunters do not fail for want of kills while the herd is full; they fail
+when it dips, because a capped pack of 16 has no numbers to lose and every hunter is
+hungry at once. The hunting levers act on a stage that is not the bottleneck. What
+might act on it (none tried; mechanisms are the owner's):
+
+1. **Soft caps**: births slowed by crowding instead of a hard stop at 200 and 16, so the
+   herd's and the pack's numbers answer to food and kills (and the pack can grow when
+   prey is plenty).
+2. **Hunters that wait out lean times**: a lower resting burn for hunters, or torpor
+   when hungry (as HIBERNATION already does for its carriers), so a pack survives the
+   herd's dips.
+3. A **separate hunting reach** from the mating distance, if reach is tuned later.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
