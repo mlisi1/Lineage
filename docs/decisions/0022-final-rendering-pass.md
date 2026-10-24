@@ -280,7 +280,26 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
   middle view's hunt is quick (about 0.75 s); hearts and eggs are drawn over a canopy; a
   sleeper's shadow stays a full oval; the director still follows sleepers at night;
   butterflies use meadow cells for flowers; calm days barely stir the plants
-  (`CALM_WIND`, `BREEZE` if the owner wants more); autumn leaves are not done.
+  (`CALM_WIND`, `BREEZE` if the owner wants more); autumn leaves are not done (done
+  below).
+
+### Seasons, family and rare genes (2026-10-24)
+
+- **Autumn leaves and animals in the rain, drawn only** (`atmosphere/leaves.ts`,
+  `creatures/weather.ts`). The plant layer marks the crown of each broadleaf it builds in
+  autumn (not one with `EVERGREEN` enough to keep its leaves in winter, no conifer), with
+  the colours it has turned; leaves come loose where random tries over the view find a
+  crown and the plants' gust (`gustAt`) lets one go, so a wood drops more than a lone tree,
+  late autumn more than early, rain and storms more through the wind's strength. They fall
+  on that wind, sorted among the plants by where they land, a pixel in the middle view and
+  in the plants' two-pixel texels up close; none on the map. When a rain spell ends each
+  animal that was out in it shakes once at its own moment (from its breathing offset, no
+  new draw), a shiver of the joints aside for the drawing and a spray of drops; in a
+  thunderstorm animals hunch (parts less lifted, feet in, head back, shorter and slower
+  steps). Staged with `?season=autumn:0.9` (the clock rewritten) and `__rain(kind)`.
+  Open: under a storm's grade the leaves barely show; shrubs drop none; the shake is
+  checked on three animals at 30 fps, never on the board; drops are 1 art pixel, small in
+  the middle view; a huddled animal's shadow is unchanged.
 
 ## Consequences
 

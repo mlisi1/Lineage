@@ -28,12 +28,13 @@ import type { SeaAt } from "./creatures/water";
 import type { Subject } from "./director";
 import { TILES, type ViewName } from "./landscape";
 import type { PlantLayer } from "./plants/plants";
-import type { CreaturesMessage, FaunaMessage, Message } from "./protocol";
+import type { CreaturesMessage, FaunaMessage, Message, SkyMessage } from "./protocol";
 import type { Random } from "./rng";
 import type { Atlas } from "./creatures/atlas";
 import { CreatureLayer } from "./creatures/layer";
 import type { CreatureSeed } from "./creatures/seed";
 import { Snores, depthOf } from "./creatures/sleep";
+import { downpourOf } from "./creatures/weather";
 import type { Portrait } from "./creatures/portrait";
 import { kindFor } from "./creatures/species";
 import { passableIn, type Passable } from "./creatures/habitat";
@@ -153,6 +154,15 @@ export class Herd {
     this.light = light;
     const depth = depthOf(light);
     for (const layer of Object.values(this.layers)) layer.nightfall(depth, this.rising);
+  }
+
+  /**
+   * What falls from the sky now (R5, `creatures/weather.ts`): the animals out in rain shake
+   * it off when it ends, and hunch in a thunderstorm.
+   */
+  weather(rain: SkyMessage["rain"]): void {
+    const falling = downpourOf(rain);
+    for (const layer of Object.values(this.layers)) layer.weather(falling);
   }
 
   /** Animal `id`'s sleep in the view's layer (tests and staging), or null if it is not alive. */
