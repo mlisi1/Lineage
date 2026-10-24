@@ -93,11 +93,13 @@ interface Hearts {
   /** Seconds since they began (negative: not yet). */
   age: number;
   salt: number;
+  /** How many rise. */
+  count: number;
 }
 
 interface Egg {
   at: Point;
-  /** Seconds since it was laid. */
+  /** Seconds since it was laid (negative: not yet). */
   age: number;
   /** Art pixels across. */
   wide: number;
@@ -118,15 +120,18 @@ export class Nursery {
     this.container.addChild(this.pool.container);
   }
 
-  /** Hearts rise from `at` (cells), beginning in `delayS` seconds. */
-  love(at: Point, delayS = 0): void {
-    this.hearts.push({ at: { x: at.x, y: at.y }, age: -delayS, salt: ++this.salts });
+  /** `count` hearts rise from `at` (cells), beginning in `delayS` seconds. */
+  love(at: Point, delayS = 0, count = HEARTS): void {
+    this.hearts.push({ at: { x: at.x, y: at.y }, age: -delayS, salt: ++this.salts, count });
   }
 
-  /** An egg is laid at `at` for a newborn `length` cells long; it opens after `EGG_S`. */
-  lay(at: Point, length: number): void {
+  /**
+   * An egg is laid at `at` for a newborn `length` cells long, in `delayS` seconds (R5: after
+   * its parents touch heads, `family.ts`); it opens `EGG_S` after that.
+   */
+  lay(at: Point, length: number, delayS = 0): void {
     const wide = Math.max(EGG_LEAST_PX, Math.round(length * EGG_SHARE * this.tile));
-    this.eggs.push({ at: { x: at.x, y: at.y }, age: 0, wide, salt: ++this.salts });
+    this.eggs.push({ at: { x: at.x, y: at.y }, age: -delayS, wide, salt: ++this.salts });
   }
 
   /** Forget everything (the view's animals are put afresh). */
@@ -142,7 +147,7 @@ export class Nursery {
     let kept = 0;
     for (const hearts of this.hearts) {
       hearts.age += dtS;
-      if (hearts.age < (HEARTS - 1) * HEART_EVERY_S + HEART_S) this.hearts[kept++] = hearts;
+      if (hearts.age < (hearts.count - 1) * HEART_EVERY_S + HEART_S) this.hearts[kept++] = hearts;
     }
     this.hearts.length = kept;
     kept = 0;
@@ -153,7 +158,7 @@ export class Nursery {
     this.eggs.length = kept;
     for (const egg of this.eggs) this.drawEgg(egg, tile);
     for (const hearts of this.hearts) {
-      for (let k = 0; k < HEARTS; k++) {
+      for (let k = 0; k < hearts.count; k++) {
         const age = hearts.age - k * HEART_EVERY_S;
         if (age < 0 || age >= HEART_S) continue;
         const share = age / HEART_S;
@@ -182,6 +187,7 @@ export class Nursery {
   private drawEgg(egg: Egg, tile: number): void {
     const { at, age, wide } = egg;
     const tall = Math.round(wide * EGG_TALL);
+    if (age < 0) return;
     if (age < EGG_S) {
       // Lying, rocking now and then, cracked toward the end.
       const rocking = ROCKS.some(([from, to]) => age >= from && age < to);
