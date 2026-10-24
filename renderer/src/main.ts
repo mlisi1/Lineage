@@ -45,9 +45,8 @@
  *                              atmosphere stands still too, moved on only by `__advance`
  *   ?cap=30                    R5: at most this many frames a second (`framecap.ts`): the
  *                              kiosk's cap on the board, which has no fan
- *   ?bushes=pieces             R5: the local view's bushes drawn a sprite to each puff,
- *                              each sorted by its own foot (`plants/pieces.ts`; an
- *                              experiment to compare with the bushes drawn whole)
+ *   ?bushes=whole              R5: the local view's bushes drawn whole, as before the owner
+ *                              chose them in pieces (`plants/pieces.ts`), to compare
  *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
  *                              `benchplan.ts` on the recordings, the results POSTed to
  *                              `?post=` (`tools/kiosk_bench.py`)
@@ -263,7 +262,7 @@ async function start(): Promise<void> {
     undefined,
     params.get("still") !== null,
   );
-  landscape.bushPieces = params.get("bushes") === "pieces";
+  landscape.bushPieces = params.get("bushes") !== "whole";
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();

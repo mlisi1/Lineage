@@ -157,10 +157,10 @@ export class Landscape {
   };
   private seaTime = 0;
   /**
-   * Draw the local view's bushes in pieces, a sprite for each puff (R5, an experiment the
-   * owner asked for: `?bushes=pieces`). Set before the first land comes.
+   * Draw the local view's bushes in pieces, a sprite for each puff (R5, the owner's choice
+   * on 2026-10-24; `?bushes=whole` draws them whole). Set before the first land comes.
    */
-  bushPieces = false;
+  bushPieces = true;
 
   /** `still` keeps the sea as it is at its first moment: for pictures that must not change. */
   constructor(
