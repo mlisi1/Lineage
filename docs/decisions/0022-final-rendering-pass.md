@@ -285,6 +285,14 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
 
 ### Seasons, family and rare genes (2026-10-24)
 
+The owner, after the report with the animations (2026-10-24): "Everything seems good." The
+bushes are drawn in pieces from now on (`?bushes=whole` draws them whole, to compare),
+with no fade in front of the animal followed; each piece leans in the wind by the lean
+the whole drawing would have at its height, every piece of a bush in step. Before the
+look is called final, a last pass on what animations were still missing; of four groups
+proposed the owner chose three (not the reactions to danger: prey bolting, fleeing fire,
+a startle at quakes), all drawn only, so that nothing changes M11's simulations.
+
 - **Autumn leaves and animals in the rain, drawn only** (`atmosphere/leaves.ts`,
   `creatures/weather.ts`). The plant layer marks the crown of each broadleaf it builds in
   autumn (not one with `EVERGREEN` enough to keep its leaves in winter, no conifer), with
@@ -300,8 +308,6 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
   Open: under a storm's grade the leaves barely show; shrubs drop none; the shake is
   checked on three animals at 30 fps, never on the board; drops are 1 art pixel, small in
   the middle view; a huddled animal's shadow is unchanged.
-
-### Seasons, family and rare genes (2026-10-24)
 
 - **Rare genes in action, drawn only** (worktree `r5-genes`): the rare genes come on the
   wire already (`born[].slots`, `rare` signatures), so nothing new is sent and the sim is
@@ -321,6 +327,22 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
   amphibian only; the middle view's wake is a narrow line rather than a V; "open land"
   is read as dry land, not as out from under a canopy; a basker caught by the sim's
   move flattens back up in a third of a second while it already walks.
+
+- **Family life, drawn only** (`creatures/family.ts`): the sim has no families beyond
+  `born[].parent`, so the scene remembers the mother of each young animal it sees born
+  (a page loaded mid-life has no pairs until the next births) and forgets her when the
+  young one comes of age or either dies. While the sim has the two within 3 cells, the
+  young one's strolls make for a spot behind her tail and a little to one side, trotting
+  to catch up; the spot is kept within its leash of where the sim has it (`motion.trail`),
+  so it is never drawn off its own place. A brood trails in a line, each behind the one
+  born before it. At a birth the grown one of her kind nearest her head (within 2.2 cells
+  and a 2.5 s trot) comes to the side of her head away from her young; their heads lean
+  together for 1.4 s under two hearts, then the young are born as before. Staged at the
+  birth, not predicted: the newborn comes that much later than the message. Open: young
+  pass through each other and their mother's legs (animals never avoid one another);
+  slow species rarely find a mate near enough, so most births have no nuzzle; on the
+  recordings' fast clock the sim's places move every third of a second and the trailing
+  shows mostly while the young walk to them.
 
 ## Consequences
 

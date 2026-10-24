@@ -226,10 +226,12 @@ below was taken in scope by the owner. Tests wait until the look is called final
   (2026-10-24, drawn only, nothing in the sim): autumn leaves blown off broadleaves, animals
   shaking off the rain and hunching in thunderstorms (`atmosphere/leaves.ts`,
   `creatures/weather.ts`); photosynthesisers bask, venom's green strike, swimmers' wakes
-  (`creatures/basking.ts`, `venom.ts`, `wake.ts`; `__grant` to stage)
-- [ ] 23. Bushes in pieces, an experiment (2026-10-24, the owner: "maybe draw the bushes
+  (`creatures/basking.ts`, `venom.ts`, `wake.ts`; `__grant` to stage); the young trail their
+  mothers until grown, a pair touches heads before a birth (`creatures/family.ts`)
+- [x] 23. Bushes in pieces, an experiment (2026-10-24, the owner: "maybe draw the bushes
   in pieces"): each puff its own sprite and footprint (`plants/pieces.ts`), behind
-  `?bushes=pieces`; the owner chooses it or the whole bushes, then the fade is decided
+  `?bushes=pieces`. The owner chose the pieces (2026-10-24): the default now
+  (`?bushes=whole` to compare), no fade, each piece leaning in the wind with its bush
 
 **Not drawn yet**
 - [x] 7. Young animals look like adults (age is not on the wire)

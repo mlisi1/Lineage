@@ -146,6 +146,14 @@ export class Herd {
   /** The light last told (`nightfall`), and whether it was last rising. */
   private light = 1;
   private rising = false;
+  /**
+   * The mother of each young one seen being born (R5, `creatures/family.ts`), until it
+   * comes of age or either dies; one staged by hand (`byHand`) until either dies. A page
+   * loaded mid-life knows none of the mothers of the young already there.
+   */
+  private readonly mothers = new Map<number, { mother: number; byHand: boolean }>();
+  /** The slots last told to trail someone. */
+  private trailing = new Set<number>();
 
   /**
    * The scene's light of the moment (R5): the animals fall asleep as it goes and wake as
@@ -248,7 +256,53 @@ export class Herd {
     const child = this.roster.slotOf(childId);
     const layer = this.shown();
     if (mother === undefined || child === undefined || layer === null) return false;
-    return layer.nurse(child, mother, egg ?? this.lays(motherId), true);
+    const mates = this.matesOf(motherId);
+    if (!layer.nurse(child, mother, egg ?? this.lays(motherId), true, mates)) return false;
+    this.mothers.set(childId, { mother: motherId, byHand: true });
+    this.family();
+    return true;
+  }
+
+  /** The slots of the grown animals of `motherId`'s species but her (R5: her mate is the nearest). */
+  private matesOf(motherId: number): number[] {
+    const species = this.roster.species.get(motherId);
+    const mates: number[] = [];
+    for (const id of this.roster.ids) {
+      if (id === motherId || this.roster.young.has(id)) continue;
+      if (this.roster.species.get(id) !== species) continue;
+      const slot = this.roster.slotOf(id);
+      if (slot !== undefined) mates.push(slot);
+    }
+    return mates;
+  }
+
+  /**
+   * Tell the layers who trails whom (R5, `creatures/family.ts`): each young one its
+   * mother, or the one of hers born just before it, so that a brood goes in a line;
+   * forgetting those come of age, and those whose mother or self has died.
+   */
+  private family(): void {
+    const { roster } = this;
+    for (const [child, { mother, byHand }] of this.mothers) {
+      const gone = !roster.where.has(child) || !roster.where.has(mother);
+      if (gone || (!byHand && !roster.young.has(child))) this.mothers.delete(child);
+    }
+    const leaders = new Map<number, number>();
+    const last = new Map<number, number>();
+    const inOrder = [...this.mothers].sort(([a], [b]) => a - b);
+    for (const [child, { mother }] of inOrder) {
+      const slot = roster.slotOf(child);
+      const hers = roster.slotOf(mother);
+      if (slot === undefined || hers === undefined) continue;
+      leaders.set(slot, last.get(mother) ?? hers);
+      last.set(mother, slot);
+    }
+    const layers = Object.values(this.layers);
+    for (const slot of this.trailing) {
+      if (!leaders.has(slot)) for (const layer of layers) layer.follow(slot, null);
+    }
+    for (const [slot, leader] of leaders) for (const layer of layers) layer.follow(slot, leader);
+    this.trailing = new Set(leaders.keys());
   }
 
   /** The layer drawing bodies in the view shown; null on the map and before the first frame. */
@@ -524,13 +578,25 @@ export class Herd {
       for (const layer of layers) {
         layer.place(slot, seed);
         // Born beside its mother in the view shown; else it fades in where it is.
-        if (layer === shown && by !== undefined && ark === 0 && layer.nurse(slot, by, egg)) {
+        if (
+          layer === shown &&
+          mother !== undefined &&
+          by !== undefined &&
+          ark === 0 &&
+          layer.nurse(slot, by, egg, false, this.matesOf(mother))
+        ) {
           continue;
         }
         if (arriving > 0) layer.arrive(slot, arriving);
       }
       if (landed.has(id)) this.remains.landed(this.laid(slot));
     }
+    // The young trail their mothers (R5), those seen being born.
+    for (const { id, parent } of message.born) {
+      if (parent !== undefined && parent !== null)
+        this.mothers.set(id, { mother: parent, byHand: false });
+    }
+    this.family();
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);
       const where = this.roster.where.get(id);

@@ -27,8 +27,25 @@ import {
   newMotion,
   reanchor,
   stepOut,
+  trail,
   type Motion,
 } from "./motion";
+import {
+  COURT_ANGLES,
+  COURT_GAP_CELLS,
+  COURT_HEARTS,
+  COURT_HEARTS_FROM,
+  COURT_LEAN_MOST,
+  COURT_REACH_CELLS,
+  COURT_TOUCH_S,
+  COURT_TROT,
+  COURT_WALK_LEAST_S,
+  COURT_WALK_MARGIN,
+  COURT_WALK_MOST_S,
+  courtLean,
+  FAMILY_NEAR_CELLS,
+  trailSpot,
+} from "./family";
 import {
   breathClock,
   breathDepth,
@@ -294,6 +311,14 @@ interface Creature {
   tending?: { x: number; y: number; age: number; lasts: number; brood: Point[] };
   /** Where the sim put it while a hunt or a birth held it, to go to once it is over. */
   deferred?: Point;
+  /** Young, the slot of the one it trails (R5, `family.ts`): its mother or an elder of its brood. */
+  leader?: number;
+  /**
+   * Turned to its mate before a birth (R5, `family.ts`): the mate's slot, seconds since,
+   * when their heads begin to touch and how long it all lasts; for the mother, the side of
+   * her head (1 or -1, as angles turn) the mate stands on, where her young are not put.
+   */
+  court?: { with: number; age: number; touch: number; lasts: number; side: number };
   /** Its sleep at night (R5, `creatures/sleep.ts`). */
   sleep: Sleeper;
   /** Hurrying to where the sim has it (R5): its feet kick up dust. */
@@ -402,6 +427,8 @@ export class CreatureLayer {
   private readonly hip: Point = { x: 0, y: 0 };
   private readonly knee: Point = { x: 0, y: 0 };
   private readonly foot: Point = { x: 0, y: 0 };
+  /** Where a young one trails its mother, worked out each frame (`family`). */
+  private readonly trailAt: Point = { x: 0, y: 0 };
   private readonly dirX = new Float32Array(16);
   private readonly dirY = new Float32Array(16);
   private readonly angle = new Float32Array(16);
@@ -502,6 +529,8 @@ export class CreatureLayer {
     if (old.held !== undefined) creature.held = old.held;
     if (old.tending !== undefined) creature.tending = old.tending;
     if (old.deferred !== undefined) creature.deferred = old.deferred;
+    if (old.leader !== undefined) creature.leader = old.leader;
+    if (old.court !== undefined) creature.court = old.court;
     // Staged by hand, it stays as it was put (R5: else the sim's place took it away).
     if (old.pinned !== undefined) creature.pinned = old.pinned;
     if (old.staged !== undefined) creature.staged = old.staged;
@@ -738,9 +767,17 @@ export class CreatureLayer {
    * it comes into being beside her head, facing her, out of an egg if `egg` (on dry land),
    * and she stands over it a while, hearts rising. False if it is not shown so (bodies not
    * shown; she is torpid, arriving, busy, or staged by hand unless `byHand`; no room by
-   * her): the newborn is then left where it was placed.
+   * her): the newborn is then left where it was placed. Before the first of a brood, she
+   * and the nearest of `mates` (slots of grown ones of her kind) touch heads, if one is
+   * near (`family.ts`).
    */
-  nurse(childIndex: number, motherIndex: number, egg: boolean, byHand = false): boolean {
+  nurse(
+    childIndex: number,
+    motherIndex: number,
+    egg: boolean,
+    byHand = false,
+    mates: readonly number[] = [],
+  ): boolean {
     const child = this.creatures[childIndex];
     const mother = this.creatures[motherIndex];
     const head = mother?.joints[0];
@@ -758,6 +795,8 @@ export class CreatureLayer {
     let spot: Point | null = null;
     let angle = 0;
     for (const turn of BESIDE_ANGLES) {
+      // Not where her mate stands (R5, `family.ts`).
+      if ((mother.court?.side ?? 0) * turn > 0) continue;
       const a = mother.heading + turn;
       const x = head.x + Math.cos(a) * away;
       const y = head.y + Math.sin(a) * away;
@@ -787,20 +826,103 @@ export class CreatureLayer {
     if (byHand) child.staged = true;
     const laid = egg && !child.plan.swims && (this.sea?.(x, y) ?? null) === null;
     const moment = (laid ? EGG_S : 0) + MOMENT_S;
-    child.held = moment;
-    child.arriving = { age: laid ? -EGG_S : 0, lasts: laid ? HATCH_S : NEWBORN_S };
+    // First she and her mate touch heads, if one is near; the rest of a brood wait as long.
+    const court =
+      brood === undefined
+        ? this.court(motherIndex, mates, angle - mother.heading, byHand)
+        : Math.max(0, -(mother.tending?.age ?? 0));
+    child.held = moment + court;
+    child.arriving = { age: (laid ? -EGG_S : 0) - court, lasts: laid ? HATCH_S : NEWBORN_S };
     this.materialise(child);
     const nursery = this.nurseryPool();
     // The egg lies where its body will.
     const middle = child.joints[child.chest] ?? spot;
-    if (laid) nursery.lay(middle, child.plan.length);
+    if (laid) nursery.lay(middle, child.plan.length, court);
     if (brood !== undefined) {
       brood.push(spot);
       return true;
     }
-    mother.tending = { x, y, age: 0, lasts: moment, brood: [spot] };
-    nursery.love({ x: (head.x + x) / 2, y: (head.y + y) / 2 }, laid ? EGG_S : NEWBORN_S);
+    mother.tending = { x, y, age: -court, lasts: moment, brood: [spot] };
+    nursery.love({ x: (head.x + x) / 2, y: (head.y + y) / 2 }, court + (laid ? EGG_S : NEWBORN_S));
     return true;
+  }
+
+  /**
+   * The mother in `motherIndex` and the nearest of `mates` to her head turn to each other
+   * and touch heads before her newborn is there (R5, `family.ts`): the mate walks up to one
+   * side of her head, the side away from `away` (radians from the way she faces, where the
+   * newborn will lie). Returns the seconds it takes, 0 if no mate is near or free.
+   */
+  private court(
+    motherIndex: number,
+    mates: readonly number[],
+    away: number,
+    byHand: boolean,
+  ): number {
+    const mother = this.creatures[motherIndex];
+    const head = mother?.joints[0];
+    if (mother === undefined || head === undefined) return 0;
+    let mate: Creature | undefined;
+    let mateIndex = -1;
+    let nearest = COURT_REACH_CELLS;
+    let walk = 0;
+    for (const index of mates) {
+      const other = this.creatures[index];
+      const at = other?.joints[0];
+      if (other === undefined || at === undefined || other === mother || other.motion === null)
+        continue;
+      if (other.torpid || other.sleep.share > 0 || other.arriving !== undefined) continue;
+      if (other.hunt !== undefined || other.held !== undefined || other.tending !== undefined)
+        continue;
+      if (other.court !== undefined || (other.staged === true && !byHand)) continue;
+      const far = Math.hypot(at.x - head.x, at.y - head.y);
+      // Only one that can walk up to her soon.
+      const ahead = Math.max(0, far - (mother.plan.radii[0] ?? 0) - (other.plan.radii[0] ?? 0));
+      const seconds =
+        other.pinned === true
+          ? 0
+          : (COURT_WALK_MARGIN * ahead) /
+            Math.max(COURT_TROT * other.plan.pace * other.waterPace, 1e-3);
+      if (far < nearest && seconds <= COURT_WALK_MOST_S) {
+        nearest = far;
+        mate = other;
+        mateIndex = index;
+        walk = Math.max(COURT_WALK_LEAST_S, seconds);
+      }
+    }
+    const motion = mate?.motion;
+    const at = mate?.joints[0];
+    if (mate === undefined || motion == null || at === undefined) return 0;
+    // The side away from her newborn; with it straight ahead, the side the mate is on.
+    const across =
+      Math.cos(mother.heading) * (at.y - head.y) - Math.sin(mother.heading) * (at.x - head.x);
+    const side = Math.abs(away) > 1e-3 ? -Math.sign(away) : across < 0 ? -1 : 1;
+    const gap = (mother.plan.radii[0] ?? 0) + (mate.plan.radii[0] ?? 0) + COURT_GAP_CELLS;
+    for (const turn of mate.pinned === true ? [0] : COURT_ANGLES) {
+      const a = mother.heading + side * turn;
+      const x = mate.pinned === true ? at.x : head.x + Math.cos(a) * gap;
+      const y = mate.pinned === true ? at.y : head.y + Math.sin(a) * gap;
+      // One held by hand leans from where it stands; the others walk up.
+      if (mate.pinned !== true) {
+        if (!this.clear(mate, x, y)) continue;
+        mate.deferred ??= { x: motion.anchor.x, y: motion.anchor.y };
+        motion.anchor.x = x;
+        motion.anchor.y = y;
+        motion.goal.x = x;
+        motion.goal.y = y;
+        motion.mode = "travel";
+      }
+      const lasts = walk + COURT_TOUCH_S;
+      mate.court = { with: motherIndex, age: 0, touch: walk, lasts, side: 0 };
+      mother.court = { with: mateIndex, age: 0, touch: walk, lasts, side };
+      this.nurseryPool().love(
+        { x: (head.x + x) / 2, y: (head.y + y) / 2 },
+        walk + COURT_TOUCH_S * COURT_HEARTS_FROM,
+        COURT_HEARTS,
+      );
+      return lasts;
+    }
+    return 0;
   }
 
   /** The flecks of the layer, made the first time they are needed. */
@@ -1022,11 +1144,29 @@ export class CreatureLayer {
         ended = true;
       }
     }
+    let courted = false;
+    if (creature.court !== undefined) {
+      creature.court.age += dtS;
+      if (creature.court.age >= creature.court.lasts) {
+        creature.court = undefined;
+        ended = true;
+        courted = true;
+      }
+    }
     const busy =
-      creature.hunt !== undefined || creature.held !== undefined || creature.tending !== undefined;
+      creature.hunt !== undefined ||
+      creature.held !== undefined ||
+      creature.tending !== undefined ||
+      creature.court !== undefined;
     if (!ended || busy || creature.deferred === undefined) return;
     const { x, y } = creature.deferred;
     creature.deferred = undefined;
+    // A mate staged by hand goes back to where it was put (R5).
+    if (courted && creature.staged === true && motion !== null) {
+      motion.anchor.x = x;
+      motion.anchor.y = y;
+      return;
+    }
     this.anchor(index, x, y);
   }
 
@@ -1035,14 +1175,29 @@ export class CreatureLayer {
    * (R5): the head moved for the drawing only, the neck half as far, as eating does.
    */
   private reach(creature: Creature, head: Point, dtS: number): void {
-    const { hunt, tending, plan } = creature;
+    const { hunt, tending, court, plan } = creature;
     let dx = 0;
     let dy = 0;
+    const mate = court === undefined ? undefined : this.creatures[court.with]?.joints[0];
     if (hunt?.from != null) {
       const { stretch } = lunge(Math.min((hunt.age - hunt.run) / LUNGE_S, 1));
       dx = Math.cos(creature.heading) * LUNGE_STRETCH * plan.spacing * stretch;
       dy = Math.sin(creature.heading) * LUNGE_STRETCH * plan.spacing * stretch;
-    } else if (tending !== undefined) {
+    } else if (court !== undefined && mate !== undefined && (tending?.age ?? -1) < 0) {
+      // Courting (R5): its head goes toward its mate's, closing its share of the gap.
+      const other = this.creatures[court.with];
+      const tx = mate.x - head.x;
+      const ty = mate.y - head.y;
+      const distance = Math.hypot(tx, ty) || 1;
+      const touching = (plan.radii[0] ?? 0) + (other?.plan.radii[0] ?? 0);
+      const lean = courtLean(court.age, court.touch, court.lasts);
+      const amount = Math.min(
+        Math.max(0, distance - touching) * lean,
+        COURT_LEAN_MOST * plan.spacing,
+      );
+      dx = (tx / distance) * amount;
+      dy = (ty / distance) * amount;
+    } else if (tending !== undefined && tending.age >= 0) {
       const tx = tending.x - head.x;
       const ty = tending.y - head.y;
       const distance = Math.hypot(tx, ty) || 1;
@@ -1105,7 +1260,10 @@ export class CreatureLayer {
     // One in a hunt or a birth goes there once that is over.
     if (
       creature !== undefined &&
-      (creature.hunt !== undefined || creature.held !== undefined || creature.tending !== undefined)
+      (creature.hunt !== undefined ||
+        creature.held !== undefined ||
+        creature.tending !== undefined ||
+        creature.court !== undefined)
     ) {
       creature.deferred = { x, y };
       return;
@@ -1359,7 +1517,8 @@ export class CreatureLayer {
       const busy =
         creature.hunt !== undefined ||
         creature.held !== undefined ||
-        creature.tending !== undefined;
+        creature.tending !== undefined ||
+        creature.court !== undefined;
       const lying =
         !busy &&
         doze(
@@ -1692,7 +1851,12 @@ export class CreatureLayer {
   private eat(creature: Creature, dtS: number): void {
     const head = creature.joints[0];
     // A hunter thrusts its head at its prey, a mother lowers hers to her newborn (R5).
-    if (head !== undefined && (creature.hunt?.from != null || creature.tending !== undefined)) {
+    if (
+      head !== undefined &&
+      (creature.hunt?.from != null ||
+        creature.tending !== undefined ||
+        creature.court !== undefined)
+    ) {
       this.reach(creature, head, dtS);
       return;
     }
@@ -1823,13 +1987,14 @@ export class CreatureLayer {
     const walker = {
       head,
       heading: creature.heading,
-      // A hunter runs (R5, `hunting.ts`).
+      // A hunter runs (R5, `hunting.ts`); a mate trots up to the mother (`family.ts`).
       // Hunched in a thunderstorm it goes slower (R5, `weather.ts`).
       pace:
         plan.pace *
         creature.waterPace *
         (creature.hunt?.speed ?? 1) *
-        (1 - HUDDLE_SLOW * creature.drench.huddle),
+        (1 - HUDDLE_SLOW * creature.drench.huddle) *
+        (creature.court === undefined ? 1 : COURT_TROT),
       length: plan.length,
       // A body that turns on the spot lets its head turn as it likes, and comes round after.
       neck: stiff.pivots ? undefined : neckDirection(joints, creature.heading),
@@ -1853,6 +2018,7 @@ export class CreatureLayer {
     if (motion.mode === "pause" && tail !== undefined && ground(tail.x, tail.y)) {
       if (!free(tail.x, tail.y) && free(head.x, head.y)) stepOut(motion, walker, free);
     }
+    this.family(creature, motion);
     const stride = drive(motion, walker, dtS, this.random, free, ground);
     creature.hurried = !plan.swims && creature.wet === "dry" && hurries(motion, head, plan.length);
     creature.heading = walker.heading;
@@ -1862,6 +2028,44 @@ export class CreatureLayer {
     followChain(joints, plan.spacing, stiff, creature.heading, dtS);
     creature.marker.position.set(head.x, head.y);
     return head;
+  }
+
+  /**
+   * Family life (R5, `family.ts`): a mate stands facing the mother it courts once it is by
+   * her; a young one near the one it trails (its mother, or an elder of its brood) keeps
+   * a little behind and to the side of it, within its own leash.
+   */
+  private family(creature: Creature, motion: Motion): void {
+    motion.following = false;
+    const { court } = creature;
+    if (court !== undefined) {
+      const head = creature.joints[0];
+      const other = this.creatures[court.with]?.joints[0];
+      if (motion.mode !== "pause" || head === undefined || other === undefined) return;
+      const toward = Math.atan2(other.y - head.y, other.x - head.x);
+      motion.look = toward;
+      motion.facing = toward;
+      motion.timer = Math.max(motion.timer, court.lasts - court.age);
+      return;
+    }
+    const leader = creature.leader === undefined ? undefined : this.creatures[creature.leader];
+    if (leader === undefined || leader === creature || leader.motion === null) return;
+    if (creature.food !== "none" || creature.hunt !== undefined) return;
+    const mine = motion.anchor;
+    const theirs = leader.motion.anchor;
+    if (Math.hypot(theirs.x - mine.x, theirs.y - mine.y) > FAMILY_NEAR_CELLS) return;
+    const own = creature.plan.radii[0] ?? 0;
+    if (!trailSpot(leader.joints, leader.plan.radii, own, creature.avoid, this.trailAt)) return;
+    trail(motion, creature.plan.length, this.trailAt.x, this.trailAt.y);
+  }
+
+  /**
+   * Young slot `index` trails slot `leader` from now on (R5, `family.ts`): its mother, or
+   * an elder of its brood; no one with null.
+   */
+  follow(index: number, leader: number | null): void {
+    const creature = this.creatures[index];
+    if (creature !== undefined) creature.leader = leader ?? undefined;
   }
 
   /** Walk the head on and pull the chain after it. Returns the head. */

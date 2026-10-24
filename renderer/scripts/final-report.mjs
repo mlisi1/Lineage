@@ -164,6 +164,36 @@ const FOLLOWS = {
     stage: "(() => { window.__pin?.(2048, 63.4, 71, 0); window.__send?.(2048, 63.4, 71); })()",
     then: "window.__birth?.(2048, 2220, true)",
   },
+  // Family life (R5): a mother of Malevo's kind (2075) and the nearest grown one (2113)
+  // touch heads before her two young (2184, 2196, young of the kind) are born; then the
+  // large lizard (2048) bears two (2184, 2220) and walks off east, the sim's places of the
+  // young sent near hers, and they trail her in a line.
+  court: {
+    query: "view=local&x=64&y=71&quiet&seed=1",
+    seconds: 6,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2075, 63.4, 71, 0); window.__send?.(2075, 63.4, 71);
+      window.__pin?.(2113, 64.4, 71.9, 3.6); window.__send?.(2113, 64.4, 71.9);
+      window.__pin?.(2184, 70, 75, 0); window.__pin?.(2196, 70, 76, 0);
+    })()`,
+    then: "[window.__birth?.(2075, 2184, false), window.__birth?.(2075, 2196, false)]",
+  },
+  trail: {
+    query: "view=local&x=66&y=71&quiet&seed=1",
+    seconds: 12,
+    presses: 0,
+    crop: 2,
+    stage: `(() => {
+      window.__pin?.(2048, 63.4, 71, 0); window.__send?.(2048, 63.4, 71);
+      window.__pin?.(2184, 70, 75, 0); window.__pin?.(2220, 70, 76, 0);
+      window.__birth?.(2048, 2184, false); window.__birth?.(2048, 2220, false);
+    })()`,
+    then: `(() => {
+      window.__send?.(2048, 67.2, 71); window.__send?.(2184, 66.3, 71.5); window.__send?.(2220, 65.7, 70.7);
+    })()`,
+  },
   // Sleep (R5): the lizard put down at night lies down; and an animal followed at night.
   sleep: {
     query: "view=local&x=64&y=71&quiet&seed=1&show=night",
@@ -281,31 +311,6 @@ const FOLLOWS = {
     stage: `(() => {
       window.__grant?.(2048, "gills");
       window.__pin?.(2048, 176, 10, 0); window.__send?.(2048, 190, 10.5);
-    })()`,
-  },
-  // Bushes in pieces (R5, an experiment behind `?bushes=pieces`): the staged walks again.
-  stagedBehindPieces: {
-    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
-    seconds: 8,
-    presses: 0,
-    crop: 2,
-    stage: STAGE_THROUGH(1.0, 122.85),
-  },
-  stagedFrontPieces: {
-    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
-    seconds: 8,
-    presses: 0,
-    crop: 2,
-    stage: STAGE_THROUGH(122.85 - 124, 125.0),
-  },
-  stagedAcrossPieces: {
-    query: "view=local&x=92&y=124&quiet&seed=1&bushes=pieces",
-    seconds: 8,
-    presses: 0,
-    crop: 2,
-    stage: `(() => {
-      [2048, 2184, 2220].forEach((id, k) => window.__pin?.(id, 89.6, 123.3 + k * 0.5, 0));
-      [2048, 2184, 2220].forEach((id, k) => window.__send?.(id, 93.6, 123.3 + k * 0.5));
     })()`,
   },
   // Animals of five sizes living among bushes, from the largest to the smallest, the
@@ -715,7 +720,7 @@ ul.open { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 72c
 <p class="lede">What R5 has changed in the scene so far, against the scene as it was when R5 began. Same places, same recordings, same camera seeds. Each still shows the scene before R5 left of the line and after it right of the line; drag the line to compare. Films play side by side.</p>
 <p class="meta">branch ${escape(branch)} at ${commit} · before ${before} · ${date} · 1024×600 · films ${FPS} fps on the scene's own clock</p>
 <nav><ul>
-<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#rare">Rare genes</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#weather">Leaves and rain</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
+<li><a href="#follow">1 Animal followed</a></li><li><a href="#colours">2 Colours</a></li><li><a href="#dots">3 Map dots</a></li><li><a href="#ground">4 Ground</a></li><li><a href="#grass">5 Grass</a></li><li><a href="#snow">6 Snow</a></li><li><a href="#young">7 Young</a></li><li><a href="#shore">Plants on water</a></li><li><a href="#water">Animals in water</a></li><li><a href="#bodies">Legs and bodies</a></li><li><a href="#bushes">Trees and bushes</a></li><li><a href="#pieces">Bushes in pieces</a></li><li><a href="#card">Name card</a></li><li><a href="#scroll">Chronicle scroll</a></li><li><a href="#eating">Eating</a></li><li><a href="#hunting">Hunting and births</a></li><li><a href="#family">Family life</a></li><li><a href="#rare">Rare genes</a></li><li><a href="#sleep">Sleep</a></li><li><a href="#ambient">Small life</a></li><li><a href="#wind">Wind</a></li><li><a href="#weather">Leaves and rain</a></li><li><a href="#deaths">Deaths</a></li><li><a href="#open">Open</a></li>
 </ul></nav>
 </header>
 
@@ -863,15 +868,12 @@ ${filmPair("bush15", ["Before: Devuga, the smallest, many-legged (SIZE 0.12)", "
 <hr>
 
 <section id="pieces">
-<div class="head"><span class="n">·</span><h2>An experiment: bushes in pieces (<code>?bushes=pieces</code>)</h2></div>
+<div class="head"><span class="n">·</span><h2>Bushes in pieces</h2></div>
 <div class="notes">
-<div><span class="label">Why</span><p>The owner, still unsatisfied with animals among bushes: perhaps draw the bushes in pieces. The default is unchanged; the experiment is switched on with <code>?bushes=pieces</code>.</p></div>
-<div><span class="label">How</span><p>Each puff of a bush in the local view is a sprite of its own, cut from the same drawing (each pixel to the puff painted last over it), so a bush with no animal near looks as before. Each piece is sorted by the foot of its puff and keeps a small footprint of its own (0.85 of its radius across, 0.5 deep): together they block the lower two-thirds of the bush, so animals pass behind its top puffs and between bushes. A piece is over an animal only where a joint of the animal is behind its foot and under its drawing: in front of a puff an animal is drawn over it, between puffs it is behind the back ones and under the front ones. Trees, sprouts and fire pines stay whole; pieces do not lean in the wind (<code>src/plants/pieces.ts</code>).</p></div>
+<div><span class="label">Why</span><p>The owner, still unsatisfied with animals among bushes: perhaps draw the bushes in pieces. Tried beside the whole bushes and chosen by the owner on 2026-10-24: the pieces are now the default (<code>?bushes=whole</code> draws them whole), with no fade in front of the animal followed.</p></div>
+<div><span class="label">How</span><p>Each puff of a bush in the local view is a sprite of its own, cut from the same drawing (each pixel to the puff painted last over it), so a bush with no animal near looks as before. Each piece is sorted by the foot of its puff and keeps a small footprint of its own (0.85 of its radius across, 0.5 deep): together they block the lower two-thirds of the bush, so animals pass behind its top puffs and between bushes. A piece is over an animal only where a joint of the animal is behind its foot and under its drawing: in front of a puff an animal is drawn over it, between puffs it is behind the back ones and under the front ones. Trees, sprouts and fire pines stay whole. In the wind each piece slides by whole art pixels as far as the whole drawing would lean at its height, all the pieces of a bush with the same gust (<code>src/plants/pieces.ts</code>, <code>PlantLayer.blow</code>).</p></div>
 </div>
-<p class="meta">The same three staged walks with the bushes in pieces: compare with the films above.</p>
-${filmAfter("stagedBehindPieces", "Pieces: from in front to behind")}
-${filmAfter("stagedFrontPieces", "Pieces: from behind to in front")}
-${filmAfter("stagedAcrossPieces", "Pieces: past it sideways")}
+<p class="meta">The staged walks in the section above are drawn with the bushes in pieces; the storm film in the wind section shows them leaning.</p>
 </section>
 <hr>
 
@@ -946,6 +948,17 @@ ${filmAfter("bask", "Photosynthesis: the lizard stands, then spreads out flat to
 ${filmAfter("venom", "Venom: the strike's green flash and drips, the prey's green dust")}
 ${filmAfter("wake", "Gills: a wake behind the lizard swimming off the north coast")}
 ${filmAfter("wakeMiddle", "The same wake in the middle view")}
+</section>
+<hr>
+
+<section id="family">
+<div class="head"><span class="n">·</span><h2>Family life</h2></div>
+<div class="notes">
+<div><span class="label">Why</span><p>The owner (2026-10-24): the young should trail their mothers until grown, and a pair nuzzle briefly before a birth. Drawn only: the sim has no families beyond who bore whom (<code>born[].parent</code>), and nothing on the wire changes.</p></div>
+<div><span class="label">How</span><p>The scene remembers the mother of each young animal it sees born (a page loaded mid-life has no pairs until the next births) and forgets her when the young one comes of age (<code>young</code> on the wire) or either dies. While the sim has the two within 3 cells, the young one makes for a spot behind her tail and a little to one side, walking after her as she goes and trotting (1.4 times its pace) when more than 1.2 of its lengths behind; the spot is kept within 0.85 of its leash of where the sim has it, so it is never drawn off its own place. The young of one mother go in a line, each behind the one born before it. At a birth, the grown one of her kind nearest her head (within 2.2 cells and 2.5 s of a trot) comes up to the side of her head away from where her young will lie; their heads lean together for 1.4 s while two hearts rise, then the young are born as before (<code>src/creatures/family.ts</code>, <code>motion.ts</code>). Staged on open grass, enlarged twice.</p></div>
+</div>
+${filmAfter("court", "A pair touches heads, then two young are born")}
+${filmAfter("trail", "The large lizard bears two and walks off; they trail her in a line")}
 </section>
 <hr>
 

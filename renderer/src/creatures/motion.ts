@@ -67,6 +67,21 @@ const LOOK_SPAN = 0.7;
 /** A breath: seconds at mass 1, growing with the fourth root of mass (as heart rates slow). */
 const BREATH_S = 2.4;
 const BREATH_MASS_EXPONENT = 0.25;
+/**
+ * A young one trailing its mother (R5, `family.ts`): the place it keeps to behind her is
+ * kept within this share of its leash of where the sim has it; further from that place
+ * than this share of its length, it walks after her, and further than `TROT_FROM_LENGTHS`
+ * of its lengths, it trots, at `TROT` times its pace.
+ */
+const TRAIL_LEASH_SHARE = 0.85;
+const TRAIL_SLACK_SHARE = 0.5;
+const TROT_FROM_LENGTHS = 1.2;
+const TROT = 1.4;
+/**
+ * Walking to a new place from the sim, it makes for the place behind her there instead,
+ * taken again whenever that has moved this far (cells) from where it is making for.
+ */
+const TRAIL_REGOAL_CELLS = 0.3;
 
 export type Mode = "travel" | "stroll" | "pause";
 
@@ -93,6 +108,14 @@ export interface Motion {
    */
   route: Point[];
   routeFor: Point | null;
+  /**
+   * Trailing another (R5: a young one its mother, `trail`): the place it keeps to, within
+   * its leash, and whether it does.
+   */
+  follow: Point;
+  following: boolean;
+  /** Where behind her it last made for, walking to a new place (`TRAIL_REGOAL_CELLS`). */
+  aimed: Point;
 }
 
 /** What `drive` needs of the body. */
@@ -136,7 +159,25 @@ export function newMotion(anchor: Point, heading: number): Motion {
     hemmed: false,
     route: [],
     routeFor: null,
+    follow: { x: anchor.x, y: anchor.y },
+    following: false,
+    aimed: { x: anchor.x, y: anchor.y },
   };
+}
+
+/**
+ * From now on it keeps near (x, y) as it strolls (R5: a young one behind its mother),
+ * never further from where the sim has it than its leash allows: the place is drawn in
+ * toward the anchor as far as it must be. Called each frame while it trails.
+ */
+export function trail(motion: Motion, length: number, x: number, y: number): void {
+  const { anchor, follow } = motion;
+  const most = TRAIL_LEASH_SHARE * leash(length);
+  const far = Math.hypot(x - anchor.x, y - anchor.y);
+  const share = far > most ? most / far : 1;
+  follow.x = anchor.x + (x - anchor.x) * share;
+  follow.y = anchor.y + (y - anchor.y) * share;
+  motion.following = true;
 }
 
 /** A new place from the sim. Returns true if the body must be put there at once (`snap`). */
@@ -210,6 +251,24 @@ export function drive(
     travel(motion, motion.anchor.x, motion.anchor.y);
   }
 
+  // Trailing (R5): it goes after the place it keeps to as soon as it is left behind, and
+  // strolls only there.
+  const { follow } = motion;
+  const behindBy = motion.following ? Math.hypot(follow.x - head.x, follow.y - head.y) : 0;
+  if (motion.following && motion.mode !== "travel") {
+    if (motion.mode === "stroll" || behindBy > TRAIL_SLACK_SHARE * length) {
+      motion.mode = "stroll";
+      motion.goal.x = follow.x;
+      motion.goal.y = follow.y;
+    }
+  } else if (
+    motion.following &&
+    Math.hypot(follow.x - motion.aimed.x, follow.y - motion.aimed.y) > TRAIL_REGOAL_CELLS
+  ) {
+    motion.goal.x = motion.aimed.x = follow.x;
+    motion.goal.y = motion.aimed.y = follow.y;
+  }
+
   if (motion.mode === "pause") {
     motion.timer -= dtS;
     // Looking about: now and then a new direction near the one it faced.
@@ -217,7 +276,11 @@ export function drive(
     // Only the head turns: the body stays as it stood.
     walker.heading = keep(walker, turnToward(walker.heading, motion.look, LOOK_RATE, dtS));
     if (motion.timer <= 0) {
-      if (random() < STROLL_CHANCE && chooseStroll(motion, walker.head, reach, random, free)) {
+      if (
+        !motion.following &&
+        random() < STROLL_CHANCE &&
+        chooseStroll(motion, walker.head, reach, random, free)
+      ) {
         motion.mode = "stroll";
       } else {
         pause(motion, walker.heading, lerp(PAUSE_MIN_S, PAUSE_MAX_S, random()));
@@ -256,7 +319,10 @@ export function drive(
   }
   const behind = motion.mode === "travel" ? fromAnchor / reach : 0;
   const hurry = behind > HURRY_FROM_LEASHES ? Math.min(HURRY, behind / HURRY_FROM_LEASHES) : 1;
-  const pace = walker.pace * (motion.mode === "stroll" ? STROLL_PACE : hurry);
+  // A young one left behind walks after its mother, and trots to catch up (R5).
+  const trailing = motion.following && motion.mode === "stroll";
+  const stroll = trailing ? (behindBy > TROT_FROM_LENGTHS * length ? TROT : 1) : STROLL_PACE;
+  const pace = walker.pace * (motion.mode === "stroll" ? stroll : hurry);
   // Walk the way it faces, slowing while it still faces away from its goal.
   const facing = Math.max(0, Math.cos(toward - walker.heading));
   const stride = Math.min(pace * dtS * (0.25 + 0.75 * facing), left);
