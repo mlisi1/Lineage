@@ -34,6 +34,13 @@ const RENDERER = fileURLToPath(new URL("../", import.meta.url));
 const FILMS = fileURLToPath(new URL("films/", OUT));
 /** The commit R5 branched from: the scene before any of R5. */
 const BEFORE = env.R5_REPORT_BEFORE ?? "80e4a4c";
+/**
+ * The sections the owner has not seen yet, tagged "new" in the contents and on their
+ * headings; emptied once the owner has looked (`R5_REPORT_NEW=family,rare` to choose).
+ */
+const NEW = new Set(
+  (env.R5_REPORT_NEW ?? "pieces,family,rare,weather").split(",").filter((id) => id !== ""),
+);
 /** The desk's screen (CLAUDE.md §2). */
 const WIDTH = 1024;
 const HEIGHT = 600;
@@ -687,6 +694,7 @@ nav a { font-weight: 600; color: var(--ink); text-decoration: none; background: 
 nav a:hover, nav a:focus-visible { background: var(--sea); color: var(--bg); }
 section { display: grid; gap: 18px; }
 .head { display: flex; align-items: baseline; gap: 14px; }
+.new { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px; background: #d9482b; color: #fff; font: 600 10px/1.4 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 2px; }
 .n { font: 700 28px/1 var(--mono); color: var(--leaf); }
 .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 32px; }
 .notes > div { display: grid; gap: 6px; min-width: 0; }
@@ -1066,6 +1074,18 @@ const readme = [
   "",
 ].join("\n");
 await mkdir(OUT, { recursive: true });
-await writeFile(new URL("report.html", OUT), html);
+await writeFile(new URL("report.html", OUT), tagNew(html));
 await writeFile(new URL("README.md", OUT), readme);
 console.log(`wrote ${fileURLToPath(OUT)} (${(html.length / 1e6).toFixed(1)} MB)`);
+
+/** Tag the sections in `NEW` "new": their link in the contents, and their heading. */
+function tagNew(page) {
+  const tag = '<span class="new">new</span>';
+  let out = page;
+  for (const id of NEW) {
+    out = out
+      .replace(new RegExp(`(<li><a href="#${id}">.*?)(</a></li>)`), `$1 ${tag}$2`)
+      .replace(new RegExp(`(<section id="${id}">\\s*<div class="head">.*?)(</h2>)`), `$1 ${tag}$2`);
+  }
+  return out;
+}
