@@ -18,6 +18,9 @@ class FakeContext {
   fillStyle = "";
   readonly filled: { x: number; y: number; style: string }[] = [];
   putImageData(): void {}
+  createImageData(width: number, height: number): FakeImageData {
+    return new FakeImageData(new Uint8ClampedArray(width * height * 4), width, height);
+  }
   fillRect(x: number, y: number): void {
     this.filled.push({ x, y, style: this.fillStyle });
   }
