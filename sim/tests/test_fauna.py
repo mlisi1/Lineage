@@ -287,6 +287,32 @@ def test_upkeep_adds_rest_movement_and_water(config: Config) -> None:
     assert float(at_home[0]) < 1.3 * rest
 
 
+def test_hunters_rest_cheaper(config: Config) -> None:
+    cfg = replace(config.fauna, hunter_rest_share=0.5)
+    genes = _genes(GRAZER, HUNTER)
+    body = phenotype(cfg, genes)
+    rest = creature.resting_burn(cfg, genes, body)
+    assert float(rest[0]) == pytest.approx(float(body.basal_burn[0]))  # a grazer: all of it
+    assert float(rest[1]) == pytest.approx(0.5 * float(body.basal_burn[1]))
+    still, dry = np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.bool_)
+    np.testing.assert_allclose(creature.upkeep(cfg, genes, body, still, dry, 2.0), 2.0 * rest)
+    # Moving costs a hunter as much as before.
+    walked = creature.upkeep(cfg, genes, body, still + 3.0, dry, 2.0)
+    np.testing.assert_allclose(walked - 2.0 * rest, 3.0 * body.move_cost, rtol=1e-5)
+
+
+def test_a_resting_hunter_outlasts_a_lean_spell(config: Config) -> None:
+    def alive_after(share: float, days: float) -> int:
+        cfg = replace(config.fauna, hunter_rest_share=share)
+        site = Site(config, biomass=0.0, fauna=cfg)  # no plants, no prey
+        ids = site.add(HUNTER, [(20.0, 20.0)], energy_share=0.9)
+        site.run(24.0 * days)
+        return site.alive(ids)
+
+    assert alive_after(1.0, 10.0) == 0
+    assert alive_after(0.3, 10.0) == 1
+
+
 def test_appetite(config: Config) -> None:
     cfg = config.fauna
     body = _body(config, GRAZER, GRAZER, _with(GRAZER, Gene.DIET, 1.0))

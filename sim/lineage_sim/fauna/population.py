@@ -1002,7 +1002,7 @@ class Fauna:
         self._learned = np.concatenate([self._learned, nothing if learned is None else learned])
         self._trace = np.concatenate([self._trace, nothing])
         self._noise = np.concatenate([self._noise, np.zeros((count, brain.OUTPUTS), np.float32)])
-        resting = -self._body.basal_burn[old:]
+        resting = -creature.resting_burn(self._cfg, self._genes, self._body)[old:]
         self._baseline = np.concatenate([self._baseline, resting / self._body.capacity[old:]])
         self._balance = np.concatenate([self._balance, resting])
         self._meal_value = np.concatenate([self._meal_value, np.full(count, np.nan, np.float32)])

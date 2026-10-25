@@ -465,6 +465,10 @@ cost_armour = 0.4
 cost_jaw = 0.3
 cost_limb_pair = 0.06
 cost_aquatic = 0.15
+# Hunters (diet at or above predator_min_diet) burn hunter_rest_share of their basal burn
+# at rest: they wait between kills, as real predators do, and a pack outlasts a lean
+# spell (M11). Moving costs the same. 1 turns it off.
+hunter_rest_share = 1.0
 # Energy per cell travelled = move_cost × mass^metabolic_exponent.
 move_cost = 0.35
 # Reserve a creature can hold = capacity_per_mass × mass; newborn founders start at

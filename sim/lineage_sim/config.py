@@ -399,6 +399,7 @@ class FaunaConfig:
     cost_aquatic: float
     move_cost: float
     capacity_per_mass: float
+    hunter_rest_share: float
     founder_energy_share: float
     water_stress: float
     wading_depth: float
@@ -584,6 +585,7 @@ class FaunaConfig:
                     "longevity_factor", "longevity_cooldown_factor"):  # fmt: skip
             check(getattr(self, key) >= 1.0, f"{key} must be at least 1")
         check(self.herbivore_max_diet < self.predator_min_diet, "diet classes overlap")
+        check(self.hunter_rest_share <= 1.0, "hunter_rest_share above 1")
         check(
             self.repro_investment_share < self.repro_energy_share,
             "breeding would starve the parent",

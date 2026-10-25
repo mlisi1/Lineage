@@ -255,6 +255,14 @@ def move(
     return moved.astype(np.float32), travelled.astype(np.float32)
 
 
+def resting_burn(cfg: FaunaConfig, genes: Genes, body: Phenotype) -> Values:
+    """Energy each burns per hour at rest: hunters (diet at or above predator_min_diet)
+    only hunter_rest_share of it, waiting between kills as predators do (M11)."""
+    hunter = genes[:, Gene.DIET] >= cfg.predator_min_diet
+    share = np.where(hunter, np.float32(cfg.hunter_rest_share), np.float32(1.0))
+    return (body.basal_burn * share).astype(np.float32)
+
+
 def upkeep(
     cfg: FaunaConfig,
     genes: Genes,
@@ -268,7 +276,8 @@ def upkeep(
     (except for the ``waterproof``)."""
     struggling = in_water if waterproof is None else in_water & ~waterproof
     drowning = cfg.water_stress * body.mass * (1.0 - genes[:, Gene.AQUATIC]) * struggling
-    return ((body.basal_burn + drowning) * np.float32(hours) + body.move_cost * travelled).astype(
+    resting = resting_burn(cfg, genes, body)
+    return ((resting + drowning) * np.float32(hours) + body.move_cost * travelled).astype(
         np.float32
     )
 
