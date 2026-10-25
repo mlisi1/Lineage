@@ -179,7 +179,8 @@ interrupted to add mechanisms first, with the owner.)
 
 ### M8 — presence and god powers (ADR 0016, reports/M8-presence)
 
-- **M8.1 is deferred here** by the owner (p = 0.15 vs 0.05, 2026-10-19). Hibernation is
+- **M8.1 is deferred here** by the owner (p = 0.15 vs 0.05, 2026-10-19). (Closed
+  2026-10-25: the owner widened it to light traits, see §7.) Hibernation is
   selected by the nights in about a third of office seeds; glow never is. Levers:
   `glow_burn_cost`, `night_sight` (how blind the dark is), and whether a glower is seen
   as far as it sees (a glow that lights the way without lighting the glower would pay
@@ -310,3 +311,10 @@ beside a full one. Resting hunters (a fifth of the resting burn) with a pack cap
 keep hunters beside grazers in 15 of 20 ten-year seeds, no world ended, and today's
 defaults pass every M criterion; M6.1's band is now 3–16 species (the owner). Next: the
 held-out check, D1 with the owner, the report.
+
+**2026-10-25, evening** (ADR 0019, "Closing the criteria"): held-out seeds 20–39 pass
+everything; the owner set the D bands (D1 ≥ 9 of 12 genes with a niche, D2 ≥ 5 of 14 rare
+genes thriving) and widened M8.1 to light traits (glow and hibernation never respond;
+photosynthesis is rarer in office light). The M11 report (`reports/M11-long-run`, 17 runs)
+passes every criterion on both seed sets; the slow suite passes. Left: the stream
+recordings, the Orange Pi measurement, the merge.

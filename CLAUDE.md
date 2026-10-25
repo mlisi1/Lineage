@@ -409,13 +409,15 @@ needs a note in `docs/decisions/`.
 - **Report**: compare schedules — always present, office hours, office + August break,
   3-week conference — on populations, nocturnal trait frequency, rare-gene frequencies
   (glow, hibernation, photosynthesis).
-- **Accept**: office schedule produces measurable selection on night traits vs
-  always-present; 3-week absence survival `[≥ 80%]` of seeds; August holiday survival
+- **Accept**: office schedule produces measurable selection on light traits (night or
+  day; night traits alone until M11, ADR 0019) vs always-present; 3-week absence survival `[≥ 80%]` of seeds; August holiday survival
   `[≥ 80%]` of seeds (added by the owner, 2026-10-19). (As built, ADR 0016: a button, not
   a covered switch, fires a power the island draws by need; holidays are long absences;
   plants follow a week's light. M8.2 and M8.3 100 % PASS; M7.2 95 % PASS in office light;
   M8.1 p = 0.15 FAIL: hibernation takes off in a third of office seeds, glow never pays;
-  deferred to M11 by the owner, 2026-10-19.)
+  deferred to M11 by the owner, 2026-10-19; in M11 night traits still never respond, and
+  the owner widened M8.1 to light traits: photosynthesis rarer in office light, p = 0.03
+  after a Bonferroni correction, PASS.)
 
 ### M9 — Chronicle and bestiary
 - **Deliver**: event detectors (speciation, extinction, firsts, records, booms/crashes,
@@ -467,7 +469,10 @@ needs a note in `docs/decisions/`.
   the owner: soft caps (births wait longer near a cap) and resting hunters
   (`hunter_rest_share`), with `predator_cap` 32: hunters last beside grazers in 15 of 20
   ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species; D1 asks
-  9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving.)
+  9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving; M8.1 judges light
+  traits. The report `reports/M11-long-run` (e08aece and after): every criterion passes
+  on tuning and held-out seeds. Left: re-record the stream recordings, measure the sim
+  on the Orange Pi, merge.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

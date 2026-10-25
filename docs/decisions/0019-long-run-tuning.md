@@ -625,6 +625,35 @@ References:
   use to survive a common challenge. *Comparative Biochemistry and Physiology A* 156(1),
   1–18.
 
+### Closing the criteria: the M11 report (2026-10-25, evening)
+
+**M8.1** (the owner): glow and hibernation sit at 2.5–2.8 ‰ of creatures under every
+schedule (always, office, office-august, conference): the office's nights select for
+neither (p = 0.59). The office's light does select: photosynthesis is rarer than under
+always-present (p = 0.016). M8.1 now asks for measurable selection on light traits,
+night or day: the smaller of the two one-sided rank tests, doubled (Bonferroni), at
+≤ 0.05. Measured 0.032, PASS.
+
+**The report** (`reports/M11-long-run`): main run `m11-report-main` (3 years × seeds
+0–19, office, the tuned defaults), with held-out (20–39), five-year, fork, learning-off,
+always / office-august / conference, weekly presses and one run per mechanism off.
+**Every criterion passes, 50 of 50**: M2–M10 and M11.1 on both seed sets, M3 over five
+years, M5, M8 (M8.2 and M8.3 100 %), D1–D3. The weekly-press run does no harm (no world
+ended, no extinction; the forest closes in 8 months, god-power entries 40 % of the
+chronicle, as the owner accepted).
+
+**Mechanisms on and off** (3 years × 20 seeds; one 20-seed run resolves about 0.2 of a
+share): without resting hunters there are no hunters (M4.3 0.04) and only 3 body genes
+find a niche (D1; 10 with them): hunters make the niches. Without soft caps, three
+years look the same (M4.3 0.95); soft caps showed their worth in the ten-year runs and in
+M6.2 (above). Without hunters from the herd, three years look the same too: the landing
+pack covers them; the rule matters when a pack dies out later. Food at sea, wading,
+reach, cover, nutrients and gut seeds each move the table within the noise.
+
+**Slow suite** (once, at the final config, as the owner planned): the 9 statistical
+tests pass; the bare-rock golden hash was updated (`e08aece`); the winter recording
+fails with the other stale recordings, to be re-recorded.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of
@@ -637,8 +666,29 @@ mechanism 4.
 
 ## Decision
 
-(Pending the sweeps.)
+Tune once, after the features (ADR 0011), toward the owner's goal: "an interesting and
+balanced ecosystem that keeps interesting over the years". The island is closed to
+strangers. Nine mechanisms were added, each with the owner's approval and an off switch:
+food at sea and wading, reach by height, cover for prey, nutrients back to the soil,
+seeds carried in guts, hunters from the herd, soft caps, and resting hunters. The
+defaults in `sim/config/default.toml` at `6d4b189` are the tuned island. Criteria that
+judged the wrong thing were revised with the owner: M2.5 retired; the step budget 600 ms
+per sim-day; M3.5 tolerates a tenth of the seeds in open woodland; M6.1 leaves out the
+founding and counts 3–16 species; M8.1 judges light traits. The owner added D1–D3 and
+set their bands. Every criterion passes on tuning and held-out seeds
+(`reports/M11-long-run`).
 
 ## Consequences
 
-(Pending.)
+- Schema v11 (algae) and v13 (seeds in guts) came with M11's mechanisms. Soft caps and
+  resting hunters are config only.
+- Hunters now last beside a mostly grazing herd (15 of 20 ten-year seeds, 23 of 30 with
+  the held-out ones), at about 14 % of the creatures. They drive the niches (D1) and
+  speciation (M6.2), so the island changes more and holds more species than before.
+- Worlds end rarely: 2 in 300 ten-year seed-years.
+- Swimming never finds a niche on a closed island, and several rare genes (hibernation,
+  fire-pine, fruiting, poisonous, amphibious) almost never thrive. D1 and D2 ask for most
+  genes, not every gene. Glow and hibernation never respond to the office's nights.
+- Every behaviour change moved the golden hashes and the stream recordings. The
+  recordings must be re-recorded before M11 or R5 merges second.
+- Not yet done: measure the sim on the Orange Pi once.
