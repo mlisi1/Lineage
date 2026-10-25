@@ -302,3 +302,11 @@ before. Replays show the hunters are not short of kills while the herd is full: 
 hard caps bind for years (herd 200, hunters 16), the herd evolves larger and faster, and
 when it dips the capped pack starves out. Next is a mechanism, the owner's choice: soft
 caps, hunters that wait out lean times, or a hunting reach apart from mating.
+
+**2026-10-25** (ADR 0019, "Soft caps and resting hunters"): the owner chose two
+mechanisms. Soft caps (births wait longer the nearer a kind is to its cap) alone kept
+hunters in 1 seed of 10; replays showed packs eating a young herd out or starving slowly
+beside a full one. Resting hunters (a fifth of the resting burn) with a pack cap of 32
+keep hunters beside grazers in 15 of 20 ten-year seeds, no world ended, and today's
+defaults pass every M criterion; M6.1's band is now 3–16 species (the owner). Next: the
+held-out check, D1 with the owner, the report.

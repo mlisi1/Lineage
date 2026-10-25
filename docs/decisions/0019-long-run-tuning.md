@@ -556,6 +556,59 @@ might act on it (none tried; mechanisms are the owner's):
    herd's dips.
 3. A **separate hunting reach** from the mating distance, if reach is tuned later.
 
+### Soft caps and resting hunters: predators that last (2026-10-25)
+
+**Soft caps** (the owner's choice, `df17921`): a pair that may breed first waits, on
+average `crowding_wait_days` (5) × c / (1 − c), with c = (N / cap)^`crowding_exponent`
+(4) per kind; none on a sparse island, without end at the cap, which stays a ceiling.
+Off (`crowding_wait_days` 0) keeps every draw as before. 10 years × seeds 0–9 on diet
+0.6 / gap 0.2 (`m11-soft-*`): alone 0 of 10 seeds keep hunters beside grazers (the pack
+now settles below 16); with `predator_cap` 32, 1 of 10 (seed 7: a pack of 25–30 beside
+about 180 grazers for ten years); 48, 1 of 10. Packs fill the room and still die in
+years 2–4. On today's defaults (3 years × 20 seeds, `m11-soft-office`) soft caps cost
+nothing elsewhere and lift M6.2 from 0.94 to 1.19.
+
+**Why packs still died** (replays of six seeds, `predator_cap` 32,
+`runs/m11-replays/`): either the pack ate a young herd out (127 → 3, 37 → 0, 117 → 14)
+and starved before it regrew within a year, or it starved slowly beside a full herd as
+prey grew heavier (seed 3: prey mass 0.44 → 1.15, hunters' energy 0.74 → 0.59). A body
+of mass 1 starves in about 6 days.
+
+**Resting hunters** (the owner's choice, `f71d2a8`): a hunter (diet at or above
+`predator_min_diet`) burns `hunter_rest_share` of its basal burn at rest; moving costs
+the same. Ambush and pursuit predators alike spend most of their time resting and go
+far longer between meals than their prey (references). 10 years, soft caps,
+`predator_cap` 32, judged as above (`m11-rest*`):
+
+| Diet | `hunter_rest_share` | Seeds 0–9 | Seeds 10–19 | Worlds ended | Hunters' share, median |
+|---|---|---|---|---|---|
+| 0.6 / gap 0.2 | 1.0 (off) | 1 | — | 0 | 0.1 % |
+| 0.6 / gap 0.2 | 0.5 | 4 | — | 0 | 8.3 % |
+| 0.6 / gap 0.2 | 0.3 | 6 | 9 | 1 | 11.7–14.4 % |
+| today's (1.0 / 0.3) | 0.3 | 6 | 7 | 2 | 13.5–14.1 % |
+| today's (1.0 / 0.3) | 0.2 | 8 | 7 | 0 | 16.8 % (0–9) |
+
+Grazers stay above 75 % of the creatures in the median seed of every row: hunters no
+longer need an omnivore herd. Resting hunters make the gentler diet unnecessary.
+
+**M6.1's band** (the owner, 2026-10-25): with hunters that last, species split more
+(the 3-year run spends 39 % of the time above 12 species, median seed 12, range 6–15;
+below 3 unchanged at 8 %), and M6.1 fell to 0.545. The species definition stays fixed;
+the band is now **3–16** species (`tools/milestones/m6.py` `ALIVE_BAND`).
+
+**Defaults set**: `predator_cap` 32, `hunter_rest_share` 0.2, soft caps on, the diet as it
+was. 3 years × 20 seeds, office, no presses (`m11-rest0.2-office`): **every M criterion
+passes** (M4.3 0.91, M6.1 1.00, M6.2 1.71, M4.4 430 ms); D3a 13.7 % and D3b 0.92 pass
+the proposed bands; D1 and D2 still 0. The best-diet alternative (0.6 / 0.2, rest 0.3,
+`m11-rest0.3-office`) also passes everything, with one world ended in 20 ten-year seeds.
+
+References:
+- Carbone, C., Teacher, A., & Rowcliffe, J. M. (2007). The costs of carnivory. *PLoS
+  Biology* 5(2), e22.
+- McCue, M. D. (2010). Starvation physiology: reviewing the different strategies animals
+  use to survive a common challenge. *Comparative Biochemistry and Physiology A* 156(1),
+  1–18.
+
 ### R4's changes to the simulation
 
 R4 (atmosphere, ADR 0021) changes the sim by the owner's choice, as schema v12 on top of

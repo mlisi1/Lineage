@@ -112,6 +112,9 @@ networks, predator–prey coexistence): ADR 0009, "References".
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
   in water, except in the shallows, where anyone can wade (M11, `wading_depth` 0.03, the
   algae's shelf). A creature with no energy left dies (starved, or drowned if in water).
+  Hunters (diet at or above `predator_min_diet`) rest at a fifth of the resting burn
+  (`hunter_rest_share` 0.2, M11): they wait between kills, as real predators do, so a
+  pack outlasts the lean spells when the herd dips; moving costs them the same.
 - **Fire** (R4): a creature on land in a burning cell loses `fire_damage_per_hour` (1.0)
   of its capacity an hour, so an hour in a fire kills it (burnt; no carrion). Swimmers
   are safe.
@@ -174,7 +177,7 @@ networks, predator–prey coexistence): ADR 0009, "References".
   energy; the young share it. Genes cross over and mutate. An adult that finds no mate
   for six days clones itself at a higher cost.
 - **Ageing**: lifespan grows with mass (about 45 days for mass 1).
-- **Caps**: 200 creatures, plus 16 predators counted apart so a full herd cannot crowd
+- **Caps**: 200 creatures, plus 32 predators counted apart so a full herd cannot crowd
   them out. They are soft (M11): a pair that may breed first waits, longer the closer
   its kind is to its cap (about 8 hours at half the cap, 3.5 days at 80 %, none at all
   on a sparse island), so births answer to deaths rather than stopping dead at the cap.

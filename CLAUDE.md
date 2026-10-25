@@ -383,8 +383,8 @@ needs a note in `docs/decisions/`.
   scenario, name determinism and uniqueness, phylogeny is a valid tree.
 - **Report**: species count over time, speciation and extinction rates per sim-month,
   rendered phylogenetic tree for 3 seeds, name samples.
-- **Accept**: species alive in `[3–12]` for ≥ 90% of sim-time; speciation `[≥ 1 / month]`
-  median. (As built, ADR 0012: species are genome clusters, finer than who can mate;
+- **Accept**: species alive in `[3–16]` for ≥ 90% of sim-time (3–12 until M11, ADR 0019);
+  speciation `[≥ 1 / month]` median. (As built, ADR 0012: species are genome clusters, finer than who can mate;
   sim-time is inhabited time, median seed; speciation counts splits only. M6.1 measured
   79 % and was deferred to M11 by the owner, 2026-10-18.)
 
@@ -463,9 +463,10 @@ needs a note in `docs/decisions/`.
   only for harm; god-power entries stay major. 2026-10-23, the owner: presses cannot be
   relied on for predators; hunters may prey on kin that eat far more plants
   (`prey_diet_gap`), so they can arise from the herd; a gentler diet trade-off brings them
-  back but turns herds omnivore. 2026-10-24: the hunting levers do not help; both hard
-  caps bind for years and the capped pack starves when the herd dips; next, a predator
-  mechanism, the owner's choice.)
+  back but turns herds omnivore. 2026-10-24: the hunting levers do not help. 2026-10-25,
+  the owner: soft caps (births wait longer near a cap) and resting hunters
+  (`hunter_rest_share`), with `predator_cap` 32: hunters last beside grazers in 15 of 20
+  ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,
