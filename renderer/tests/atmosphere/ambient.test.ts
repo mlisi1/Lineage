@@ -183,11 +183,14 @@ describe("dust behind running animals", () => {
     expect(ambient.state.dust).toBeGreaterThan(10);
   });
 
-  // Suspected: the module's header says nothing is drawn in rain nor while a world ends,
-  // but `Ambient.drawDust` runs whatever `raining` and `ending` say, so a running animal
-  // raises dust in a thunderstorm and during the apocalypse (src/atmosphere/ambient.ts,
-  // `update`). Left for the owner: wet ground raising no dust may be wanted.
-  it.todo("raises no dust in rain or while a world ends");
+  it("raises no dust in rain or while a world ends", () => {
+    for (const extra of [{ raining: true }, { ending: true }]) {
+      const ambient = new Ambient(11);
+      ambient.update(1 / 30, frameOf("local", DAY, MEADOW, extra));
+      for (let k = 0; k < 50; k++) ambient.dust(4, 5);
+      expect(ambient.state.dust).toBe(0);
+    }
+  });
 
   it("raises none on the map", () => {
     const ambient = new Ambient(11);

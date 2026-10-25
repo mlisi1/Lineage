@@ -241,6 +241,8 @@ export class Ambient {
   private season = "summer";
   /** The view drawn last, and its art pixels to the cell (dust is told only where, in cells). */
   private view: ViewName = "map";
+  /** Raining, or a world ending: no dust is raised. */
+  private wet = false;
   private tile = 1;
 
   constructor(seed: number) {
@@ -274,7 +276,8 @@ export class Ambient {
    * puff of dust there.
    */
   dust(x: number, y: number): void {
-    if (this.view === "map" || this.random() >= DUST_CHANCE) return;
+    // Wet ground raises none, nor does a world ending.
+    if (this.view === "map" || this.wet || this.random() >= DUST_CHANCE) return;
     while (this.dustSprites.length < DUSTS) {
       const sprite = new Sprite(this.art.dustSmall);
       sprite.tint = DUST_COLOUR;
@@ -303,6 +306,7 @@ export class Ambient {
     }
     this.view = frame.view;
     this.tile = frame.tile;
+    this.wet = frame.raining || frame.ending;
     this.glowPool.begin();
     this.shadowPool.begin();
     this.flyerPool.begin();
