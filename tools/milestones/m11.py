@@ -87,7 +87,7 @@ def _criteria() -> list[Criterion]:
     single = [
         (mid, c) for mid, (_, criteria) in sc.SOURCES.items() for c in criteria if mid != "M3"
     ]
-    single += [("M11", c) for c in sc.CRITERIA] + [("D", c) for c in sc.PROPOSED]
+    single += [("M11", c) for c in sc.CRITERIA] + [("D", c) for c in sc.DIVERSITY]
     for label, where in ((TUNING, "tuning seeds"), (HELD_OUT, "held-out seeds")):
         for mid, c in single:
             out.append(
@@ -241,7 +241,7 @@ def _diversity_section(values: dict[str, float]) -> Section:
                 SET_COLOURS,
                 title="Every gene has a niche (D1)",
                 ylabel="share of seeds",
-                reference=(0.3, "proposed band ≥ 0.3"),
+                reference=(sc.NICHE_SEEDS, f"a niche: ≥ {sc.NICHE_SEEDS:.0%} of seeds"),
             ),
         ),
         _svg(
@@ -256,7 +256,7 @@ def _diversity_section(values: dict[str, float]) -> Section:
                 SET_COLOURS,
                 title="Rare genes can thrive (D2)",
                 ylabel="share of seeds",
-                reference=(0.2, "proposed band ≥ 0.2"),
+                reference=(sc.THRIVE_SEEDS, f"thriving: ≥ {sc.THRIVE_SEEDS:.0%} of seeds"),
             ),
         ),
     ]
@@ -292,7 +292,8 @@ ABLATION_KEYS = (
     ("M3.5 seeds without succession", "M3:seeds_without_succession.share"),
     ("M4.3 both diets present", "M4:both_diets.last_year.mean_share_of_seeds"),
     ("M6.1 species in band", "M6:species_alive.in_band_after_founding.share_of_time.median"),
-    ("D1 lowest gene", "D:niche.share_of_seeds.min"),
+    ("D1 genes with a niche", "D:niche.genes_with_niche"),
+    ("D2 rare genes thriving", "D:thrive.genes_thriving"),
     ("D1 size", "D:niche.size.share_of_seeds"),
     ("D1 swimming", "D:niche.aquatic.share_of_seeds"),
     ("D3 predators' share", "D:predators.share_of_creatures.median"),

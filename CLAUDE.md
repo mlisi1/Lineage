@@ -466,7 +466,8 @@ needs a note in `docs/decisions/`.
   back but turns herds omnivore. 2026-10-24: the hunting levers do not help. 2026-10-25,
   the owner: soft caps (births wait longer near a cap) and resting hunters
   (`hunter_rest_share`), with `predator_cap` 32: hunters last beside grazers in 15 of 20
-  ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species.)
+  ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species; D1 asks
+  9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

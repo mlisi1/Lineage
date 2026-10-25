@@ -608,6 +608,16 @@ every M criterion passes (M4.3 1.00, M6.1 0.98, M6.2 1.65, M3.5 0.05, M4.4 442 m
 in 8 of 10, two worlds ended in seed 28. Over 30 ten-year seeds: 23 hold hunters beside
 grazers, 2 worlds ended in 300 seed-years.
 
+**D bands** (the owner, 2026-10-25). D1 took the worst gene, and swimming never finds a
+niche on a closed island of walking founders (0 of 20 seeds; size 5–15 %; the other ten
+genes 25–100 %). D2 took the worst rare gene, and hibernation, fire-pine, fruiting,
+poisonous and amphibious (almost) never thrive. Now: **D1** at least 9 of the 12 body
+genes find a niche in ≥ 25 % of seeds; **D2** at least 5 of the 14 rare genes thrive
+(≥ 5 % of their population for ≥ 30 days) in ≥ 10 % of seeds; **D3** as proposed. They
+are judged with the M criteria from now on. Today's defaults: D1 10 and 10, D2 5 and 8
+(tuning and held-out seeds; D2 is at its edge on the tuning seeds), D3a 13.7 % and
+14.0 %, D3b 0.92 and 0.94: **every criterion passes on both seed sets**.
+
 References:
 - Carbone, C., Teacher, A., & Rowcliffe, J. M. (2007). The costs of carnivory. *PLoS
   Biology* 5(2), e22.

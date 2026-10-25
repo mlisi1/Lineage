@@ -49,30 +49,31 @@ CRITERIA: list[Criterion] = [
 # A world's end rate the owner accepted (2026-10-20): about once a decade, at most.
 WORLD_END_RATE_MAX = 0.1  # per seed-year
 
-# Diversity and balance (owner, 2026-10-20). Reported with proposed bands; they become
-# pass/fail criteria once the M11 mechanisms are in and their bands are set (ADR 0019).
+# Diversity and balance (owner, 2026-10-20; bands set by the owner 2026-10-25, ADR 0019).
 NICHE_SHARE = 0.10  # D1: a group at one end of a gene's range holds this share of creatures
 NICHE_MIN_CREATURES = 20  # D1: samples with fewer creatures do not count
 NICHE_GENES = tuple(g for g in Gene if g not in (Gene.HUE, Gene.PATTERN))  # looks: neutral
+NICHE_SEEDS, NICHE_GENES_MIN = 0.25, 9  # D1: genes with a niche in this share of seeds
 THRIVE_SHARE, THRIVE_DAYS = 0.05, 30  # D2: a rare gene thrives at this share for this long
+THRIVE_SEEDS, THRIVE_GENES_MIN = 0.10, 5  # D2: rare genes thriving in this share of seeds
 PREDATOR_SHARE_BAND = (0.03, 0.20)  # D3: predators' share of creatures
 PREDATOR_PRESENT = 0.8  # D3: share of inhabited days after year 1 with ≥ 3 predators
 SWEEP_SHARE, SWEEP_DAYS = 0.5, 30  # photosynthesis watch: majority of creatures for a month
 
-PROPOSED: list[Criterion] = [
+DIVERSITY: list[Criterion] = [
     Criterion(
         "D1",
-        f"Every gene has a niche: lowest, over genes (looks aside), share of seeds where "
-        f"both ends of its range each held ≥ {NICHE_SHARE:.0%} of creatures at some time",
-        "niche.share_of_seeds.min",
-        low=0.3,
+        f"Genes with a niche (looks aside) in ≥ {NICHE_SEEDS:.0%} of seeds: both ends of "
+        f"the range each held ≥ {NICHE_SHARE:.0%} of creatures at some time",
+        "niche.genes_with_niche",
+        low=NICHE_GENES_MIN,
     ),
     Criterion(
         "D2",
-        f"Rare genes can thrive: lowest, over creature and plant genes, share of seeds where "
-        f"it held ≥ {THRIVE_SHARE:.0%} of its population for ≥ {THRIVE_DAYS} days",
-        "thrive.share_of_seeds.min",
-        low=0.2,
+        f"Rare genes (creature and plant) that thrive in ≥ {THRIVE_SEEDS:.0%} of seeds: "
+        f"≥ {THRIVE_SHARE:.0%} of its population for ≥ {THRIVE_DAYS} days",
+        "thrive.genes_thriving",
+        low=THRIVE_GENES_MIN,
     ),
     Criterion(
         "D3a",
@@ -88,7 +89,8 @@ PROPOSED: list[Criterion] = [
         low=PREDATOR_PRESENT,
     ),
 ]
-REPORTED = frozenset(c.cid for c in PROPOSED)
+# Criteria measured but not judged in sweeps (none since the D bands were set).
+REPORTED: frozenset[str] = frozenset()
 
 _M5_CRITERIA = [c for c in m5.CRITERIA if c.cid == "M5.1"]
 
@@ -209,6 +211,7 @@ def diversity_metrics(run: Run) -> dict[str, float]:
             out[f"niche.{gene.name.lower()}.share_of_seeds"] = float(np.mean(both))
             shares.append(float(np.mean(both)))
         out["niche.share_of_seeds.min"] = min(shares)
+        out["niche.genes_with_niche"] = float(sum(x >= NICHE_SEEDS for x in shares))
     thrive = []
     sweeps = []
     for key in m7.GENE_KEYS:
@@ -221,6 +224,7 @@ def diversity_metrics(run: Run) -> dict[str, float]:
         out[f"thrive.{key}.share_of_seeds"] = float(np.mean(hits))
         thrive.append(float(np.mean(hits)))
     out["thrive.share_of_seeds.min"] = min(thrive)
+    out["thrive.genes_thriving"] = float(sum(x >= THRIVE_SEEDS for x in thrive))
     out["photosynthesis.sweeps.share_of_seeds"] = float(np.mean(sweeps))
     column = {name: i for i, name in enumerate(RARE_DAILY_COLUMNS)}
     medians, present, days = [], 0, 0
@@ -256,5 +260,5 @@ def _score(run: Run) -> Scorecard:
     card.judged += [judge(c, card.metrics, "M11:") for c in CRITERIA]
     values = diversity_metrics(run)
     card.metrics |= {f"D:{k}": v for k, v in values.items()}
-    card.judged += [judge(c, card.metrics, "D:") for c in PROPOSED]
+    card.judged += [judge(c, card.metrics, "D:") for c in DIVERSITY]
     return card
