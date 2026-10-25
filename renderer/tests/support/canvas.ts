@@ -30,6 +30,9 @@ class FakeCanvas {
   width = 1;
   height = 1;
   readonly context = new FakeContext();
+  /** What a page element over the scene is styled and tagged with. */
+  readonly style: Record<string, string> = {};
+  readonly dataset: Record<string, string> = {};
   getContext(): FakeContext {
     return this.context;
   }
