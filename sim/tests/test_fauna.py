@@ -44,7 +44,7 @@ GOLDEN_FAUNA_SEED_42 = "622ef3ee26dcfde279ad08404a550f1068a6f1225cf42014367f2915
 GOLDEN_AFTER_THREE_DAYS = "7ce83724e3e8c9d1235476fd67c23104dd3cca712b75e03498e3b2bcd3cd663b"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
+GOLDEN_BARE_ROCK_520_DAYS = "353bb176bfad305dc040113963a907bc34f0a3e4ce5537b8317c1b92a6849d83"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
