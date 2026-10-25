@@ -186,9 +186,24 @@ describe("a body turning back on itself", () => {
     }
   });
 
-  // While it turns, a joint may bend past its kind's limit for a moment: `followChain` is
-  // given the frame's `dtS`, so an over-bend is eased back at `STRAIGHTEN_RATE` (meant for a
-  // sleeper getting up) instead of being held at the limit. Measured here: up to 0.08 rad
-  // over 0.33 for a beast, 0.17 over 0.23 for a stiff armoured one. Left as found.
-  it.todo("holds every joint within its kind's bend at every frame of a turn");
+  // While it turns, a joint may bend a little past its kind's limit for a moment and is
+  // eased back (`followChain` is given the frame's `dtS`, `STRAIGHTEN_RATE`), a soft turn
+  // the owner keeps (2026-10-25); never far past, and back within as it walks on.
+  it("bends a joint only a little past its kind's limit while it turns, and eases it back", () => {
+    for (const look of [
+      { limbPairs: 0, aquatic: 0 },
+      { limbPairs: 2 },
+      { limbPairs: 3, armour: 0.8 },
+    ]) {
+      const { creature, layer } = walk(look, 2);
+      layer.send(0, 4, 10.2);
+      let over = 0;
+      for (let t = 0; t < 4; t += STEP_S) {
+        layer.update(STEP_S);
+        over = Math.max(over, mostBend(creature.joints) - creature.stiffness.bend);
+      }
+      expect(over).toBeLessThan(0.25);
+      expect(mostBend(creature.joints)).toBeLessThanOrEqual(creature.stiffness.bend + 1e-4);
+    }
+  });
 });
