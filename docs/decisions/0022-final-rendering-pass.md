@@ -344,6 +344,14 @@ a startle at quakes), all drawn only, so that nothing changes M11's simulations.
   recordings' fast clock the sim's places move every third of a second and the trailing
   shows mostly while the young walk to them.
 
+### The look called final (2026-10-25)
+
+The owner, after the report with the new sections tagged: "I'd say it's all good", then
+"Yes, i think we can call it final" (2026-10-25). The look of R5 is final as the report
+`reports/R5-final/` (1e07964) shows it; the open points above stay open, the reactions to
+danger stay out. What follows is the tests (checklist item 20), the board (items 17–19)
+and the merge into `main`.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

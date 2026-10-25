@@ -21,7 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
-| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 21, 22 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); left: the report regenerated, the owner's verdicts (bushes in pieces), the board run, tests; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
+| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 21, 22 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; left: tests (item 20), the board run (17–19), the merge; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
@@ -137,20 +137,14 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   ADR 0022 (decisions round by round, references); coordination board `r5.md`. No other
   R5 worktree is open: hunting, wind, sleep and the bush pieces were built in their own
   (`r5-hunt`, `r5-wind`, `r5-sleep`, `r5-puffs`) and merged into `r5-final` on 2026-10-24.
-- **Done**: checklist items 1–16, 21 and 22 (below). The last report on disk
-  (`reports/R5-final/`, 724c04b) stops at eating.
-- **Next session, in order**:
-  1. Regenerate the report: `cd renderer && npm run final` (about 15 minutes, `ffmpeg`;
-     films committed). `scripts/final-report.mjs` already has the new films (hunt, birth,
-     egg, sleep, sleepFollow, fireflies, gulls, dust, windCalm, windStorm and the three
-     staged walks with `bushes=pieces`) and their sections; none has been rendered yet,
-     so look at each before committing (the gulls' `advance: 28` and default middle view
-     may miss the flock: `window.__ambient().flock` tells where it is).
-  2. Show the owner, who decides: bushes in pieces (`?bushes=pieces`) or whole (today's
-     default; the fade in front of the animal followed is still off, `FADED = 1`); the
-     new animations (each agent's open points are in ADR 0022, round 9).
-  3. Items 17–19 on the board with the owner; item 20, the tests, once the look is final.
-  4. Merge into `main` (M11 re-records the streams if it merges after: `by`, `parent`,
+- **Done**: checklist items 1–16 and 21–23 (below); the owner called the look final on
+  2026-10-25 with the report `reports/R5-final/` (1e07964; `R5_REPORT_NEW=id,…` tags
+  sections the owner has not seen).
+- **Next, in order**:
+  1. Item 20, the tests for everything since R5 began (vitest for the pure pieces,
+     Playwright snapshots of the final look).
+  2. Items 17–19 on the board with the owner.
+  3. Merge into `main` (M11 re-records the streams if it merges after: `by`, `parent`,
      `grazing`, `feeding`, `died`, `landed`, `young` are new on the creatures message).
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;
   `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V
@@ -276,7 +270,8 @@ below was taken in scope by the owner. Tests wait until the look is called final
 - [ ] 18. The atmosphere on the board (R4 closed): big fires, rain, the apocalypse, the shore
   shader; surf's ~30 MB of GPU memory; the shadows and plant redraws on the page's thread
 - [ ] 19. On-device report; R5 accepted on the 7" screen with the final look
-- [ ] 20. Tests for all of the above once the owner calls the look final
+- [ ] 20. Tests for all of the above once the owner calls the look final (called final
+  2026-10-25)
 
 ### Starting R4 (atmosphere)
 
