@@ -602,6 +602,12 @@ passes** (M4.3 0.91, M6.1 1.00, M6.2 1.71, M4.4 430 ms); D3a 13.7 % and D3b 0.92
 the proposed bands; D1 and D2 still 0. The best-diet alternative (0.6 / 0.2, rest 0.3,
 `m11-rest0.3-office`) also passes everything, with one world ended in 20 ten-year seeds.
 
+**Held out** (seeds 20–39, never used in tuning): 3 years × 20 (`m11-tuned-heldout`)
+every M criterion passes (M4.3 1.00, M6.1 0.98, M6.2 1.65, M3.5 0.05, M4.4 442 ms; D3a
+14.0 %, D3b 0.94); 10 years on seeds 20–29 (`m11-tuned-10y-s20`) hunters beside grazers
+in 8 of 10, two worlds ended in seed 28. Over 30 ten-year seeds: 23 hold hunters beside
+grazers, 2 worlds ended in 300 seed-years.
+
 References:
 - Carbone, C., Teacher, A., & Rowcliffe, J. M. (2007). The costs of carnivory. *PLoS
   Biology* 5(2), e22.

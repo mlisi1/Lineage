@@ -82,10 +82,10 @@ after the owner approves them**.
   1 seed of 10; resting hunters lifted it to 6–9 of 10.
 
 **Next steps, in order**:
-1. **Held-out check** (seeds 20–39, 3 years) of today's defaults, and a 10-year check of
-   the defaults on seeds 20–29 (`runs/m11-hunt-judge.py`).
-2. A short sweep of the other levers around the defaults (3 years × 20 seeds,
-   `tools/tune/sweep.py`) only if the held-out check fails a criterion.
+1. **Done: held-out check.** Seeds 20–39, 3 years: every M criterion passes
+   (`runs/m11-tuned-heldout`); 10 years on seeds 20–29: hunters beside grazers in 8 of 10,
+   two worlds ended in one seed (`runs/m11-tuned-10y-s20`). No sweep needed.
+2. (Skipped: the held-out check passed.)
 3. D1 (0 everywhere since strangers went): propose to the owner what D1 should ask of a
    closed island; set D1–D3 bands with the owner; revisit D2's plant test (niche genes in
    their habitat).
