@@ -175,7 +175,10 @@ networks, predator–prey coexistence): ADR 0009, "References".
   for six days clones itself at a higher cost.
 - **Ageing**: lifespan grows with mass (about 45 days for mass 1).
 - **Caps**: 200 creatures, plus 16 predators counted apart so a full herd cannot crowd
-  them out.
+  them out. They are soft (M11): a pair that may breed first waits, longer the closer
+  its kind is to its cap (about 8 hours at half the cap, 3.5 days at 80 %, none at all
+  on a sparse island), so births answer to deaths rather than stopping dead at the cap.
+  The caps stay as ceilings.
 
 ## Arrivals
 

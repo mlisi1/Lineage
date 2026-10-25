@@ -70,6 +70,20 @@ _LOW_GAIN = brain.FOLLOWED.index(brain.Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(brain.Sense.WOODY_X)
 
 
+def breeding_chance(crowding: Values, wait_days: float, exponent: float, hours: float) -> Values:
+    """Chance that a pair allowed to breed does so within ``hours`` (soft caps, M11).
+
+    ``crowding`` is the living of its kind over its kind's cap. The pair waits on average
+    ``wait_days`` × c / (1 - c) with c = crowding^``exponent``: no wait on an empty
+    island, no birth at the cap. A rate, so a tick of two hours equals two of one."""
+    c = np.clip(crowding, 0.0, 1.0) ** np.float32(exponent)
+    rate = np.divide(
+        1.0 - c, c * np.float32(wait_days * _HOURS_PER_DAY),
+        out=np.full_like(c, np.inf), where=c > 0.0,
+    )  # fmt: skip
+    return (1.0 - np.exp(-rate * np.float32(hours))).astype(np.float32)
+
+
 class Landing(IntEnum):
     """Who a group of newcomers is."""
 
@@ -344,7 +358,7 @@ class Fauna:
         self._learn(self._energy - before, hours, ctx.t_ms)
         in_fire = self._burn(hours)
         dead = self._expire(dead, in_fire)
-        newborn = self._breed(rng, dead)
+        newborn = self._breed(rng, dead, hours)
         self._bury(dead, ctx.t_ms)
         if newborn is not None:
             self._append(*newborn)
@@ -765,7 +779,7 @@ class Fauna:
         return dead
 
     def _breed(
-        self, rng: Generator, dead: NDArray[np.int8]
+        self, rng: Generator, dead: NDArray[np.int8], hours: float
     ) -> tuple[NDArray[np.float32], Values, NDArray[np.float32], NDArray[np.float32],
                NDArray[np.uint16], NDArray[np.int32], NDArray[np.int32],
                NDArray[np.float32]] | None:  # fmt: skip
@@ -812,8 +826,25 @@ class Fauna:
         share = np.float32(cfg.repro_investment_share)
         invest_a = share * body.capacity[a] * np.where(cloned, cfg.asexual_cost_factor, 1.0)
         invest_b = np.where(cloned, 0.0, share * body.capacity[b])
-        # Parents pay in creature order until their kind's cap is reached.
         hunters = predator[a]
+        if cfg.crowding_wait_days > 0.0:
+            # Soft caps (M11): the more crowded its kind, the longer a pair waits.
+            crowding = np.where(
+                hunters,
+                np.count_nonzero(living & predator) / max(cfg.predator_cap, 1),
+                np.count_nonzero(living & ~predator) / cfg.population_cap,
+            ).astype(np.float32)
+            chance = breeding_chance(crowding, cfg.crowding_wait_days, cfg.crowding_exponent, hours)
+            keep = rng.random(a.size) < chance
+            a, b, brood, cloned, hunters = (
+                a[keep],
+                b[keep],
+                brood[keep],
+                cloned[keep],
+                hunters[keep],
+            )
+            invest_a, invest_b = invest_a[keep], invest_b[keep]
+        # Parents pay in creature order until their kind's cap is reached.
         allowed = np.where(
             hunters,
             np.cumsum(brood * hunters) <= room_predators,

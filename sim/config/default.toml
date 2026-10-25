@@ -571,6 +571,13 @@ carrion_scent_cells = 3
 compat_distance = 0.10
 repro_energy_share = 0.6
 repro_cooldown_days = 2.5
+# Soft caps (M11): a pair that may breed first waits, on average,
+# crowding_wait_days × c / (1 − c), with c = (N / cap)^crowding_exponent, N the living of
+# its kind (predators or the rest) and cap population_cap or predator_cap. Near zero on a
+# sparse island, without end at the cap; births then answer to how many died, not only to
+# a hard stop. The caps stay as ceilings. 0 turns the wait off (hard caps alone).
+crowding_wait_days = 5.0
+crowding_exponent = 4.0
 # Each parent invests repro_investment_share of its capacity; birth_efficiency of the sum
 # is shared among 1 + round(brood gene × (brood_max − 1)) young.
 repro_investment_share = 0.25

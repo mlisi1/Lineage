@@ -434,6 +434,8 @@ class FaunaConfig:
     compat_distance: float
     repro_energy_share: float
     repro_cooldown_days: float
+    crowding_wait_days: float
+    crowding_exponent: float
     repro_investment_share: float
     birth_efficiency: float
     brood_max: int
@@ -503,6 +505,7 @@ class FaunaConfig:
             check(value >= 0, f"{key} must not be negative")
         positive = (
             "population_cap",
+            "crowding_exponent",
             "founder_count",
             "mass_min",
             "limb_pairs_max",

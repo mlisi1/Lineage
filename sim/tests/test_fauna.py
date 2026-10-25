@@ -24,7 +24,7 @@ from lineage_sim.events import (
     PopulationExtinct,
     VolcanoErupted,
 )
-from lineage_sim.fauna import brain, creature
+from lineage_sim.fauna import brain, creature, population
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.creature import cells_of
@@ -41,7 +41,7 @@ DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
 GOLDEN_FAUNA_SEED_42 = "622ef3ee26dcfde279ad08404a550f1068a6f1225cf42014367f2915d2125539"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "fe363b47dcbb7e87462d39b5d38173c18c1cdf395f247e3b64a01c8af1f68001"
+GOLDEN_AFTER_THREE_DAYS = "fb885057fb06f5658a90a8757d75c31a80205e6bce140543770b722fbbb0030b"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
 GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
@@ -555,6 +555,34 @@ def test_population_caps_stop_births(config: Config) -> None:
     site.run(24.0 * 6)
     assert site.fauna.count <= 3
     assert site.fauna.tally.births <= 1 + site.fauna.tally.deaths
+
+
+def test_breeding_waits_longer_the_more_crowded() -> None:
+    crowding = np.array([0.0, 0.5, 0.8, 0.95, 1.0, 1.3], dtype=np.float32)
+    chance = population.breeding_chance(crowding, wait_days=5.0, exponent=4.0, hours=1.0)
+    assert chance[0] == 1.0  # an empty island: no wait
+    assert chance[4] == chance[5] == 0.0  # at or past the cap: no birth
+    assert np.all(np.diff(chance[:5]) < 0.0)
+    # A rate: one tick of two hours is as likely as two ticks of one.
+    one = population.breeding_chance(crowding[1:4], 5.0, 4.0, hours=1.0)
+    two = population.breeding_chance(crowding[1:4], 5.0, 4.0, hours=2.0)
+    np.testing.assert_allclose(two, 1.0 - (1.0 - one) ** 2, atol=1e-6)
+
+
+def test_soft_caps_slow_births_near_the_cap(config: Config) -> None:
+    def births(wait_days: float) -> int:
+        cfg = replace(
+            config.fauna, population_cap=12, founder_count=2, immigrant_groups_per_year=0.0,
+            crowding_wait_days=wait_days,
+        )  # fmt: skip
+        site = Site(config, fauna=cfg)
+        spots = [(20.0 + 0.3 * k, 20.0) for k in range(8)]
+        site.add(_with(GRAZER, Gene.BROOD, 0.0), spots, idle_days=5.0)
+        site.run(24.0)
+        return site.fauna.tally.births
+
+    assert births(0.0) == 4  # the hard cap alone fills the room at once
+    assert births(5.0) < 4
 
 
 def test_hungry_hunter_kills_and_feeds(config: Config) -> None:
