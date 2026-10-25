@@ -31,7 +31,8 @@ function bareEdges(art: PlantArt, open: readonly number[] = []): number {
 describe("cosy plants", () => {
   it("outline everything they draw but a bare tree's fine twigs, wood under snow too", () => {
     const twigs = [INK.trunkDark, INK.snow, INK.snowShade];
-    for (const form of ["BROADLEAF", "CONIFER", "SHRUB", "GRASS"] as const) {
+    // Not grass: since R5 its tufts are a texture of spikes with no outline.
+    for (const form of ["BROADLEAF", "CONIFER", "SHRUB"] as const) {
       for (const season of ["summer", "winter"] as const) {
         const art = drawStanding(form, "grown", 0, 4, season, season === "winter", "cosy");
         const open = form === "BROADLEAF" && season === "winter" ? twigs : [];
