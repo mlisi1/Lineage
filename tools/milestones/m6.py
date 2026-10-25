@@ -1,13 +1,14 @@
 """M6 — Species, names, phylogeny: metrics, acceptance criteria, report sections.
 
-Acceptance (CLAUDE.md §8): species alive in [3–12] for ≥ 90 % of sim-time (M6.1);
+Acceptance (CLAUDE.md §8): species alive in [3–16] for ≥ 90 % of sim-time (M6.1; 3–12 until
+M11, ADR 0019: hunters that last bring their own species);
 speciation ≥ 1 per sim-month, median (M6.2).
 
 Readings used here (agreed with the owner at the start of M6):
 
 - **Sim-time** is inhabited time: from the day the founders land (the first census with a
   species) to the end of the run. Days after a total extinction count, with no species
-  alive. M6.1 takes, per seed, the share of those days with 3 to 12 species alive after
+  alive. M6.1 takes, per seed, the share of those days with 3 to 16 species alive after
   the daily census, and passes if the median seed is at 90 % or more. Since M11 (ADR
   0019, the owner's OK) the founding is left out: the founders are one species and need
   time to diverge, which a 3-year run weighs far more than a world of a decade. M6.1
@@ -34,7 +35,7 @@ from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import TIME_KEY, Run
 from tools.viz import figures, style
 
-ALIVE_BAND = (3, 12)
+ALIVE_BAND = (3, 16)
 SHARE_TARGET = 0.9
 SPLITS_PER_MONTH_TARGET = 1.0
 DAYS_PER_MONTH = DAYS_PER_YEAR / 12.0
@@ -287,7 +288,7 @@ def _count_section(run: Run) -> Section:
     shares = per_seed(run)["in_band"]
     fig = figures.distribution(
         shares[np.isfinite(shares)],
-        title="Inhabited time with 3–12 species alive",
+        title=f"Inhabited time with {ALIVE_BAND[0]}–{ALIVE_BAND[1]} species alive",
         xlabel="share of inhabited days, per seed",
         bins=np.linspace(0.0, 1.0, 21).tolist(),
     )

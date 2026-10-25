@@ -65,7 +65,7 @@ def _synthetic_run(tmp_path: Path) -> Path:
 
 
 def test_in_band_share_counts_inhabited_days_only() -> None:
-    alive = np.array([0, 0, 0, 3, 4, 12, 13, 0, 2, 5])
+    alive = np.array([0, 0, 0, 3, 4, 16, 17, 0, 2, 5])
     assert m6.in_band_share(alive) == pytest.approx(4 / 7)
     assert np.isnan(m6.in_band_share(np.zeros(5, dtype=np.int64)))
 
