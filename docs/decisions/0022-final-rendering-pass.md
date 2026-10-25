@@ -1,6 +1,7 @@
 # 0022 — The final rendering pass: the look tuned together, and the board at 30 fps
 
-- **Status**: in progress (R5)
+- **Status**: accepted for the look (the owner called it final, 2026-10-25); the board's
+  measurement (R5.1–R5.4) still to come
 - **Date**: 2026-10-21
 
 ## Context
@@ -273,7 +274,8 @@ small life, and bushes in pieces as an experiment beside the whole bushes.
 - **Bushes in pieces**: sorting a whole bush by one base cannot be right for an animal
   partly in front of it and partly behind; cutting it into puffs, each sorted and
   footprinted on its own (the forum's "split a sprite spanning depths"), lets an animal
-  stand among them. Kept behind `?bushes=pieces` until the owner compares the films.
+  stand among them. Kept behind `?bushes=pieces` until the owner compared the films; chosen
+  on 2026-10-24 (below).
   Open: legs overlap the bush's lower edge when an animal is in front; sprouts are still
   walked over; a rare-gene overlay stays whole over the pieces.
 - **Open points from the four**: the prey stands frozen up to 1.4 s before a strike; the
@@ -352,6 +354,20 @@ The owner, after the report with the new sections tagged: "I'd say it's all good
 danger stay out. What follows is the tests (checklist item 20), the board (items 17–19)
 and the merge into `main`.
 
+The tests (2026-10-25) found two places where the drawing did not do what its notes said,
+and the owner chose for each:
+
+- **No dust in rain.** Running animals raised dust in a thunderstorm and during an
+  apocalypse, against `ambient.ts`'s own header. The owner: none while it rains or a
+  world ends (wet ground raises none). Fixed.
+- **A soft turn kept.** While a body turns hard, a joint may bend past its kind's limit
+  for a moment (up to about 0.1–0.2 rad) and is eased back (`followChain` is given the
+  frame's time, `STRAIGHTEN_RATE`); the body never comes onto itself. The owner keeps it:
+  it reads as a soft turn. A test holds it under 0.25 rad and back within once it walks on.
+
+The report's films (about 60 MB) leave git, as R4's did (the owner, 2026-10-25): the page
+keeps a poster of each, and `npm run final` films them again.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and
@@ -359,7 +375,9 @@ and the merge into `main`.
   regenerates the recordings as usual.
 - Colours now depend on which species are alive, not only on an animal's own genes. A
   species keeps its place in the order but not an exact hue across the years.
-- Tests are written once the owner calls the look final (as in R4).
+- Tests were written once the owner called the look final (as in R4), on 2026-10-25:
+  vitest for the pure pieces and the layers run in Node, Playwright stills of what R5
+  drew (`tests/e2e/final.spec.ts`), the sim's new outputs and the encoder in Python.
 
 ## References
 

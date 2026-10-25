@@ -21,7 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
-| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 21, 22 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); left: the board run (17–19), the merge; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
+| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); left: the board run (17–19), the merge; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
@@ -140,14 +140,21 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 - **Done**: checklist items 1–16 and 21–23 (below); the owner called the look final on
   2026-10-25 with the report `reports/R5-final/` (1e07964; `R5_REPORT_NEW=id,…` tags
   sections the owner has not seen).
+- **Since** (2026-10-25): the tests (item 20); the owner's choices after them: no dust in
+  rain or while a world ends, the soft over-bend of a turning body kept, the report's
+  films out of git (`reports/R5-final/films/` gitignored, posters kept). The desk's build,
+  the benchmark and `tools.report R5` were run end to end on the PC (headless, software
+  drawing: not the measurement, and the report says so).
 - **Next, in order**:
-  1. Items 17–19 on the board with the owner (item 20, the tests, is in).
+  1. Items 17–19 on the board with the owner: the procedure is `deploy/README.md`
+     ("Measuring the renderer on the device"), from a boxed board `deploy/board-setup.md`.
   2. Merge into `main` (M11 re-records the streams if it merges after: `by`, `parent`,
      `grazing`, `feeding`, `died`, `landed`, `young` are new on the creatures message).
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;
   `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V
   twice to follow an animal), stage by hand what is to be seen (below), regenerate the
-  report, show the owner. No tests until the owner calls the look final.
+  report, show the owner. The look is final now: a change to it comes with its tests and
+  new Playwright baselines (`npx playwright test --update-snapshots`, looked at first).
 - **Staging by hand** (`?film&view=local&x=64&y=71&quiet&seed=1`, step with
   `window.__frame(1/30)`): `__pin(id,x,y,heading)` then `__send(id,x,y)` puts an animal and
   holds it there; `__feed(id,"plants"|"meat")`, `__hunt(hunter,prey)`,
@@ -168,7 +175,8 @@ The owner's answers at the start: the known fixes, plus tuning rounds on creatur
 ground and plants (R4's atmosphere stays final); the board run on the 7" screen at
 1024×600; the kiosk capped at 30 fps on the board (no fan yet), so "≥ 30 fps" is read as
 holding the cap (median, 1 % low and frame-time headroom reported; ADR 0022). Everything
-below was taken in scope by the owner. Tests wait until the look is called final.
+below was taken in scope by the owner. Tests waited until the look was called final
+(2026-10-25).
 
 **Known from R3 and R4**
 - [x] Plants that seem to stand on water (`plants.ts` `aboveSea` against the blended coast):
@@ -273,9 +281,10 @@ below was taken in scope by the owner. Tests wait until the look is called final
   the gait run through a real `CreatureLayer`, hunting, family, sleep, weather, basking,
   venom, wakes, remains, colours, marks, the herd's news), the plants and atmosphere (wind,
   pieces, tufts, the plant layer's footprints, crowns, depth and lean, the swash, leaves,
-  ambient life), the card, scroll, lantern, marker, visits and the benchmark plan (628
-  tests, 2 todos: a joint bends past its limit for a moment while a body turns; dust rises
-  in storms and in an apocalypse, against `ambient.ts`'s header); Playwright baselines of
+  ambient life), the card, scroll, lantern, marker, visits and the benchmark plan (630
+  tests; the two things they found were put to the owner: dust in storms and in an
+  apocalypse, now none; a joint bending past its limit for a moment in a hard turn, kept
+  and tested as a soft turn); Playwright baselines of
   the final look and stills of what R5 drew (`tests/e2e/final.spec.ts`, staged as the
   report's films, a fixed number of frames so two runs draw the same); Python tests of the
   sim's `CreaturesDied`/`CreaturesBorn`, `maturity`, the encoder's new fields and the

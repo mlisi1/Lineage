@@ -1078,8 +1078,8 @@ Round 1, items 1–7:
   in `creatures/motion.ts`: an A* search over a grid of quarter cells about the start and
   the goal, out to 8 cells, a step open where its body fits, pulled straight where places
   see each other; a goal in a bush is moved to the nearest place beside it). A tree keeps
-  its trunk's footprint. The fade in front of the animal followed is off for now, while
-  this is looked at (`FADED` 1). Staged by hand to look at it: `window.__pin(id, x, y,
+  its trunk's footprint. There is no fade in front of the animal followed (the owner,
+  2026-10-24; `FADED` 1 leaves the code in place). Staged by hand to look at it: `window.__pin(id, x, y,
   heading)` holds an animal at a place, `window.__send(id, x, y)` sends it somewhere (an
   animal staged so ignores the sim's places for it from then on),
   `window.__standing(x0, y0, x1, y1)` lists the trees and bushes in a box.
