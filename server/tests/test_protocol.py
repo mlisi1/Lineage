@@ -296,3 +296,117 @@ def test_the_land_carries_scorch_and_algae(world: World) -> None:
     algae = decode(land["algae"], cells).reshape(land["height"], land["width"])
     assert np.allclose(scorch, world.flora.scorch, atol=1 / 255)
     assert np.allclose(algae, world.flora.algae, atol=1 / 255)
+
+
+# --- R5: what the scene shows of each creature ------------------------------------------
+
+
+def _stand_in(
+    ids: list[int], maturity: list[float] | None = None, eating: list[int] | None = None
+) -> Any:
+    """A fauna of ``ids`` with R5's read-only views, in a world at t_ms 5."""
+    import types
+
+    count = len(ids)
+    fauna = types.SimpleNamespace(
+        ids=np.array(ids, dtype=np.int64),
+        genes=np.zeros((count, 14), dtype=np.float32),
+        positions=np.zeros((count, 2), dtype=np.float32),
+    )
+    if maturity is not None:
+        fauna.maturity = np.array(maturity, dtype=np.float32)
+    if eating is not None:
+        fauna.eating = np.array(eating, dtype=np.int8)
+    return types.SimpleNamespace(fauna=fauna, t_ms=5)
+
+
+def test_the_dead_are_told_by_cause_and_hunter() -> None:
+    from lineage_sim.events import CreaturesDied
+
+    world = _stand_in([1, 2])
+    sent: set[int] = set()
+    encode.creatures_message(world, sent)  # 1 and 2 sent; 3 never was
+    sent.update({4, 6, 7, 8, 9, 10})
+    world.fauna.ids = np.array([1], dtype=np.int64)
+    news = [
+        CreaturesDied(1, (2, 3), ("killed", "starved"), (1, -1)),
+        CreaturesDied(2, (4,), ("killed",), (1,)),
+        CreaturesDied(3, (6, 7), ("drowned", "old_age"), (-1, -1)),
+        CreaturesDied(3, (8,), ("blast",), ()),  # a blast names no hunter
+        CreaturesDied(3, (9,), ("killed",), ()),  # a caller that does not say who
+        CreaturesDied(3, (10,), ("burnt",), (-1,)),
+    ]
+    message = encode.creatures_message(world, sent, news)
+    assert errors(message, SCHEMA) == []
+    assert message["died"] == [
+        {"id": 2, "cause": "killed", "by": 1},
+        {"id": 4, "cause": "killed", "by": 1},
+        {"id": 6, "cause": "drowned"},
+        {"id": 7, "cause": "old_age"},
+        {"id": 8, "cause": "blast"},
+        {"id": 9, "cause": "killed"},
+        {"id": 10, "cause": "burnt"},
+    ]
+    assert json.loads(json.dumps(message)) == message
+
+
+def test_the_newborn_carry_their_mother_and_the_landed_are_named() -> None:
+    from lineage_sim.events import CreaturesArrived, CreaturesBorn
+
+    world = _stand_in([1, 2, 3, 11, 12])
+    sent: set[int] = {1, 2}
+    news = [
+        CreaturesBorn(1, (3, 13), (1, 2)),  # 13 died before the message: not sent
+        CreaturesArrived(2, 3, False, 0.0, 0.0, 10),  # ids 10, 11, 12; 10 is gone already
+    ]
+    message = encode.creatures_message(world, sent, news)
+    assert errors(message, SCHEMA) == []
+    parents = {born["id"]: born.get("parent") for born in message["born"]}
+    assert parents == {3: 1, 11: None, 12: None}
+    assert message["landed"] == [11, 12]
+    assert "died" not in message
+    # Without news: neither the dead nor the landed, nor a parent.
+    quiet = encode.creatures_message(world, set())
+    assert "died" not in quiet
+    assert "landed" not in quiet
+    assert all("parent" not in born for born in quiet["born"])
+
+
+def test_the_young_and_what_each_ate() -> None:
+    world = _stand_in([4, 5, 6, 7, 8], maturity=[0.0, 0.5, 0.999, 1.0, 1.0], eating=[1, 2, 0, 1, 0])
+    message = encode.creatures_message(world)
+    assert errors(message, SCHEMA) == []
+    assert message["young"] == [[4, 0], [5, 8], [6, encode.YOUNG_STEPS - 1]]
+    assert message["grazing"] == [4, 7]
+    assert message["feeding"] == [5]
+
+
+def test_the_real_fauna_sends_its_young_and_meals() -> None:
+    config = parse_config(CONFIG.read_text(encoding="utf-8"))
+    world = World.restore(config, io.loads(SAVE.read_bytes()))
+    world.step(3600.0)  # an hour of meals
+    message = encode.creatures_message(world)
+    assert errors(message, SCHEMA) == []
+    fauna = world.fauna
+    young = {ident: step for ident, step in message["young"]}
+    for ident, grown in zip(fauna.ids.tolist(), fauna.maturity.tolist(), strict=True):
+        if grown < 1.0:
+            assert young[ident] == int(grown * encode.YOUNG_STEPS)
+        else:
+            assert ident not in young
+    eating = fauna.eating
+    assert message["grazing"] == fauna.ids[eating == 1].tolist()
+    assert message["feeding"] == fauna.ids[eating == 2].tolist()
+    assert message["grazing"]  # a herd on pasture grazes
+
+
+def test_the_schema_knows_the_causes_of_death() -> None:
+    from lineage_sim.fauna.population import Death
+
+    message = encode.creatures_message(_stand_in([1]))
+    assert errors({**message, "died": [{"id": 1, "cause": "killed", "by": 2}]}, SCHEMA) == []
+    assert errors({**message, "died": [{"id": 1, "cause": "eaten"}]}, SCHEMA)
+    assert errors({**message, "died": [{"id": 1}]}, SCHEMA)
+    assert errors({**message, "young": [[1]]}, SCHEMA)
+    for cause in [death.name.lower() for death in Death] + ["blast"]:
+        assert errors({**message, "died": [{"id": 1, "cause": cause}]}, SCHEMA) == [], cause

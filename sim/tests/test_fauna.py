@@ -19,6 +19,7 @@ from lineage_sim.config import Config
 from lineage_sim.events import (
     CraterFormed,
     CreaturesArrived,
+    CreaturesDied,
     FireEnded,
     JuvenileGrown,
     PopulationExtinct,
@@ -398,7 +399,8 @@ def test_last_death_is_an_extinction(config: Config) -> None:
     site = Site(config, biomass=0.0)
     site.add(GRAZER, [(20.0, 20.0)], energy_share=0.05)
     outputs = site.run(24.0 * 3)
-    assert [type(o) for o in outputs] == [PopulationExtinct]
+    # The death itself is told first (R5: the scene shows it), then the extinction.
+    assert [type(o) for o in outputs] == [CreaturesDied, PopulationExtinct]
     assert site.fauna.tally.extinctions == 1
 
 
