@@ -10,7 +10,7 @@
  * 2. Both are filmed in headless Chromium at the screen's own size, 1024×600: stills at the
  *    same places with the same camera seeds, and films that follow an animal (the view
  *    button pressed twice, as on the desk). Stills and posters go inline at the art
- *    pixels' size; films are VP9 beside the report (`films/`, small: committed).
+ *    pixels' size; films are VP9 beside the report (`films/`, gitignored like R4's).
  * 3. The species' colours are read from the page as drawn (`window.__colours`).
  *
  * Films are caught frame by frame on the scene's own clock (`?film`), so two runs draw the
@@ -1056,7 +1056,8 @@ const readme = [
   "The scene as R5 leaves it against the scene when R5 began, filmed from the real",
   "renderer at 1024×600: stills at the same places (drag to compare) and films following",
   "an animal. `report.html` is one self-contained file but for its films, in `films/`",
-  "(VP9, a few MB, committed with it).",
+  "(VP9, about 60 MB, not in git: `npm run final` makes them again; the page shows each",
+  "film's poster without them).",
   "",
   `- Branch \`${branch}\` at \`${commit}\`; before: \`${before}\``,
   "- Rounds 1–4 (the owner's checklist items 1–7): grass see-through round the animal",

@@ -3,7 +3,8 @@
 The scene as R5 leaves it against the scene when R5 began, filmed from the real
 renderer at 1024×600: stills at the same places (drag to compare) and films following
 an animal. `report.html` is one self-contained file but for its films, in `films/`
-(VP9, a few MB, committed with it).
+(VP9, about 60 MB, not in git: `npm run final` makes them again; the page shows each
+film's poster without them).
 
 - Branch `r5-final` at `9f511dd`; before: `80e4a4c`
 - Rounds 1–4 (the owner's checklist items 1–7): grass see-through round the animal

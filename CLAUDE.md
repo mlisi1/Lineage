@@ -222,7 +222,7 @@ Do not create directories outside this layout without updating this file.
   - `cd renderer && npm run final` — write the R5 report to `reports/R5-final/`: builds the
     renderer as it is and as it was when R5 began (`R5_REPORT_BEFORE=<commit>` for another),
     films the same places in both at 1024×600 (needs `ffmpeg`) and writes `report.html`
-    with stills to compare and the films in `films/`
+    with stills to compare and the films in `films/` (gitignored, as R4's)
   - `cd renderer && npm run creatures` — write the creature sheet (phenotype port against
     the sim, creature styles side by side) to `reports/R2-creature-sheet/`; live at
     `/creatures.html`
