@@ -546,13 +546,17 @@ needs a note in `docs/decisions/`.
   tints; snow only from the sim; the young drawn small, `young` on the wire. Later rounds
   to 2026-10-24: plants off the water; animals wading or struggling in the sea, wet feet
   at high tide; legs in turn, no folding; animals round and behind trees and bushes, the
-  leaves over them (the fade off; bushes in pieces as an experiment, `?bushes=pieces`,
-  awaiting the owner); deaths by cause with bones, landings with a splash; a field-guide
+  leaves over them (no fade; bushes in pieces, each piece leaning in the wind, the
+  owner's choice); deaths by cause with bones, landings with a splash; a field-guide
   name card with a portrait, an illuminated chronicle scroll lit like a lantern at night,
   chronicle places marked and visited; eating, hunting, births, sleep at night, plants
-  in the wind, fireflies, gulls, butterflies and dust; the scene's benchmark
-  (`?bench`, `?cap=30`) and the desk's build (`npm run build:kiosk`). Left: the report
-  regenerated, the owner's verdicts, the board run, tests. Checklist and handoff in
+  in the wind, fireflies, gulls, butterflies and dust; then, drawn only so that M11's
+  simulations are unchanged: autumn leaves, animals shaking off the rain and hunching in
+  storms, photosynthesisers basking, venom's strike, swimmers' wakes, the young trailing
+  their mothers, a pair touching heads before a birth; the scene's benchmark
+  (`?bench`, `?cap=30`) and the desk's build (`npm run build:kiosk`). The owner called
+  the look final on 2026-10-25; its tests are in (`tests/e2e/final.spec.ts` the stills of
+  what R5 drew). Left: the board run (checklist items 17–19). Checklist and handoff in
   `docs/milestones.md`; report `reports/R5-final/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).

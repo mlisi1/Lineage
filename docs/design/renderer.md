@@ -1180,15 +1180,42 @@ Round 1, items 1–7:
   eased with the rain, and up to 30 % softer at night (`Atmosphere.wind`). A tall tree
   leans at most three pixels, a tuft at most a fifth of its height; the middle view's
   plants move little. With `?still` everything stands straight. Stones, logs, mushrooms,
-  stumps, snags and mangrove roots do not move, nor do bushes drawn in pieces.
-- **Bushes in pieces** (`plants/pieces.ts`, an experiment behind `?bushes=pieces`, the
-  default unchanged). Each puff of a local-view bush is a sprite of its own, cut from the
+  stumps, snags and mangrove roots do not move. A bush drawn in pieces leans as its whole
+  drawing would: each piece slides by the lean at the height of its middle, every piece of
+  a bush in step.
+- **Bushes in pieces** (`plants/pieces.ts`, the owner's choice, 2026-10-24: the default;
+  `?bushes=whole` draws them whole, to compare; no fade in front of the animal followed). Each puff of a local-view bush is a sprite of its own, cut from the
   same drawing (each pixel to the puff painted last over it, else the nearest), so a bush
   with no animal near looks as before. A piece is sorted by its puff's foot and keeps a
   footprint of its own (0.85 of its radius across, 0.5 deep): together they block the
   lower two-thirds of the bush, so animals pass behind its top puffs and between bushes.
   A piece is over an animal only where a joint of the animal is behind its foot and under
-  its drawing. Trees, sprouts and fire pines stay whole. Awaiting the owner's choice.
+  its drawing. Trees, sprouts and fire pines stay whole.
+- **Autumn leaves** (`atmosphere/leaves.ts`, drawn only). In autumn the plant layer marks
+  the crown of each broadleaf (none with `EVERGREEN` enough to keep its leaves, no conifer)
+  with the colours it has turned (`crownAt`); leaves come loose where the plants' gust
+  lets one go, so a wood drops more than a lone tree, late autumn more than early, storms
+  more than calm. They fall on the wind, sorted among the plants by where they land, a
+  pixel in the middle view, the plants' two-pixel texels up close; none on the map.
+- **Animals in the rain** (`creatures/weather.ts`, drawn only). When a rain spell ends each
+  animal out in it shakes once, at its own moment (its breathing offset), with a spray of
+  drops; in a thunderstorm animals hunch (parts lower, feet in, head back, shorter and
+  slower steps). No dust is raised in rain or while a world ends.
+- **Rare genes in action** (drawn only, from the signatures already on the wire). A
+  photosynthesiser standing in daylight on dry land under a clear sky spreads out flat to
+  the sun, a glint of light on its back now and then (`creatures/basking.ts`, the
+  atmosphere's `overcastNow`); a venomous hunter's strike adds a lime flash, drips and
+  green wisps (`venom.ts`, `remains.ts`); a swimmer, or an animal with gills in the water,
+  leaves a V of foam while it moves (`wake.ts`). All are pooled marks of whole art pixels
+  (`sparks.ts`), timed from the scene's clock and each animal's offset, with no random
+  draws. `window.__grant(id, look)` stages one.
+- **Family life** (`creatures/family.ts`, drawn only). The scene remembers the mother of
+  each young animal it sees born (`born[].parent`) until it comes of age or either dies.
+  While the sim has them within 3 cells, the young one's strolls make for a spot behind
+  her tail and to one side, trotting to catch up, kept within its leash of where the sim
+  has it (`motion.trail`); a brood trails in a line. At a birth the nearest grown one of
+  her kind comes to the side of her head and their heads touch for 1.4 s under two
+  hearts, then the young are born. Young pass through each other and their mother's legs.
 - **Wet feet at high tide.** The swash runs up the beach in the shore's shader, so
   `Landscape.swashCovers(x, y)` replays it: the tide's level (`tideLevel`, shared with the
   shader), the place's own wave (`tidePhase`), up for 0.3 of a wave and back by 0.8
