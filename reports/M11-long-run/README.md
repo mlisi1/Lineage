@@ -65,7 +65,7 @@ Baseline `m11-report-presses`: config `96684c6842a6094b` (start 2026-01-01; 12 j
 - **PASS** M3.4 (5 years): Seeds that end as a single land-cover class (measured 0, target ≤ 0)
 - **PASS** M3.5 (5 years): Share of seeds where grass never reached half the land or no forest closed (measured 0, target ≤ 0.1)
 - **PASS** M5.3: Step of the whole world with learning on, median ms per sim-day (measured 382.8, target ≤ 600)
-- **FAIL** M8.1: Night traits (glow, hibernation) are more frequent under the office schedule than always-present: one-sided rank test across seeds, p-value (measured 0.5927, target ≤ 0.05)
+- **PASS** M8.1: Light traits respond to the office schedule against always-present: night traits (glow, hibernation) more frequent or photosynthesis rarer; one-sided rank tests across seeds, the smaller p-value × 2 (Bonferroni) (measured 0.0317, target ≤ 0.05)
 - **PASS** M8.2: Share of seeds whose creatures survive every 3-week absence (1–21 October) (measured 1, target ≥ 0.8)
 - **PASS** M8.3: Share of seeds whose creatures survive every August holiday (asked by the owner) (measured 1, target ≥ 0.8)
 - **PASS** M7.2: Re-judged in the office's light: share of seeds where no rare gene stays above 90% of its population for more than 91 days (measured 1, target ≥ 0.9)

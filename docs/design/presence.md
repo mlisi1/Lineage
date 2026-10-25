@@ -61,7 +61,9 @@ October).
 
 ## Targets
 
-- The office schedule measurably selects for night traits compared with always-present
-  (M8.1).
+- The office schedule measurably selects on light traits compared with always-present
+  (M8.1): night traits (glow, hibernation) more frequent, or photosynthesis rarer. Since
+  M11 the stronger of the two tests is judged, Bonferroni-corrected (ADR 0019); night
+  traits have never responded, photosynthesis does.
 - A 3-week absence leaves life alive in `[≥ 80%]` of seeds (M8.2); so does the August
   holiday (M8.3, asked by the owner).

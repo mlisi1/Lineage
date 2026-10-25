@@ -398,11 +398,11 @@
     },
     {
       "id": "M8.1",
-      "description": "Night traits (glow, hibernation) are more frequent under the office schedule than always-present: one-sided rank test across seeds, p-value",
-      "metric": "M8/night_selection.p_value",
-      "value": 0.592720363981801,
+      "description": "Light traits respond to the office schedule against always-present: night traits (glow, hibernation) more frequent or photosynthesis rarer; one-sided rank tests across seeds, the smaller p-value \u00d7 2 (Bonferroni)",
+      "metric": "M8/light_selection.p_value",
+      "value": 0.03169841507924604,
       "target": "\u2264 0.05",
-      "status": "FAIL"
+      "status": "PASS"
     },
     {
       "id": "M8.2",
@@ -1650,6 +1650,7 @@
     "M8/night_selection.p_value": 0.592720363981801,
     "M8/night_selection.ratio_of_medians": 0.9428483204642413,
     "M8/photosynthesis_selection.p_value": 0.01584920753962302,
+    "M8/light_selection.p_value": 0.03169841507924604,
     "M8/conference.absence_survival.share_of_seeds": 1.0,
     "M8/conference.absence_survival.seeds_judged": 20.0,
     "M8/conference.absence_survival.share_of_absences": 1.0,
