@@ -723,7 +723,7 @@ async function start(): Promise<void> {
     );
     if (showcase !== null && overlay !== null) {
       const { act } = showcase.now;
-      overlay.show(act.line, act.title ?? "");
+      overlay.show(act.line, act.title ?? "", showcase.caption);
     }
   };
   if (film) {

@@ -16,8 +16,6 @@ const TITLE_SCALE = 4;
 /** The title's outline and fill. */
 const TITLE_INK = 0x2a1810;
 const TITLE_FILL = 0xfff1b8;
-/** Seconds a line or title takes to come in and to go. */
-export const FADE_S = 0.6;
 
 type Put = (x: number, y: number, colour: number) => void;
 
@@ -48,7 +46,6 @@ function layer(width: number, height: number): HTMLCanvasElement {
   style.imageRendering = "pixelated";
   style.pointerEvents = "none";
   style.opacity = "0";
-  style.transition = `opacity ${FADE_S}s linear`;
   return canvas;
 }
 
@@ -140,8 +137,11 @@ export class Overlay {
     style.display = "none";
   }
 
-  /** Show `line` and `title` ("" for none); they fade in, and out when they change. */
-  show(line: string, title: string): void {
+  /**
+   * Show `line` and `title` ("" for none), `shown` of the way in (0–1): the showcase eases
+   * them in and out on its own clock, so that a film of it fades them as the screen does.
+   */
+  show(line: string, title: string, shown: number): void {
     if (line !== this.lineShown) {
       this.lineShown = line;
       this.repaint(
@@ -156,6 +156,10 @@ export class Overlay {
         title === "" ? null : (put) => paintTitle(title, this.width, this.height, put),
       );
     }
+    const opacity = String(Math.round(shown * 100) / 100);
+    if (this.line.style.opacity !== opacity) this.line.style.opacity = line === "" ? "0" : opacity;
+    if (this.title.style.opacity !== opacity)
+      this.title.style.opacity = title === "" ? "0" : opacity;
   }
 
   /** The frame counter's text, such as "30 FPS"; shown once first set. */
@@ -172,13 +176,8 @@ export class Overlay {
   }
 
   private repaint(canvas: HTMLCanvasElement, paint: ((put: Put) => void) | null): void {
-    if (paint === null) {
-      canvas.style.opacity = "0";
-      return;
-    }
     const { data, put } = picture(canvas.width, canvas.height);
-    paint(put);
+    paint?.(put);
     canvas.getContext("2d")?.putImageData(data, 0, 0);
-    canvas.style.opacity = "1";
   }
 }

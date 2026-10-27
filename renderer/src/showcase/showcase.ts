@@ -56,8 +56,43 @@ const PLACES = {
 /** The animals the films stage, by id, in the creatures' recording; others stand in. */
 const CAST = { big: 2048, small: 2184, other: 2220, mother: 2075, mate: 2113, young: 2196 };
 
-/** Seconds of the dip to dark into each act. */
-const CUT_S = 0.5;
+/** Seconds the picture takes to fade out before a cut, and in after it. */
+const FADE_OUT_S = 0.6;
+const FADE_IN_S = 0.8;
+/** Seconds the caption takes to come in after the picture, and to go before it. */
+const CAPTION_FADE_S = 0.5;
+/** For cues timed just after a cut: the picture is back by then. */
+const CUT_S = FADE_IN_S;
+
+/** Eased from 0 to 1 as `t` goes from 0 to 1 (clamped). */
+const ease = (t: number): number => {
+  const u = Math.min(Math.max(t, 0), 1);
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * How dark the picture is `intoS` into an act of `seconds` with cuts at `cuts` (seconds in,
+ * besides its start and end): faded out before each cut, in after it.
+ */
+export function dipAt(intoS: number, seconds: number, cuts: readonly number[] = []): number {
+  let dim = 0;
+  for (const cut of [0, ...cuts, seconds]) {
+    const before = cut - intoS;
+    if (before >= 0 && before < FADE_OUT_S && cut > 0)
+      dim = Math.max(dim, ease(1 - before / FADE_OUT_S));
+    const after = intoS - cut;
+    if (after >= 0 && after < FADE_IN_S && cut < seconds)
+      dim = Math.max(dim, ease(1 - after / FADE_IN_S));
+  }
+  return dim;
+}
+
+/** How much of an act's caption shows `intoS` into it: in after the picture, out before it. */
+export function captionAt(intoS: number, seconds: number): number {
+  const comes = ease((intoS - FADE_IN_S) / CAPTION_FADE_S);
+  const goes = ease((seconds - FADE_OUT_S - intoS) / CAPTION_FADE_S);
+  return Math.min(comes, goes);
+}
 /**
  * While dipped this dark and the ground under the shot is not painted yet, the showcase
  * waits (its clock does not move): the next shot opens on its ground, not bare land. At
@@ -82,6 +117,8 @@ interface Cue {
 interface Staging {
   cues: Cue[];
   shot: (intoS: number) => Shot;
+  /** Cuts within the act, seconds in, where the camera goes elsewhere through the dark. */
+  cuts?: number[];
 }
 
 export class Showcase {
@@ -98,6 +135,8 @@ export class Showcase {
   private holdNext = false;
   /** How dark the last shot was, and how long the showcase has waited in it. */
   private lastDim = 1;
+  /** How much of the act's caption shows (0–1). */
+  caption = 0;
   private heldS = 0;
 
   constructor(private readonly host: ShowcaseHost) {}
@@ -140,8 +179,10 @@ export class Showcase {
       this.done += 1;
     }
     const shot = staging.shot(intoS);
-    // Each act comes out of a dip to dark.
-    shot.dim = Math.max(shot.dim, 1 - Math.min(intoS / CUT_S, 1));
+    // Into each act and out of it, and at its cuts, through the dark.
+    const seconds = (ACTS[index] as Act).seconds;
+    shot.dim = Math.max(shot.dim, dipAt(intoS, seconds, staging.cuts));
+    this.caption = captionAt(intoS, seconds);
     this.lastDim = shot.dim;
     return shot;
   }
@@ -311,20 +352,13 @@ export class Showcase {
               },
             },
           ],
-          shot: (intoS) =>
-            intoS < 8
-              ? {
-                  view: "local",
-                  centre: { ...grass },
-                  dim: intoS >= 4 && intoS < 4 + CUT_S ? 1 - (intoS - 4) / CUT_S : 0,
-                  subject: null,
-                }
-              : {
-                  view: "local",
-                  centre: { ...shore },
-                  dim: Math.max(0, 1 - (intoS - 8) / CUT_S),
-                  subject: null,
-                },
+          cuts: [8],
+          shot: (intoS) => ({
+            view: "local",
+            centre: intoS < 8 ? { ...grass } : { ...shore },
+            dim: 0,
+            subject: null,
+          }),
         };
       }
       case "seasons":
@@ -339,15 +373,13 @@ export class Showcase {
               },
             },
           ],
-          shot: (intoS) =>
-            intoS < 7
-              ? { view: "local", centre: { ...wood }, dim: 0, subject: null }
-              : {
-                  view: "middle",
-                  centre: { ...wood },
-                  dim: Math.max(0, 1 - (intoS - 7) / CUT_S),
-                  subject: null,
-                },
+          cuts: [7],
+          shot: (intoS) => ({
+            view: intoS < 7 ? "local" : "middle",
+            centre: { ...wood },
+            dim: 0,
+            subject: null,
+          }),
         };
       case "weather": {
         const cast = [this.alive(CAST.big), this.alive(CAST.small), this.alive(CAST.other)];
