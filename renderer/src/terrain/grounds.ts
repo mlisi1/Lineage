@@ -29,6 +29,13 @@ const PIECE_MARGIN = 1;
 /** Pieces this many cells beyond the view are painted too, so that the camera finds them ready. */
 const AHEAD_CELLS = 4;
 
+/**
+ * Seconds `PieceGround.prepaint` rests between two pieces: the island is painted ahead
+ * over half an hour or so of a sim-day on the board, using a third of a core, not a whole
+ * one taken from the frames (R5).
+ */
+const PREPAINT_REST_S = 2;
+
 /** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
 export interface PieceOptions {
   /** Cells per side of a piece. */
@@ -239,6 +246,8 @@ export class PieceGround extends Layers {
     private readonly fadeS = FADE_S,
     private readonly cut: PieceOptions = CLOSE_PIECES,
     private readonly cache: GroundCache = NO_CACHE,
+    /** Seconds rested between two pieces painted ahead (`prepaint`). */
+    private readonly rest = PREPAINT_REST_S,
   ) {
     super();
   }
@@ -300,6 +309,7 @@ export class PieceGround extends Layers {
         if (this.stamp !== stamp) break;
         this.cache.put(this.keyOf(key), stamp, pixels);
         painted += 1;
+        if (this.rest > 0) await new Promise((resolve) => setTimeout(resolve, this.rest * 1000));
       } catch (error) {
         if (!(error instanceof Dropped)) throw error;
         break;

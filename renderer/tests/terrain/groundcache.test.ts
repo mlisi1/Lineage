@@ -36,7 +36,7 @@ async function settle(ground: PieceGround, view = everywhere): Promise<void> {
 
 function groundOf(painter: Counting, cache = new MemoryCache()): PieceGround {
   painter.setLand(land);
-  return new PieceGround(painter, 8, land, 0, CLOSE_PIECES, cache);
+  return new PieceGround(painter, 8, land, 0, CLOSE_PIECES, cache, 0);
 }
 
 describe("the ground kept between visits", () => {

@@ -64,12 +64,12 @@ export const TILES: Readonly<Record<ViewName, number>> = {
  */
 const MIDDLE_CALM = 1;
 /**
- * The middle view's ground in pieces (R5, the board): what is on the screen is painted
- * first, then the rest of the island nearest first, every piece kept, so that the view's
- * drift finds it painted. One picture of the whole island took the board's painter some
- * 25 s before anything showed.
+ * The middle view's ground in pieces (R5, the board): what is on the screen and a piece
+ * round it are painted first, the rest of the island in the background (`prepaint`), and
+ * every piece is kept, so that the view's drift finds it painted. One picture of the
+ * whole island took the board's painter some 25 s before anything showed.
  */
-const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: Infinity, kept: Infinity };
+const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: 32, kept: Infinity };
 /** Land higher than this above the sea (height units) is never reached by the swash. */
 const SWASH_BEACH = 0.03;
 /** Where to look for the water round a place, to know if the swash reaches it: eight ways. */

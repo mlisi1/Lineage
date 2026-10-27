@@ -236,15 +236,20 @@ export class WorkerPainter extends QueuedPainter {
   }
 }
 
-/** Painting workers at most: the page's own thread and the GPU's want cores too. */
+/** Painting workers at most. */
 const MOST_PAINTERS = 3;
+/**
+ * Cores left to the page's own thread and the GPU's: on the board (four cores) three
+ * painters took the frames' time in the local view, two do not (R5).
+ */
+const CORES_KEPT = 2;
 
 /**
- * Workers where the browser has them, one fewer than its cores (at most `MOST_PAINTERS`,
- * at least one), else the page's own thread.
+ * Workers where the browser has them, `CORES_KEPT` fewer than its cores (at most
+ * `MOST_PAINTERS`, at least one), else the page's own thread.
  */
 export function makePainter(): Painter {
   if (typeof Worker === "undefined") return new InlinePainter();
   const cores = typeof navigator === "undefined" ? 2 : (navigator.hardwareConcurrency ?? 2);
-  return new WorkerPainter(Math.min(Math.max(cores - 1, 1), MOST_PAINTERS));
+  return new WorkerPainter(Math.min(Math.max(cores - CORES_KEPT, 1), MOST_PAINTERS));
 }
