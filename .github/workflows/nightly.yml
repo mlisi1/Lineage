@@ -17,6 +17,18 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - name: Slow suite
-        # Exit code 5 means "no tests collected": allowed until the first statistical
-        # milestone (M2) adds slow tests.
-        run: uv run pytest -m slow || [ $? -eq 5 ]
+        # The criteria check runs in its own job below, with its own time limit.
+        run: uv run pytest -m "slow and not criteria"
+
+  criteria:
+    # M11: the tuned island, 3 years x 20 seeds, judged on every criterion at once.
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Every criterion on the tuned island
+        run: uv run pytest -m criteria

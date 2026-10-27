@@ -37,6 +37,7 @@ testpaths = ["sim/tests", "server/tests", "device/tests", "tools/tests"]
 pythonpath = [".", "sim/tests"]
 markers = [
     "slow: long statistical tests, run nightly (`pytest -m slow`)",
+    "criteria: M11's nightly check of every criterion on the tuned island (also slow)",
 ]
 filterwarnings = ["error"]
 

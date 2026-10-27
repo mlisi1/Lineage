@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Final state of the default world, seed 42, after 200 days (no creatures yet).
-GOLDEN_FLORA_SEED_42 = "ac1dabd2aa9a6175ae1b243f39c5b2b1692ccb052ac5fba44464a23539c71f79"
+GOLDEN_FLORA_SEED_42 = "4eb31fe7a89170a6137e817f9d8da71272a6a01fcc62d4ebb1df72517ee27d83"
 
 Grid = NDArray[np.float32]
 ROWS, COLUMNS = 40, 60
@@ -614,20 +614,29 @@ def _far_cells(site: Site, source: NDArray[np.bool_], reach: int) -> int:
     return int(np.count_nonzero(alive & far))
 
 
-def test_animals_carry_fruit_far(config: Config) -> None:
-    """Heavy seeds stay near; the same plant bearing fruit lands far away."""
+def test_fruit_goes_far_by_the_stand_in_and_only_by_animals_without_it(config: Config) -> None:
+    """Heavy seeds stay near. With the stand-in for gut seeds (``fruit_by_wind``) the same
+    plant bearing fruit lands far away; without it, only the animals carry it (M11)."""
     heavy = list(GRASS)
     heavy[Gene.SEED] = 1.0
     source = np.zeros((ROWS, COLUMNS), dtype=np.bool_)
     source[18:22, 28:32] = True
-    counts: dict[int, int] = {}
+    counts: dict[tuple[int, bool], int] = {}
     for rare in (0, int(Rare.FRUITING)):
-        site = Site(config, _plain(), 0.5)
-        site.plant(source, tuple(heavy), 0.9, rare=rare)
-        site.grow(20)
-        counts[rare] = _far_cells(site, source, 8)
-    assert counts[0] == 0
-    assert counts[int(Rare.FRUITING)] > 0
+        for wind in (False, True):
+            flora = replace(
+                config.flora,
+                fruit_by_wind=wind,
+                seed_rain_per_year=0.0,
+                fire_strikes_per_storm_hour=0.0,
+            )
+            site = Site(config, _plain(), 0.5, flora=flora)
+            site.plant(source, tuple(heavy), 0.9, rare=rare)
+            site.grow(20)
+            counts[rare, wind] = _far_cells(site, source, 8)
+    assert counts[0, False] == counts[0, True] == 0
+    assert counts[int(Rare.FRUITING), True] > 0
+    assert counts[int(Rare.FRUITING), False] == 0
 
 
 def test_emergent_crowns_shade_more_but_need_soil_and_shelter(config: Config) -> None:

@@ -110,7 +110,11 @@ networks, predator–prey coexistence): ADR 0009, "References".
 ## Life
 
 - **Energy**: resting burn, a cost per cell travelled, and a heavy cost for land animals
-  in water. A creature with no energy left dies (starved, or drowned if in water).
+  in water, except in the shallows, where anyone can wade (M11, `wading_depth` 0.03, the
+  algae's shelf). A creature with no energy left dies (starved, or drowned if in water).
+  Hunters (diet at or above `predator_min_diet`) rest at a fifth of the resting burn
+  (`hunter_rest_share` 0.2, M11): they wait between kills, as real predators do, so a
+  pack outlasts the lean spells when the herd dips; moving costs them the same.
 - **Fire** (R4): a creature on land in a burning cell loses `fire_damage_per_hour` (1.0)
   of its capacity an hour, so an hour in a fire kills it (burnt; no carrion). Swimmers
   are safe.
@@ -121,10 +125,35 @@ networks, predator–prey coexistence): ADR 0009, "References".
 - **Grazing**: through `Flora.graze`. Roots and stubble are out of reach, so pasture
   regrows; defended plants refuse part of each bite, and what is eaten is worth less:
   energy × (1 − `defence_toxicity` × defence gene). Grazers cannot sense defence.
+- **Seeds in guts** (M11, schema v13): a grazer eating a fruiting plant swallows one of
+  its seeds at `gut_seeds_per_hour` (0.5 an hour of full bites; one at a time) and drops
+  it where it is `gut_passage_hours` later (12 h, 0.5–1.5× at random). The seed takes as
+  any plant's does (`Flora.drop_seeds`): it must suit the site and win against what grows
+  there. Herds carry fruiting plants along their routes; a seed dies with its carrier.
 - **Hunting**: a creature with diet ≥ 0.15 attacks the nearest creature of another kind
-  in reach that it is strong enough for, but only while hungry. A hit kills with a
+  in reach that it is strong enough for, but only while hungry. Its own kind (those it
+  could mate with) it spares, unless they eat far more plants: a diet gene at least
+  `prey_diet_gap` (0.3) below its own (M11, the owner, 2026-10-23; cannibal morphs, as in
+  spadefoot and salamander larvae). So a lineage of the herd that drifts toward meat finds
+  prey in the herd itself, and hunters can arise again after the last pack dies. What it
+  digests: plants `(1 − diet)^diet_exponent`, meat `diet^meat_diet_exponent` (both 1.0;
+  below 1, generalists absorb more, ADR 0019 "Two islands, and why"). A hit kills with a
   probability that grows with attack over defence and with the hunter's speed over the
   prey's.
+- **Cover** (M11): prey standing among plants taller than it reaches (see "Reach") is
+  hidden by the share of the plants' height above its reach, times their density
+  (biomass over `[flora] closed_canopy_biomass`). A kill's chance is × (1 −
+  `cover_protection` (0.6) × hidden). Small bodies hide in shrubs and forest, large ones
+  cannot: size trades browsing the trees against hiding in them. A refuge steadies
+  predator and prey (Křivan 2013, ADR 0009). `cover_protection` 0 turns it off.
+- **Reach** (M11): a creature reaches plants up to `reach_at_unit_mass` (0.5) ×
+  mass^(1/3) in the plants' height units (`Flora.stature`: grass about 0.2, shrubs to
+  0.6, trees to 1, emergent crowns 1.5), so about 0.3 at the smallest size, 1.0 at mass
+  8, and more for giants. Of a taller plant it bites `browse_floor` (0.3) of a full bite
+  (low leaves, seedlings) plus the rest in proportion to the share of the plant's height
+  it reaches, and it smells that plant's food the same way, so a small grazer heads for
+  the grass it can eat rather than a forest it cannot. Large bodies get food small ones
+  cannot reach; forests are browsed less. `browse_floor` 1 turns it off. No saved state.
 - **Food at sea** (M11): algae grow on the shallow sea (`plants.md`). A creature eats
   them wherever it swims and no plant stands, like a plant meal worth
   `[flora] algae_meal_share` of one. It smells them in proportion to its ease in water:
@@ -138,13 +167,21 @@ networks, predator–prey coexistence): ADR 0009, "References".
   through a scent spread over `carrion_scent_cells`. It feeds young and unlucky hunters
   between kills, and gives half-meat diets a niche. Founders arrive with an instinct for
   carrion in proportion to their diet.
+- **Nutrients** (M11): what creatures eat returns to the soil. A land cell gains
+  `dung_fertility` (0.05) fertility per unit of plant biomass eaten there, and
+  `carrion_fertility` (0.2) per unit of carrion mass that rots there (not what is
+  scavenged). Herds keep their pastures fertile; a kill leaves a rich patch where
+  taller plants can take hold. Saved state is the terrain's fertility, as before.
 - **Breeding**: two adults whose genomes differ by at most `compat_distance`, close
   together, both well fed and past their cooldown, have a brood. Each parent invests
   energy; the young share it. Genes cross over and mutate. An adult that finds no mate
   for six days clones itself at a higher cost.
 - **Ageing**: lifespan grows with mass (about 45 days for mass 1).
-- **Caps**: 200 creatures, plus 16 predators counted apart so a full herd cannot crowd
-  them out.
+- **Caps**: 200 creatures, plus 32 predators counted apart so a full herd cannot crowd
+  them out. They are soft (M11): a pair that may breed first waits, longer the closer
+  its kind is to its cap (about 8 hours at half the cap, 3.5 days at 80 %, none at all
+  on a sparse island), so births answer to deaths rather than stopping dead at the cap.
+  The caps stay as ceilings.
 
 ## Arrivals
 
@@ -152,9 +189,17 @@ networks, predator–prey coexistence): ADR 0009, "References".
   half the land carries well-grown plants, in spring or summer. They come again only if
   the landing dies out within 30 days; once life is established, a total extinction ends
   the world (M10, ADR 0018) and the founders land on the next continent.
-- **Strangers**: about six groups of eight per year reach an inhabited island. Half are a
-  hunter species (land walkers, at least medium-sized, with jaw, legs and senses to
-  match); the rest have a random genome. Most fail; some stay.
+- **Hunters**, the second wave of founders (M11, ADR 0019): once the herd (every
+  creature that is not a predator) reaches 120, a pack of 8 of a hunter species (land
+  walkers with jaw, legs and senses to match) lands in spring or summer, once per world,
+  by a member of the herd drawn at random (`hunter_landing_cells`), its size gene the
+  herd's mean plus `hunter_size_margin` (0.1): hunters that follow a herd, built for it.
+  The ark's hunters land and are built the same way. After that predators live, evolve again from the herd, or
+  come by the ark.
+- **No strangers** since M11 (the owner, ADR 0019): the island is closed, and every
+  species descends from its founders or the ark. Strangers (`immigrant_groups_per_year`,
+  six groups of eight a year until M11, half of them hunters) remain as a switch for
+  comparison runs.
 
 Every creature remembers the genome its lineage arrived with; its distance from it is
 the measure of evolutionary drift.
@@ -171,7 +216,7 @@ Decisions, alternatives and the sweep behind the numbers: ADR 0012.
   creature keeps the species it was given. A newcomer joins the species of its nearest
   relative: the genetically closest labelled creature of its lineage (the arrival it
   descends from through its mother). A lineage the island has not seen (the founders,
-  each group of strangers) founds a new **root** species.
+  the hunters, each group the ark brings) founds a new **root** species.
 - **Splits.** When a species' members fall into separate clusters of at least
   `min_members` (8; 5 for predator species, whose numbers have their own cap) and stay apart for `split_days` (3 days), the largest group keeps the
   species and every other one becomes a **daughter** species. Smaller strays stay; a
@@ -255,7 +300,12 @@ See `reports/M4-fauna-evolution/`. Targets from CLAUDE.md §8, and how they are 
 
 - The mean diet gene of the founders' descendants stays near 0.1 or below: herbivores
   never evolve into predators (no omnivores in any run); hunters only come from arrivals.
-- Creatures graze every plant form alike (same bite rate); forms differ only through the
-  plants' genes (defence).
+- Until M11 creatures grazed every plant form alike; since M11 tall plants are partly out
+  of reach of small bodies ("Reach"), and small prey hides in them ("Cover").
 - Food at sea came with M11 (algae, above); before it, swimmers had to feed on land and
-  the `AQUATIC` gene never found a niche (M11, D1).
+  the `AQUATIC` gene never found a niche. Algae alone did not change that (D1 for
+  swimming at 1 seed in 20 with or without them), hence wading on the shelf (ADR 0019).
+- Seeds carried by the grazers that eat fruit came with M11 (schema v13), after R4.
+- M11 open: whether the founders' descendants ever become omnivores or hunters now that
+  cover, reach and carrion shape the niches and no strangers bring hunters (D1 for diet
+  rose to 0.45–0.60 of seeds with them, strangers still landing).

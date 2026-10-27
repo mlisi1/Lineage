@@ -6,6 +6,8 @@ creatures. `population.py` owns the arrays and decides who is born and who dies.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -54,6 +56,21 @@ def _gradient(field: NDArray[np.float32], positions: Positions) -> tuple[Values,
 SmellPoints = list[tuple[float, NDArray[np.float32], Index, Index]]
 
 
+@dataclass(frozen=True)
+class Browse:
+    """What each creature can bite of the plants (M11): the plants' height per cell, how
+    high each creature reaches, and the share of an out-of-reach plant it still gets."""
+
+    plant_height: NDArray[np.float32]
+    reaches: Values
+    floor: float
+
+    def share(self, rows: Index, columns: Index) -> Values:
+        reached = np.minimum(self.reaches / np.maximum(self.plant_height[rows, columns], 1e-6), 1.0)
+        floor = np.float32(self.floor)
+        return (floor + (np.float32(1.0) - floor) * reached).astype(np.float32)
+
+
 def smell_points(positions: Positions, reach: Values, shape: tuple[int, int]) -> SmellPoints:
     """The cells each creature smells, as (ring, direction, rows, columns) per sample.
     They depend only on where creatures are and how far they sense, so one set serves
@@ -74,19 +91,23 @@ def smell_food(
     points: SmellPoints | None = None,
     sea: NDArray[np.float32] | None = None,
     ease: Values | None = None,
+    browse: Browse | None = None,
 ) -> tuple[Values, Values]:
     """Direction in which there is more food than underfoot, out to the sense range.
 
     Nearer food pulls harder; the result is 0 on uniform ground. ``points`` are
     `smell_points` of the same positions and reach, if already computed. With ``sea``
     (food in the water) each creature smells it weighted by its ``ease`` in water, so
-    the food it smells is ``food + ease × sea`` (``here`` must be read the same way).
+    the food it smells is ``food + ease × sea``; with ``browse`` it smells of ``food``
+    only the share it can bite (``here`` must be read the same way).
     """
     if points is None:
         points = smell_points(positions, reach, (food.shape[0], food.shape[1]))
     pull = np.zeros_like(positions)
     for ring, direction, rows, columns in points:
         there = food[rows, columns]
+        if browse is not None:
+            there = there * browse.share(rows, columns)
         if sea is not None and ease is not None:
             there = there + ease * sea[rows, columns]
         better = np.maximum(there - here, 0.0) / np.float32(ring)
@@ -98,10 +119,15 @@ def smell_food(
 
 
 def can_kill(genes: Genes, body: Phenotype, compatible: Flags, cfg: FaunaConfig) -> Flags:
-    """Matrix [i, j]: creature i hunts and could kill creature j (never its own kind)."""
-    hunts = genes[:, Gene.DIET] >= cfg.attack_min_diet
+    """Matrix [i, j]: creature i hunts and could kill creature j. Never its own kind (those
+    it could mate with), unless j eats far more plants than i: a diet gene at least
+    prey_diet_gap below i's (M11, the cannibal morphs of spadefoot and salamander larvae),
+    so that hunters can arise again from an island's herd."""
+    diet = genes[:, Gene.DIET]
+    hunts = diet >= cfg.attack_min_diet
     strong = body.attack[:, None] >= _WORTH_ATTACKING * body.defence[None, :]
-    kills = hunts[:, None] & strong & ~compatible
+    kin = compatible & (diet[:, None] - diet[None, :] < cfg.prey_diet_gap)
+    kills = hunts[:, None] & strong & ~kin
     np.fill_diagonal(kills, False)  # nobody hunts itself
     return kills
 
@@ -154,6 +180,7 @@ def sense(
     sight: NDArray[np.float32] | None = None,
     sea: NDArray[np.float32] | None = None,
     ease: Values | None = None,
+    browse: Browse | None = None,
 ) -> Senses:
     """Everything the brains perceive this tick. ``offsets`` and ``distance`` come from
     `separations` of the same positions; ``ready`` marks creatures able to breed now
@@ -163,18 +190,21 @@ def sense(
     is how far i sees j in the dark (`rare.sight`); None in daylight, when each sees out
     to its sense range. Smell is not affected by the dark. ``sea`` is food in the water
     (algae, M11), smelled and seen underfoot in proportion to each creature's ``ease``
-    in water; None when there is none."""
+    in water; None when there is none. ``browse`` limits the plant food each creature
+    senses to what it can reach (M11)."""
     n = positions.shape[0]
     senses = np.zeros((n, SENSE_COUNT), dtype=np.float32)
     rows, columns = cells_of(positions, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.ENERGY] = energy / body.capacity
     here: Values = biomass[rows, columns]
+    if browse is not None:
+        here = (here * browse.share(rows, columns)).astype(np.float32)
     if sea is not None and ease is not None:
         here = (here + ease * sea[rows, columns]).astype(np.float32)
     senses[:, Sense.FOOD_HERE] = here
     points = smell_points(positions, body.sense_range, (biomass.shape[0], biomass.shape[1]))
     senses[:, Sense.FOOD_X], senses[:, Sense.FOOD_Y] = smell_food(
-        biomass, positions, here, body.sense_range, points, sea, ease
+        biomass, positions, here, body.sense_range, points, sea, ease, browse
     )
     for field, sense_x, sense_y in ((low, Sense.LOW_X, Sense.LOW_Y),
                                     (woody, Sense.WOODY_X, Sense.WOODY_Y),
@@ -225,6 +255,14 @@ def move(
     return moved.astype(np.float32), travelled.astype(np.float32)
 
 
+def resting_burn(cfg: FaunaConfig, genes: Genes, body: Phenotype) -> Values:
+    """Energy each burns per hour at rest: hunters (diet at or above predator_min_diet)
+    only hunter_rest_share of it, waiting between kills as predators do (M11)."""
+    hunter = genes[:, Gene.DIET] >= cfg.predator_min_diet
+    share = np.where(hunter, np.float32(cfg.hunter_rest_share), np.float32(1.0))
+    return (body.basal_burn * share).astype(np.float32)
+
+
 def upkeep(
     cfg: FaunaConfig,
     genes: Genes,
@@ -238,9 +276,22 @@ def upkeep(
     (except for the ``waterproof``)."""
     struggling = in_water if waterproof is None else in_water & ~waterproof
     drowning = cfg.water_stress * body.mass * (1.0 - genes[:, Gene.AQUATIC]) * struggling
-    return ((body.basal_burn + drowning) * np.float32(hours) + body.move_cost * travelled).astype(
+    resting = resting_burn(cfg, genes, body)
+    return ((resting + drowning) * np.float32(hours) + body.move_cost * travelled).astype(
         np.float32
     )
+
+
+def reach(cfg: FaunaConfig, mass: Values) -> Values:
+    """How tall a plant each creature reaches, in the plants' height units (M11)."""
+    return (cfg.reach_at_unit_mass * np.cbrt(mass)).astype(np.float32)
+
+
+def hidden(plant_height: Values, density: Values, reaches: Values) -> Values:
+    """How hidden each prey is among the plants where it stands (M11): the share of the
+    plants' height above its reach, times their density in [0, 1]."""
+    above = np.clip(1.0 - reaches / np.maximum(plant_height, 1e-6), 0.0, 1.0)
+    return (above * np.clip(density, 0.0, 1.0)).astype(np.float32)
 
 
 def appetite(cfg: FaunaConfig, energy: Values, body: Phenotype, hours: float) -> Values:

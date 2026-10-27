@@ -23,7 +23,7 @@ from numpy.random import Generator
 from numpy.typing import NDArray
 
 from lineage_sim import rare
-from lineage_sim.clock import MS_PER_DAY, Season
+from lineage_sim.clock import MS_PER_DAY, Instant, Season
 from lineage_sim.config import FaunaConfig
 from lineage_sim.events import (
     CraterFormed,
@@ -40,6 +40,7 @@ from lineage_sim.fauna import brain, creature
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.genome import GENE_COUNT, Gene
 from lineage_sim.fauna.phenotype import Phenotype
+from lineage_sim.flora import GENE_COUNT as PLANT_GENE_COUNT
 from lineage_sim.flora import LOW_FORMS, WOODY_FORMS, Flora, Wildfire
 from lineage_sim.rare import body_of
 from lineage_sim.rng import FAUNA
@@ -69,6 +70,28 @@ _LANDING_BIOMASS = 0.3
 # Learned gains on the plant-form senses, which meals teach.
 _LOW_GAIN = brain.FOLLOWED.index(brain.Sense.LOW_X)
 _WOODY_GAIN = brain.FOLLOWED.index(brain.Sense.WOODY_X)
+
+
+def breeding_chance(crowding: Values, wait_days: float, exponent: float, hours: float) -> Values:
+    """Chance that a pair allowed to breed does so within ``hours`` (soft caps, M11).
+
+    ``crowding`` is the living of its kind over its kind's cap. The pair waits on average
+    ``wait_days`` × c / (1 - c) with c = crowding^``exponent``: no wait on an empty
+    island, no birth at the cap. A rate, so a tick of two hours equals two of one."""
+    c = np.clip(crowding, 0.0, 1.0) ** np.float32(exponent)
+    rate = np.divide(
+        1.0 - c, c * np.float32(wait_days * _HOURS_PER_DAY),
+        out=np.full_like(c, np.inf), where=c > 0.0,
+    )  # fmt: skip
+    return (1.0 - np.exp(-rate * np.float32(hours))).astype(np.float32)
+
+
+class Landing(IntEnum):
+    """Who a group of newcomers is."""
+
+    PLANT_EATERS = 0  # founders and the ark's plant eaters
+    HUNTERS = 1  # the hunter pack that follows the founders, or the ark's hunters
+    STRANGERS = 2  # strangers (off by default since M11): plant eaters or hunters
 
 
 class Death(IntEnum):
@@ -142,6 +165,11 @@ class Fauna:
         self._competent_h = np.zeros(0, dtype=np.float32)
         self._young_eaten = np.zeros(0, dtype=np.float32)
         self._young_burnt = np.zeros(0, dtype=np.float32)
+        # Seeds in the gut (M11): the plant genome and rare genes of the one seed each
+        # creature carries, and the hours until it drops it (negative: none).
+        self._gut_genome = np.zeros((0, PLANT_GENE_COUNT), dtype=np.uint8)
+        self._gut_rare = np.zeros(0, dtype=np.uint8)
+        self._gut_h = np.zeros(0, dtype=np.float32)
         # Remains of the dead, in units of meat mass per cell; they rot away.
         self._carrion = np.zeros(self._shape, dtype=np.float32)
         # Its scent: carrion spread over carrion_scent_cells (creature.spread), kept up to
@@ -162,6 +190,8 @@ class Fauna:
         # -1 for none), and the mother of each newborn of this tick's broods, by id.
         self._killer = np.zeros(0, dtype=np.int64)
         self._mothers = np.zeros(0, dtype=np.int64)
+        # Fertility returned to the soil this tick (M11): rebuilt every tick, not saved.
+        self._soil = np.zeros(self._shape, dtype=np.float32)
         # Youths that ended and creatures that died this tick: outputs not yet handed on.
         self._grown: list[OutputEvent] = []
         # Pairwise offsets and distances for the current positions; None when stale.
@@ -340,15 +370,21 @@ class Fauna:
             ctx.instant.season is Season.WINTER, self._daylight,
         )  # fmt: skip
         rot = np.float32(np.exp(-hours / self._cfg.carrion_decay_hours))
+        # Nutrients return to the soil (M11): what rots of the carrion, and below, dung.
+        self._soil = np.float32(self._cfg.carrion_fertility) * self._carrion * (1 - rot)
         self._carrion *= rot
         self._scent *= rot
+        self._pass_seeds(rng, hours, ctx.instant)
         self._live(rng, hours)
+        if self._cfg.dung_fertility > 0.0 or self._cfg.carrion_fertility > 0.0:
+            land = self._terrain.land
+            self._terrain.adjust_fertility(np.where(land, self._soil, np.float32(0.0)))
         dead = self._hunt(rng, hours)
         # The tick's own balance, before any breeding: what eating and moving earned.
         self._learn(self._energy - before, hours, ctx.t_ms)
         in_fire = self._burn(hours)
         dead = self._expire(dead, in_fire)
-        newborn = self._breed(rng, dead)
+        newborn = self._breed(rng, dead, hours)
         self._bury(dead, ctx.t_ms, killers=self._killer)
         if newborn is not None:
             self._append(*newborn)
@@ -368,7 +404,11 @@ class Fauna:
             self._arrival_at_h = -1.0
             outputs.append(PopulationExtinct(ctx.t_ms))
         elif stranger_roll < self._cfg.immigrant_groups_per_year * hours / _HOURS_PER_YEAR:
-            outputs += self._arrive(rng, ctx.t_ms, self._cfg.immigrant_group_size, founders=False)
+            outputs += self._arrive(
+                rng, ctx.t_ms, self._cfg.immigrant_group_size, Landing.STRANGERS
+            )
+        if self.count > 0 and ctx.instant.season in _FOUNDING_SEASONS:
+            outputs += self._await_hunters(rng, ctx.t_ms)
         return outputs
 
     def observe(self, outputs: Sequence[OutputEvent], ctx: Context) -> list[OutputEvent]:
@@ -406,6 +446,9 @@ class Fauna:
             "competent_h": self._competent_h.copy(),
             "young_eaten": self._young_eaten.copy(),
             "young_burnt": self._young_burnt.copy(),
+            "gut_genome": self._gut_genome.copy(),
+            "gut_rare": self._gut_rare.copy(),
+            "gut_h": self._gut_h.copy(),
             "carrion": self._carrion.copy(),
             "scent": self._scent.copy(),
             "next_id": self._next_id,
@@ -436,6 +479,10 @@ class Fauna:
         self._competent_h = np.array(tree["competent_h"], dtype=np.float32)
         self._young_eaten = np.array(tree["young_eaten"], dtype=np.float32)
         self._young_burnt = np.array(tree["young_burnt"], dtype=np.float32)
+        gut = (-1, PLANT_GENE_COUNT)
+        self._gut_genome = np.array(tree["gut_genome"], dtype=np.uint8).reshape(gut)
+        self._gut_rare = np.array(tree["gut_rare"], dtype=np.uint8)
+        self._gut_h = np.array(tree["gut_h"], dtype=np.float32)
         self._carrion = np.array(tree["carrion"], dtype=np.float32).reshape(self._shape)
         self._scent = np.array(tree["scent"], dtype=np.float32).reshape(self._shape)
         self._next_id = int(tree["next_id"])
@@ -454,6 +501,10 @@ class Fauna:
         low = np.where(is_low, biomass, np.float32(0.0)).astype(np.float32)
         woody = np.where(is_woody, biomass, np.float32(0.0)).astype(np.float32)
         offsets, distance = self._separations()
+        # Reach (M11): of a plant taller than it reaches, a creature bites only a share.
+        browse = creature.Browse(
+            self._flora.stature(), creature.reach(cfg, body.mass), cfg.browse_floor
+        )
         # Food at sea (M11): smelled by those at ease in water (swimmers, amphibians).
         algae = self._flora.grazeable_algae()
         sea, ease = None, None
@@ -482,6 +533,7 @@ class Fauna:
             rare.sight(cfg, self._slots, body.sense_range, self._daylight),
             sea,
             ease,
+            browse,
         )
         # Roaming: a heading that drifts slowly, so a creature with nothing to steer by
         # covers ground instead of jittering in place.
@@ -519,7 +571,13 @@ class Fauna:
         )
         self._apart = None
         burnt = creature.upkeep(
-            cfg, self._genes, body, travelled, in_water, hours, rare.waterproof(self._slots)
+            cfg,
+            self._genes,
+            body,
+            travelled,
+            in_water,
+            hours,
+            rare.waterproof(self._slots) | self._wading(rows, columns),
         )
         torpor = np.float32(cfg.hibernation_burn_share)
         burnt = np.where(torpid, burnt * torpor, burnt).astype(np.float32)
@@ -534,8 +592,14 @@ class Fauna:
         sun = np.minimum(sun, np.maximum(body.capacity - self._energy, 0.0))
         self._energy = (self._energy + sun).astype(np.float32)
         appetite = creature.appetite(cfg, self._energy, body, hours)
+        appetite = (appetite * browse.share(rows, columns)).astype(np.float32)
         appetite[torpid] = 0.0
         eaten = self._flora.graze(rows, columns, appetite)
+        full_bite = body.graze_rate * np.float32(hours)
+        if cfg.gut_seeds_per_hour > 0.0:
+            self._swallow(rng, rows, columns, eaten, full_bite, hours)
+        if cfg.dung_fertility > 0.0:
+            np.add.at(self._soil, (rows, columns), np.float32(cfg.dung_fertility) * eaten)
         # Defended plants are not only harder to bite: what is eaten is worth less (toxins).
         # Rare plant genes change it again: fruit is richer, poison costs energy.
         toxic = np.float32(cfg.defence_toxicity) * self._flora.defence_at(rows, columns)
@@ -556,7 +620,6 @@ class Fauna:
             ).astype(np.intp)
             # Algae are no plant form: a meal of them teaches nothing about low or woody.
             gain_index[self._flora.on_algae(rows, columns)] = -1
-            full_bite = body.graze_rate * np.float32(hours)
             bite = np.clip(eaten / np.maximum(full_bite, 1e-9), 0.0, 1.0).astype(np.float32)
             self._learned, self._meal_value = brain.taste(
                 self._learned, gain_index, bite, quality,
@@ -567,6 +630,50 @@ class Fauna:
         ageing = np.where(torpid, np.float32(cfg.hibernation_ageing_share), np.float32(1.0))
         self._age_h = (self._age_h + np.float32(hours) * ageing).astype(np.float32)
         self._idle_h = self._idle_h + np.float32(hours)
+
+    def _swallow(
+        self,
+        rng: Generator,
+        rows: NDArray[np.intp],
+        columns: NDArray[np.intp],
+        eaten: Values,
+        full_bite: Values,
+        hours: float,
+    ) -> None:
+        """Seeds in guts (M11): a grazer eating a fruiting plant swallows one of its seeds
+        now and then, and carries it (one at a time) for about gut_passage_hours."""
+        cfg = self._cfg
+        # Only those eating fruit with an empty gut draw, so the stream is untouched
+        # where no fruit grows.
+        eating = np.flatnonzero(
+            (self._gut_h < 0) & (eaten > 0) & self._flora.fruiting_at(rows, columns)
+        )
+        if eating.size == 0:
+            return
+        bite = np.clip(eaten[eating] / np.maximum(full_bite[eating], 1e-9), 0.0, 1.0)
+        chance = -np.expm1(-cfg.gut_seeds_per_hour * hours * bite)
+        which = eating[rng.random(eating.size) < chance]
+        if which.size == 0:
+            return
+        y, x = rows[which], columns[which]
+        self._gut_genome[which] = self._flora.genome[:, y, x].T
+        self._gut_rare[which] = self._flora.rare[y, x]
+        passage = cfg.gut_passage_hours * rng.uniform(0.5, 1.5, which.size)
+        self._gut_h[which] = passage.astype(np.float32)
+
+    def _pass_seeds(self, rng: Generator, hours: float, instant: Instant) -> None:
+        """Seeds whose time in the gut is up are dropped where their carrier stands."""
+        carried = self._gut_h >= 0
+        if not carried.any():
+            return
+        self._gut_h[carried] -= np.float32(hours)
+        due = np.flatnonzero(carried & (self._gut_h < 0))
+        if due.size == 0:
+            return
+        self._gut_h[due] = -1.0
+        rows, columns = creature.cells_of(self._positions[due], self._shape)
+        genome = np.ascontiguousarray(self._gut_genome[due].T)
+        self._flora.drop_seeds(rng, rows, columns, genome, self._gut_rare[due], instant)
 
     def _scavenge(self, rows: NDArray[np.intp], columns: NDArray[np.intp], hours: float) -> None:
         """Creatures that digest meat eat the carrion where they stand."""
@@ -587,6 +694,12 @@ class Fauna:
         self._meal[who] += got * value
         self._meat[who] += got * value
 
+    def _wading(self, rows: NDArray[np.intp], columns: NDArray[np.intp]) -> NDArray[np.bool_]:
+        """Creatures standing in water shallow enough to wade (M11): they do not struggle."""
+        terrain = self._terrain
+        depth = np.float32(terrain.sea_level) - terrain.height[rows, columns]
+        return depth < np.float32(self._cfg.wading_depth)
+
     def _hunt(self, rng: Generator, hours: float) -> NDArray[np.int8]:
         """Hunters attack the nearest prey in reach. Returns each creature's cause of
         death (-1: alive)."""
@@ -606,6 +719,19 @@ class Fauna:
             return dead
         chance = creature.kill_chance(cfg, body, hunters, prey[hunters], self._torpid)
         chance = chance * rare.kill_factor(cfg, self._slots)[prey[hunters]]
+        if cfg.cover_protection > 0.0:
+            # Cover (M11): prey hidden among plants taller than it is harder to kill.
+            victims = prey[hunters]
+            rows, columns = creature.cells_of(self._positions[victims], self._shape)
+            density = self._flora.biomass[rows, columns] / np.float32(
+                self._flora.config.closed_canopy_biomass
+            )
+            cover = creature.hidden(
+                self._flora.stature()[rows, columns],
+                density,
+                creature.reach(cfg, body.mass[victims]),
+            )
+            chance = chance * (np.float32(1.0) - np.float32(cfg.cover_protection) * cover)
         self._energy[hunters] -= np.float32(cfg.attack_cost) * body.mass[hunters]
         for k, hunter in enumerate(hunters.tolist()):
             victim = int(prey[hunter])
@@ -692,7 +818,7 @@ class Fauna:
         return dead
 
     def _breed(
-        self, rng: Generator, dead: NDArray[np.int8]
+        self, rng: Generator, dead: NDArray[np.int8], hours: float
     ) -> tuple[NDArray[np.float32], Values, NDArray[np.float32], NDArray[np.float32],
                NDArray[np.uint16], NDArray[np.int32], NDArray[np.int32],
                NDArray[np.float32]] | None:  # fmt: skip
@@ -739,8 +865,25 @@ class Fauna:
         share = np.float32(cfg.repro_investment_share)
         invest_a = share * body.capacity[a] * np.where(cloned, cfg.asexual_cost_factor, 1.0)
         invest_b = np.where(cloned, 0.0, share * body.capacity[b])
-        # Parents pay in creature order until their kind's cap is reached.
         hunters = predator[a]
+        if cfg.crowding_wait_days > 0.0:
+            # Soft caps (M11): the more crowded its kind, the longer a pair waits.
+            crowding = np.where(
+                hunters,
+                np.count_nonzero(living & predator) / max(cfg.predator_cap, 1),
+                np.count_nonzero(living & ~predator) / cfg.population_cap,
+            ).astype(np.float32)
+            chance = breeding_chance(crowding, cfg.crowding_wait_days, cfg.crowding_exponent, hours)
+            keep = rng.random(a.size) < chance
+            a, b, brood, cloned, hunters = (
+                a[keep],
+                b[keep],
+                brood[keep],
+                cloned[keep],
+                hunters[keep],
+            )
+            invest_a, invest_b = invest_a[keep], invest_b[keep]
+        # Parents pay in creature order until their kind's cap is reached.
         allowed = np.where(
             hunters,
             np.cumsum(brood * hunters) <= room_predators,
@@ -879,6 +1022,8 @@ class Fauna:
         # The tick's meals stay with their eaters, for what is read of them after the tick.
         if self._meal.size == keep.size:
             self._meal, self._meat = self._meal[keep], self._meat[keep]
+        self._gut_genome, self._gut_rare = self._gut_genome[keep], self._gut_rare[keep]
+        self._gut_h = self._gut_h[keep]
         self._body = body_of(self._cfg, self._genes, self._slots)
         self._compatible = self._compatible[keep][:, keep]
         self._kills = self._kills[keep][:, keep]
@@ -922,7 +1067,7 @@ class Fauna:
         self._learned = np.concatenate([self._learned, nothing if learned is None else learned])
         self._trace = np.concatenate([self._trace, nothing])
         self._noise = np.concatenate([self._noise, np.zeros((count, brain.OUTPUTS), np.float32)])
-        resting = -self._body.basal_burn[old:]
+        resting = -creature.resting_burn(self._cfg, self._genes, self._body)[old:]
         self._baseline = np.concatenate([self._baseline, resting / self._body.capacity[old:]])
         self._balance = np.concatenate([self._balance, resting])
         self._meal_value = np.concatenate([self._meal_value, np.full(count, np.nan, np.float32)])
@@ -933,6 +1078,10 @@ class Fauna:
         if self._meal.size == old:
             self._meal = np.concatenate([self._meal, zeros])
             self._meat = np.concatenate([self._meat, zeros])
+        empty = np.zeros((count, PLANT_GENE_COUNT), dtype=np.uint8)
+        self._gut_genome = np.concatenate([self._gut_genome, empty])
+        self._gut_rare = np.concatenate([self._gut_rare, np.zeros(count, dtype=np.uint8)])
+        self._gut_h = np.concatenate([self._gut_h, np.full(count, -1.0, np.float32)])
         # Extend the pair matrices with the newcomers' rows and columns only.
         near = gn.distance(self._genes[old:, None, :], self._genes[None, :, :])
         compatible = np.zeros((old + count, old + count), dtype=np.bool_)
@@ -978,9 +1127,25 @@ class Fauna:
             outputs.append(PopulationExtinct(t_ms))
         return outputs
 
-    def arrive(self, rng: Generator, t_ms: int, count: int) -> list[OutputEvent]:
-        """The ark: ``count`` plant eaters land on a vegetated spot, as founders do."""
-        return self._arrive(rng, t_ms, count, founders=True)
+    def arrive(
+        self, rng: Generator, t_ms: int, count: int, *, hunters: bool = False
+    ) -> list[OutputEvent]:
+        """The ark: ``count`` plant eaters (or hunters) land on a vegetated spot, as
+        founders do."""
+        return self._arrive(rng, t_ms, count, Landing.HUNTERS if hunters else Landing.PLANT_EATERS)
+
+    def green_enough(self) -> bool:
+        """Whether plants have taken hold well enough to feed founders: at least
+        founder_min_plant_cover of the land carries well-grown plants."""
+        land = self._terrain.land
+        green = land & (self._flora.biomass >= _LANDING_BIOMASS)
+        cover = np.count_nonzero(green) / max(1, int(np.count_nonzero(land)))
+        return bool(cover >= self._cfg.founder_min_plant_cover)
+
+    def lacks_hunters(self) -> bool:
+        """Whether the herd is large enough for hunters and none live here."""
+        herbivores, omnivores, predators = self.diet_counts()
+        return predators == 0 and herbivores + omnivores >= self._cfg.hunter_wave_herd
 
     # -- arrivals --
 
@@ -990,20 +1155,41 @@ class Fauna:
         if self._arrival_at_h < 0:
             if t_ms % MS_PER_DAY != 0:
                 return []  # plants are surveyed once a day, at midnight
-            land = self._terrain.land
-            green = land & (self._flora.biomass >= _LANDING_BIOMASS)
-            cover = np.count_nonzero(green) / max(1, int(np.count_nonzero(land)))
-            if cover >= cfg.founder_min_plant_cover:
+            if self.green_enough():
                 self._arrival_at_h = now_h + cfg.arrival_delay_days * _HOURS_PER_DAY
             return []
         if now_h < self._arrival_at_h:
             return []
         self._arrival_at_h = -1.0
-        return self._arrive(rng, t_ms, cfg.founder_count, founders=True)
+        return self._arrive(rng, t_ms, cfg.founder_count, Landing.PLANT_EATERS)
 
-    def _arrive(
-        self, rng: Generator, t_ms: int, count: int, *, founders: bool
-    ) -> list[OutputEvent]:
+    def _await_hunters(self, rng: Generator, t_ms: int) -> list[OutputEvent]:
+        """The second wave of founders: once the herd has grown, a pack of hunters lands.
+        Once per world: never where a lineage already arrived as hunters."""
+        cfg = self._cfg
+        if cfg.hunter_wave_count == 0 or t_ms % MS_PER_DAY != 0:
+            return []  # the herd is surveyed once a day, at midnight
+        if (self._ancestors[:, Gene.DIET] >= cfg.predator_min_diet).any():
+            return []
+        if not self.lacks_hunters():
+            return []
+        return self._arrive(rng, t_ms, cfg.hunter_wave_count, Landing.HUNTERS)
+
+    def _near_the_herd(
+        self, rng: Generator, spots_y: NDArray[np.intp], spots_x: NDArray[np.intp]
+    ) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+        """Hunters land where they find prey: on the landing spots nearest one member of
+        the herd, drawn at random (within hunter_landing_cells of the nearest spot, as a
+        herd grazes the ground round it bare)."""
+        herd = np.flatnonzero(self._genes[:, Gene.DIET] < self._cfg.predator_min_diet)
+        if herd.size == 0:
+            return spots_y, spots_x
+        x, y = self._positions[herd[int(rng.integers(0, herd.size))]]
+        apart = np.hypot(spots_x - x, spots_y - y)
+        near = apart <= apart.min() + self._cfg.hunter_landing_cells
+        return spots_y[near], spots_x[near]
+
+    def _arrive(self, rng: Generator, t_ms: int, count: int, landing: Landing) -> list[OutputEvent]:
         """A group of one new species lands on a vegetated spot."""
         cfg = self._cfg
         spots_y, spots_x = np.nonzero(
@@ -1011,22 +1197,33 @@ class Fauna:
         )
         if count <= 0 or spots_y.size == 0:
             return []
+        if landing is Landing.HUNTERS:
+            spots_y, spots_x = self._near_the_herd(rng, spots_y, spots_x)
         spot = int(rng.integers(0, spots_y.size))
         base = gn.random_genes(rng, 1)
         low, high = _WALKER_LIMBS
-        if founders:
+        hunters = landing is Landing.HUNTERS or (
+            landing is Landing.STRANGERS and rng.random() < cfg.immigrant_hunter_share
+        )
+        if landing is Landing.PLANT_EATERS:
             # Small to medium land-walking plant eaters.
             base[0, Gene.DIET] *= cfg.founder_diet_max
             base[0, Gene.SIZE] *= cfg.founder_size_max
             base[0, Gene.AQUATIC] *= _WALKER_AQUATIC_MAX
             base[0, Gene.LIMBS] = low + (high - low) * base[0, Gene.LIMBS]
-        elif rng.random() < cfg.immigrant_hunter_share:
+        elif hunters:
             # A hunter species, built for it: a land walker in the predator diet range,
             # at least medium-sized, with a real jaw, legs and senses.
             base[0, Gene.DIET] = (
                 cfg.predator_min_diet + (1.0 - cfg.predator_min_diet) * base[0, Gene.DIET]
             )
             base[0, Gene.SIZE] = _HUNTER_MIN + (1.0 - _HUNTER_MIN) * base[0, Gene.SIZE]
+            herd = self._genes[:, Gene.DIET] < cfg.predator_min_diet
+            if landing is Landing.HUNTERS and herd.any():
+                # Hunters that follow a herd are built for it: a little larger than their
+                # prey, so a kill feeds them (M11).
+                size = float(self._genes[herd, Gene.SIZE].mean()) + cfg.hunter_size_margin
+                base[0, Gene.SIZE] = min(max(size, 0.0), 1.0)
             for gene in (Gene.JAW, Gene.SPEED, Gene.SENSE):
                 base[0, gene] = _HUNTER_MIN + (1.0 - _HUNTER_MIN) * base[0, gene]
             base[0, Gene.AQUATIC] *= _WALKER_AQUATIC_MAX
@@ -1062,8 +1259,6 @@ class Fauna:
         )  # fmt: skip
         self._age_h[-count:] = ages
         self.tally.arrivals += count
-        return [
-            CreaturesArrived(
-                t_ms, count, founders, float(spots_x[spot]), float(spots_y[spot]), first_id
-            )
-        ]
+        founders = landing is not Landing.STRANGERS
+        x, y = float(spots_x[spot]), float(spots_y[spot])
+        return [CreaturesArrived(t_ms, count, founders, x, y, first_id)]

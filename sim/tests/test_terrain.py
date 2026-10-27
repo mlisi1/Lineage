@@ -30,7 +30,7 @@ EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 YEAR_DAYS = 365
 # Final state of the default world (every subsystem), seed 42, after 30 days.
-GOLDEN_TERRAIN_SEED_42 = "0eb1222bcc60370302ba8e50860ba59a1cf98c2e48cad0163ea0e465073da2d7"
+GOLDEN_TERRAIN_SEED_42 = "1f984a29f075735f47f7dcb67c4c2654e9ea1f2c9f084b29f66f7d82e6319935"
 
 Grid = NDArray[np.float32]
 

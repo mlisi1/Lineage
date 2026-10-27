@@ -420,6 +420,37 @@ def lines_over_time(
     return fig
 
 
+def heatmap(
+    rows: Sequence[str],
+    columns: Sequence[str],
+    values: np.ndarray,
+    *,
+    title: str,
+    limit: float = 1.0,
+    fmt: str = "{:+.2f}",
+) -> Figure:
+    """A diverging grid of ``values`` [row, column] in [-limit, limit], each cell labelled;
+    NaN cells stay blank. For correlations, such as levers against metrics."""
+    from matplotlib.colors import LinearSegmentedColormap
+
+    cmap = LinearSegmentedColormap.from_list("diverging", list(style.DIVERGING))
+    height = 1.2 + 0.32 * len(rows)
+    fig, ax = plt.subplots(figsize=(1.6 + 0.62 * len(columns), height))
+    ax.imshow(np.ma.masked_invalid(values), cmap=cmap, vmin=-limit, vmax=limit, aspect="auto")
+    for i in range(len(rows)):
+        for j in range(len(columns)):
+            if np.isfinite(values[i, j]):
+                ax.text(j, i, fmt.format(values[i, j]), ha="center", va="center", fontsize=7,
+                        color=style.TEXT_PRIMARY)  # fmt: skip
+    ax.set_xticks(np.arange(len(columns)), columns, rotation=40, ha="right",
+                  rotation_mode="anchor", fontsize=8)  # fmt: skip
+    ax.set_yticks(np.arange(len(rows)), rows, fontsize=8)
+    ax.grid(visible=False)
+    ax.set_title(title)
+    fig.tight_layout()
+    return fig
+
+
 def image_grid(
     images: Sequence[Sequence[np.ndarray]],
     row_labels: Sequence[str],

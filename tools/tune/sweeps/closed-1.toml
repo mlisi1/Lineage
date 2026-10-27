@@ -1,0 +1,32 @@
+# M11 fifth sweep (ADR 0019): the closed island (no strangers; one hunter pack lands by
+# the herd, built a little larger than its prey; seeds in guts; R4's weather and fire).
+# Its first run (m11-closed-office) lost its hunters within months in 19 of 20 seeds:
+# replays showed them starving among plenty, first because they landed far from the
+# herd and were built too big (fixed in the wave itself), then because kills are too few
+# and too unevenly shared for a pack capped at 16 to last. So the predator levers: the
+# cap, meat per kill, how hungry a hunter must be to hunt, the pack's size and build,
+# prey's cover; and, for D1 and M7.2 (diversity no longer brought by strangers), body
+# mutation, the founders' spread and longevity's cost. The species definition is fixed
+# (the owner, 2026-10-21). Tuning seeds 0–19, office, no presses (the island must stand
+# alone); 30 Latin-hypercube points besides the defaults.
+[sweep]
+name = "closed-1"
+seeds = 20
+seed_base = 0
+years = 3
+schedule = "office"
+samples = 30
+sampler = "lhs"
+rng_seed = 51
+
+[levers]
+"fauna.predator_cap" = { low = 16, high = 40, integer = true }
+"fauna.meat_energy" = { low = 1600, high = 3200, integer = true }
+"fauna.hunt_below_energy_share" = { low = 0.4, high = 0.8 }
+"fauna.hunter_wave_count" = { low = 8, high = 16, integer = true }
+"fauna.hunter_size_margin" = { low = 0.0, high = 0.25 }
+"fauna.cover_protection" = { low = 0.3, high = 0.7 }
+"fauna.defence_toxicity" = { low = 0.3, high = 0.5 }
+"fauna.mutation_sigma_body" = { low = 0.025, high = 0.036 }
+"fauna.founder_spread" = { low = 0.04, high = 0.10 }
+"fauna.longevity_burn_cost" = { low = 0.15, high = 0.35 }

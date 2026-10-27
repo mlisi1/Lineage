@@ -238,7 +238,7 @@ def test_m2_report_has_acceptance_maps_and_animation(tmp_path: Path) -> None:
     assert out.name == "M2-terrain"
 
     doc = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-    assert [a["id"] for a in doc["acceptance"]] == ["M2.1", "M2.2", "M2.3", "M2.4", "M2.5"]
+    assert [a["id"] for a in doc["acceptance"]] == ["M2.1", "M2.2", "M2.3", "M2.4"]
     assert all(a["status"] in {"PASS", "FAIL"} for a in doc["acceptance"])
     assert doc["metrics"]["seeds_without_land"] == 0
     assert 0.25 <= doc["metrics"]["land_fraction.min"] <= doc["metrics"]["land_fraction.max"]

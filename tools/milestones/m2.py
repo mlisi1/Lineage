@@ -17,9 +17,8 @@ from tools.runs import TIME_KEY, Run
 from tools.viz import figures, pixelmap, style
 
 LAND_FRACTION_BAND = (0.25, 0.6)
-# A terrain tick (one per sim-day) may take this long on the reference machine; the
-# device is roughly 10× slower and still far inside 25 % of a core (CLAUDE.md §4.8).
-STEP_BUDGET_MS = 25.0
+# The step time is still reported (``step_ms.median``). Its budget, 25 ms for a world of
+# terrain only, was retired in M11 (ADR 0019): M4.4 budgets the whole world.
 SNAPSHOT_YEARS = (0, 5, 10)
 REPRESENTATIVE_SEEDS = 3
 ANIMATION_FRAME_MS = 120
@@ -75,12 +74,6 @@ CRITERIA: list[Criterion] = [
         low=0.5,
     ),
     Criterion("M2.4", "Seeds that lost all their land at any time", "seeds_without_land", high=0),
-    Criterion(
-        "M2.5",
-        "Step of the whole world (terrain and everything on it), median ms per sim-day",
-        "step_ms.median",
-        high=STEP_BUDGET_MS,
-    ),
 ]
 
 

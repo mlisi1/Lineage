@@ -135,7 +135,8 @@ class FireEnded(OutputEvent):
 @dataclass(frozen=True)
 class CreaturesArrived(OutputEvent):
     """A group of one new species landed near cell (x, y): the founders of an empty
-    world, or strangers joining an inhabited one. Their ids start at ``first_id``."""
+    world, the hunters that follow them, the ark's newcomers (``founders``), or strangers
+    joining an inhabited one. Their ids start at ``first_id``."""
 
     count: int
     founders: bool
