@@ -31,6 +31,8 @@ export interface ShowcaseHost {
   advance(seconds: number): void;
   /** Whether the ground under the shot last returned is painted (`Landscape.groundShown`). */
   groundShown(): boolean;
+  /** Paint and keep ahead the ground of a shot to come (`Landscape.prefetch`). */
+  prefetch(view: Shot["view"], centre: { x: number; y: number }): void;
   herd: Herd;
 }
 
@@ -103,6 +105,11 @@ export function captionAt(intoS: number, seconds: number): number {
 const HOLD_FROM_DIM = 0.85;
 /** The most the showcase's clock moves in one frame (seconds). */
 const MOST_STEP_S = 0.1;
+/**
+ * Seconds before a cut the ground of the shot after it is painted ahead, so that it is
+ * kept by the time the camera gets there (a screenful is some 10 s on the board).
+ */
+const PREFETCH_S = 9;
 const MOST_HELD_S = 20;
 /** How much faster the world's end plays than it would (three minutes in some fifteen s). */
 const END_SPEED = 12;
@@ -135,6 +142,8 @@ export class Showcase {
   private clockAtStart: ClockMessage | null = null;
   /** Prey already taken: a hunt in a later loop takes another. */
   private readonly eaten = new Set<number>();
+  /** The cuts whose next shot has been painted ahead, by loop, act and second. */
+  private readonly prefetched = new Set<string>();
   /** How dark the last shot was, and how long the showcase has waited in it. */
   private lastDim = 1;
   /** How much of the act's caption shows (0–1). */
@@ -182,6 +191,7 @@ export class Showcase {
     const shot = staging.shot(intoS);
     // Into each act and out of it, and at its cuts, through the dark.
     const seconds = (ACTS[index] as Act).seconds;
+    this.prefetchNext(loop, index, intoS, seconds, staging, size);
     shot.dim = Math.max(shot.dim, dipAt(intoS, seconds, staging.cuts));
     this.caption = captionAt(intoS, seconds);
     this.lastDim = shot.dim;
@@ -468,6 +478,33 @@ export class Showcase {
         };
       case "card":
         return { cues: [], shot: fixed("map", centre) };
+    }
+  }
+
+  /**
+   * Paint ahead the ground of the shot after the next cut, once it is `PREFETCH_S` away:
+   * the next act's first shot, or the act's own after a cut within it.
+   */
+  private prefetchNext(
+    loop: number,
+    index: number,
+    intoS: number,
+    seconds: number,
+    staging: Staging,
+    size: { width: number; height: number },
+  ): void {
+    for (const cut of [...(staging.cuts ?? []), seconds]) {
+      const toGo = cut - intoS;
+      if (toGo <= 0 || toGo > PREFETCH_S) continue;
+      const mark = `${loop}:${index}:${cut}`;
+      if (this.prefetched.has(mark)) continue;
+      this.prefetched.add(mark);
+      if (this.prefetched.size > 64) this.prefetched.clear();
+      const next =
+        cut < seconds
+          ? staging.shot(cut + 0.01)
+          : this.stage((ACTS[(index + 1) % ACTS.length] as Act).name, size).shot(0);
+      this.host.prefetch(next.view, next.centre);
     }
   }
 

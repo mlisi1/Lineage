@@ -572,6 +572,10 @@ async function start(): Promise<void> {
           advance += seconds;
         },
         groundShown: () => landscape.groundShown,
+        prefetch: (view, centre) => {
+          const tile = TILES[view];
+          landscape.prefetch(view, sight(centre, WIDTH / tile, HEIGHT / tile));
+        },
         herd,
       })
     : null;

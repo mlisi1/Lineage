@@ -75,30 +75,36 @@ describe("the ground kept between visits", () => {
     later.cover(everywhere);
     await settle(later);
     expect(later.ready(everywhere)).toBe(true);
-    expect(again.asked).toBe(0);
+    // Asked of the painter, which hands back what it kept: nothing painted again.
+    expect(again.painted).toBe(0);
   });
 
-  it("shows an older day's piece at once, and paints today's to come over it", async () => {
+  it("shows an older day's piece while today's is late, and paints today's over it", async () => {
     const cache = new MemoryCache();
     const before = groundOf(new Counting(cache), cache);
     before.update(1, request, noShadows, "day 1");
     before.cover(everywhere);
     await settle(before);
 
+    // A painter that never comes back: after a moment the older day's pieces show.
+    const stalled = new Counting(cache);
+    stalled.paint = () => new Promise<Painted>(() => undefined);
+    const waiting = groundOf(stalled, cache);
+    waiting.update(1, request, noShadows, "day 2");
+    waiting.cover(everywhere);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    waiting.tick(0);
+    expect(waiting.container.children.length).toBe(2);
+    expect(waiting.ready(everywhere)).toBe(false);
+
+    // A painter that does: today's comes, and both days are kept.
     const painter = new Counting(cache);
     const ground = groundOf(painter, cache);
     ground.update(1, request, noShadows, "day 2");
     ground.cover(everywhere);
-    // The older pieces come before anything is painted: no bare ground.
-    await Promise.resolve();
-    await Promise.resolve();
-    ground.tick(0);
-    expect(ground.container.children.length).toBe(2);
-    expect(ground.ready(everywhere)).toBe(false);
     await settle(ground);
     expect(ground.ready(everywhere)).toBe(true);
     expect(painter.painted).toBe(2);
-    // Both days kept, each piece under each: going back to day 1 would show it unpainted.
     expect([...cache.kept.values()].map((kept) => kept.stamp)).toEqual([
       "day 1",
       "day 1",
@@ -204,5 +210,23 @@ describe("the ground kept between visits", () => {
     expect(await cache.get("piece", "spring")).toBeUndefined();
     expect((await cache.latest("piece"))?.stamp).toBe("winter");
     expect(await cache.latest("elsewhere")).toBeUndefined();
+  });
+
+  it("paints ahead the pieces a place will need and keeps them, without showing them", async () => {
+    const cache = new MemoryCache();
+    const painter = new Counting(cache);
+    const ground = groundOf(painter, cache);
+    ground.update(1, request, noShadows, "day 1");
+    ground.prefetch({ x0: 0, y0: 0, x1: 4, y1: 4 });
+    // Asked once for the place, however often: two pieces with the ring round it.
+    ground.prefetch({ x0: 0, y0: 0, x1: 4, y1: 4 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(cache.kept.size).toBe(2);
+    expect(ground.container.children.length).toBe(0);
+    expect(painter.painted).toBe(2);
+    ground.cover(everywhere);
+    await settle(ground);
+    expect(ground.ready(everywhere)).toBe(true);
+    expect(painter.painted).toBe(2);
   });
 });

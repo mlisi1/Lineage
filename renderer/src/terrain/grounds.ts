@@ -42,6 +42,8 @@ const YIELD_WAIT_S = 1;
  * is a texture sent to the GPU (R5: several in one frame made it late on the board).
  */
 const PLACED_PER_FRAME = 4;
+/** Seconds a piece with nothing to show waits for today's before the latest kept is shown. */
+const PLACEHOLDER_AFTER_S = 0.3;
 
 /** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
 export interface PieceOptions {
@@ -244,6 +246,9 @@ export class PieceGround extends Layers {
   private shadowsOf: ((cells: CellRect) => PaintRequest["shadows"]) | null = null;
   /** What the pieces asked for now are painted from (`GroundCache`); "" keeps none. */
   private stamp = "";
+  /** Pieces asked for ahead of the camera (`prefetch`), for the stamp they were asked for. */
+  private readonly prefetched = new Set<number>();
+  private prefetchedFor = "";
   /**
    * Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`),
    * the nearest the view first: by their key (a painting that comes overtakes a kept one
@@ -340,6 +345,46 @@ export class PieceGround extends Layers {
       }
     }
     return painted;
+  }
+
+  /**
+   * Paint the pieces `view` will need, behind everything the view on the screen asks for,
+   * and keep them without showing them: where the camera goes next (R5, the showcase),
+   * so that its ground is kept and comes at once when it gets there.
+   */
+  prefetch(view: CellRect): void {
+    const { stamp, request, shadowsOf } = this;
+    if (stamp === "" || request === null || shadowsOf === null) return;
+    if (this.prefetchedFor !== stamp) {
+      this.prefetchedFor = stamp;
+      this.prefetched.clear();
+    }
+    const centre = { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 };
+    for (const key of this.keys(view, this.cut.ahead === Infinity ? 0 : this.cut.ahead)) {
+      if (this.prefetched.has(key)) continue;
+      const shown = this.pieces.get(key);
+      if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
+      this.prefetched.add(key);
+      const { padded } = this.extent(key);
+      const shadows = shadowsOf(padded);
+      const x = ((key % 1024) + 0.5) * this.cut.cells;
+      const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
+      this.painter
+        .paint(
+          {
+            ...request,
+            tile: this.tile,
+            cells: padded,
+            ...(shadows === undefined ? {} : { shadows }),
+            keep: { key: this.keyOf(key), stamp, ahead: true },
+          },
+          BACKGROUND + Math.hypot(x - centre.x, y - centre.y),
+        )
+        .catch((error: unknown) => {
+          if (!(error instanceof Dropped)) throw error;
+          this.prefetched.delete(key);
+        });
+    }
   }
 
   /** Pieces painted from the latest land, of those the view needs. */
@@ -444,35 +489,26 @@ export class PieceGround extends Layers {
       paint();
       return;
     }
-    // A piece already showing something (a new day over the old) is not read here: the
-    // painter looks in the cache itself and hands back today's if it is kept (R5: reading
-    // every piece on the page's thread at each new day held up the frames).
-    if (piece.painting !== null) {
-      paint();
-      return;
-    }
-    // Kept from before: today's is shown as it is; an older one at once, while today's is
-    // painted to fade in over it.
+    // The painter looks in the cache itself, off the page's thread, and hands back what it
+    // kept for this stamp without copying it, or paints it (R5: the page decoding every
+    // kept piece itself held up the frames at each cut). Only a piece with nothing to show
+    // that has not come after `PLACEHOLDER_AFTER_S` is read here, the latest kept of any
+    // stamp, to show at once while today's comes over it: no bare ground.
+    paint();
+    if (piece.painting !== null) return;
     const name = this.keyOf(key);
-    void this.cache.get(name, stamp).then(async (today) => {
-      if (!wanted()) return;
-      if (today !== undefined) {
-        this.arriving.set(key, () => {
-          if (wanted()) this.place(piece, today, cells, padded, version);
-        });
-        return;
-      }
-      const older = await this.cache.latest(name);
-      if (!wanted()) return;
-      if (older !== undefined && piece.painting === null) {
+    setTimeout(() => {
+      if (!wanted() || piece.painting !== null) return;
+      void this.cache.latest(name).then((older) => {
+        if (older === undefined || !wanted() || piece.painting !== null) return;
+        if (this.arriving.has(key)) return;
         this.arriving.set(key, () => {
           if (wanted() && piece.painting === null) {
             this.place(piece, older.pixels, cells, padded, piece.painted, 0);
           }
         });
-      }
-      paint();
-    });
+      });
+    }, PLACEHOLDER_AFTER_S * 1000);
   }
 
   /** The cells of piece `key`, and those painted for it with its margin round them. */

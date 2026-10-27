@@ -332,6 +332,16 @@ export class Landscape {
     return this.sinceLate >= ON_TIME_S;
   }
 
+  /**
+   * Paint and keep the ground `view` will show over `cells`, behind what is on the screen
+   * (R5, the showcase: where the camera goes next). Only a view built for the latest land.
+   */
+  prefetch(view: ViewName, cells: CellRect): void {
+    if (this.land === null || view === "map" || this.behind(view)) return;
+    const ground = view === "middle" ? this.built.middle?.ground : this.built.local?.ground;
+    ground?.prefetch(cells);
+  }
+
   /** Whether a new day or land is waiting to be laid out. */
   get dayDue(): boolean {
     return this.stale;
