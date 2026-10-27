@@ -152,11 +152,13 @@ def is_spike(page: str) -> bool:
 
 def default_profiles(page: str) -> str:
     """The profiles run when none are named, comma-separated: every one the spike can run;
-    for the scene the GPU's only (the owner, 2026-10-27: the CPU cannot draw the scene, so
-    ``software`` is run only when asked for)."""
+    for the scene ``default`` alone, a plain Chromium as the kiosk runs it (the owner,
+    2026-10-27: the CPU cannot draw the scene, and on the board every GPU profile draws
+    through the same path, ANGLE on OpenGL ES with Panfrost, so the others are run only
+    when asked for, as after a Chromium or Mesa update)."""
     if is_spike(page):
         return ",".join(PROFILES)
-    names = [n for n in PROFILES if n not in SPIKE_ONLY_PROFILES and n != "software"]
+    names = ["default"]
     return ",".join(names)
 
 
