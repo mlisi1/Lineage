@@ -91,4 +91,30 @@ describe("what stands among the plants", () => {
     expect(d.parent).toBe(fallback);
     expect(b.visible).toBe(false);
   });
+
+  it("stays last in its row in the order asked, and is not moved when it is there already", () => {
+    const guests = [new Container()];
+    const rows = { guests, rowsPerCell: 1 };
+    const pool = new RowPool(new Container());
+    const frame = (): [unknown, unknown] => {
+      pool.begin();
+      const first = pool.next(Texture.WHITE, rows, 0.5);
+      const second = pool.next(Texture.WHITE, rows, 0.5);
+      pool.end();
+      return [first, second];
+    };
+    const [first, second] = frame();
+    // An animal comes into the row after them: next frame they go after it again.
+    const animal = new Container();
+    guests[0]?.addChild(animal);
+    frame();
+    expect(guests[0]?.children).toEqual([animal, first, second]);
+    // Nothing changed: nothing is taken out and put back (no draw list rebuilt for it).
+    let moved = 0;
+    guests[0]?.on("childRemoved", () => (moved += 1));
+    frame();
+    frame();
+    expect(moved).toBe(0);
+    expect(guests[0]?.children).toEqual([animal, first, second]);
+  });
 });

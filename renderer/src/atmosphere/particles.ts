@@ -137,6 +137,8 @@ export interface Rows {
 export class RowPool {
   private readonly sprites: Sprite[] = [];
   private used = 0;
+  /** This frame's sprites by the row they were asked into, in the order asked. */
+  private readonly placed = new Map<Container, Sprite[]>();
 
   constructor(
     private readonly fallback: Container,
@@ -145,6 +147,7 @@ export class RowPool {
 
   begin(): void {
     this.used = 0;
+    this.placed.clear();
   }
 
   /** The next sprite, shown, with `texture`, in the row of a foot at `footY` cells. */
@@ -161,9 +164,13 @@ export class RowPool {
         : (rows.guests[
             Math.min(Math.max(Math.floor(footY * rows.rowsPerCell), 0), rows.guests.length - 1)
           ] ?? this.fallback);
-    // Last in its row, every frame: what is asked for later is drawn over what came before
-    // (a cone, then its lava; a tree's foot fire, then the flames in its crown).
-    host.addChild(sprite);
+    if (sprite.parent !== host) host.addChild(sprite);
+    let row = this.placed.get(host);
+    if (row === undefined) {
+      row = [];
+      this.placed.set(host, row);
+    }
+    row.push(sprite);
     if (sprite.texture !== texture) sprite.texture = texture;
     sprite.visible = true;
     this.used += 1;
@@ -171,6 +178,17 @@ export class RowPool {
   }
 
   end(): void {
+    // Last in its row, in the order asked: what is asked for later is drawn over what came
+    // before (a cone, then its lava; a tree's foot fire, then the flames in its crown).
+    // Put there only where they are not already (R5: taken out and put back every frame,
+    // every flame rebuilt its band's draw list every frame).
+    for (const [host, row] of this.placed) {
+      const children = host.children;
+      const from = children.length - row.length;
+      let inPlace = from >= 0;
+      for (let k = 0; inPlace && k < row.length; k++) inPlace = children[from + k] === row[k];
+      if (!inPlace) for (const sprite of row) host.addChild(sprite);
+    }
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
       if (sprite !== undefined) sprite.visible = false;
