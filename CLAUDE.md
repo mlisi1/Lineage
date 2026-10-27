@@ -172,6 +172,9 @@ Do not create directories outside this layout without updating this file.
   - `uv run ruff check . && uv run ruff format --check . && uv run pyright` — lint/format/types
   - `uv run pytest -m "not slow"` — fast suite (CI on every push)
   - `uv run pytest -m slow` — long statistical tests (nightly)
+  - `uv run pytest -m criteria` — M11's nightly check: the tuned island, 3 years × 20
+    seeds, judged on every criterion at once (`tools/tests/test_m11_criteria.py`; its own
+    nightly job; about 8 minutes on 20 cores)
   - `uv run python -m tools.fastforward --years 3 --seeds 20 --out runs/<id>`
     (`--save-days 30` for long statistical runs; `--power-cut-day N` to test resume;
     `--set fauna.learning=false` to change one config key for an ablation;
@@ -472,7 +475,8 @@ needs a note in `docs/decisions/`.
   ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species; D1 asks
   9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving; M8.1 judges light
   traits. The report `reports/M11-long-run` (e08aece and after): every criterion passes
-  on tuning and held-out seeds; merged into `main` 2026-10-27. R5, merging second,
+  on tuning and held-out seeds; merged into `main` 2026-10-27; the nightly criteria test
+  (`pytest -m criteria`) guards it. R5, merging second,
   re-records the stream recordings; the sim's Orange Pi measurement is left to S1/S7.)
 
 ### R0 — Renderer spike on the device (gates R1+)

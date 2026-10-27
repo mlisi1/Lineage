@@ -41,6 +41,11 @@ The tuned island (ADR 0019, Decision and Consequences; `docs/m11-plan.md` §7;
 through soft caps and resting hunters. The owner revised M6.1 (3–16 species), M8.1
 (light traits) and set D1–D3.
 
+**Guarded nightly** by `tools/tests/test_m11_criteria.py` (`pytest -m criteria`, its own
+job in `.github/workflows/nightly.yml`): the tuned island, 3 years × 20 seeds, office,
+judged on every single-run criterion. A failure means a change unbalanced the island.
+Branches `m11-tuning` and `m11-reach` and the worktree `../Lineage-m11-reach` are gone.
+
 **Left for others:**
 - **R5 (merging second)**: re-record the stream recordings and the spike fixture on top of
   M11's sim (three tools tests fail until then: the spike fixture, the stream recording,
