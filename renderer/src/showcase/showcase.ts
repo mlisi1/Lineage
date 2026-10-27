@@ -12,7 +12,7 @@ import type { Herd } from "../herd";
 import type { Show } from "../atmosphere/demo";
 import { regrid } from "../atmosphere/demo";
 import type { RareLook } from "../creatures/rare";
-import type { ClockMessage, LandMessage, Message } from "../protocol";
+import type { ClockMessage, LandMessage, Message, SkyMessage } from "../protocol";
 import { gridNumbers } from "../stream";
 import { ACTS, actAt, type Act, type ActName } from "./script";
 
@@ -31,6 +31,8 @@ export interface ShowcaseHost {
   advance(seconds: number): void;
   /** Whether the ground under the shot last returned is painted (`Landscape.groundShown`). */
   groundShown(): boolean;
+  /** The light of the moment and what falls, as the sim's sky message has them. */
+  sky(light: number, present: boolean, rain: SkyMessage["rain"]): void;
   /** Paint and keep ahead the ground of a shot to come (`Landscape.prefetch`). */
   prefetch(view: Shot["view"], centre: { x: number; y: number }): void;
   herd: Herd;
@@ -116,8 +118,18 @@ const END_SPEED = 12;
 /** The day of the year shown late in autumn and in winter (the clock rewritten). */
 const AUTUMN_DAY = 315;
 const WINTER_DAY = 25;
-/** Snow lies above this share of the land's heights, in the winter the showcase lays on. */
+/**
+ * Snow lies above this share of the land's heights in the winter the showcase lays on:
+ * first on the high ground, then lower (the owner: the snow came too fast).
+ */
+const SNOW_HIGH = 0.6;
 const SNOW_FROM = 0.35;
+/** Seconds night takes to fall, and how often the light steps down meanwhile. */
+const NIGHTFALL_S = 9;
+const LIGHT_STEP_S = 0.5;
+/** The light of the day, of dusk and of night (as the demo's, `atmosphere/demo.ts`). */
+const DAY_LIGHT = 1;
+const NIGHT_LIGHT = 0.05;
 
 interface Cue {
   atS: number;
@@ -373,20 +385,26 @@ export class Showcase {
         };
       }
       case "seasons":
+        // Autumn up close, then from further off the snow comes: it falls, settles on the
+        // high ground, then lower down, each fading in over the land before it.
         return {
           cues: [
             { atS: 0, run: () => this.season("autumn", AUTUMN_DAY, 0.9, null) },
             {
-              atS: 7,
+              atS: 8,
               run: () => {
-                this.season("winter", WINTER_DAY, 0.4, this.snowed());
-                host.demo(["rain"], wood.x, wood.y);
+                this.season("winter", WINTER_DAY, 0.1, this.snowed(SNOW_HIGH));
+                host.sky(DAY_LIGHT, true, "rain");
               },
             },
+            {
+              atS: 12,
+              run: () => this.season("winter", WINTER_DAY + 1, 0.2, this.snowed(SNOW_FROM)),
+            },
           ],
-          cuts: [7],
+          cuts: [6],
           shot: (intoS) => ({
-            view: intoS < 7 ? "local" : "middle",
+            view: intoS < 6 ? "local" : "middle",
             centre: { ...wood },
             dim: 0,
             subject: null,
@@ -418,10 +436,15 @@ export class Showcase {
       }
       case "night":
         return {
-          cues: [
-            { atS: 0, run: () => host.demo(["dusk"], crowd.x, crowd.y) },
-            { atS: 4, run: () => host.demo(["night"], crowd.x, crowd.y) },
-          ],
+          // Night falls over the herd, the light stepping down through dusk.
+          cues: Array.from({ length: Math.round(NIGHTFALL_S / LIGHT_STEP_S) + 1 }, (_, k) => {
+            const share = ease((k * LIGHT_STEP_S) / NIGHTFALL_S);
+            return {
+              atS: CUT_S + k * LIGHT_STEP_S,
+              run: () =>
+                host.sky(DAY_LIGHT + (NIGHT_LIGHT - DAY_LIGHT) * share, share < 0.5, "none"),
+            };
+          }),
           shot: fixed("middle", crowd),
         };
       case "powers": {
@@ -558,7 +581,7 @@ export class Showcase {
   }
 
   /** The recording's land with snow on its higher ground (the winter the showcase lays on). */
-  private snowed(): LandMessage | null {
+  private snowed(from: number): LandMessage | null {
     this.keepStart();
     const message = this.landAtStart;
     if (message === null || message.snow === undefined) return message;
@@ -566,11 +589,11 @@ export class Showcase {
     const heights = gridNumbers(message.heights, cells);
     const sea = message.sea_level * message.heights.scale;
     const top = Math.max(...heights);
-    const from = sea + (top - sea) * SNOW_FROM;
+    const lowest = sea + (top - sea) * from;
     const snow = new Uint8Array(cells);
     heights.forEach((height, cell) => {
-      if (height > from)
-        snow[cell] = Math.min(255, Math.round((255 * (height - from)) / (top - from)) + 90);
+      if (height > lowest)
+        snow[cell] = Math.min(255, Math.round((255 * (height - lowest)) / (top - lowest)) + 90);
     });
     return { ...message, snow: regrid(message.snow, snow) };
   }

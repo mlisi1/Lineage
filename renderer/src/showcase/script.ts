@@ -55,9 +55,9 @@ export const ACTS: readonly Act[] = [
   { name: "life", seconds: 14, line: "They eat, hunt and die, and their kind changes with them." },
   { name: "family", seconds: 12, line: "Families. A lineage, generation after generation." },
   { name: "rare", seconds: 12, line: "Rare genes give strange gifts, at a cost." },
-  { name: "seasons", seconds: 14, line: "Seasons follow the real calendar." },
+  { name: "seasons", seconds: 18, line: "Seasons follow the real calendar." },
   { name: "weather", seconds: 14, line: "It has its own weather." },
-  { name: "night", seconds: 12, line: "Your presence is its sun. When you leave, night falls." },
+  { name: "night", seconds: 16, line: "Your presence is its sun. When you leave, night falls." },
   { name: "powers", seconds: 15, line: "One button. Once a week, the island asks for help." },
   // The chronicle's scroll unrolls at the foot of the screen: the line goes at the top.
   { name: "chronicle", seconds: 9, line: "It writes its own history.", top: true },

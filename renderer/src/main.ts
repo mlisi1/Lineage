@@ -572,6 +572,9 @@ async function start(): Promise<void> {
           advance += seconds;
         },
         groundShown: () => landscape.groundShown,
+        sky: (light, present, rain) => {
+          receive({ type: "sky", protocol: 1, t_ms: lastMs, light, present, rain, burning: [] });
+        },
         prefetch: (view, centre) => {
           const tile = TILES[view];
           landscape.prefetch(view, sight(centre, WIDTH / tile, HEIGHT / tile));
@@ -601,7 +604,14 @@ async function start(): Promise<void> {
         : (places.get(scroll.caption.number) ?? null);
     const scripted = showcase?.update(dtS) ?? null;
     if (scripted !== null) {
-      shot = scripted;
+      // Kept inside the world, as the director keeps its own views (past its edge there is
+      // nothing to draw); the map shows the whole of it.
+      const tile = TILES[scripted.view];
+      const centre =
+        scripted.view === "map"
+          ? { x: size.width / 2, y: size.height / 2 }
+          : within(scripted.centre, WIDTH / tile, HEIGHT / tile, size.width, size.height);
+      shot = { ...scripted, centre };
     } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
