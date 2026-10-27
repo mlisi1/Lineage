@@ -241,7 +241,8 @@ describe("depth among the plants", () => {
       order.indexOf(layer.guests[6] as never),
     );
     // And rows are drawn top to bottom: the plants of a row in front cover the creatures behind.
-    const rows = layer.container.children;
+    // (The rows are kept in bands, each its own render group: read them in drawing order.)
+    const rows = layer.container.children.flatMap((band) => band.children);
     expect(rows.indexOf(row as never)).toBeGreaterThan(
       rows.indexOf(layer.guests[5]?.parent as never),
     );

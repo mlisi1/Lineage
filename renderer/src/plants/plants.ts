@@ -176,6 +176,14 @@ interface Swaying {
   slide?: { x: number; pixel: number };
 }
 
+/**
+ * Cells of rows to a band (R5): the rows are kept in bands, each its own render group, so
+ * that an animal stepping into the next row, or a row culled, rebuilds the draw list of its
+ * band and not the world's (on the board, with thousands of plants, that rebuild took a
+ * frame's whole budget several times a second in a crowd). The order drawn is the same.
+ */
+const BAND_CELLS = 4;
+
 interface Row {
   container: Container;
   /** The plants of this row, by the first column of their chunk. */
@@ -184,6 +192,11 @@ interface Row {
   swaying: Map<number, Swaying[]>;
   /** The creatures standing on this row, drawn over its plants. */
   guests: Container;
+  /**
+   * The row's trees and bushes (those with a footprint) by chunk, its first column `x`:
+   * what `over` looks through for each animal every frame, without the grass.
+   */
+  leafy: { x: number; sprites: Sprite[] }[];
 }
 
 export interface PlantLayerOptions {
@@ -204,6 +217,9 @@ export class PlantLayer {
   readonly guests: readonly Container[];
   readonly rowsPerCell: number;
   private readonly rows: Row[] = [];
+  /** The rows' bands, top first, each `BAND_CELLS` cells of rows (`BAND_CELLS`). */
+  private readonly bands: Container[] = [];
+  private readonly rowsPerBand: number;
   private readonly built = new Set<number>();
   private readonly tall: number;
   private readonly onBuilt: (() => void) | undefined;
@@ -217,8 +233,6 @@ export class PlantLayer {
    * in: four numbers each, the middle and the half width and height, in cells.
    */
   private readonly feet: (number[] | undefined)[];
-  /** The drawings of trees and bushes (those with a footprint): what is drawn over animals. */
-  private readonly leafy = new WeakSet<Sprite>();
   /** Of those, the pieces of bushes drawn in pieces, each sorted by its own foot. */
   private readonly pieced = new WeakSet<Sprite>();
   /** The largest half width or height of a footprint so far: how far round a place to look. */
@@ -237,16 +251,23 @@ export class PlantLayer {
     this.rowsPerCell = options.rowsPerCell ?? 1;
     this.feet = new Array<number[] | undefined>(land.width * land.height);
     this.crowns = new Array<Crown | undefined>(land.width * land.height);
+    this.rowsPerBand = BAND_CELLS * this.rowsPerCell;
     for (let row = 0; row < land.height * this.rowsPerCell; row++) {
       const made: Row = {
         container: new Container(),
         chunks: new Map(),
         swaying: new Map(),
         guests: new Container(),
+        leafy: [],
       };
       made.container.addChild(made.guests);
       this.rows.push(made);
-      this.container.addChild(made.container);
+      if (row % this.rowsPerBand === 0) {
+        const band = new Container({ isRenderGroup: true });
+        this.bands.push(band);
+        this.container.addChild(band);
+      }
+      this.bands[this.bands.length - 1]?.addChild(made.container);
     }
     this.guests = this.rows.map((row) => row.guests);
     if (options.eager === true) {
@@ -407,17 +428,24 @@ export class PlantLayer {
     }
     if (this.built.size !== before) this.onBuilt?.();
     let drawn = 0;
+    const bandsShown = new Array<boolean>(this.bands.length).fill(false);
     this.rows.forEach((row, index) => {
       const top = index / this.rowsPerCell;
       const bottom = (index + 1) / this.rowsPerCell;
       const visible = bottom + REACH_CELLS >= view.y0 && top - this.tall <= view.y1;
       if (row.container.visible !== visible) row.container.visible = visible;
       if (!visible) return;
-      for (const [x, chunk] of row.chunks) {
+      bandsShown[Math.floor(index / this.rowsPerBand)] = true;
+      row.chunks.forEach((chunk, x) => {
         const inside = x + CHUNK_CELLS + REACH_CELLS >= view.x0 && x - REACH_CELLS <= view.x1;
         if (chunk.visible !== inside) chunk.visible = inside;
         if (inside) drawn += chunk.children.length;
-      }
+      });
+    });
+    // A band none of whose rows shows is left out whole.
+    this.bands.forEach((band, index) => {
+      const shown = bandsShown[index] === true;
+      if (band.visible !== shown) band.visible = shown;
     });
     return drawn;
   }
@@ -485,11 +513,12 @@ export class PlantLayer {
     const first = Math.max(from - reach, 0);
     const last = Math.min(to + reach, this.rows.length - 1);
     for (let index = first; index <= last; index++) {
-      for (const [x, chunk] of this.rows[index]?.chunks ?? []) {
+      const leafy = this.rows[index]?.leafy ?? [];
+      for (let k = 0; k < leafy.length; k++) {
+        const { x, sprites } = leafy[k] as { x: number; sprites: Sprite[] };
         if (x + CHUNK_CELLS + REACH_CELLS < box.x0 || x - REACH_CELLS > box.x1) continue;
-        for (const child of chunk.children) {
-          const sprite = child as Sprite;
-          if (!this.leafy.has(sprite)) continue;
+        for (let j = 0; j < sprites.length; j++) {
+          const sprite = sprites[j] as Sprite;
           const high = sprite.texture.height * sprite.scale.y;
           const wide = sprite.texture.width * sprite.scale.x;
           const left = sprite.x - sprite.anchor.x * wide;
@@ -637,7 +666,6 @@ export class PlantLayer {
         }
         if (placed.footprint !== undefined) {
           this.tread(footX, footY, placed.footprint);
-          this.leafy.add(sprite);
           if (placed.piece === true) this.pieced.add(sprite);
         }
         // The row its foot is in: the last row of a cell for a foot on the cell's edge.
@@ -656,6 +684,14 @@ export class PlantLayer {
         }
         chunk.addChild(sprite);
         this.sprites += 1;
+        if (placed.footprint !== undefined) {
+          let leafy = row.leafy.find((each) => each.x === left);
+          if (leafy === undefined) {
+            leafy = { x: left, sprites: [] };
+            row.leafy.push(leafy);
+          }
+          leafy.sprites.push(sprite);
+        }
         if (placed.sway !== undefined) {
           const { frames, lowest, reach } = placed.sway;
           let swaying = row.swaying.get(left);
