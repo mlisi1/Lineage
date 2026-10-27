@@ -457,6 +457,8 @@ export class Landscape {
         (cells) => plants.shadows(cells),
         stamp,
       );
+      // The rest of the island painted ahead and kept, for wherever the camera goes next.
+      void this.built.middle.ground.prepaint();
       this.built.middle.plants.show(plants);
       return;
     }
@@ -486,6 +488,7 @@ export class Landscape {
       (cells) => plants.shadows(cells),
       stamp,
     );
+    void this.built.local.ground.prepaint();
     this.built.local.plants.show(plants);
   }
 }

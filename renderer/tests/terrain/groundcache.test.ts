@@ -117,4 +117,32 @@ describe("the ground kept between visits", () => {
     expect(uncached.ready(everywhere)).toBe(true);
     expect(painter.asked).toBe(2);
   });
+
+  it("paints the whole island ahead and keeps it, without showing it", async () => {
+    const cache = new MemoryCache();
+    const painter = new Counting();
+    const ground = groundOf(painter, cache);
+    ground.update(1, request, noShadows, "day 1");
+    // Nothing in view yet: every piece is painted ahead, kept and not shown.
+    expect(await ground.prepaint()).toBe(2);
+    expect(cache.kept.size).toBe(2);
+    expect(ground.container.children.length).toBe(0);
+    // Already kept for the day: nothing to paint again.
+    expect(await ground.prepaint()).toBe(0);
+    // Then the view finds them ready without painting.
+    ground.cover(everywhere);
+    await settle(ground);
+    expect(ground.ready(everywhere)).toBe(true);
+    expect(painter.asked).toBe(2);
+  });
+
+  it("stops painting ahead when another day comes", async () => {
+    const cache = new MemoryCache();
+    const ground = groundOf(new Counting(), cache);
+    ground.update(1, request, noShadows, "day 1");
+    const ahead = ground.prepaint();
+    ground.update(2, request, noShadows, "day 2");
+    expect(await ahead).toBeLessThan(2);
+    expect([...cache.kept.values()].every((kept) => kept.stamp === "day 1")).toBe(true);
+  });
 });

@@ -70,10 +70,16 @@ export interface Painter {
   paint(request: PaintRequest, priority?: number): Promise<Painted>;
   /** Take off the queue every request not yet started for which `which` says so. */
   drop(which: (request: PaintRequest) => boolean): void;
-  /** Requests waiting or being painted. */
+  /** Requests waiting or being painted, but those in the background (`BACKGROUND`). */
   readonly busy: number;
   dispose(): void;
 }
+
+/**
+ * Requests at this priority or beyond are painted in the background (the island painted
+ * ahead of time, R5): after everything else, and not counted in `busy`.
+ */
+export const BACKGROUND = 1e9;
 
 export class Dropped extends Error {
   constructor() {
@@ -126,7 +132,8 @@ abstract class QueuedPainter implements Painter {
   }
 
   get busy(): number {
-    return this.queue.length + this.running.filter((each) => each !== null).length;
+    const wanted = (each: Queued | null): boolean => each !== null && each.priority < BACKGROUND;
+    return this.queue.filter(wanted).length + this.running.filter(wanted).length;
   }
 
   dispose(): void {

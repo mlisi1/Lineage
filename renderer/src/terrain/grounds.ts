@@ -17,7 +17,7 @@
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
 import { NO_CACHE, type GroundCache } from "./groundcache";
-import { Dropped, type PaintRequest, type Painter } from "./painter";
+import { BACKGROUND, Dropped, type PaintRequest, type Painter } from "./painter";
 import type { Pixels } from "./pixels";
 
 /** Seconds a new painting takes to come over the old. */
@@ -267,6 +267,47 @@ export class PieceGround extends Layers {
     }
   }
 
+  /**
+   * Paint every piece of the island not yet kept for the latest stamp, one at a time and
+   * after anything the view asks for, and keep them (`GroundCache`) without showing them:
+   * so that the camera, wherever it goes next, finds its ground ready (R5). Stops when
+   * the stamp changes. Resolves with the number painted.
+   */
+  async prepaint(): Promise<number> {
+    const { stamp, request, shadowsOf } = this;
+    if (stamp === "" || request === null || shadowsOf === null) return 0;
+    const { width, height } = this.world;
+    let painted = 0;
+    for (const key of this.keys({ x0: 0, y0: 0, x1: width, y1: height }, 0)) {
+      if (this.stamp !== stamp) break;
+      // One the view has asked for, or shows painted, is not painted twice.
+      const shown = this.pieces.get(key);
+      if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
+      const kept = await this.cache.get(this.keyOf(key));
+      if (kept?.stamp === stamp || this.stamp !== stamp) continue;
+      const { padded } = this.extent(key);
+      const shadows = shadowsOf(padded);
+      try {
+        const { pixels } = await this.painter.paint(
+          {
+            ...request,
+            tile: this.tile,
+            cells: padded,
+            ...(shadows === undefined ? {} : { shadows }),
+          },
+          BACKGROUND + this.distance(key),
+        );
+        if (this.stamp !== stamp) break;
+        this.cache.put(this.keyOf(key), stamp, pixels);
+        painted += 1;
+      } catch (error) {
+        if (!(error instanceof Dropped)) throw error;
+        break;
+      }
+    }
+    return painted;
+  }
+
   /** Pieces painted from the latest land, of those the view needs. */
   ready(view: CellRect): boolean {
     return this.keys(view, 0).every(
@@ -325,22 +366,7 @@ export class PieceGround extends Layers {
   private ask(key: number, piece: Piece): void {
     const { request, shadowsOf, stamp } = this;
     if (request === null || shadowsOf === null) return;
-    const { width, height } = this.world;
-    const px = key % 1024;
-    const py = Math.floor(key / 1024);
-    const size = this.cut.cells;
-    const cells = {
-      x0: px * size,
-      y0: py * size,
-      x1: Math.min((px + 1) * size, width),
-      y1: Math.min((py + 1) * size, height),
-    };
-    const padded = {
-      x0: Math.max(cells.x0 - PIECE_MARGIN, 0),
-      y0: Math.max(cells.y0 - PIECE_MARGIN, 0),
-      x1: Math.min(cells.x1 + PIECE_MARGIN, width),
-      y1: Math.min(cells.y1 + PIECE_MARGIN, height),
-    };
+    const { cells, padded } = this.extent(key);
     const version = this.landVersion;
     piece.asked = version;
     const wanted = (): boolean => this.pieces.get(key) === piece && piece.asked === version;
@@ -385,6 +411,27 @@ export class PieceGround extends Layers {
       }
       paint();
     });
+  }
+
+  /** The cells of piece `key`, and those painted for it with its margin round them. */
+  private extent(key: number): { cells: CellRect; padded: CellRect } {
+    const { width, height } = this.world;
+    const px = key % 1024;
+    const py = Math.floor(key / 1024);
+    const size = this.cut.cells;
+    const cells = {
+      x0: px * size,
+      y0: py * size,
+      x1: Math.min((px + 1) * size, width),
+      y1: Math.min((py + 1) * size, height),
+    };
+    const padded = {
+      x0: Math.max(cells.x0 - PIECE_MARGIN, 0),
+      y0: Math.max(cells.y0 - PIECE_MARGIN, 0),
+      x1: Math.min(cells.x1 + PIECE_MARGIN, width),
+      y1: Math.min(cells.y1 + PIECE_MARGIN, height),
+    };
+    return { cells, padded };
   }
 
   /** Where piece `key` is kept: by this ground's tile and piece size. */

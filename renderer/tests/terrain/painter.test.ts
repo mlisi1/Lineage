@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Dropped, InlinePainter, paintRequest } from "../../src/terrain/painter";
+import { BACKGROUND, Dropped, InlinePainter, paintRequest } from "../../src/terrain/painter";
 import { paintGround } from "../../src/terrain/ground";
 import { COSY } from "../../src/looks";
 import { LAND_PALETTE } from "../../src/terrain/palette";
@@ -53,5 +53,19 @@ describe("painting off the frame", () => {
     const version = painter.setLand({ ...land, seaLevel: land.seaLevel + 0.01 });
     const { landVersion } = await painter.paint(request);
     expect(landVersion).toBe(version);
+  });
+
+  it("does not count what is painted in the background as busy, and paints it last", async () => {
+    const painter = new InlinePainter();
+    painter.setLand(land);
+    const order: string[] = [];
+    const behind = painter.paint(request, BACKGROUND).then(() => order.push("behind"));
+    const after = painter.paint(request, BACKGROUND + 1).then(() => order.push("after"));
+    const near = painter.paint(request, 3).then(() => order.push("near"));
+    // The first in the background has started; the near one counts, the other does not.
+    expect(painter.busy).toBe(1);
+    await Promise.all([behind, after, near]);
+    expect(order).toEqual(["behind", "near", "after"]);
+    expect(painter.busy).toBe(0);
   });
 });
