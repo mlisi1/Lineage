@@ -91,7 +91,7 @@ lineage/
 │   ├── stream.py             # record the state stream from a save, for the renderer (R1)
 │   ├── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
 │   │                         #   standard library only: copied to the board as one file
-│   └── showcase.py           # run the showcase on the board and sum up how it ran (R5);
+│   └── showcase.py           # run the showcase on the board and sum up how it ran (R6);
 │                             #   standard library and kiosk_bench.py, copied beside it
 ├── renderer/                 # TypeScript + PixiJS (WebGL). One renderer for desk and phone.
 │   ├── src/                  # terrain/, plants/, creatures/, camera.ts, captions.ts, protocol.ts
@@ -106,7 +106,7 @@ lineage/
 │   │   │                     #   nursery, sleep), card.ts (the name card),
 │   │   │                     #   marker.ts (a chronicle entry's place), bench.ts and
 │   │   │                     #   benchplan.ts (R5: the scene's benchmark), framecap.ts (the
-│   │   │                     #   30 fps cap), gpu.ts, framestats.ts, showcase/ (R5: the
+│   │   │                     #   30 fps cap), gpu.ts, framestats.ts, showcase/ (R6: the
 │   │   │                     #   showcase's script, director, captions and frame meter),
 │   │   │                     #   terrain/groundcache.ts (R5: painted ground kept between visits)
 │   │   ├── sheets/           # look sheets of the real scene (land.html, R1)
@@ -253,7 +253,7 @@ Do not create directories outside this layout without updating this file.
     for the spike `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
   - on the board: `./showcase.sh` (with `lineage-showcase@.service` installed, `deploy/`;
     `showcase.py`, `kiosk_bench.py` and `dist-kiosk/` in `~/lineage-r5/`) — the showcase
-    (`index.html?showcase`, R5: a scripted tour of the scene in the desk's build, looping,
+    (`index.html?showcase`, R6: a scripted tour of the scene in the desk's build, looping,
     a frame counter top right); Ctrl+C prints frames a second, frames late by act and by
     loop, memory and temperature (also `showcase-summary.txt`)
   - `uv run python -m tools.report R5 --runs runs/r5-device` — R5's device report from the
