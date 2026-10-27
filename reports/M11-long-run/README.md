@@ -4,6 +4,7 @@ Run `m11-report-main`: 20 seeds × 3 sim-years, commit `92a082a235be`, config `9
 Baseline `m11-tuned-heldout`: config `96684c6842a6094b` (start 2026-01-01; 14 job(s); schedule office).
 Baseline `m11-report-always`: config `96684c6842a6094b` (start 2026-01-01; 12 job(s)).
 Baseline `m11-report-conference`: config `96684c6842a6094b` (start 2026-01-01; 12 job(s); schedule conference).
+Baseline `m11-report-decade`: config `96684c6842a6094b` (start 2026-01-01; 15 job(s); schedule office).
 Baseline `m11-report-five-year`: config `96684c6842a6094b` (start 2026-01-01; 12 job(s); schedule office).
 Baseline `m11-report-fork`: config `96684c6842a6094b` (start 2026-01-01; 12 job(s); forks every 60 days for 28; schedule office).
 Baseline `m11-report-learning-off`: config `e6caa502a8da141c` (start 2026-01-01; 12 job(s); fauna.learning=false; schedule office).
