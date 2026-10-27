@@ -609,16 +609,32 @@ needs a note in `docs/decisions/`.
   ahead after each new day while frames come on time; the middle view's animals posed
   two frames in three (the owner); measured with the plain kiosk, 20 s a scenario, the
   sim-day held, a day's turn reported apart (the owner). `main` (M11) merged in on
-  2026-10-27, the streams re-recorded with M11's sim. A showcase the owner asked for
-  (`src/showcase/`, `?showcase`): a scripted tour of about three minutes in thirteen acts
-  with captions, run on the board by `tools/showcase.py` and filmed for the README. Left:
-  the owner's verdict on the showcase's look, tuning it on the board, the final report
-  regenerated, a last board run of the final build, the merge into `main`. Checklist and
-  handoff in `docs/milestones.md`; reports `reports/R5-final/`, `reports/R5-device/`.)
+  2026-10-27, the streams re-recorded with M11's sim. The showcase the owner asked for
+  was begun here and moved to R6 by the owner (2026-10-27); its first version is on
+  `r5-final`. Left: the final report regenerated, a last board run of the final build, the
+  merge into `main`. Checklist and handoff in `docs/milestones.md`; reports
+  `reports/R5-final/`, `reports/R5-device/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
   (ADR 0010), with the final look; Chromium's memory within the board's budget (§4.8).
+
+### R6 — Showcase and trailer
+- **Deliver** (added by the owner, 2026-10-27, from R5): a showcase of the whole of Lineage
+  "almost like a trailer, with text that describes what is being shown": the concept, close
+  ups, effects and animations, in a scripted tour of the real scene in the desk's build
+  (`?showcase`, `renderer/src/showcase/`), looping on the board without reloading, as the
+  desk would run it, a frame counter in the top-right corner, and a runner
+  (`tools/showcase.py`) that prints frames a second, frames late by act and by loop,
+  memory and temperature on Ctrl+C; the tour filmed on the PC for the README (a trailer and
+  a short teaser), the README's section. The owner judges the trailer's look on the PC
+  first, then the showcase is tuned on the board. (Begun in R5: a first version of
+  thirteen acts, about three minutes, its runner and the board's unit; ADR 0022.)
+- **Tests**: the script's timeline, captions within the screen, the transitions, the frame
+  meter; the runner's summary; a still of each act (Playwright).
+- **Accept**: the owner's verdict on the trailer; on the board, `[≥ 30 fps median and
+  ≤ 10 % frames late in every act]` from the second loop on (bands the owner sets), no
+  ground bare at a cut.
 
 ### S1 — Server: real-time loop and persistence
 - **Deliver**: run the sim in real time, daily atomic saves (write temp → fsync → rename),
@@ -656,7 +672,7 @@ needs a note in `docs/decisions/`.
 
 **Suggested order**: M0 → M1 → R0 (as soon as hardware is on the desk) → M2 → M3 → M4 →
 M5 → M6 → M7 → M8 → M9 → M10 → M11, with R1–R4 following M3/M4, R5 once R1–R4 are in,
-and S1–S7 after M8.
+and S1–S7 after M8; R6 after R5.
 
 ## 9. How to work on a milestone (for Claude)
 
