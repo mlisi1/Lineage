@@ -29,6 +29,7 @@ import {
   stepOut,
   trail,
   type Motion,
+  type Walker,
 } from "./motion";
 import {
   COURT_ANGLES,
@@ -436,6 +437,19 @@ export class CreatureLayer {
   private showing: Showing = "bodies";
   // Scratch, reused every frame so the animation allocates nothing.
   private readonly hip: Point = { x: 0, y: 0 };
+  /**
+   * The animal `live` moves, its walker, and the ways it asks where it may go: made once
+   * and filled for each animal (R5, the board: an object and two closures per animal per
+   * frame were much of what the collector had to clear).
+   */
+  private living: Creature | null = null;
+  /** What an animal is posed from now (`posedAsBefore`): its joints (at most 16) and seven more. */
+  private readonly posedNow = new Float64Array(16 * 2 + 7);
+  private readonly walker: Walker = { head: { x: 0, y: 0 }, heading: 0, pace: 0, length: 0 };
+  private readonly livingGround = (x: number, y: number): boolean =>
+    this.passable(x, y, this.living?.plan.swims ?? false);
+  private readonly livingFree = (x: number, y: number): boolean =>
+    this.living === null ? true : this.clear(this.living, x, y);
   private readonly knee: Point = { x: 0, y: 0 };
   private readonly foot: Point = { x: 0, y: 0 };
   /** Where a young one trails its mother, worked out each frame (`family`). */
@@ -1475,11 +1489,10 @@ export class CreatureLayer {
       // is in sight, and an animal coming into it is put in its row in the same frame.
       if (!creature.inView && creature.container.parent !== null) continue;
       const last = guests.length - 1;
-      const rowOf = (y: number): number => Math.min(Math.max(Math.floor(y * rowsPerCell), 0), last);
       let lowest = 0;
       let highest = last;
       for (const joint of creature.joints) {
-        const row = rowOf(joint.y);
+        const row = Math.min(Math.max(Math.floor(joint.y * rowsPerCell), 0), last);
         lowest = Math.max(lowest, row);
         highest = Math.min(highest, row);
       }
@@ -2014,23 +2027,22 @@ export class CreatureLayer {
     const head = joints[0] ?? { x: 0, y: 0 };
     if (motion === null) return head;
     const { stiffness: stiff } = creature;
-    const walker = {
-      head,
-      heading: creature.heading,
-      // A hunter runs (R5, `hunting.ts`); a mate trots up to the mother (`family.ts`).
-      // Hunched in a thunderstorm it goes slower (R5, `weather.ts`).
-      pace:
-        plan.pace *
-        creature.waterPace *
-        (creature.hunt?.speed ?? 1) *
-        (1 - HUDDLE_SLOW * creature.drench.huddle) *
-        (creature.court === undefined ? 1 : COURT_TROT),
-      length: plan.length,
-      // A body that turns on the spot lets its head turn as it likes, and comes round after.
-      neck: stiff.pivots ? undefined : neckDirection(joints, creature.heading),
-      bend: stiff.neck,
-      turning: stiff.turning,
-    };
+    const { walker } = this;
+    walker.head = head;
+    walker.heading = creature.heading;
+    // A hunter runs (R5, `hunting.ts`); a mate trots up to the mother (`family.ts`).
+    // Hunched in a thunderstorm it goes slower (R5, `weather.ts`).
+    walker.pace =
+      plan.pace *
+      creature.waterPace *
+      (creature.hunt?.speed ?? 1) *
+      (1 - HUDDLE_SLOW * creature.drench.huddle) *
+      (creature.court === undefined ? 1 : COURT_TROT);
+    walker.length = plan.length;
+    // A body that turns on the spot lets its head turn as it likes, and comes round after.
+    walker.neck = stiff.pivots ? undefined : neckDirection(joints, creature.heading);
+    walker.bend = stiff.neck;
+    walker.turning = stiff.turning;
     // Eating, it stands where it is and keeps its head down: no stroll, no looking about.
     if (creature.food !== "none" && motion.mode !== "travel" && creature.hunt === undefined) {
       motion.mode = "pause";
@@ -2038,8 +2050,9 @@ export class CreatureLayer {
       motion.look = creature.heading;
       motion.facing = creature.heading;
     }
-    const ground = (x: number, y: number): boolean => this.passable(x, y, plan.swims);
-    const free = (x: number, y: number): boolean => this.clear(creature, x, y);
+    this.living = creature;
+    const ground = this.livingGround;
+    const free = this.livingFree;
     // Where the sim has it is drawn beside the plant it may be in, not on it (R5).
     const { anchor } = motion;
     if (ground(anchor.x, anchor.y)) clearAnchor(motion, free, plan.length);
@@ -2237,24 +2250,27 @@ export class CreatureLayer {
     let posed = creature.posed;
     let same = posed !== null && posed.length === size;
     if (posed === null || posed.length !== size) posed = creature.posed = new Float64Array(size);
-    const keep = (at: number, value: number): void => {
-      if (posed[at] !== value) {
-        posed[at] = value;
+    // (Plain loops, no closures: this runs for every animal in sight every frame.)
+    const now = this.posedNow;
+    let at = 0;
+    for (let i = 0; i < joints.length; i++) {
+      const joint = joints[i];
+      now[at++] = joint?.x ?? 0;
+      now[at++] = joint?.y ?? 0;
+    }
+    now[at++] = creature.heading;
+    now[at++] = creature.gait;
+    now[at++] = creature.striding;
+    now[at++] = creature.basker.share;
+    now[at++] = creature.drench.huddle;
+    now[at++] = creature.drench.age;
+    now[at++] = tuckOf(creature.sleep);
+    for (let k = 0; k < size; k++) {
+      if (posed[k] !== now[k]) {
+        posed[k] = now[k] ?? 0;
         same = false;
       }
-    };
-    joints.forEach((joint, i) => {
-      keep(2 * i, joint.x);
-      keep(2 * i + 1, joint.y);
-    });
-    const at = joints.length * 2;
-    keep(at, creature.heading);
-    keep(at + 1, creature.gait);
-    keep(at + 2, creature.striding);
-    keep(at + 3, creature.basker.share);
-    keep(at + 4, creature.drench.huddle);
-    keep(at + 5, creature.drench.age);
-    keep(at + 6, tuckOf(creature.sleep));
+    }
     return same;
   }
 
@@ -2359,7 +2375,12 @@ export class CreatureLayer {
       const swing = Math.sin(creature.stroke - at * 0.9) * STROKE_SWING;
       const rotation =
         (this.angle[at] ?? 0) + side * (Math.PI / 2 + FLIPPER_REST - 0.4 * aim + swing);
-      for (const sprite of [leg.upper, ...leg.edges]) {
+      // (Plain loops, no arrays made: this runs for every leg in sight every frame.)
+      leg.upper.position.set(hip.x, hip.y);
+      leg.upper.rotation = rotation;
+      for (let k = 0; k < leg.edges.length; k++) {
+        const sprite = leg.edges[k];
+        if (sprite === undefined) continue;
         sprite.position.set(hip.x, hip.y);
         sprite.rotation = rotation;
       }
@@ -2432,14 +2453,17 @@ export class CreatureLayer {
     solveKnee(hip, foot, bone, bone, side, this.knee);
     this.stretch(leg.upper, hip, this.knee, thickness);
     this.stretch(leg.lower, this.knee, foot, thickness * 0.8);
-    const [upperEdge, lowerEdge, soleEdge] = leg.edges;
+    const upperEdge = leg.edges[0];
+    const lowerEdge = leg.edges[1];
+    const soleEdge = leg.edges[2];
     const edge = 2 * leg.plan.edge;
     if (upperEdge !== undefined) this.stretch(upperEdge, hip, this.knee, thickness + edge);
     if (lowerEdge !== undefined) this.stretch(lowerEdge, this.knee, foot, thickness * 0.8 + edge);
     // A webbed foot lies ahead of the leg's end, across the way the shin points.
     const reach = leg.webbed ? leg.plan.foot * WEB_AHEAD : 0;
     const shin = Math.atan2(foot.y - this.knee.y, foot.x - this.knee.x);
-    for (const sprite of [soleEdge, leg.sole]) {
+    for (let k = 0; k < 2; k++) {
+      const sprite = k === 0 ? soleEdge : leg.sole;
       if (sprite === undefined || sprite === null) continue;
       sprite.position.set(foot.x + Math.cos(shin) * reach, foot.y + Math.sin(shin) * reach);
       if (leg.webbed) sprite.rotation = shin;

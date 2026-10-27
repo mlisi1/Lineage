@@ -459,8 +459,9 @@ export class PlantLayer {
   blow(wind: Wind | null): void {
     for (const row of this.rows) {
       if (!row.container.visible) continue;
-      for (const [x, swaying] of row.swaying) {
-        if (row.chunks.get(x)?.visible !== true) continue;
+      // (`forEach`: a `for…of` over a map makes an array for each entry, every frame.)
+      row.swaying.forEach((swaying, x) => {
+        if (row.chunks.get(x)?.visible !== true) return;
         for (const plant of swaying) {
           const last = plant.lowest + plant.frames.length - 1;
           const lean =
@@ -486,7 +487,7 @@ export class PlantLayer {
           const frame = plant.frames[lean - plant.lowest];
           if (frame !== undefined) plant.sprite.texture = frame;
         }
-      }
+      });
     }
   }
 
