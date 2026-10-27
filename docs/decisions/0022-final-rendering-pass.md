@@ -464,9 +464,12 @@ What the board showed on its first runs, and what changed:
   the winter shot showed past the world's edge (shots kept inside the world).
 
 Open: on the board's first runs, the weather act (a thunderstorm up close) ran at some 16
-fps and the night act at 22; the world's end and the end card were slow. The owner looks
-at the trailer filmed on the PC first, for what is only of the look; then the showcase is
-tuned on the board.
+fps and the night act at 22; the world's end and the end card were slow. The owner then
+moved the showcase and its trailer to a milestone of their own, R6 (2026-10-27): R5 closes
+on its look, its tests and its measurement on the board; the first version of the showcase
+stays on `r5-final` as R6's start, only on `?showcase` (the desk's page is unchanged by
+it). The changes to the ground it led to (several stamps kept, the workers reading the
+cache, a new land laid out per view) are R5's and stay.
 
 ## Consequences
 

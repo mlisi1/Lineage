@@ -1322,7 +1322,7 @@ kernel's `gpu sched timeout` lines counted by the runner before and after each p
 where the log can be read) are reported without a band. A file from a PC builds a report
 marked as not the measurement. The bands were confirmed by the owner on 2026-10-23.
 
-### The showcase (R5)
+### The showcase (R6; begun in R5)
 
 The owner asked for "a demo/showcase of the whole thing ... almost like a trailer, with text
 that describes what is being shown", run on the board itself. `index.html?showcase`

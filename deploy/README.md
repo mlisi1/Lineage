@@ -153,7 +153,7 @@ Left running, the board out of any enclosure creeps towards 80 °C, where it slo
 (`/sys/class/thermal/thermal_zone*/temp`, in thousandths of a degree): the enclosure
 needs a heatsink at least.
 
-## The showcase on the board (R5)
+## The showcase on the board (R6)
 
 The showcase is a scripted tour of the scene, about three minutes in thirteen acts with a
 caption each (`renderer/src/showcase/`), in the desk's own build: it loops without
