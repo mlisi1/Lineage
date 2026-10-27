@@ -13,7 +13,9 @@ recognised by its manifest, and judges each criterion on the run it belongs to:
   fauna.learning=false``);
 - ``always``, ``office-august``, ``conference``: M8's schedules;
 - ``off:<mechanism>``: the main run with one M11 mechanism turned off (its off switch in
-  the notes), for the ablation table.
+  the notes), for the ablation table;
+- ``decade``: the tuned config over 10 years or more, for "What to expect over the
+  years": the island as the owner will live with it, island by island.
 
 Sweeps (``--sweep runs/sweep-<name>``) add the sensitivity of the key metrics to the
 levers. Step-time criteria read a shared PC and are reported for the record.
@@ -29,10 +31,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from lineage_sim.chronicle import KINDS
 from lineage_sim.fauna.genome import Gene
 from matplotlib.figure import Figure
 
-from tools.milestones import m3, m5, m7, m8
+from tools.fastforward import CHRONICLE_COLUMNS, DAYS_PER_YEAR, EXTRA_PREFIX
+from tools.milestones import m3, m4, m5, m7, m8
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import TIME_KEY, Run
 from tools.tune import score as sc
@@ -67,6 +71,11 @@ ROLES = (
     *(s for s in m8.SCHEDULES if s != "office"),
 )
 TUNING, HELD_OUT = "tuning", "held-out"
+DECADE = "decade"  # a run of at least DECADE_YEARS: what to expect over the years
+DECADE_YEARS = 10.0
+# Chronicle importance (default.toml [chronicle]): notable entries, and major ones, which
+# reach the owner's phone (ADR 0017).
+NOTABLE, MAJOR = 3, 4
 SET_COLOURS = {TUNING: style.categorical(0), HELD_OUT: style.categorical(1)}
 
 SERIES_LABELS: dict[str, SeriesLabel] = {
@@ -127,6 +136,8 @@ def role_of(run: Run, main: Run) -> str:
     for name, switches in MECHANISMS.items():
         if all(switch in notes for switch in switches):
             return f"off:{name}"
+    if run.manifest.sim_years >= DECADE_YEARS:
+        return DECADE
     if run.manifest.sim_years >= 5:
         return "five-year"
     schedule = m8.schedule_of(run)
@@ -178,10 +189,100 @@ def _metrics(run: Run, *others: Run, sweeps: tuple[Path, ...] = ()) -> dict[str,
         off = roles.get(f"off:{name}")
         if off is not None:
             out |= {f"off:{name}/{k}": v for k, v in sc.score(off).metrics.items()}
+    if DECADE in roles:
+        out |= {f"{DECADE}/{k}": v for k, v in decade_metrics(roles[DECADE]).items()}
     for path in sweeps:
         document = json.loads((path / "points.json").read_text(encoding="utf-8"))
         out[f"sweep:{document['sweep']}/points"] = float(len(document["points"]))
     return {k: v for k, v in out.items() if isinstance(v, float) and math.isfinite(v)}
+
+
+def _first_year(times: np.ndarray, hit: np.ndarray) -> float:
+    """Sim time (years) of the first sample where ``hit`` holds; NaN if never."""
+    return float(times[hit][0]) if hit.any() else np.nan
+
+
+def _spells(flags: np.ndarray) -> list[int]:
+    """Lengths, in samples, of each run of True in ``flags``."""
+    lengths, current = [], 0
+    for flag in flags.tolist():
+        if flag:
+            current += 1
+        elif current:
+            lengths.append(current)
+            current = 0
+    if current:
+        lengths.append(current)
+    return lengths
+
+
+def _at_year(times: np.ndarray, values: np.ndarray, year: float) -> float:
+    return float(values[int(np.argmin(np.abs(times - year)))])
+
+
+def decade_metrics(run: Run) -> dict[str, float]:
+    """What living with the island looks like, per island (seed): the founding, life once
+    settled, evolution, hunters, the land and the chronicle. Each per-island number is
+    reported as the median island and the 10–90 % range across islands."""
+    years = run.manifest.sim_years
+    per: dict[str, list[float]] = {}
+
+    def add(key: str, value: float) -> None:
+        per.setdefault(key, []).append(float(value))
+
+    kind = CHRONICLE_COLUMNS.index("kind")
+    importance = CHRONICLE_COLUMNS.index("importance")
+    kinds: dict[str, float] = {}
+    for seed in run.manifest.seeds:
+        s = run.series[seed]
+        t = s[TIME_KEY]
+        population, predators, herbivores = s["population"], s["predators"], s["herbivores"]
+        settled = (t >= 1.0) & (population > 0)
+        add("worlds_ended", s["worlds_ended"][-1])
+        add("founders.months", 12 * _first_year(t, population > 0))
+        add("hunters_land.months", 12 * _first_year(t, predators >= m4.PRESENT))
+        add("forest.months", 12 * _first_year(t, s["closed_forest"] >= m3.FOREST_SHARE))
+        if settled.any():
+            add("creatures.median", np.median(population[settled]))
+            add("grazers.share", np.median(herbivores[settled] / population[settled]))
+            add("hunters.share", np.median(predators[settled] / population[settled]))
+            add("species_alive.median", np.median(s["species_alive"][settled]))
+        after = t >= 1.0
+        present = predators[after] >= m4.PRESENT
+        add("hunters.present.share_of_time", present.mean() if present.size else np.nan)
+        gone = _spells(~present)
+        step_days = DAYS_PER_YEAR * float(t[1] - t[0]) if t.size > 1 else np.nan
+        add("hunters.gone.spells_per_decade", len(gone) * 10.0 / max(years - 1.0, 1.0))
+        add("hunters.gone.longest_days", max(gone) * step_days if gone else 0.0)
+        add("species.new_per_year", s["species_splits"][-1] / years)
+        add("species.lost_per_year", s["species_extinctions"][-1] / years)
+        for name in ("fires", "volcanoes", "earthquakes", "craters", "splits", "rejoins"):
+            add(f"{name}.per_year", s[name][-1] / years)
+        for year in (1.0, years / 2, years):
+            add(f"genetic_distance.year_{year:g}", _at_year(t, s["genetic_distance"], year))
+        entries = s[f"{EXTRA_PREFIX}chronicle"]
+        add("chronicle.notable_per_month", np.sum(entries[:, importance] >= NOTABLE) / (years * 12))
+        add("chronicle.major_per_month", np.sum(entries[:, importance] >= MAJOR) / (years * 12))
+        for row in entries[entries[:, importance] >= NOTABLE]:
+            name = KINDS[int(row[kind])].value
+            kinds[name] = kinds.get(name, 0.0) + 1.0
+    out: dict[str, float] = {}
+    for key, values in per.items():
+        a = np.array(values, dtype=float)
+        if np.isfinite(a).any():
+            out[f"{key}.median"] = float(np.nanmedian(a))
+            out[f"{key}.p10"] = float(np.nanpercentile(a, 10))
+            out[f"{key}.p90"] = float(np.nanpercentile(a, 90))
+    present = np.array(per.get("hunters.present.share_of_time", []), dtype=float)
+    out["hunters.present_most.share_of_islands"] = float(np.mean(present >= 0.5))
+    out["islands"] = float(len(run.manifest.seeds))
+    out["island_years"] = years * len(run.manifest.seeds)
+    out["worlds_ended.total"] = float(sum(per.get("worlds_ended", [])))
+    out["worlds_ended.islands"] = float(sum(e > 0 for e in per.get("worlds_ended", [])))
+    island_years = out["island_years"]
+    for name, count in kinds.items():
+        out[f"chronicle.kind.{name}.per_year"] = count / island_years
+    return out
 
 
 # --- Sections ----------------------------------------------------------------------------
@@ -346,6 +447,189 @@ def _engagement_section(values: dict[str, float]) -> Section:
     return Section("Engagement", note + _table(["measure", "tuning seeds", "held-out seeds"], rows))
 
 
+# Rows of "A typical year": label, decade metric, format of the numbers.
+TYPICAL_YEAR = (
+    ("creatures alive (after the first year)", "creatures.median", "{:.0f}"),
+    ("grazers among them", "grazers.share", "{:.0%}"),
+    ("hunters among them", "hunters.share", "{:.0%}"),
+    ("species alive at once", "species_alive.median", "{:.0f}"),
+    ("new species per year", "species.new_per_year", "{:.1f}"),
+    ("species lost per year", "species.lost_per_year", "{:.1f}"),
+    ("hunters present (share of time after year 1)", "hunters.present.share_of_time", "{:.0%}"),
+    ("times the hunters vanish, per decade", "hunters.gone.spells_per_decade", "{:.1f}"),
+    ("longest time without hunters (days)", "hunters.gone.longest_days", "{:.0f}"),
+    ("fires per year", "fires.per_year", "{:.1f}"),
+    ("volcanic eruptions per year", "volcanoes.per_year", "{:.1f}"),
+    ("earthquakes per year", "earthquakes.per_year", "{:.1f}"),
+    ("craters per year", "craters.per_year", "{:.1f}"),
+    ("the land splitting, per year", "splits.per_year", "{:.1f}"),
+    ("the land rejoining, per year", "rejoins.per_year", "{:.1f}"),
+    ("notable chronicle entries per month", "chronicle.notable_per_month", "{:.1f}"),
+    ("major entries per month (pushed to the phone)", "chronicle.major_per_month", "{:.1f}"),
+)
+
+
+def _fmt(values: dict[str, float], key: str, form: str = "{:.1f}") -> str:
+    v = values.get(f"{DECADE}/{key}")
+    return "—" if v is None or not math.isfinite(v) else form.format(v)
+
+
+def _spread(values: dict[str, float], key: str, form: str) -> str:
+    """Median island, then the 10–90 % range across islands."""
+    mid = _fmt(values, f"{key}.median", form)
+    low, high = _fmt(values, f"{key}.p10", form), _fmt(values, f"{key}.p90", form)
+    return mid if low == high else f"{mid} ({low}–{high})"
+
+
+def _decade_section(values: dict[str, float], decade: Run | None) -> Section:
+    title = "What to expect over the years"
+    if decade is None:
+        return Section(title, '<p class="empty">No ten-year run was given.</p>')
+    v = lambda key: values.get(f"{DECADE}/{key}", np.nan)  # noqa: E731
+    islands, island_years, ended = v("islands"), v("island_years"), v("worlds_ended.total")
+    note = (
+        f'<p class="note">From run {html.escape(decade.manifest.run_id)}: {islands:.0f} '
+        f"islands (seeds), each lived for {decade.manifest.sim_years:g} years under the office "
+        "schedule with nobody pressing the button: one island per seed, as the gadget will "
+        "live it. Numbers are the median island, with the range from the 10th to the 90th "
+        "percentile island in brackets.</p>"
+    )
+    if ended > 0:
+        on = v("worlds_ended.islands")
+        worlds = (
+            f"<b>Worlds end rarely.</b> {ended:.0f} worlds ended in {island_years:.0f} "
+            f"island-years, on {on:.0f} of the {islands:.0f} islands: about one every "
+            f"{island_years / ended:.0f} years for one island. When one does, the apocalypse "
+            "plays and a new continent rises."
+        )
+    else:
+        worlds = f"<b>Worlds end rarely.</b> No world ended in {island_years:.0f} island-years."
+    founding = (
+        "<b>The first year is a founding.</b> The bare island greens first; the founders, "
+        f"plant eaters of one species, land after {_spread(values, 'founders.months', '{:.0f}')} "
+        f"months, the hunter pack after {_spread(values, 'hunters_land.months', '{:.0f}')}, "
+        "and the first closed forest stands after "
+        f"{_spread(values, 'forest.months', '{:.0f}')} months."
+    )
+    life = (
+        f"<b>Then life settles.</b> The island holds about "
+        f"{_spread(values, 'creatures.median', '{:.0f}')} creatures, "
+        f"{_spread(values, 'grazers.share', '{:.0%}')} of them grazers and "
+        f"{_spread(values, 'hunters.share', '{:.0%}')} hunters, in "
+        f"{_spread(values, 'species_alive.median', '{:.0f}')} species at once."
+    )
+    years = decade.manifest.sim_years
+    half = _fmt(values, f"genetic_distance.year_{years / 2:g}.median", "{:.3f}")
+    end = _fmt(values, f"genetic_distance.year_{years:g}.median", "{:.3f}")
+    change = (
+        "<b>Evolution does not stop.</b> About "
+        f"{_spread(values, 'species.new_per_year', '{:.1f}')} new species arise each year and "
+        f"{_spread(values, 'species.lost_per_year', '{:.1f}')} die out. Species here are "
+        "groups of similar genomes (ADR 0012), finer than who can mate, so most are "
+        "short-lived branches of a few lasting lineages. The creatures drift "
+        "ever further from the founders (mean gene difference "
+        f"{_fmt(values, 'genetic_distance.year_1.median', '{:.3f}')} after a year, "
+        f"{half} halfway, {end} at the end)."
+    )
+    most = v("hunters.present_most.share_of_islands")
+    hunters = (
+        "<b>Hunters come and go.</b> After the first year hunters are present "
+        f"{_spread(values, 'hunters.present.share_of_time', '{:.0%}')} of the time; they "
+        f"vanish {_spread(values, 'hunters.gone.spells_per_decade', '{:.1f}')} times a decade "
+        "(they can arise again from the herd, or the ark brings them back), the longest "
+        f"absence lasting {_spread(values, 'hunters.gone.longest_days', '{:.0f}')} days. "
+        f"On {most:.0%} of the islands they are present most of the time."
+    )
+    land = (
+        "<b>The land moves too.</b> A year brings about "
+        f"{_fmt(values, 'fires.per_year.median')} fires (lightning in thunderstorms), "
+        f"{_fmt(values, 'volcanoes.per_year.median')} eruptions, "
+        f"{_fmt(values, 'earthquakes.per_year.median')} earthquakes and "
+        f"{_fmt(values, 'craters.per_year.median')} craters; the shifting coasts split "
+        f"the land {_fmt(values, 'splits.per_year.median')} times a year and join it again "
+        f"{_fmt(values, 'rejoins.per_year.median')} times."
+    )
+    common = sorted(
+        ((k.split(".")[2], val) for k, val in values.items()
+         if k.startswith(f"{DECADE}/chronicle.kind.")),
+        key=lambda kv: -kv[1],
+    )[:5]  # fmt: skip
+    listed = ", ".join(f"{html.escape(name.replace('_', ' '))} ({val:.0f} a year)"
+                       for name, val in common)  # fmt: skip
+    chronicle = (
+        "<b>The chronicle.</b> It writes "
+        f"{_spread(values, 'chronicle.notable_per_month', '{:.1f}')} notable entries a month, "
+        f"of which {_spread(values, 'chronicle.major_per_month', '{:.1f}')} are major and "
+        f"reach the phone: about {12 * v('chronicle.major_per_month.median'):.0f} pushes a "
+        f"year without the button. The most common notable entries: {listed or '—'}."
+    )
+    bullets = "".join(
+        f"<li>{b}</li>" for b in (worlds, founding, life, change, hunters, land, chronicle)
+    )
+    table = _table(
+        ["a typical year", "median island (10–90 % of islands)"],
+        [[html.escape(label), _spread(values, key, form)] for label, key, form in TYPICAL_YEAR],
+    )
+    seeds = decade.manifest.seeds
+    times = decade.series[seeds[0]][TIME_KEY]
+    population = np.stack([decade.series[s]["population"] for s in seeds])
+    species = np.stack([decade.series[s]["species_alive"] for s in seeds])
+    predators = np.stack([decade.series[s]["predators"] for s in seeds])
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share = np.where(population > 0, predators / population, np.nan)
+    figs = (
+        _svg("Creatures alive over the years, every island",
+             figures.time_series_band(times, population, title="Creatures alive",
+                                      xlabel="sim time (years)", ylabel="creatures"))
+        + _svg("Species alive at once over the years, every island",
+               figures.time_series_band(times, species, title="Species alive",
+                                        xlabel="sim time (years)", ylabel="species",
+                                        integer_y=True))
+        + _svg("Hunters' share of the creatures over the years, every island",
+               figures.time_series_band(times, share, title="Hunters' share",
+                                        xlabel="sim time (years)",
+                                        ylabel="share of creatures"))
+    )  # fmt: skip
+    return Section(
+        title,
+        note + f"<ul>{bullets}</ul>" + table + figs + _considerations(values),
+    )
+
+
+def _considerations(values: dict[str, float]) -> str:
+    """Higher-level notes on living with the island, from the other runs where given."""
+    items = [
+        "<b>The island is closed.</b> No strangers land: every species descends from the "
+        "founders, the hunter pack that lands once, or what an ark brings (ADR 0019). What "
+        "the island becomes, it becomes by itself.",
+        "<b>No two islands are alike.</b> The ranges above are wide on purpose: some islands "
+        "keep a steady pack of hunters for years, others lose it and turn into grazing "
+        "lands until hunters arise again. The criteria judge the spread, not one island.",
+    ]
+    forest = values.get(f"{PRESSES}/M3:closed_forest.months.median")
+    if forest is not None:
+        items.append(
+            "<b>The button helps, gently.</b> Pressed weekly, it ended no world and caused no "
+            f"extinction in the press run; the island greened faster (first closed forest after "
+            f"{forest:.0f} months) and god powers fill much of the chronicle."
+        )
+    holiday = values.get("M8/office-august.absence_survival.share_of_seeds")
+    away = values.get("M8/conference.absence_survival.share_of_seeds")
+    if holiday is not None and away is not None:
+        items.append(
+            "<b>Your absences are its long nights.</b> Life survived the August holiday on "
+            f"{holiday:.0%} of the islands and a three-week absence on {away:.0%}."
+        )
+    swim = values.get(f"{TUNING}/D:niche.aquatic.share_of_seeds")
+    if swim is not None and swim == 0:
+        items.append(
+            "<b>Some things will not happen.</b> No island raised a lineage of swimmers: the "
+            "founders walk, and on a closed island swimming never pays enough. Glow and "
+            "hibernation stay rare whatever the schedule (M8.1)."
+        )
+    return "<h3>Considerations</h3><ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>"
+
+
 def _sensitivity_section(sweeps: tuple[Path, ...]) -> Section:
     if not sweeps:
         return Section("Sensitivity", '<p class="empty">No sweep was given (--sweep).</p>')
@@ -390,5 +674,6 @@ def _sections(
         _balance_section(run),
         _ablation_section(values),
         _engagement_section(values),
+        _decade_section(values, roles.get(DECADE)),
         _sensitivity_section(sweeps),
     ]

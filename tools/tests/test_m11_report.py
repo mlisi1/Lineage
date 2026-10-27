@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from tools.fastforward import fastforward
@@ -66,6 +68,28 @@ def test_the_dashboard_judges_each_criterion_on_its_run(
     assert {"D1 (tuning seeds)", "M11.1 (held-out seeds)", "M8.1"} <= set(status)
     assert any(k.startswith("off:cover/") for k in doc["metrics"])
     page = (out / "report.html").read_text(encoding="utf-8")
-    for title in ("Diversity and balance", "Mechanisms on and off", "Sensitivity"):
+    for title in (
+        "Diversity and balance",
+        "Mechanisms on and off",
+        "What to expect",
+        "Sensitivity",
+    ):
         assert title in page
     shutil.rmtree(out)
+
+
+def test_a_decade_run_feeds_what_to_expect(runs: dict[str, Path]) -> None:
+    main = read_run(runs["main"])
+    long = replace(main, manifest=replace(main.manifest, sim_years=m11.DECADE_YEARS))
+    assert m11.role_of(long, main) == m11.DECADE
+    values = m11.decade_metrics(main)
+    assert values["islands"] == 1.0
+    assert values["worlds_ended.total"] == 0.0
+    assert {"fires.per_year.median", "chronicle.notable_per_month.median"} <= set(values)
+    assert values["hunters.gone.longest_days.p10"] <= values["hunters.gone.longest_days.p90"]
+
+
+def test_spells_count_runs_of_true() -> None:
+    flags = np.array([True, True, False, True, False, False, True])
+    assert m11._spells(flags) == [2, 1, 1]  # pyright: ignore[reportPrivateUsage]
+    assert m11._spells(np.zeros(3, dtype=bool)) == []  # pyright: ignore[reportPrivateUsage]

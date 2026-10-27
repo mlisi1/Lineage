@@ -182,8 +182,9 @@ Do not create directories outside this layout without updating this file.
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
     (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
     M8 takes the office run and `--baseline` once per other schedule; M11 takes the tuned
-    office run and, as `--baseline`, the held-out, 5-year, fork, learning-off, schedule
-    and mechanism-off runs, each recognised by its manifest, plus `--sweep runs/sweep-<name>`)
+    office run and, as `--baseline`, the held-out, 5-year, 10-year ("what to expect over
+    the years"), fork, learning-off, schedule and mechanism-off runs, each recognised by its
+    manifest, plus `--sweep runs/sweep-<name>`)
   - `uv run python -m tools.tune.sweep tools/tune/sweeps/<name>.toml --jobs 10 --max-load 14`
     — run and score a sweep (M11; resumes where it stopped; `--dry-run` lists the points),
     then `uv run python -m tools.tune.sensitivity runs/sweep-<name>` (which levers move
