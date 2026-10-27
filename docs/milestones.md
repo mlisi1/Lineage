@@ -50,9 +50,12 @@ through soft caps and resting hunters. The owner revised M6.1 (3–16 species), 
 - **S1/S7** (the owner, 2026-10-27): measure the sim on the Orange Pi when the server runs
   it in real time. On the PC the whole world takes about 0.4 s of CPU per sim-day.
 
-The report ends with "What to expect over the years", the island as the owner will live
-with it, from a 10-year run of 30 islands (`runs/m11-report-decade`, recognised by its
-length). Rebuild: `uv run python -m tools.report M11 --runs runs/m11-report-main
+The report opens with the island's story in figures (`tools/milestones/m11_story.py`,
+the owner's request: an animated island, the lives of six islands, hunters island by
+island, species and a family tree, bodies, maps, the chronicle, the mechanisms, the
+owner's presence), then "What to expect over the years" and "Why some criteria are not
+met"; the criteria and the numbers fold away at the end. Its long-run figures read a
+10-year run of 30 islands (`runs/m11-report-decade`, recognised by its length). Rebuild: `uv run python -m tools.report M11 --runs runs/m11-report-main
 --baseline runs/m11-tuned-heldout --baseline runs/m11-report-<each>` (every
 `m11-report-*` but main).
 

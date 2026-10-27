@@ -36,7 +36,7 @@ from lineage_sim.fauna.genome import Gene
 from matplotlib.figure import Figure
 
 from tools.fastforward import CHRONICLE_COLUMNS, DAYS_PER_YEAR, EXTRA_PREFIX
-from tools.milestones import m3, m4, m5, m7, m8
+from tools.milestones import m3, m4, m5, m7, m8, m11_story
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import TIME_KEY, Run
 from tools.tune import score as sc
@@ -46,6 +46,7 @@ from tools.viz import figures, style
 NEEDS_BASELINE = True
 MIXED_RUNS = True  # compared runs may have other seeds or lengths (held-out, five-year)
 TAKES_SWEEPS = True
+STORY_FIRST = True  # the island in figures before the header and the criteria (the owner)
 
 # Each M11 mechanism's off switch, as fast-forward notes write it (``--set``).
 MECHANISMS: dict[str, tuple[str, ...]] = {
@@ -297,6 +298,11 @@ def _value(values: dict[str, float], key: str) -> str:
     return "—" if v is None else f"{v:.3g}"
 
 
+def _fold(summary: str, inner: str) -> str:
+    """Numbers the reader may open; the report leads with pictures."""
+    return f"<details><summary>{html.escape(summary)}</summary>{inner}</details>"
+
+
 def _table(head: list[str], rows: list[list[str]]) -> str:
     cells = "".join(f"<th>{html.escape(h)}</th>" for h in head)
     body = "".join(
@@ -316,9 +322,8 @@ def _runs_section(run: Run, roles: dict[str, Run]) -> Section:
         '<p class="note">Each criterion is judged on the run it belongs to. The tuning '
         "seeds were used to choose the config; the held-out seeds never were.</p>"
     )
-    return Section(
-        "Runs", note + _table(["role", "run", "seeds", "years", "commit", "notes"], rows)
-    )
+    table = _table(["role", "run", "seeds", "years", "commit", "notes"], rows)
+    return Section("Runs", _fold(f"The {len(rows)} runs behind this report", note + table))
 
 
 def _diversity_section(values: dict[str, float]) -> Section:
@@ -364,30 +369,6 @@ def _diversity_section(values: dict[str, float]) -> Section:
     return Section("Diversity and balance (D1–D3)", "".join(parts))
 
 
-def _balance_section(run: Run) -> Section:
-    times = run.series[run.manifest.seeds[0]][TIME_KEY]
-    population = np.stack([run.series[s]["population"] for s in run.manifest.seeds])
-    predators = np.stack([run.series[s]["predators"] for s in run.manifest.seeds])
-    with np.errstate(invalid="ignore", divide="ignore"):
-        share = np.where(population > 0, predators / population, np.nan)
-    fig = figures.time_series_band(
-        times, share, title="Predators' share of creatures (D3)", xlabel="sim time (years)",
-        ylabel="share of creatures",
-    )  # fmt: skip
-    distance = np.nan_to_num(
-        np.stack([run.series[s]["genetic_distance"] for s in run.manifest.seeds])
-    )
-    fig2 = figures.time_series_band(
-        times, distance, title="Mean genetic distance from the ancestors (M11.1)",
-        xlabel="sim time (years)", ylabel="mean gene difference",
-    )  # fmt: skip
-    return Section(
-        "Hunters, grazers and change",
-        _svg("Predators' share of the creatures alive, tuning seeds", fig)
-        + _svg("Genetic distance from the ancestors, tuning seeds: still rising at year 3?", fig2),
-    )
-
-
 ABLATION_KEYS = (
     ("M3.2 months to closed forest", "M3:closed_forest.months.median"),
     ("M3.5 seeds without succession", "M3:seeds_without_succession.share"),
@@ -418,7 +399,9 @@ def _ablation_section(values: dict[str, float]) -> Section:
         "off by its switch (ADR 0019). One 20-seed run cannot resolve a share's change "
         "below about 0.2.</p>"
     )
-    return Section("Mechanisms on and off", note + _table(head, rows))
+    return Section(
+        "Mechanisms on and off, in numbers", _fold("Open the table", note + _table(head, rows))
+    )
 
 
 ENGAGEMENT = (
@@ -444,7 +427,8 @@ def _engagement_section(values: dict[str, float]) -> Section:
         for label, key in ENGAGEMENT
     ]  # fmt: skip
     note = '<p class="note">The engagement targets of docs/m11-plan.md §1, reported.</p>'
-    return Section("Engagement", note + _table(["measure", "tuning seeds", "held-out seeds"], rows))
+    table = _table(["measure", "tuning seeds", "held-out seeds"], rows)
+    return Section("Engagement", _fold("Open the table", note + table))
 
 
 # Rows of "A typical year": label, decade metric, format of the numbers.
@@ -566,34 +550,14 @@ def _decade_section(values: dict[str, float], decade: Run | None) -> Section:
     bullets = "".join(
         f"<li>{b}</li>" for b in (worlds, founding, life, change, hunters, land, chronicle)
     )
-    table = _table(
-        ["a typical year", "median island (10–90 % of islands)"],
-        [[html.escape(label), _spread(values, key, form)] for label, key, form in TYPICAL_YEAR],
+    table = _fold(
+        "A typical year in numbers",
+        _table(
+            ["a typical year", "median island (10–90 % of islands)"],
+            [[html.escape(label), _spread(values, key, form)] for label, key, form in TYPICAL_YEAR],
+        ),
     )
-    seeds = decade.manifest.seeds
-    times = decade.series[seeds[0]][TIME_KEY]
-    population = np.stack([decade.series[s]["population"] for s in seeds])
-    species = np.stack([decade.series[s]["species_alive"] for s in seeds])
-    predators = np.stack([decade.series[s]["predators"] for s in seeds])
-    with np.errstate(invalid="ignore", divide="ignore"):
-        share = np.where(population > 0, predators / population, np.nan)
-    figs = (
-        _svg("Creatures alive over the years, every island",
-             figures.time_series_band(times, population, title="Creatures alive",
-                                      xlabel="sim time (years)", ylabel="creatures"))
-        + _svg("Species alive at once over the years, every island",
-               figures.time_series_band(times, species, title="Species alive",
-                                        xlabel="sim time (years)", ylabel="species",
-                                        integer_y=True))
-        + _svg("Hunters' share of the creatures over the years, every island",
-               figures.time_series_band(times, share, title="Hunters' share",
-                                        xlabel="sim time (years)",
-                                        ylabel="share of creatures"))
-    )  # fmt: skip
-    return Section(
-        title,
-        note + f"<ul>{bullets}</ul>" + table + figs + _considerations(values),
-    )
+    return Section(title, note + f"<ul>{bullets}</ul>" + table + _considerations(values))
 
 
 def _considerations(values: dict[str, float]) -> str:
@@ -673,8 +637,8 @@ _ROLE_NOTES = {
     "hunters it lets the pack grow and the herd answer to its losses (ADR 0019).",
 }
 _NOTHING_FAILS = (
-    "Nothing fails without it in three years: what it adds is smaller than one 20-seed run "
-    "resolves, or shows over longer times (the ablation table above)."
+    "the mechanism's effect over three years is smaller than one 20-seed run resolves, or "
+    "it shows over longer times (see What makes it work)."
 )
 
 
@@ -710,12 +674,13 @@ def _shortfalls_section(values: dict[str, float]) -> Section:
         ) or "none"  # fmt: skip
         name = role.removeprefix("off:")
         does = MECHANISM_ROLES.get(name)
-        why = _ROLE_NOTES.get(role) or (_NOTHING_FAILS if not failed else "")
-        what = html.escape(f"It makes: {does}. {why}" if does else why)
+        why = _ROLE_NOTES.get(role, "")
+        what = html.escape(f"It makes: {does}. {why}".strip() if does else why)
         label = "weekly presses" if role == PRESSES else f"without {name}"
         rows.append([html.escape(label), listed, what])
     runs = (
         "<h3>Where criteria fail</h3>"
+        + f'<p class="note">Where nothing fails: {html.escape(_NOTHING_FAILS)}</p>'
         + _table(["run", "criteria that fail (value, band)", "why"], rows)
         if rows
         else ""
@@ -812,19 +777,41 @@ def sections(run: Run, run_dir: Path, *others: Run, sweeps: tuple[Path, ...] = (
         # Flat or empty series (a short run) make matplotlib widen a zero-height axis.
         warnings.simplefilter("ignore", RuntimeWarning)
         warnings.simplefilter("ignore", UserWarning)
-        return _sections(run, roles, values, sweeps)
+        return _sections(run, run_dir, roles, values, sweeps)
 
 
 def _sections(
-    run: Run, roles: dict[str, Run], values: dict[str, float], sweeps: tuple[Path, ...]
+    run: Run,
+    run_dir: Path,
+    roles: dict[str, Run],
+    values: dict[str, float],
+    sweeps: tuple[Path, ...],
 ) -> list[Section]:
-    return [
-        _runs_section(run, roles),
-        _diversity_section(values),
-        _balance_section(run),
-        _ablation_section(values),
-        _engagement_section(values),
+    life = roles.get(DECADE, run)
+    # Snapshots (maps) live in the run's directory; compared runs sit beside the main one.
+    life_dir = run_dir if life is run else run_dir.parent / life.manifest.run_id
+    maps = life_dir if (life_dir / "snapshots").is_dir() else None
+    judged = [c.evaluate(values)[1] for c in CRITERIA]
+    passed = (sum(status == "PASS" for status in judged), len(judged))
+    story = [
+        m11_story.glance_section(values, life, maps, passed),
+        m11_story.lives_section(life),
+        m11_story.hunters_section(life),
+        m11_story.species_section(life),
+        m11_story.bodies_section(life),
+        m11_story.land_section(life, maps),
+        m11_story.chronicle_section(life),
+        m11_story.mechanisms_section(values, tuple(MECHANISMS)),
+        m11_story.presence_section(values),
+    ]
+    rest = [
         _decade_section(values, roles.get(DECADE)),
         _shortfalls_section(values),
-        _sensitivity_section(sweeps),
+        _diversity_section(values),
+        _ablation_section(values),
+        _engagement_section(values),
+        _runs_section(run, roles),
     ]
+    if sweeps:
+        rest.append(_sensitivity_section(sweeps))
+    return [section for section in (*story, *rest) if section is not None]
