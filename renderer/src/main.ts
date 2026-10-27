@@ -80,7 +80,10 @@ import { Herd } from "./herd";
 import type { PlantLayer } from "./plants/plants";
 import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
 import { PlaceMarker } from "./marker";
-import type { CreaturesMessage, Message, SkyMessage } from "./protocol";
+import type { ClockMessage, CreaturesMessage, Message, SkyMessage } from "./protocol";
+import { FrameMeter } from "./showcase/meter";
+import { Overlay } from "./showcase/overlay";
+import { Showcase } from "./showcase/showcase";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./creatures/atlas";
@@ -227,6 +230,9 @@ async function start(): Promise<void> {
   const bench = await Bench.start(window.location.search, VIEW_CELLS);
   const params = bench?.params ?? new URLSearchParams(window.location.search);
   const pinned = pinnedView(params.get("view"));
+  // The showcase (R5): a scripted tour of the scene on a recording, kept in the desk's
+  // build so that it runs on the board as the desk would (`showcase/`).
+  const showcasing = params.get("showcase") !== null;
 
   const app = new Application();
   await app.init({
@@ -315,6 +321,9 @@ async function start(): Promise<void> {
   // The name card of the animal followed, in the top-left corner (R5).
   const card = new NameCard(WIDTH, HEIGHT);
   frame.append(dim, captions.element, card.element);
+  // The showcase's lines and titles, and its frame counter with `?fps`.
+  const overlay = showcasing ? new Overlay(WIDTH, HEIGHT) : null;
+  if (overlay !== null) frame.append(overlay.title, overlay.line, overlay.counter);
 
   // Where each notable entry happened, by its number, for the marker and the local view's
   // visit while its scroll is out (R5); entries with no one place are not kept.
@@ -338,8 +347,12 @@ async function start(): Promise<void> {
   let lastMs = 0;
   let lastCreatures: CreaturesMessage | null = null;
   let lastSky: SkyMessage | null = null;
+  let lastClock: ClockMessage | null = null;
   const deliver = (message: Message): void => {
-    if (message.type === "clock") date = message.date;
+    if (message.type === "clock") {
+      date = message.date;
+      lastClock = message;
+    }
     if (message.type === "sky") lastSky = message;
     if (message.type === "creatures") lastCreatures = message;
     if ("t_ms" in message) lastMs = message.t_ms;
@@ -400,7 +413,8 @@ async function start(): Promise<void> {
   const shows = KIOSK && bench === null ? [] : showsOf(params.get("show"));
 
   // The desk's build takes the server's stream unless benchmarked.
-  const socket = params.get("source") ?? (KIOSK && bench === null ? serverStream() : null);
+  const socket =
+    params.get("source") ?? (KIOSK && bench === null && !showcasing ? serverStream() : null);
   // `?file=` plays any recording under `stream/` (the report's, R4), as a creatures' one.
   const file = KIOSK ? null : params.get("file");
   const name = file === null ? (params.get("recording") ?? "life") : "life";
@@ -540,6 +554,27 @@ async function start(): Promise<void> {
   let shown = shows.length === 0;
   // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
   let later: Timed[] = [];
+  const showcase = showcasing
+    ? new Showcase({
+        size: () => landscape.size,
+        landMessage: () => landscape.lastMessage,
+        clock: () => lastClock,
+        receive: (message) => receive(message),
+        demo: (asked, x, y) => {
+          const land = landscape.current;
+          if (land === null) return;
+          const world = { land, landMessage: landscape.lastMessage, creatures: lastCreatures };
+          later.push(...demoMessages(asked, world, x, y, lastMs));
+        },
+        advance: (seconds) => {
+          advance += seconds;
+        },
+        holdDay: (held) => {
+          landscape.holdDay = held;
+        },
+        herd,
+      })
+    : null;
   /** The light of the moment as last drawn (the animals sleep by it, R5). */
   let sceneLight = 1;
   /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
@@ -560,7 +595,10 @@ async function start(): Promise<void> {
       scroll.caption === null || scroll.phase === "gap"
         ? null
         : (places.get(scroll.caption.number) ?? null);
-    if (pinned === null) {
+    const scripted = showcase?.update(dtS) ?? null;
+    if (scripted !== null) {
+      shot = scripted;
+    } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
       scene.ready = landscape.settled;
@@ -680,6 +718,10 @@ async function start(): Promise<void> {
       facts === null ? null : { ...facts, portrait: look === null ? null : portraits.of(look) },
       lamp,
     );
+    if (showcase !== null && overlay !== null) {
+      const { act } = showcase.now;
+      overlay.show(act.line, act.title ?? "");
+    }
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.
@@ -692,7 +734,30 @@ async function start(): Promise<void> {
       app.render();
     };
   } else {
-    app.ticker.add((ticker) => step(ticker.deltaMS));
+    // The showcase's frame counter (`?fps`) and its reports to who runs it (`?post=`).
+    const post = showcasing ? params.get("post") : null;
+    const meter =
+      showcase === null
+        ? null
+        : new FrameMeter(
+            (fps) => {
+              if (params.get("fps") !== null) overlay?.count(`${Math.round(fps)} FPS`);
+            },
+            post === null
+              ? null
+              : (report) => {
+                  void fetch(post, { method: "POST", body: JSON.stringify(report) }).catch(
+                    () => undefined,
+                  );
+                },
+          );
+    app.ticker.add((ticker) => {
+      step(ticker.deltaMS);
+      if (meter !== null && showcase !== null) {
+        const { index, loop } = showcase.now;
+        meter.frame(performance.now(), index, loop, showcase.time);
+      }
+    });
     // The kiosk's cap on the board (R5, ADR 0022): none unless asked.
     capFrames(app.ticker, Number(params.get("cap") ?? 0));
   }

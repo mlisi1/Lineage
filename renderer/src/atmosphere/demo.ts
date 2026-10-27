@@ -183,7 +183,7 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 /** `grid` with its whole numbers replaced by `numbers`. */
-function regrid(grid: Grid, numbers: Uint8Array | Uint16Array): Grid {
+export function regrid(grid: Grid, numbers: Uint8Array | Uint16Array): Grid {
   if (grid.encoding === "u8") return { ...grid, data: encodeBase64(Uint8Array.from(numbers)) };
   const bytes = new Uint8Array(numbers.length * 2);
   numbers.forEach((value, i) => {

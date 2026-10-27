@@ -1,0 +1,38 @@
+# Runs the showcase (R5), full screen on the board's display, as user %i, at the
+# kiosk's 30 fps cap, until it is stopped; then showcase.py writes its summary to
+# ~<user>/lineage-r5/showcase-summary.txt (and the journal).
+#
+#   sudo cp lineage-showcase@.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   ./showcase.sh       # starts it, shows its status lines; Ctrl+C stops it and prints
+#                       # the summary (or: sudo systemctl start/stop lineage-showcase@<user>)
+#
+# It expects ~<user>/lineage-r5/ to hold showcase.py, kiosk_bench.py (which it uses) and
+# dist-kiosk/ (the desk's build, `npm run build:kiosk`). The browser's profile is kept in
+# ~/.lineage-showcase, so the ground painted and kept is there the next run, as on the
+# desk. The unit takes the first console for itself; `sudo systemctl start getty@tty1`
+# gives the login prompt back afterwards.
+[Unit]
+Description=Lineage showcase on the display, as %i
+After=systemd-user-sessions.service systemd-logind.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/lineage-r5
+# A login session on the first console: what gives cage the display and the GPU.
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_SESSION_TYPE=wayland
+# So that each table reaches the journal as it is printed, not when the run is over.
+Environment=PYTHONUNBUFFERED=1
+UtmpIdentifier=tty1
+UtmpMode=user
+ExecStart=/usr/bin/cage -s -- /usr/bin/python3 showcase.py --dist dist-kiosk --fps-cap 30
+Restart=no
