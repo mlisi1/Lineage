@@ -55,8 +55,9 @@ benchmark and nothing of the project needs to be on the board.
    …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
    the report marks as not the R0 measurement.
 
-   The screen belongs to the benchmark for ten to twenty minutes: four browser profiles
-   (`default`, `gpu`, `gpu-gles`, `software`; `canvas` is the spike's only), nine
+   The screen belongs to the benchmark for about twenty minutes: three browser profiles
+   (`default`, `gpu`, `gpu-gles`; the CPU's `software` only with `--profiles software`,
+   since the CPU cannot draw the scene; `canvas` is the spike's only), nine
    scenarios each, 2 s of warm-up and 8 s measured per scenario, plus a few seconds for
    each scenario's page to load and the view it measures to be painted (on the board the
    local view's ground takes several seconds): the scene loads itself again for every scenario, so the

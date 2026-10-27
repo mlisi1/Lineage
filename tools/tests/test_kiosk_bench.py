@@ -226,8 +226,10 @@ def test_the_scene_page_is_asked_for_its_benchmark_and_cap() -> None:
     assert "cap" not in kb.page_url(1, kb.SCENE_PAGE, PROFILES["gpu"], 1.0, 0.0, None)
     assert kb.is_spike("spike.html")
     assert not kb.is_spike("index.html")
-    # The scene has no canvas backend: it is not run by default, nor taken when asked.
-    assert kb.default_profiles(kb.SCENE_PAGE) == "default,gpu,gpu-gles,software"
+    # The scene has no canvas backend: it is not run by default, nor taken when asked; nor
+    # is the CPU's drawing run by default (the owner), though it can be asked for.
+    assert kb.default_profiles(kb.SCENE_PAGE) == "default,gpu,gpu-gles"
+    assert [p.name for p in kb.chosen_profiles("software", None, kb.SCENE_PAGE)] == ["software"]
     assert kb.default_profiles(kb.SPIKE_PAGE) == ",".join(PROFILES)
     with pytest.raises(ValueError, match="canvas: only the R0 spike"):
         kb.chosen_profiles("gpu,canvas", None, kb.SCENE_PAGE)
