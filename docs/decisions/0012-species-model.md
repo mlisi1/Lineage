@@ -1,6 +1,6 @@
 # 0012 — Species model: lineage labels, genome clusters, genome names
 
-- **Status**: accepted
+- **Status**: accepted; M6.1 revised in M11 (ADR 0019): measured after the founding, 3–16 species
 - **Date**: 2026-10-18
 
 ## Context

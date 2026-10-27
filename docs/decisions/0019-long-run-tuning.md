@@ -1,6 +1,6 @@
 # 0019 — Long-run tuning
 
-- **Status**: in progress (M11)
+- **Status**: accepted (2026-10-27): M11 closed; every criterion passes on tuning and held-out seeds (`reports/M11-long-run`)
 - **Date**: 2026-10-20
 
 ## Context

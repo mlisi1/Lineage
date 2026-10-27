@@ -1,6 +1,6 @@
 # 0016 — Presence, light and god powers
 
-- **Status**: accepted
+- **Status**: accepted; M8.1 revised in M11 (ADR 0019): selection on light traits, night or day
 - **Date**: 2026-10-19
 
 ## Context
