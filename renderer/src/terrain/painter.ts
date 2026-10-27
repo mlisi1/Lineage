@@ -89,12 +89,19 @@ interface Queued {
   reject: (error: Error) => void;
 }
 
-/** The queue both painters share: the lowest priority first, then the oldest. */
+/**
+ * The queue both painters share: the lowest priority first, then the oldest, as many at a
+ * time as the painter has hands (`slots`).
+ */
 abstract class QueuedPainter implements Painter {
   protected version = 0;
   private queue: Queued[] = [];
-  private running: Queued | null = null;
+  private readonly running: (Queued | null)[];
   private order = 0;
+
+  constructor(slots = 1) {
+    this.running = new Array<Queued | null>(Math.max(slots, 1)).fill(null);
+  }
 
   setLand(land: Land): number {
     this.version += 1;
@@ -119,7 +126,7 @@ abstract class QueuedPainter implements Painter {
   }
 
   get busy(): number {
-    return this.queue.length + (this.running === null ? 0 : 1);
+    return this.queue.length + this.running.filter((each) => each !== null).length;
   }
 
   dispose(): void {
@@ -127,12 +134,12 @@ abstract class QueuedPainter implements Painter {
   }
 
   protected abstract sendLand(land: Land, version: number): void;
-  protected abstract start(request: PaintRequest): void;
+  protected abstract start(request: PaintRequest, slot: number): void;
 
-  /** The running request is done: hand it its pixels and start the next. */
-  protected finished(pixels: Pixels | Error, landVersion: number): void {
-    const done = this.running;
-    this.running = null;
+  /** The request running in `slot` is done: hand it its pixels and start the next. */
+  protected finished(pixels: Pixels | Error, landVersion: number, slot = 0): void {
+    const done = this.running[slot] ?? null;
+    this.running[slot] = null;
     if (done !== null) {
       if (pixels instanceof Error) done.reject(pixels);
       else done.resolve({ pixels, landVersion });
@@ -141,12 +148,15 @@ abstract class QueuedPainter implements Painter {
   }
 
   private next(): void {
-    if (this.running !== null || this.queue.length === 0) return;
-    this.queue.sort((a, b) => a.priority - b.priority || a.order - b.order);
-    const first = this.queue.shift();
-    if (first === undefined) return;
-    this.running = first;
-    this.start(first.request);
+    for (let slot = 0; slot < this.running.length; slot++) {
+      if (this.running[slot] !== null) continue;
+      if (this.queue.length === 0) return;
+      this.queue.sort((a, b) => a.priority - b.priority || a.order - b.order);
+      const first = this.queue.shift();
+      if (first === undefined) return;
+      this.running[slot] = first;
+      this.start(first.request, slot);
+    }
   }
 }
 
@@ -179,39 +189,55 @@ export type FromWorker =
   | { kind: "painted"; pixels: Pixels; landVersion: number }
   | { kind: "failed"; message: string; landVersion: number };
 
-/** Painting in a Web Worker: the page goes on drawing frames meanwhile. */
+/**
+ * Painting in Web Workers: the page goes on drawing frames meanwhile, and several pieces
+ * are painted at once, one to a worker (R5: the board's four cores, one painting, left the
+ * island's ground coming in slowly).
+ */
 export class WorkerPainter extends QueuedPainter {
-  private readonly worker: Worker;
+  private readonly workers: Worker[];
 
-  constructor() {
-    super();
-    this.worker = new Worker(new URL("./paint.worker.ts", import.meta.url), { type: "module" });
-    this.worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
-      const reply = event.data;
-      this.finished(
-        reply.kind === "painted" ? reply.pixels : new Error(reply.message),
-        reply.landVersion,
-      );
+  constructor(count = 1) {
+    super(count);
+    this.workers = Array.from({ length: Math.max(count, 1) }, (_, slot) => {
+      const worker = new Worker(new URL("./paint.worker.ts", import.meta.url), { type: "module" });
+      worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
+        const reply = event.data;
+        this.finished(
+          reply.kind === "painted" ? reply.pixels : new Error(reply.message),
+          reply.landVersion,
+          slot,
+        );
+      });
+      return worker;
     });
   }
 
   protected sendLand(land: Land, version: number): void {
     const message: ToWorker = { kind: "land", land, version };
-    this.worker.postMessage(message);
+    for (const worker of this.workers) worker.postMessage(message);
   }
 
-  protected start(request: PaintRequest): void {
+  protected start(request: PaintRequest, slot: number): void {
     const message: ToWorker = { kind: "paint", request };
-    this.worker.postMessage(message);
+    this.workers[slot]?.postMessage(message);
   }
 
   override dispose(): void {
     super.dispose();
-    this.worker.terminate();
+    for (const worker of this.workers) worker.terminate();
   }
 }
 
-/** A worker where the browser has them, else the page's own thread. */
+/** Painting workers at most: the page's own thread and the GPU's want cores too. */
+const MOST_PAINTERS = 3;
+
+/**
+ * Workers where the browser has them, one fewer than its cores (at most `MOST_PAINTERS`,
+ * at least one), else the page's own thread.
+ */
 export function makePainter(): Painter {
-  return typeof Worker === "undefined" ? new InlinePainter() : new WorkerPainter();
+  if (typeof Worker === "undefined") return new InlinePainter();
+  const cores = typeof navigator === "undefined" ? 2 : (navigator.hardwareConcurrency ?? 2);
+  return new WorkerPainter(Math.min(Math.max(cores - 1, 1), MOST_PAINTERS));
 }
