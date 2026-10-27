@@ -287,7 +287,7 @@ const MOST_PAINTERS = 3;
  * Cores left to the page's own thread and the GPU's: on the board (four cores) three
  * painters took the frames' time in the local view, two do not (R5).
  */
-const CORES_KEPT = 3;
+const CORES_KEPT = 2;
 
 /**
  * Workers where the browser has them, `CORES_KEPT` fewer than its cores (at most
