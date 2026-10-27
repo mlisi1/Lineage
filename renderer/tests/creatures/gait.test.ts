@@ -140,6 +140,29 @@ describe("legs stepping in turn", () => {
     for (let t = 0; t < 3; t += STEP_S) layer.update(STEP_S);
     expect(creature.legs.every((leg) => !leg.swinging)).toBe(true);
   });
+
+  it("standing still, keeps every part where a full pose puts it, only its chest breathing", () => {
+    const { creature, layer } = walk({ limbPairs: 2 }, 3);
+    for (let t = 0; t < 20; t += STEP_S) layer.update(STEP_S);
+    layer.pin(0, 16, 10, 0);
+    for (let t = 0; t < 3; t += STEP_S) layer.update(STEP_S);
+    const inside = creature as unknown as {
+      sprites: { x: number; y: number; rotation: number; scale: { x: number; y: number } }[];
+      plan: { parts: { joint: number }[] };
+      chest: number;
+      posed: Float64Array | null;
+    };
+    const drawn = (): number[][] =>
+      inside.sprites.map((sprite) => [sprite.x, sprite.y, sprite.rotation, sprite.scale.x]);
+    // A still frame: posed from what it was posed from before, so not posed again.
+    layer.update(STEP_S);
+    const kept = drawn();
+    expect(inside.posed).not.toBeNull();
+    // Posed in full the next frame (what it was posed from forgotten): the same, part for part.
+    inside.posed = null;
+    layer.update(STEP_S);
+    expect(drawn()).toEqual(kept);
+  });
 });
 
 describe("a body turning back on itself", () => {

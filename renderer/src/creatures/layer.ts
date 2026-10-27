@@ -275,6 +275,8 @@ interface Creature {
   inView: boolean;
   /** Seconds not yet lived out of sight (`OUT_OF_SIGHT_EVERY`). */
   lag: number;
+  /** What it was last posed from (`posedAsBefore`); null before its first pose. */
+  posed: Float64Array | null;
   /** With anchored life: where the sim has it and what it is doing there. */
   motion: Motion | null;
   /** Its mass, which sets how slowly it breathes. */
@@ -1840,6 +1842,7 @@ export class CreatureLayer {
       legs,
       inView: true,
       lag: 0,
+      posed: null,
     };
   }
 
@@ -2154,6 +2157,16 @@ export class CreatureLayer {
     const spreads = 1 + BASK_SPREADS * flat;
     const lowers = 1 - BASK_LOWERS * flat;
     const widens = 1 + BASK_WIDENS * flat;
+    // The gait moves on first (the parts do not read it, the legs do).
+    this.step(creature, dtS);
+    creature.unsettled = false;
+    // Posed from just what it was posed from last time (R5, the board: standing, grazing
+    // between steps, asleep), every part and leg would come out where it is: only the
+    // chest, breathing, is posed again.
+    if (!moved && this.posedAsBefore(creature)) {
+      this.breathe(creature, dtS, widens);
+      return;
+    }
     // Which way the body points at each joint: the head where it is going, the others
     // toward the joint in front.
     this.dirX[0] = Math.cos(creature.heading);
@@ -2202,8 +2215,6 @@ export class CreatureLayer {
         sprite.scale.y = (part.across / texels) * (1 + deeper * full) * widens;
       }
     }
-    this.step(creature, dtS);
-    creature.unsettled = false;
     for (const leg of creature.legs) this.walk(creature, leg);
     if (moved) {
       for (let i = 0; i < joints.length && i < this.heldX.length; i++) {
@@ -2211,6 +2222,57 @@ export class CreatureLayer {
         if (joint === undefined) continue;
         joint.x = this.heldX[i] ?? joint.x;
         joint.y = this.heldY[i] ?? joint.y;
+      }
+    }
+  }
+
+  /**
+   * Whether `creature` is to be posed from just what it was last time: its joints, its
+   * heading, its gait, how it strides, basks, hunches, shakes and tucks its feet. Keeps
+   * what it is posed from now for the next time.
+   */
+  private posedAsBefore(creature: Creature): boolean {
+    const { joints } = creature;
+    const size = joints.length * 2 + 7;
+    let posed = creature.posed;
+    let same = posed !== null && posed.length === size;
+    if (posed === null || posed.length !== size) posed = creature.posed = new Float64Array(size);
+    const keep = (at: number, value: number): void => {
+      if (posed[at] !== value) {
+        posed[at] = value;
+        same = false;
+      }
+    };
+    joints.forEach((joint, i) => {
+      keep(2 * i, joint.x);
+      keep(2 * i + 1, joint.y);
+    });
+    const at = joints.length * 2;
+    keep(at, creature.heading);
+    keep(at + 1, creature.gait);
+    keep(at + 2, creature.striding);
+    keep(at + 3, creature.basker.share);
+    keep(at + 4, creature.drench.huddle);
+    keep(at + 5, creature.drench.age);
+    keep(at + 6, tuckOf(creature.sleep));
+    return same;
+  }
+
+  /** Only the chest of `creature` breathing, as `pose` has it (the rest stays where it is). */
+  private breathe(creature: Creature, dtS: number, widens: number): void {
+    const { plan } = creature;
+    for (let i = 0; i < plan.parts.length; i++) {
+      const part = plan.parts[i];
+      const sprite = creature.sprites[i];
+      if (part === undefined || sprite === undefined) continue;
+      if (part.joint === creature.chest && part.layer > LAYER.ground && part.layer <= LAYER.light) {
+        const clock = creature.torpid
+          ? this.clock / TORPID_BREATH
+          : breathClock(creature.sleep, dtS);
+        const full = breath(clock, creature.mass, creature.breathOffset);
+        const texels = part.shape === "bar" ? WHITE_TEXELS : DISC_SIZE;
+        const deeper = BREATH_WIDENS * breathDepth(creature.sleep);
+        sprite.scale.y = (part.across / texels) * (1 + deeper * full) * widens;
       }
     }
   }
