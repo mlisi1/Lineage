@@ -28,6 +28,23 @@ const PIECE_MARGIN = 1;
 /** Pieces this many cells beyond the view are painted too, so that the camera finds them ready. */
 const AHEAD_CELLS = 4;
 
+/** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
+export interface PieceOptions {
+  /** Cells per side of a piece. */
+  cells: number;
+  /** Cells beyond the view whose pieces are painted too (Infinity: the whole world). */
+  ahead: number;
+  /** Pieces kept; the farthest are forgotten beyond this (Infinity: every one). */
+  kept: number;
+}
+
+/** The local view's: small pieces round the camera, the far ones forgotten. */
+export const CLOSE_PIECES: PieceOptions = {
+  cells: PIECE_CELLS,
+  ahead: AHEAD_CELLS,
+  kept: PIECES_KEPT,
+};
+
 /** Where a painting goes: its corner in cells, and the part of it kept (texels; all if left out). */
 interface Placing {
   x: number;
@@ -217,6 +234,7 @@ export class PieceGround extends Layers {
     readonly tile: number,
     private readonly world: { width: number; height: number },
     private readonly fadeS = FADE_S,
+    private readonly cut: PieceOptions = CLOSE_PIECES,
   ) {
     super();
   }
@@ -253,7 +271,7 @@ export class PieceGround extends Layers {
   cover(view: CellRect): void {
     if (this.request === null) return;
     this.centre = { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 };
-    for (const key of this.keys(view, AHEAD_CELLS)) {
+    for (const key of this.keys(view, this.cut.ahead)) {
       let piece = this.pieces.get(key);
       if (piece === undefined) {
         piece = { painting: null, painted: -1, asked: 0, fade: null };
@@ -262,9 +280,9 @@ export class PieceGround extends Layers {
       if (piece.asked !== this.landVersion && piece.painted !== this.landVersion)
         this.ask(key, piece);
     }
-    if (this.pieces.size <= PIECES_KEPT) return;
+    if (this.pieces.size <= this.cut.kept) return;
     const byDistance = [...this.pieces.keys()].sort((a, b) => this.distance(b) - this.distance(a));
-    for (const key of byDistance.slice(0, this.pieces.size - PIECES_KEPT)) {
+    for (const key of byDistance.slice(0, this.pieces.size - this.cut.kept)) {
       const piece = this.pieces.get(key);
       piece?.fade?.finish();
       destroy(piece?.painting ?? null);
@@ -280,15 +298,10 @@ export class PieceGround extends Layers {
 
   private keys(view: CellRect, ahead: number): number[] {
     const { width, height } = this.world;
-    const first = (value: number): number => Math.max(Math.floor(value / PIECE_CELLS), 0);
-    const lastX = Math.min(
-      Math.floor((view.x1 + ahead) / PIECE_CELLS),
-      Math.ceil(width / PIECE_CELLS) - 1,
-    );
-    const lastY = Math.min(
-      Math.floor((view.y1 + ahead) / PIECE_CELLS),
-      Math.ceil(height / PIECE_CELLS) - 1,
-    );
+    const size = this.cut.cells;
+    const first = (value: number): number => Math.max(Math.floor(value / size), 0);
+    const lastX = Math.min(Math.floor((view.x1 + ahead) / size), Math.ceil(width / size) - 1);
+    const lastY = Math.min(Math.floor((view.y1 + ahead) / size), Math.ceil(height / size) - 1);
     const keys: number[] = [];
     for (let py = first(view.y0 - ahead); py <= lastY; py++) {
       for (let px = first(view.x0 - ahead); px <= lastX; px++) keys.push(py * 1024 + px);
@@ -297,8 +310,8 @@ export class PieceGround extends Layers {
   }
 
   private distance(key: number): number {
-    const x = ((key % 1024) + 0.5) * PIECE_CELLS;
-    const y = (Math.floor(key / 1024) + 0.5) * PIECE_CELLS;
+    const x = ((key % 1024) + 0.5) * this.cut.cells;
+    const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
     return Math.hypot(x - this.centre.x, y - this.centre.y);
   }
 
@@ -308,11 +321,12 @@ export class PieceGround extends Layers {
     const { width, height } = this.world;
     const px = key % 1024;
     const py = Math.floor(key / 1024);
+    const size = this.cut.cells;
     const cells = {
-      x0: px * PIECE_CELLS,
-      y0: py * PIECE_CELLS,
-      x1: Math.min((px + 1) * PIECE_CELLS, width),
-      y1: Math.min((py + 1) * PIECE_CELLS, height),
+      x0: px * size,
+      y0: py * size,
+      x1: Math.min((px + 1) * size, width),
+      y1: Math.min((py + 1) * size, height),
     };
     const padded = {
       x0: Math.max(cells.x0 - PIECE_MARGIN, 0),

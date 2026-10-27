@@ -21,7 +21,7 @@ import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
 import { landOf, yearOf } from "./stream";
 import { MAP_TILE, MID_TILE, type GroundStyle } from "./terrain/ground";
-import { FADE_S, PieceGround, WholeGround } from "./terrain/grounds";
+import { FADE_S, PieceGround, WholeGround, type PieceOptions } from "./terrain/grounds";
 import type { CellRect, Land } from "./terrain/land";
 import type { Painter } from "./terrain/painter";
 import { Sea } from "./terrain/sea";
@@ -41,6 +41,13 @@ export const TILES: Readonly<Record<ViewName, number>> = {
  * view does), so that cover lies in patches instead of a patchwork cell by cell (R5).
  */
 const MIDDLE_CALM = 1;
+/**
+ * The middle view's ground in pieces (R5, the board): what is on the screen is painted
+ * first, then the rest of the island nearest first, every piece kept, so that the view's
+ * drift finds it painted. One picture of the whole island took the board's painter some
+ * 25 s before anything showed.
+ */
+const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: Infinity, kept: Infinity };
 /** Land higher than this above the sea (height units) is never reached by the swash. */
 const SWASH_BEACH = 0.03;
 /** Where to look for the water round a place, to know if the swash reaches it: eight ways. */
@@ -117,7 +124,7 @@ class PlantFade {
 
 interface Built {
   map: WholeGround | null;
-  middle: { ground: WholeGround; plants: PlantFade } | null;
+  middle: { ground: PieceGround; plants: PlantFade } | null;
   local: { ground: PieceGround; plants: PlantFade } | null;
 }
 
@@ -307,6 +314,7 @@ export class Landscape {
     if (built.middle !== null) {
       built.middle.ground.tick(dtS);
       built.middle.plants.tick(dtS, cells, this.view === "middle" ? this.wind : null);
+      if (this.view === "middle") built.middle.ground.cover(cells);
     }
     if (built.local !== null) {
       built.local.ground.tick(dtS);
@@ -321,7 +329,9 @@ export class Landscape {
     const { built } = this;
     if (this.view === "map") return built.map?.settled ?? false;
     if (this.view === "middle") {
-      return (built.middle?.ground.settled ?? false) && !(built.middle?.plants.fading ?? true);
+      return (
+        (built.middle?.ground.ready(this.cells) ?? false) && !(built.middle?.plants.fading ?? true)
+      );
     }
     return (
       (built.local?.ground.ready(this.cells) ?? false) && !(built.local?.plants.fading ?? true)
@@ -378,7 +388,7 @@ export class Landscape {
     if (name === "middle") {
       if (this.built.middle === null) {
         this.built.middle = {
-          ground: new WholeGround(this.painter, TILES.middle, this.fadeS),
+          ground: new PieceGround(this.painter, TILES.middle, land, this.fadeS, MIDDLE_PIECES),
           plants: new PlantFade(this.fadeS),
         };
         const { ground, plants: standing } = this.built.middle;
@@ -389,10 +399,10 @@ export class Landscape {
           standing.container,
         );
       }
-      const island = { x0: 0, y0: 0, x1: land.width, y1: land.height };
-      void this.built.middle.ground.repaint(
-        { ...request, calm: MIDDLE_CALM, shadows: plants.shadows(island) },
-        10,
+      this.built.middle.ground.update(
+        this.landVersion,
+        { ...request, calm: MIDDLE_CALM },
+        (cells) => plants.shadows(cells),
       );
       this.built.middle.plants.show(plants);
       return;
