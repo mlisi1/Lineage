@@ -71,8 +71,9 @@ export interface Painted {
   fresh?: boolean;
 }
 
-/** No pixels: what a painting done ahead of time hands back. */
-const NONE: Pixels = { width: 0, height: 0, rgba: new Uint8ClampedArray(0) };
+/** No pixels: what a painting done ahead of time hands back (a new one each time, as a
+ * worker hands its buffers over and cannot send one twice). */
+const none = (): Pixels => ({ width: 0, height: 0, rgba: new Uint8ClampedArray(0) });
 
 /**
  * Paint `request` on `land`, keeping it in `cache` as `request.keep` asks: what the worker
@@ -87,10 +88,10 @@ export async function paintKept(
   if (keep === undefined) return { pixels: paintRequest(land, request), fresh: true };
   const kept = await cache.get(keep.key);
   if (kept?.stamp === keep.stamp)
-    return { pixels: keep.ahead === true ? NONE : kept.pixels, fresh: false };
+    return { pixels: keep.ahead === true ? none() : kept.pixels, fresh: false };
   const pixels = paintRequest(land, request);
   cache.put(keep.key, keep.stamp, pixels);
-  return { pixels: keep.ahead === true ? NONE : pixels, fresh: true };
+  return { pixels: keep.ahead === true ? none() : pixels, fresh: true };
 }
 
 export interface Painter {
