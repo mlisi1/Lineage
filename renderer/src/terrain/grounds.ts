@@ -431,6 +431,13 @@ export class PieceGround extends Layers {
       paint();
       return;
     }
+    // A piece already showing something (a new day over the old) is not read here: the
+    // painter looks in the cache itself and hands back today's if it is kept (R5: reading
+    // every piece on the page's thread at each new day held up the frames).
+    if (piece.painting !== null) {
+      paint();
+      return;
+    }
     // Kept from before: today's is shown as it is; an older one at once, while today's is
     // painted to fade in over it.
     void this.cache.get(this.keyOf(key)).then((kept) => {

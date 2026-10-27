@@ -77,6 +77,10 @@ STARTUP_ALLOWANCE_S = 90.0
 # again for each one and paints its first land, and then the view it measures (the local
 # view's ground comes in pieces, slowly on the board), before measuring.
 PER_SCENARIO_ALLOWANCE_S = {SCENE_PAGE: 60.0, SPIKE_PAGE: 5.0}
+# Seconds measured per scenario when not told: the scene's 20 (R5: in 8 s, some 240
+# frames, whether a sim-day's turn fell in the window decided the share of late frames
+# more than the scene did), the spike's 8 as R0 measured it.
+MEASURE_S = {SCENE_PAGE: 20.0, SPIKE_PAGE: 8.0}
 # Scenarios each page runs when not told which (renderer/src/benchplan.ts,
 # renderer/src/spike/scenarios.ts); a page of neither kind is given the larger.
 SCENARIO_COUNT_ESTIMATE = {SCENE_PAGE: 9, SPIKE_PAGE: 14}
@@ -777,7 +781,12 @@ def main(argv: list[str] | None = None) -> int:
         help="more Chromium flags to try, as one more profile named 'custom' "
         "(quote them: --flags='--use-gl=egl')",
     )
-    parser.add_argument("--seconds", type=float, default=8.0, help="measured per scenario")
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        default=None,
+        help="measured per scenario (default: 20 for the scene, 8 for the spike)",
+    )
     parser.add_argument("--warmup", type=float, default=2.0, help="discarded before each scenario")
     parser.add_argument(
         "--only",
@@ -818,6 +827,8 @@ def main(argv: list[str] | None = None) -> int:
     width, _, height = args.window.partition("x")
     window = (int(width), int(height))
     kind = SPIKE_PAGE if is_spike(args.page) else SCENE_PAGE
+    if args.seconds is None:
+        args.seconds = MEASURE_S[kind]
     timeout_s = args.timeout or (
         STARTUP_ALLOWANCE_S
         + SCENARIO_COUNT_ESTIMATE[kind]

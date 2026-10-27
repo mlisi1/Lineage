@@ -55,12 +55,12 @@ benchmark and nothing of the project needs to be on the board.
    …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
    the report marks as not the R0 measurement.
 
-   The screen belongs to the benchmark for about six minutes: one browser profile,
+   The screen belongs to the benchmark for about seven minutes: one browser profile,
    `default`, a plain Chromium as the kiosk runs it (on the board every GPU profile draws
    through the same path, ANGLE on OpenGL ES with Panfrost; `--profiles gpu,gpu-gles`
    runs the others, as after a Chromium or Mesa update; the CPU's `software` only when
    named, since the CPU cannot draw the scene; `canvas` is the spike's only), nine
-   scenarios each, 2 s of warm-up and 8 s measured per scenario, plus a few seconds for
+   scenarios each, 2 s of warm-up and 20 s measured per scenario (the spike 8 s), plus a few seconds for
    each scenario's page to load and the view it measures to be painted (on the board the
    local view's ground takes several seconds): the scene loads itself again for every scenario, so the
    screen flashes between them. It prints a table per profile and writes `kiosk-bench.json`
