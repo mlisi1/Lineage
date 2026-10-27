@@ -16,6 +16,7 @@
  */
 import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
+import { NO_CACHE, type GroundCache } from "./groundcache";
 import { Dropped, type PaintRequest, type Painter } from "./painter";
 import type { Pixels } from "./pixels";
 
@@ -227,6 +228,8 @@ export class PieceGround extends Layers {
   private landVersion = 0;
   private request: Omit<PaintRequest, "tile" | "cells"> | null = null;
   private shadowsOf: ((cells: CellRect) => PaintRequest["shadows"]) | null = null;
+  /** What the pieces asked for now are painted from (`GroundCache`); "" keeps none. */
+  private stamp = "";
   private centre = { x: 0, y: 0 };
 
   constructor(
@@ -235,6 +238,7 @@ export class PieceGround extends Layers {
     private readonly world: { width: number; height: number },
     private readonly fadeS = FADE_S,
     private readonly cut: PieceOptions = CLOSE_PIECES,
+    private readonly cache: GroundCache = NO_CACHE,
   ) {
     super();
   }
@@ -242,16 +246,19 @@ export class PieceGround extends Layers {
   /**
    * The land has changed (or the season, or what stands on it): paint every piece kept
    * again from `request`, each fading in over its old self. `shadows` says what throws a
-   * shadow on given cells.
+   * shadow on given cells. `stamp` says what all this is (`GroundCache`): pieces kept for
+   * it are shown as they are; without one, none are kept.
    */
   update(
     landVersion: number,
     request: Omit<PaintRequest, "tile" | "cells">,
     shadows: (cells: CellRect) => PaintRequest["shadows"],
+    stamp = "",
   ): void {
     this.landVersion = landVersion;
     this.request = request;
     this.shadowsOf = shadows;
+    this.stamp = stamp;
     // What was asked for an older land is not wanted any more.
     this.painter.drop((queued) => queued.tile === this.tile);
     for (const [key, piece] of this.pieces) {
@@ -316,7 +323,7 @@ export class PieceGround extends Layers {
   }
 
   private ask(key: number, piece: Piece): void {
-    const { request, shadowsOf } = this;
+    const { request, shadowsOf, stamp } = this;
     if (request === null || shadowsOf === null) return;
     const { width, height } = this.world;
     const px = key % 1024;
@@ -336,39 +343,80 @@ export class PieceGround extends Layers {
     };
     const version = this.landVersion;
     piece.asked = version;
-    performance.mark("lineage:shadows");
-    const shadows = shadowsOf(padded);
-    performance.measure("lineage:shadows", "lineage:shadows");
-    this.painter
-      .paint(
-        {
-          ...request,
-          tile: this.tile,
-          cells: padded,
-          ...(shadows === undefined ? {} : { shadows }),
-        },
-        this.distance(key),
-      )
-      .then(({ pixels }) => {
-        if (this.pieces.get(key) !== piece || piece.asked !== version) return;
-        // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
-        const painting = show(pixels, this.tile, this.layers, {
-          x: cells.x0,
-          y: cells.y0,
-          width: (cells.x1 - cells.x0) * this.tile,
-          height: (cells.y1 - cells.y0) * this.tile,
-          offsetX: (padded.x0 - cells.x0) * this.tile,
-          offsetY: (padded.y0 - cells.y0) * this.tile,
+    const wanted = (): boolean => this.pieces.get(key) === piece && piece.asked === version;
+    const paint = (): void => {
+      performance.mark("lineage:shadows");
+      const shadows = shadowsOf(padded);
+      performance.measure("lineage:shadows", "lineage:shadows");
+      this.painter
+        .paint(
+          {
+            ...request,
+            tile: this.tile,
+            cells: padded,
+            ...(shadows === undefined ? {} : { shadows }),
+          },
+          this.distance(key),
+        )
+        .then(({ pixels }) => {
+          if (!wanted()) return;
+          if (stamp !== "") this.cache.put(this.keyOf(key), stamp, pixels);
+          this.place(piece, pixels, cells, padded, version);
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof Dropped)) throw error;
+          if (piece.asked === version) piece.asked = 0;
         });
-        piece.fade?.finish();
-        piece.fade = new Fade(painting, piece.painting, piece.painting === null ? 0 : this.fadeS);
-        if (piece.fade.done) piece.fade = null;
-        piece.painting = painting;
-        piece.painted = version;
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof Dropped)) throw error;
-        if (piece.asked === version) piece.asked = 0;
-      });
+    };
+    if (stamp === "") {
+      paint();
+      return;
+    }
+    // Kept from before: today's is shown as it is; an older one at once, while today's is
+    // painted to fade in over it.
+    void this.cache.get(this.keyOf(key)).then((kept) => {
+      if (!wanted()) return;
+      if (kept?.stamp === stamp) {
+        this.place(piece, kept.pixels, cells, padded, version);
+        return;
+      }
+      if (kept !== undefined && piece.painting === null) {
+        this.place(piece, kept.pixels, cells, padded, piece.painted, 0);
+      }
+      paint();
+    });
+  }
+
+  /** Where piece `key` is kept: by this ground's tile and piece size. */
+  private keyOf(key: number): string {
+    return `${this.tile}/${this.cut.cells}/${key}`;
+  }
+
+  /**
+   * Show `pixels` (painted with a margin round `cells`, `padded`) as `piece`, fading in
+   * over what it showed, and mark it painted for land `version`.
+   */
+  private place(
+    piece: Piece,
+    pixels: Pixels,
+    cells: CellRect,
+    padded: CellRect,
+    version: number,
+    fadeS = this.fadeS,
+  ): void {
+    // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
+    const painting = show(pixels, this.tile, this.layers, {
+      x: cells.x0,
+      y: cells.y0,
+      width: (cells.x1 - cells.x0) * this.tile,
+      height: (cells.y1 - cells.y0) * this.tile,
+      offsetX: (padded.x0 - cells.x0) * this.tile,
+      offsetY: (padded.y0 - cells.y0) * this.tile,
+    });
+    piece.fade?.finish();
+    piece.fade = new Fade(painting, piece.painting, piece.painting === null ? 0 : fadeS);
+    if (piece.fade.done) piece.fade = null;
+    piece.painting = painting;
+    piece.painted = version;
   }
 }

@@ -21,7 +21,29 @@ import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
 import { landOf, yearOf } from "./stream";
 import { MAP_TILE, MID_TILE, type GroundStyle } from "./terrain/ground";
-import { FADE_S, PieceGround, WholeGround, type PieceOptions } from "./terrain/grounds";
+import {
+  CLOSE_PIECES,
+  FADE_S,
+  PieceGround,
+  WholeGround,
+  type PieceOptions,
+} from "./terrain/grounds";
+import { NO_CACHE, type GroundCache } from "./terrain/groundcache";
+
+declare const __BUILD_COMMIT__: string;
+
+/**
+ * The painter's code, for the stamps of the ground kept (`GroundCache`): the commit the
+ * page was built from; none kept for a build with changes not committed, or under the
+ * development server, whose painter may change from one page load to the next.
+ */
+const PAINTER_CODE =
+  typeof __BUILD_COMMIT__ === "string" &&
+  __BUILD_COMMIT__ !== "unknown" &&
+  !__BUILD_COMMIT__.endsWith("-dirty") &&
+  !import.meta.env.DEV
+    ? __BUILD_COMMIT__
+    : "";
 import type { CellRect, Land } from "./terrain/land";
 import type { Painter } from "./terrain/painter";
 import { Sea } from "./terrain/sea";
@@ -148,6 +170,8 @@ export class Landscape {
   readonly floor = new Container();
   /** Cells a cone or crater covers (R4): no plant, stone or boulder is placed there. */
   covered: ((x: number, y: number) => boolean) | null = null;
+  /** Where painted ground is kept between visits (R5); nothing kept by default. */
+  cache: GroundCache = NO_CACHE;
   /** The wind the plants of the view shown lean in (R5, `plants/wind.ts`); none: straight. */
   wind: Wind | null = null;
   private readonly layers: Record<ViewName, Container> = {
@@ -358,6 +382,26 @@ export class Landscape {
     }
   }
 
+  /**
+   * What the ground painted now is made from, for the pieces kept (`GroundCache`): the
+   * painter's code, the world, the land message, the day of the year, the look and how
+   * the plants that throw shadows are drawn. "" (nothing kept) without a cache or a
+   * committed build.
+   */
+  private stampOf(): string {
+    const message = this.landMessage;
+    if (this.cache === NO_CACHE || PAINTER_CODE === "" || message === null) return "";
+    return [
+      PAINTER_CODE,
+      message.world.seed,
+      message.t_ms,
+      this.clock?.day_of_year ?? -1,
+      this.look.name,
+      this.bushPieces ? "pieces" : "whole",
+      this.covered === null ? "open" : "covered",
+    ].join("|");
+  }
+
   /** Make view `name` (again) for the current land and day. */
   private build(name: ViewName): void {
     const { land, look } = this;
@@ -366,6 +410,7 @@ export class Landscape {
     const close = name !== "map";
     // Waves break on every coast in every view, the map's too (the owner, 2026-10-20).
     const request = { style: STYLES[name], grain: close, surf: true, look: look.name, time };
+    const stamp = this.stampOf();
     if (name === "map") {
       if (this.built.map === null) {
         this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
@@ -388,7 +433,14 @@ export class Landscape {
     if (name === "middle") {
       if (this.built.middle === null) {
         this.built.middle = {
-          ground: new PieceGround(this.painter, TILES.middle, land, this.fadeS, MIDDLE_PIECES),
+          ground: new PieceGround(
+            this.painter,
+            TILES.middle,
+            land,
+            this.fadeS,
+            MIDDLE_PIECES,
+            this.cache,
+          ),
           plants: new PlantFade(this.fadeS),
         };
         const { ground, plants: standing } = this.built.middle;
@@ -403,13 +455,21 @@ export class Landscape {
         this.landVersion,
         { ...request, calm: MIDDLE_CALM },
         (cells) => plants.shadows(cells),
+        stamp,
       );
       this.built.middle.plants.show(plants);
       return;
     }
     if (this.built.local === null) {
       this.built.local = {
-        ground: new PieceGround(this.painter, TILES.local, land, this.fadeS),
+        ground: new PieceGround(
+          this.painter,
+          TILES.local,
+          land,
+          this.fadeS,
+          CLOSE_PIECES,
+          this.cache,
+        ),
         plants: new PlantFade(this.fadeS),
       };
       const { ground, plants: standing } = this.built.local;
@@ -420,7 +480,12 @@ export class Landscape {
         standing.container,
       );
     }
-    this.built.local.ground.update(this.landVersion, request, (cells) => plants.shadows(cells));
+    this.built.local.ground.update(
+      this.landVersion,
+      request,
+      (cells) => plants.shadows(cells),
+      stamp,
+    );
     this.built.local.plants.show(plants);
   }
 }

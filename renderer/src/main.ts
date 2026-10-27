@@ -50,6 +50,8 @@
  *                              leaves blown off the trees as in that season
  *   ?bushes=whole              R5: the local view's bushes drawn whole, as before the owner
  *                              chose them in pieces (`plants/pieces.ts`), to compare
+ *   ?ground=fresh              R5: paint all the ground anew, nothing taken from what is
+ *                              kept between visits (`terrain/groundcache.ts`)
  *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
  *                              `benchplan.ts` on the recordings, the results POSTed to
  *                              `?post=` (`tools/kiosk_bench.py`)
@@ -86,6 +88,7 @@ import { Portraits } from "./creatures/portrait";
 import { heightAt } from "./creatures/habitat";
 import type { RareLook } from "./creatures/rare";
 import { Recording, SocketSource, type Source } from "./stream";
+import { makeGroundCache } from "./terrain/groundcache";
 import { InlinePainter, makePainter } from "./terrain/painter";
 import { Bench } from "./bench";
 import { capFrames } from "./framecap";
@@ -278,6 +281,8 @@ async function start(): Promise<void> {
     params.get("still") !== null,
   );
   landscape.bushPieces = params.get("bushes") !== "whole";
+  // The ground painted is kept between visits (R5); `?ground=fresh` paints it all anew.
+  if (params.get("ground") !== "fresh") landscape.cache = makeGroundCache();
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();
