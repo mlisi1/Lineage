@@ -70,6 +70,12 @@ const MIDDLE_CALM = 1;
  * whole island took the board's painter some 25 s before anything showed.
  */
 const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: 32, kept: Infinity };
+/**
+ * A frame later than this (seconds; the cap's is a thirtieth) came late; the island is
+ * painted ahead only once frames have come on time for `ON_TIME_S` (R5, the board).
+ */
+const LATE_FRAME_S = 0.045;
+const ON_TIME_S = 3;
 /** Land higher than this above the sea (height units) is never reached by the swash. */
 const SWASH_BEACH = 0.03;
 /** Where to look for the water round a place, to know if the swash reaches it: eight ways. */
@@ -159,6 +165,8 @@ export class Landscape {
   private landVersion = 0;
   /** What has to be laid out again: a new land, or a new day of the year. */
   private stale = false;
+  /** Seconds since a frame came late (`framesOnTime`). */
+  private sinceLate = Infinity;
   /** The day held (`holdDay`), and whether a land came while it was. */
   private held = false;
   private landWaiting = false;
@@ -303,6 +311,14 @@ export class Landscape {
     return this.held;
   }
 
+  /**
+   * Whether the frames have come on time for a while (`ON_TIME_S`): the island is painted
+   * ahead only then (`PieceGround.mayPaintAhead`).
+   */
+  get framesOnTime(): boolean {
+    return this.sinceLate >= ON_TIME_S;
+  }
+
   /** Whether a new day or land is waiting to be laid out. */
   get dayDue(): boolean {
     return this.stale;
@@ -342,6 +358,7 @@ export class Landscape {
 
   /** Lay out what is stale, move the fades on, and ask for the ground the view needs. */
   update(dtS: number): void {
+    this.sinceLate = dtS > LATE_FRAME_S ? 0 : this.sinceLate + dtS;
     if (this.stale && this.landMessage !== null && !this.held) this.layOut();
     this.placeFloor();
     const { built, cells } = this;
@@ -470,6 +487,7 @@ export class Landscape {
           plants: new PlantFade(this.fadeS),
         };
         const { ground, plants: standing } = this.built.middle;
+        ground.mayPaintAhead = () => this.framesOnTime;
         this.layers.middle.addChild(
           ground.container,
           ...[...ground.surf].reverse(),
@@ -501,6 +519,7 @@ export class Landscape {
         plants: new PlantFade(this.fadeS),
       };
       const { ground, plants: standing } = this.built.local;
+      ground.mayPaintAhead = () => this.framesOnTime;
       this.layers.local.addChild(
         ground.container,
         ...[...ground.surf].reverse(),

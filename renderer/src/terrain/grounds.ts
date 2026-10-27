@@ -35,6 +35,8 @@ const AHEAD_CELLS = 4;
  * one taken from the frames (R5).
  */
 const PREPAINT_REST_S = 30;
+/** Seconds `PieceGround.prepaint` waits before asking again whether it may paint ahead. */
+const YIELD_WAIT_S = 1;
 /**
  * Pieces put on the screen in one frame at most: kept ones come back together, and each
  * is a texture sent to the GPU (R5: several in one frame made it late on the board).
@@ -264,6 +266,13 @@ export class PieceGround extends Layers {
   }
 
   /**
+   * Whether the island may be painted ahead now (`prepaint`): it waits while this says no,
+   * so that painting ahead yields to the frames (R5: on the board's four cores it made
+   * them late; `Landscape` says no while frames have been coming late).
+   */
+  mayPaintAhead: () => boolean = () => true;
+
+  /**
    * The land has changed (or the season, or what stands on it): paint every piece kept
    * again from `request`, each fading in over its old self. `shadows` says what throws a
    * shadow on given cells. `stamp` says what all this is (`GroundCache`): pieces kept for
@@ -299,6 +308,10 @@ export class PieceGround extends Layers {
     const { width, height } = this.world;
     let painted = 0;
     for (const key of this.keys({ x0: 0, y0: 0, x1: width, y1: height }, 0)) {
+      // It waits for the frames to be on time again.
+      while (!this.mayPaintAhead() && this.stamp === stamp) {
+        await new Promise((resolve) => setTimeout(resolve, YIELD_WAIT_S * 1000));
+      }
       if (this.stamp !== stamp) break;
       // One the view has asked for, or shows painted, is not painted twice.
       const shown = this.pieces.get(key);

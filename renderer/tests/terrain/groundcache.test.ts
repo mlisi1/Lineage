@@ -159,4 +159,18 @@ describe("the ground kept between visits", () => {
     expect(await ahead).toBeLessThan(2);
     expect([...cache.kept.values()].every((kept) => kept.stamp === "day 1")).toBe(true);
   });
+
+  it("paints ahead only while it may, waiting while the frames come late", async () => {
+    const cache = new MemoryCache();
+    const ground = groundOf(new Counting(cache), cache);
+    ground.update(1, request, noShadows, "day 1");
+    let may = false;
+    ground.mayPaintAhead = () => may;
+    const ahead = ground.prepaint();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(cache.kept.size).toBe(0);
+    may = true;
+    expect(await ahead).toBe(2);
+    expect(cache.kept.size).toBe(2);
+  });
 });
