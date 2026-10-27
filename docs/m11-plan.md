@@ -318,3 +318,6 @@ genes thriving) and widened M8.1 to light traits (glow and hibernation never res
 photosynthesis is rarer in office light). The M11 report (`reports/M11-long-run`, 17 runs)
 passes every criterion on both seed sets; the slow suite passes. Left: the stream
 recordings, the Orange Pi measurement, the merge.
+
+**2026-10-27**: M11 closed and merged into `main`. The owner left the sim's Orange Pi
+measurement to S1/S7; R5, merging second, re-records the stream recordings.

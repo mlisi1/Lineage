@@ -452,7 +452,7 @@ needs a note in `docs/decisions/`.
 - **Report**: full dashboard — all prior metrics at 3 sim-years, genetic distance from
   ancestors, sensitivity of key metrics to the top tunables.
 - **Accept**: every M2–M10 criterion passes simultaneously; mean genetic distance still
-  rising at year 3 (no stagnation). (In progress, ADR 0019: the owner added criteria on
+  rising at year 3 (no stagnation). (Done 2026-10-27, ADR 0019: the owner added criteria on
   diversity and balance, D1–D3, bands set after five new mechanisms: food at sea and
   wading, reach by height, cover for prey, nutrients back to the soil, seeds carried by
   grazers; M2.5 retired and the whole-world step budget raised to 600 ms. 2026-10-21, the
@@ -471,8 +471,8 @@ needs a note in `docs/decisions/`.
   ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species; D1 asks
   9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving; M8.1 judges light
   traits. The report `reports/M11-long-run` (e08aece and after): every criterion passes
-  on tuning and held-out seeds. Left: re-record the stream recordings, measure the sim
-  on the Orange Pi, merge.)
+  on tuning and held-out seeds; merged into `main` 2026-10-27. R5, merging second,
+  re-records the stream recordings; the sim's Orange Pi measurement is left to S1/S7.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

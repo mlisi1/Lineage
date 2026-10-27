@@ -15,7 +15,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | **in progress** on `m11-tuning` (from 2026-10-20; see "M11 in progress" below): `tools/tune/` built; mechanisms complete (food at sea and wading, reach, cover, nutrients, seeds in guts v13; R4 merged, v12); the island closed to strangers, hunters land once by the herd, may prey on kin that eat far more plants, the ark brings them back; criteria judged without presses; defaults fail only M4.3 (predators do not last); best diet setting brings hunters back but turns herds omnivore; soft caps and resting hunters (the owner's choices) keep hunters beside grazers in 15 of 20 ten-year seeds; the M11 report passes every criterion (50/50) on tuning and held-out seeds (M6.1 band 3–16, D bands set and M8.1 widened to light traits by the owner); slow suite passes; left: re-record recordings, measure on the Pi, merge (ADR 0019) | — |
+| M11 | Long-run tuning and stability | **done** 2026-10-27, merged into `main`: every criterion passes (50/50) on tuning and held-out seeds; nine mechanisms (food at sea and wading, reach, cover, nutrients, seeds in guts, hunters from the herd, soft caps, resting hunters); closed island; hunters beside grazers in 23 of 30 ten-year seeds; M6.1 band 3–16, M8.1 light traits, D1–D3 set by the owner (ADR 0019). Recordings re-recorded by R5 (merging second); the Pi measurement left to S1/S7 | [reports/M11-long-run](../reports/M11-long-run/README.md) |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -32,124 +32,27 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 
 ## Handoff notes
 
-### M11 in progress (branch `m11-tuning`, paused 2026-10-25 evening)
+### M11 done (merged into `main` 2026-10-27)
 
-**Start here, on a fresh start.** This section is self-contained. For every number and
-decision read ADR 0019 (newest sections: "Soft caps and resting hunters", "Closing the
-criteria: the M11 report", then Decision and Consequences);
-for the plan, `docs/m11-plan.md` §7; for the owner's answers, also the memory notes.
+The tuned island (ADR 0019, Decision and Consequences; `docs/m11-plan.md` §7;
+`reports/M11-long-run`): every criterion passes, 50 of 50, on tuning (0–19) and held-out
+(20–39) seeds; the slow suite passes. Nine mechanisms, each with an off switch
+(`tools/milestones/m11.py` `MECHANISMS`); the island is closed to strangers; hunters last
+through soft caps and resting hunters. The owner revised M6.1 (3–16 species), M8.1
+(light traits) and set D1–D3.
 
-**State.** Branch `m11-tuning` at the commit that adds this note, clean; the worktree
-`../Lineage-m11-reach` (branch `m11-reach`) is reset to the same commit (write code there
-while a run occupies the main checkout). **Nothing is running.** M11 merged `main` (R4) at `4d41ec4`; `main` is one docs commit
-ahead (`80e4a4c`, R5's brief). R5 works on branch `r5-final` in `../Lineage-r5`, not yet
-on `main`; whoever merges second re-records the stream recordings (coordination board,
-`/home/elechim/Lineage-coord/`).
+**Left for others:**
+- **R5 (merging second)**: re-record the stream recordings and the spike fixture on top of
+  M11's sim (three tools tests fail until then: the spike fixture, the stream recording,
+  the winter recording; commands in CLAUDE.md §5), look at the scene diffs, then
+  `npx playwright test --update-snapshots`. R5's `test_last_death_is_an_extinction`
+  expectation meets M11's `test_fauna.py` changes there.
+- **S1/S7** (the owner, 2026-10-27): measure the sim on the Orange Pi when the server runs
+  it in real time. On the PC the whole world takes about 0.4 s of CPU per sim-day.
 
-**The goal** (the owner, 2026-10-21): "an interesting and balanced ecosystem that keeps
-interesting over the years". Criteria serve that; one that judges the wrong thing may be
-revised, with an ADR note. Numbers (config levers) may be tried freely; **mechanisms only
-after the owner approves them**.
-
-**The island as built** (all in `default.toml`, ADR 0019):
-- Mechanisms: food at sea (algae) and wading on the shelf; reach by height; cover for
-  prey; nutrients from dung and carcasses; seeds carried in grazers' guts (schema v13);
-  R4's weather, storm-only fires, burnt deaths, barren land, blast kills (v12).
-- **A closed island**: no strangers (`immigrant_groups_per_year = 0`). Founders (plant
-  eaters) land once the land is green; a pack of 8 hunters lands once per world when the
-  herd reaches 120, by a member of the herd and a little larger than it; the ark (god
-  power) brings hunters to a herd of 120 without any and waits until an empty island is
-  green. **Hunters may prey on kin that eat far more plants** (`prey_diet_gap` 0.3) so
-  that hunters can arise again from the herd. `meat_diet_exponent` (1.0) is the meat side
-  of the diet trade-off, `diet_exponent` (1.0) the plant side.
-- Criteria: M3.5 tolerates a tenth of the seeds in open woodland; M6.1 leaves out the
-  founding; the species definition (`[species] link_distance`, `min_members`) is fixed.
-  **Every M criterion is judged on runs without presses; the owner cannot rely on weekly
-  presses for predators** (2026-10-23); a weekly-press run only checks for harm. God-power
-  entries stay major. D1–D3 are reported, bands not set yet.
-
-**Where it stands** (2026-10-25; 3 years × 20 seeds, office schedule, no presses):
-- **Today's defaults pass every criterion** (`reports/M11-long-run`; first measured on `runs/m11-rest0.2-office`): M4.3 0.91,
-  M6.1 1.00 (band now 3–16 species), M6.2 1.71, M4.4 430 ms; D3a 13.7 % and D3b 0.92
-  pass; D1 10 of 12 genes, D2 5 of 14 rare genes pass the owner's bands (step 3).
-- **Predators last** (ADR 0019, "Soft caps and resting hunters"): two mechanisms the
-  owner chose, soft caps (`crowding_wait_days` 5, `crowding_exponent` 4) and resting
-  hunters (`hunter_rest_share` 0.2), with `predator_cap` 32. Over 10 years hunters live
-  beside grazers in 15 of 20 seeds (8 of 0–9, 7 of 10–19), no world ended, grazers above
-  75 % of the creatures in the median seed. The diet stays as it was (1.0 / gap 0.3).
-- How it got there: the hunting levers did not help (2026-10-24); replays showed both
-  hard caps binding and packs dying when the herd dipped; soft caps alone kept hunters in
-  1 seed of 10; resting hunters lifted it to 6–9 of 10.
-
-**Next steps, in order**:
-1. **Done: held-out check.** Seeds 20–39, 3 years: every M criterion passes
-   (`runs/m11-tuned-heldout`); 10 years on seeds 20–29: hunters beside grazers in 8 of 10,
-   two worlds ended in one seed (`runs/m11-tuned-10y-s20`). No sweep needed.
-2. (Skipped: the held-out check passed.)
-3. **Done: D bands set by the owner** (D1 ≥ 9 of 12 genes with a niche in ≥ 25 % of
-   seeds; D2 ≥ 5 of 14 rare genes thriving in ≥ 10 % of seeds; D3 as proposed). Every
-   criterion passes on both seed sets; D2 sits at its edge (5) on seeds 0–19.
-4. **Done: the M11 report** (`reports/M11-long-run`, 17 runs `runs/m11-report-*` plus
-   `runs/m11-tuned-heldout`): every criterion passes, 50 of 50, after the owner widened
-   M8.1 to light traits (photosynthesis rarer in office light; night traits never
-   respond). Rebuild: `uv run python -m tools.report M11 --runs runs/m11-report-main
-   --baseline runs/m11-tuned-heldout --baseline runs/m11-report-<each>` (no sweep given).
-5. **Done: slow suite** at the final config: 9 statistical tests pass; bare-rock golden
-   hash updated (`e08aece`).
-6. Re-record the stream recordings and the spike fixture (three tests fail: the spike
-   fixture, the stream recording and the winter recording; stale since R4/R5 and M11's
-   behaviour changes). Do it when M11 and R5 meet on `main` (whoever merges second),
-   then `npx playwright test --update-snapshots` after looking at the scene diffs.
-7. Measure the sim on the Orange Pi once (§4.8: ≤ 25 % of one core).
-8. Merge `m11-tuning` into `main` (ask the owner), close M11 in the status table and
-   CLAUDE.md §8.
-
-**Runs kept in `runs/`** (gitignored; read with `tools.runs.read_run`, score with
-`tools.tune.score.score`): `sweep-closed-1` (23 points), `m11-closed-10y`,
-`m11-closed-presses-2`, `m11-kin-10y`(`-b`), `m11-kin-office`, `m11-diet-*`,
-`m11-diet-office`, `m11-diet-10y-b`, `m11-grid-*`, `m11-meat-*`, `m11-meat-office`,
-`m11-hunt-*` (the hunting levers, 2026-10-24), `m11-soft-*`, `m11-rest*`, `m11-replays/`
-(2026-10-25).
-Detached chain scripts that made them: `runs/m11-chain-*.sh`, log `runs/m11-chain.log`.
-Scripts of 2026-10-24 (in `runs/`, not committed): `m11-hunt-judge.py <run>...` (per
-seed: hunters after year 3, grazers after year 5, worlds ended) and
-`m11-hunt-replay.py <seed> <years> key=value...` (per quarter: hunters' deaths by cause,
-kills, prey in reach, distance, energy; herd size, diets, speed and mass). Run both with
-`PYTHONPATH=. uv run python ...` from the repo root.
-
-**What exists**: `tools/tune/` (`score.py` every criterion of a run, `sweep.py` Latin
-hypercube or grid, resumable, `--max-load`; `sensitivity.py` rank correlations); sweeps in
-`tools/tune/sweeps/`; `fastforward --press-every-days 7` plays the owner's weekly press;
-the M11 report (`tools/milestones/m11.py`) recognises runs by their manifests, including
-"weekly presses" and each mechanism off (`m11.MECHANISMS`, now with "hunters from the
-herd": `prey_diet_gap = 1.0`).
-
-**Working on this PC**:
-- It is shared: the owner's own jobs (ROS, `tack_py.plan`, Ruby) can take 20+ cores.
-  Check `uptime`; **at most 12 workers** when the owner asks; sweeps need `--max-load`
-  above the owner's load or they stall.
-- The owner goes offline at times: start long runs **detached** (`setsid nohup script &
-  disown`, a script in `runs/`), never as a background job of the session.
-- The run manifest stamps the commit **when the run ends**: never commit in the checkout a
-  run uses while it runs (use the worktree; ff-merge between runs).
-- Kill processes by PIDs read from `ps` into a file; a `pgrep -f`/`pkill -f` pattern can
-  match the shell running it and kill or stop it.
-
-**Pitfalls met in M11**:
-- Every behaviour change moves golden hashes and all five recordings: re-record them
-  (commands in CLAUDE.md §5), look at the scene diffs, then
-  `npx playwright test --update-snapshots`.
-- A new random draw in fauna shifts every later draw: draw only for the creatures
-  concerned, or scenario tests without the feature change outcome.
-- A new fauna key read by the phenotype must also go into the renderer's port
-  (`renderer/src/creatures/phenotype.ts`) and the specimen fixture's config block
-  (`sim/tests/fixtures/phenotypes.json`; add the line, do not rewrite the file).
-- Diagnosing a mechanism: replay one seed with `World.create` and `tools.fastforward.live_day`
-  and wrap the method in question (deaths by cause in `Fauna._bury`, distances and kills
-  in `Fauna._hunt`); that is how the hunters' starvation was found.
-- One 20-seed run cannot resolve a share's change below about 0.2; judge predators on
-  10-year runs per seed, not on 3-year medians alone.
-- Step-time criteria (M4.4) read the shared PC's load; sweeps leave them out.
+Runs behind the report stay in `runs/` (gitignored): `m11-report-*`, `m11-tuned-*`,
+`m11-rest*`, `m11-soft-*`, `m11-hunt-*`; scripts `runs/m11-hunt-judge.py` and
+`runs/m11-hunt-replay.py`.
 
 ### R4 closed (merged into `main` at `d9770d3`, 2026-10-21; branch `r4-atmosphere` and its worktree removed)
 
