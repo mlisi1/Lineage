@@ -284,6 +284,7 @@ function describe(settings: Settings): BenchResults {
       height: window.screen.height,
       device_pixel_ratio: window.devicePixelRatio,
     },
+    // Read again as each scenario is measured (`runScenario`).
     viewport: { width: window.innerWidth, height: window.innerHeight },
     gpu: null,
     world: { cells: [0, 0], plant_cells: 0, description: "" },
@@ -709,6 +710,15 @@ export class Bench {
     if (scenario.dayTurn === true) {
       turned = await until(() => hooks.dayDue(), DAY_DUE_TIMEOUT_S);
       hooks.holdDay(false);
+    }
+    // The page's size as it is measured, the smallest of the run's (R5: read when the run
+    // began, before the kiosk's window had gone full screen, it said 992 x 558).
+    const { viewport } = stored.results;
+    viewport.width = Math.min(viewport.width, window.innerWidth);
+    viewport.height = Math.min(viewport.height, window.innerHeight);
+    if (stored.results.scenarios.length === 0) {
+      viewport.width = window.innerWidth;
+      viewport.height = window.innerHeight;
     }
     const readyS = performance.now() / 1000;
     const timings = await measure(hooks.app, settings.warmupS, settings.measureS);
