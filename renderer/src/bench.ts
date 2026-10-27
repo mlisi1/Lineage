@@ -176,7 +176,8 @@ export interface BenchScenarioResult extends FrameStats {
   atmosphere: Record<string, unknown>;
   /** Seconds from the page's start to the warm-up's (loading, the first land painted, presses). */
   ready_s: number;
-  /** Whether the land was painted when the warm-up began (false: it timed out waiting). */
+  /** Whether the land, and the view measured, were painted when the warm-up began (false: it
+   * timed out waiting). */
   settled: boolean;
   /** Wall-clock window of the measurement, so the device runner can match its samples. */
   started_epoch_ms: number;
@@ -686,9 +687,13 @@ export class Bench {
       const camera = hooks.camera();
       return camera.view === scenario.view && !camera.dipping;
     }, VIEW_TIMEOUT_S);
+    // The view measured painted too, not only the first one: on the board the local view's
+    // ground comes in pieces over several seconds, and a view measured before it would be
+    // measured with bare ground.
+    const viewSettled = await until(() => hooks.settled(), READY_TIMEOUT_S);
     const readyS = performance.now() / 1000;
     const timings = await measure(hooks.app, settings.warmupS, settings.measureS);
-    stored.results.scenarios.push(this.resultOf(hooks, timings, readyS, settled));
+    stored.results.scenarios.push(this.resultOf(hooks, timings, readyS, settled && viewSettled));
     const next = this.step + 1;
     if (next < stored.names.length && save(this.run, stored)) {
       window.location.replace(stepUrl(this.run, next));

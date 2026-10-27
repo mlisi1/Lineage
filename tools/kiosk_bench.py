@@ -74,8 +74,9 @@ SPIKE_PAGE = "spike.html"
 # Seconds allowed for the browser to start and the page to load, on top of the benchmark.
 STARTUP_ALLOWANCE_S = 90.0
 # Seconds allowed per scenario beyond its warm-up and measurement: the scene loads itself
-# again for each one and paints its first land before measuring.
-PER_SCENARIO_ALLOWANCE_S = {SCENE_PAGE: 20.0, SPIKE_PAGE: 5.0}
+# again for each one and paints its first land, and then the view it measures (the local
+# view's ground comes in pieces, slowly on the board), before measuring.
+PER_SCENARIO_ALLOWANCE_S = {SCENE_PAGE: 60.0, SPIKE_PAGE: 5.0}
 # Scenarios each page runs when not told which (renderer/src/benchplan.ts,
 # renderer/src/spike/scenarios.ts); a page of neither kind is given the larger.
 SCENARIO_COUNT_ESTIMATE = {SCENE_PAGE: 9, SPIKE_PAGE: 14}
