@@ -34,7 +34,7 @@ const AHEAD_CELLS = 4;
  * over half an hour or so of a sim-day on the board, using a third of a core, not a whole
  * one taken from the frames (R5).
  */
-const PREPAINT_REST_S = 10;
+const PREPAINT_REST_S = 30;
 /**
  * Pieces put on the screen in one frame at most: kept ones come back together, and each
  * is a texture sent to the GPU (R5: several in one frame made it late on the board).
