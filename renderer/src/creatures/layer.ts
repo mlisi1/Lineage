@@ -149,6 +149,13 @@ import type { Random } from "../rng";
  * a body's length and a cell beyond the view, so it is back to every frame before it shows.
  */
 const OUT_OF_SIGHT_EVERY = 3;
+/**
+ * In a view that asks for it (`posedSparsely`), an animal in sight is posed (legs, body,
+ * breath) on two updates in three, staggered across the herd, with the time of the one it
+ * missed: the owner's choice for the middle view, where an animal is a few art pixels long
+ * (R5, the board: the crowded middle view came late; up close every update poses).
+ */
+const POSE_SKIP_EVERY = 3;
 
 const TURN_JITTER = 6;
 const TURN_DAMPING = 1.5;
@@ -276,6 +283,8 @@ interface Creature {
   inView: boolean;
   /** Seconds not yet lived out of sight (`OUT_OF_SIGHT_EVERY`). */
   lag: number;
+  /** Seconds not yet posed (`POSE_SKIP_EVERY`). */
+  poseLag: number;
   /** What it was last posed from (`posedAsBefore`); null before its first pose. */
   posed: Float64Array | null;
   /** With anchored life: where the sim has it and what it is doing there. */
@@ -461,6 +470,8 @@ export class CreatureLayer {
   private clock = 0;
   /** Updates since the layer began: which animals out of sight live this one. */
   private ticks = 0;
+  /** Animals in sight posed on two updates in three (`POSE_SKIP_EVERY`): the middle view's. */
+  posedSparsely = false;
   /** The trees and bushes anchored animals keep clear of (R5), if any. */
   private footprints: Footprints | null = null;
   /** The night the animals sleep in (R5, `sleep.ts`). */
@@ -1600,7 +1611,12 @@ export class CreatureLayer {
           head.y <= view.y1 + reach);
       if (inView && posed) {
         this.shakeOff(creature, dtS);
-        this.eat(creature, dtS);
+        // Posed on two updates in three where asked, the missed time given at the next.
+        creature.poseLag += dtS;
+        if (!this.posedSparsely || (this.ticks + index) % POSE_SKIP_EVERY !== 0) {
+          this.eat(creature, creature.poseLag);
+          creature.poseLag = 0;
+        }
         if (creature.plan.swims && creature.arriving === undefined) this.wet(creature, head);
         else if (creature.motion !== null && creature.arriving === undefined) {
           this.wade(creature, head);
@@ -1855,6 +1871,7 @@ export class CreatureLayer {
       legs,
       inView: true,
       lag: 0,
+      poseLag: 0,
       posed: null,
     };
   }

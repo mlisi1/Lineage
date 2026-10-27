@@ -363,6 +363,8 @@ export class Herd {
     const layer = (body: (typeof BODIES)["middle"]): CreatureLayer =>
       new CreatureLayer(atlas, [], passable, random, body, "anchored", sea, WATER_LOOK);
     this.layers = { middle: layer(BODIES.middle), local: layer(BODIES.local) };
+    // In the middle view an animal is a few art pixels long: posed two frames in three (R5).
+    this.layers.middle.posedSparsely = true;
     for (const each of Object.values(this.layers)) each.show("hidden");
   }
 
