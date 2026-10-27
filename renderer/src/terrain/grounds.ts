@@ -453,18 +453,21 @@ export class PieceGround extends Layers {
     }
     // Kept from before: today's is shown as it is; an older one at once, while today's is
     // painted to fade in over it.
-    void this.cache.get(this.keyOf(key)).then((kept) => {
+    const name = this.keyOf(key);
+    void this.cache.get(name, stamp).then(async (today) => {
       if (!wanted()) return;
-      if (kept?.stamp === stamp) {
+      if (today !== undefined) {
         this.arriving.set(key, () => {
-          if (wanted()) this.place(piece, kept.pixels, cells, padded, version);
+          if (wanted()) this.place(piece, today, cells, padded, version);
         });
         return;
       }
-      if (kept !== undefined && piece.painting === null) {
+      const older = await this.cache.latest(name);
+      if (!wanted()) return;
+      if (older !== undefined && piece.painting === null) {
         this.arriving.set(key, () => {
           if (wanted() && piece.painting === null) {
-            this.place(piece, kept.pixels, cells, padded, piece.painted, 0);
+            this.place(piece, older.pixels, cells, padded, piece.painted, 0);
           }
         });
       }

@@ -183,6 +183,11 @@ export class Landscape {
   covered: ((x: number, y: number) => boolean) | null = null;
   /** Where painted ground is kept between visits (R5); nothing kept by default. */
   cache: GroundCache = NO_CACHE;
+  /**
+   * Whether the rest of the island is painted ahead after a new day (`PieceGround.prepaint`):
+   * the desk's way; the showcase, which visits a few places, turns it off.
+   */
+  paintAhead = true;
   /** The wind the plants of the view shown lean in (R5, `plants/wind.ts`); none: straight. */
   wind: Wind | null = null;
   private readonly layers: Record<ViewName, Container> = {
@@ -390,6 +395,18 @@ export class Landscape {
     }
   }
 
+  /**
+   * Whether the ground the view shows has been put on the screen from the latest land
+   * (plants may still be fading in): what the showcase waits for in the dark between shots.
+   */
+  get groundShown(): boolean {
+    if (this.stale || this.land === null) return false;
+    const { built } = this;
+    if (this.view === "map") return built.map?.settled ?? false;
+    const ground = this.view === "middle" ? built.middle?.ground : built.local?.ground;
+    return ground?.ready(this.cells) ?? false;
+  }
+
   /** Whether everything the view shows is painted from the latest land, and nothing is fading. */
   get settled(): boolean {
     if (this.stale || this.land === null || this.painter.busy > 0) return false;
@@ -502,7 +519,7 @@ export class Landscape {
         stamp,
       );
       // The rest of the island painted ahead and kept, for wherever the camera goes next.
-      void this.built.middle.ground.prepaint();
+      if (this.paintAhead) void this.built.middle.ground.prepaint();
       this.built.middle.plants.show(plants);
       return;
     }
@@ -533,7 +550,7 @@ export class Landscape {
       (cells) => plants.shadows(cells),
       stamp,
     );
-    void this.built.local.ground.prepaint();
+    if (this.paintAhead) void this.built.local.ground.prepaint();
     this.built.local.plants.show(plants);
   }
 }

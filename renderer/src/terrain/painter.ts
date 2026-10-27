@@ -86,9 +86,8 @@ export async function paintKept(
 ): Promise<{ pixels: Pixels; fresh: boolean }> {
   const { keep } = request;
   if (keep === undefined) return { pixels: paintRequest(land, request), fresh: true };
-  const kept = await cache.get(keep.key);
-  if (kept?.stamp === keep.stamp)
-    return { pixels: keep.ahead === true ? none() : kept.pixels, fresh: false };
+  const kept = await cache.get(keep.key, keep.stamp);
+  if (kept !== undefined) return { pixels: keep.ahead === true ? none() : kept, fresh: false };
   const pixels = paintRequest(land, request);
   cache.put(keep.key, keep.stamp, pixels);
   return { pixels: keep.ahead === true ? none() : pixels, fresh: true };

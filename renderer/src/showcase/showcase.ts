@@ -31,6 +31,8 @@ export interface ShowcaseHost {
   advance(seconds: number): void;
   /** Hold the sim-day as drawn, or let what came be laid out (`Landscape.holdDay`). */
   holdDay(held: boolean): void;
+  /** Whether the ground under the shot last returned is painted (`Landscape.groundShown`). */
+  groundShown(): boolean;
   herd: Herd;
 }
 
@@ -56,6 +58,13 @@ const CAST = { big: 2048, small: 2184, other: 2220, mother: 2075, mate: 2113, yo
 
 /** Seconds of the dip to dark into each act. */
 const CUT_S = 0.5;
+/**
+ * While dipped this dark and the ground under the shot is not painted yet, the showcase
+ * waits (its clock does not move): the next shot opens on its ground, not bare land. At
+ * most `MOST_HELD_S` at a time.
+ */
+const HOLD_FROM_DIM = 0.85;
+const MOST_HELD_S = 20;
 /** How much faster the world's end plays than it would (three minutes in some fifteen s). */
 const END_SPEED = 12;
 /** The day of the year shown late in autumn and in winter (the clock rewritten). */
@@ -87,6 +96,9 @@ export class Showcase {
   private readonly eaten = new Set<number>();
   /** Let the day be held again next frame, after what the showcase sent was laid out. */
   private holdNext = false;
+  /** How dark the last shot was, and how long the showcase has waited in it. */
+  private lastDim = 1;
+  private heldS = 0;
 
   constructor(private readonly host: ShowcaseHost) {}
 
@@ -108,7 +120,13 @@ export class Showcase {
       this.host.holdDay(true);
       this.holdNext = false;
     }
-    this.timeS += dtS;
+    // Waiting in the dark for the ground of the shot (shown since the last frame).
+    if (this.lastDim >= HOLD_FROM_DIM && !this.host.groundShown() && this.heldS < MOST_HELD_S) {
+      this.heldS += dtS;
+    } else {
+      this.timeS += dtS;
+      if (this.lastDim < HOLD_FROM_DIM) this.heldS = 0;
+    }
     const { loop, index, intoS } = actAt(this.timeS);
     if (this.playing === null || this.playing.loop !== loop || this.playing.index !== index) {
       this.playing = { loop, index };
@@ -124,6 +142,7 @@ export class Showcase {
     const shot = staging.shot(intoS);
     // Each act comes out of a dip to dark.
     shot.dim = Math.max(shot.dim, 1 - Math.min(intoS / CUT_S, 1));
+    this.lastDim = shot.dim;
     return shot;
   }
 

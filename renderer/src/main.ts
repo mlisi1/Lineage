@@ -554,6 +554,8 @@ async function start(): Promise<void> {
   let shown = shows.length === 0;
   // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
   let later: Timed[] = [];
+  // The showcase visits a few places: the rest of the island is not painted ahead for it.
+  if (showcasing) landscape.paintAhead = false;
   const showcase = showcasing
     ? new Showcase({
         size: () => landscape.size,
@@ -572,6 +574,7 @@ async function start(): Promise<void> {
         holdDay: (held) => {
           landscape.holdDay = held;
         },
+        groundShown: () => landscape.groundShown,
         herd,
       })
     : null;

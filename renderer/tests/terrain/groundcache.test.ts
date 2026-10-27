@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { InlinePainter, type PaintRequest, type Painted } from "../../src/terrain/painter";
 import { CLOSE_PIECES, PieceGround } from "../../src/terrain/grounds";
-import { MemoryCache, NO_CACHE, type GroundCache } from "../../src/terrain/groundcache";
+import {
+  MOST_STAMPS,
+  MemoryCache,
+  NO_CACHE,
+  type GroundCache,
+} from "../../src/terrain/groundcache";
 import { LAND_PALETTE } from "../../src/terrain/palette";
 import { fakeCanvas } from "../support/canvas";
 import { world } from "../spike/worlds";
@@ -93,7 +98,13 @@ describe("the ground kept between visits", () => {
     await settle(ground);
     expect(ground.ready(everywhere)).toBe(true);
     expect(painter.painted).toBe(2);
-    expect([...cache.kept.values()].map((kept) => kept.stamp)).toEqual(["day 2", "day 2"]);
+    // Both days kept, each piece under each: going back to day 1 would show it unpainted.
+    expect([...cache.kept.values()].map((kept) => kept.stamp)).toEqual([
+      "day 1",
+      "day 1",
+      "day 2",
+      "day 2",
+    ]);
   });
 
   it("keeps what it is given as it was painted", async () => {
@@ -172,5 +183,26 @@ describe("the ground kept between visits", () => {
     may = true;
     expect(await ahead).toBe(2);
     expect(cache.kept.size).toBe(2);
+  });
+
+  it("lets go of the stamp used longest ago beyond the most it keeps, with its pieces", () => {
+    const cache = new MemoryCache();
+    const pixels = { width: 1, height: 1, rgba: new Uint8ClampedArray(4) };
+    for (let day = 0; day < MOST_STAMPS + 2; day++) cache.put("piece", `day ${day}`, pixels);
+    expect(cache.stamps).toHaveLength(MOST_STAMPS);
+    expect(cache.stamps).not.toContain("day 0");
+    expect([...cache.kept.keys()].some((name) => name.startsWith("day 0"))).toBe(false);
+  });
+
+  it("finds a stamp's piece, and the latest of any stamp for one not kept", async () => {
+    const cache = new MemoryCache();
+    const a = { width: 1, height: 1, rgba: new Uint8ClampedArray([1, 0, 0, 255]) };
+    const b = { width: 1, height: 1, rgba: new Uint8ClampedArray([2, 0, 0, 255]) };
+    cache.put("piece", "autumn", a);
+    cache.put("piece", "winter", b);
+    expect((await cache.get("piece", "autumn"))?.rgba[0]).toBe(1);
+    expect(await cache.get("piece", "spring")).toBeUndefined();
+    expect((await cache.latest("piece"))?.stamp).toBe("winter");
+    expect(await cache.latest("elsewhere")).toBeUndefined();
   });
 });

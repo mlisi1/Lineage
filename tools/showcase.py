@@ -184,9 +184,20 @@ def drain(inbox: queue.Queue[dict[str, Any]], frames: Frames) -> None:
             frames.take(report)
 
 
+# Where the lines printed go too: under cage the terminal and the journal may not get them.
+LOG = Path("showcase.log")
+
+
+def say(text: str) -> None:
+    """Print `text`, and add it to `LOG`."""
+    print(text, flush=True)
+    with LOG.open("a", encoding="utf-8") as log:
+        log.write(text + "\n")
+
+
 def write_lines(lines: Iterable[str], path: Path | None) -> None:
     text = "\n".join(lines)
-    print(text, flush=True)
+    say(text)
     if path is not None:
         path.write_text(text + "\n", encoding="utf-8")
 
@@ -241,7 +252,8 @@ def main(argv: list[str] | None = None) -> int:
 
     signal.signal(signal.SIGINT, stop_now)
     signal.signal(signal.SIGTERM, stop_now)
-    print(f"showcase: {dist} on Chromium, profile {profile_dir}; Ctrl+C to stop", flush=True)
+    LOG.write_text("", encoding="utf-8")
+    say(f"showcase: {dist} on Chromium, profile {profile_dir}; Ctrl+C to stop")
     next_sample = next_status = time.monotonic()
     try:
         while not stopping and process.poll() is None:
@@ -252,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
                 next_sample = now + SAMPLE_EVERY_S
             if now >= next_status and now - started > 5:
                 temperature = sampler.samples[-1].temperature_c if sampler.samples else None
-                print(status_line(frames, temperature), flush=True)
+                say(status_line(frames, temperature))
                 next_status = now + STATUS_EVERY_S
             time.sleep(0.2)
     finally:
