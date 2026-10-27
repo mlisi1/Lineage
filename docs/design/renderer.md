@@ -99,12 +99,15 @@ thinner under trees, where the simulation's snow is (R1, ADR 0014: by season and
 height, so the hills in autumn and the lowland only in a hard winter); the spike's `snow`
 option, winter under snow everywhere, is what the look sheet still shows.
 
-The map and the middle view are each one picture of the whole world (512×300 and
-2048×1200), repainted when the plants change, once a sim-day. The local view would be
+The map is one picture of the whole world (512×300), repainted when the plants change,
+once a sim-day. The middle view (2048×1200 for the whole world) is painted in pieces of
+32 × 32 cells, what is on the screen and a piece round it first, every piece kept (R5:
+one picture took the board some 25 s before anything showed). The local view would be
 8192×4800, so its ground is painted in pieces of 8 × 8 cells as the camera comes over
-them (`GroundPieces`) and forgotten when far behind. A piece is painted with a cell of
+them (`PieceGround`) and forgotten when far behind. A piece is painted with a cell of
 margin, which is cut off: calm, detail and shadows come out the same in a piece as in
-the whole (a test holds this).
+the whole (a test holds this; the middle view's stills are the same pixels as its one
+picture was).
 
 ### Plants
 
@@ -621,13 +624,32 @@ committed in `renderer/public/stream/`, two from the v4 fixture (land only):
 and `life.json` from the v9 fixture, with the creatures every two sim-hours and the
 chronicle (R3, see "The camera and captions"), the page's default.
 
-**Painting off the frame.** Grounds are painted in a Web Worker (`terrain/painter.ts`,
-`paint.worker.ts`) so that the page keeps drawing frames: the map's and the middle view's
-whole world once a sim-day, the local view's pieces as the camera comes near them. The
-page keeps its own queue and hands the worker one request at a time, nearest piece
-first; a whole-world painting asked for again before it started is dropped, and so are
-the pieces of an older land. A ring of pieces four cells beyond the view is painted ahead
-of the camera. Where there is no worker the same code runs on the page's thread.
+**Painting off the frame.** Grounds are painted in Web Workers (`terrain/painter.ts`,
+`paint.worker.ts`) so that the page keeps drawing frames: the map's whole world once a
+sim-day, the middle and local views' pieces as the camera comes near them. The page keeps
+its own queue and hands each worker one request at a time, nearest piece first; a
+whole-world painting asked for again before it started is dropped, and so are the pieces
+of an older land. There are as many workers as the cores less two, at most three (R5: two
+on the board's four; three left the page's thread too little in the local view). A ring
+of pieces beyond the view is painted ahead of the camera (four cells up close, a piece in
+the middle view). Pieces come on the screen nearest first, four a frame, each a texture
+sent to the GPU. Where there is no worker the same code runs on the page's thread.
+
+**The ground kept between visits** (R5, the owner: "save the world once generated and
+pre-compute all we can"; `terrain/groundcache.ts`). Every piece painted is kept in the
+browser's storage (IndexedDB), the latest for each place, under a stamp of what it was
+painted from: the build's commit, the world's seed, the land message, the day of the year,
+the look and how the bushes are drawn. A piece kept for today's stamp is shown as it is,
+unpainted; one kept for an older stamp is shown at once and today's, painted, fades in
+over it, so bare ground shows only the first time a world is seen. The workers read and
+write the storage themselves; the page's thread only reads what it shows. After each new
+day, each pieced ground paints the rest of the island ahead (`PieceGround.prepaint`), one
+piece at a time behind everything the view asks for, resting 2 s between pieces (some
+half an hour of a third of a core on the board), and keeps it without showing it: so
+that the camera finds its ground ready wherever it jumps. Requests painted ahead are not
+counted as the painter being busy. Nothing is kept under the development server or from a
+build with changes not committed (the commit would not say what painted it), nor with
+`?ground=fresh`.
 
 **A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
 plants out again for the day and repaints the grounds of the views that have been
