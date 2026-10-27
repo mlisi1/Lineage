@@ -51,7 +51,9 @@ interface Spark {
 
 export class Sparks {
   /** Add this to the world (in cells) where the marks are to be seen. */
-  readonly container = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly container = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   private readonly sparks: Spark[] = [];
   private next = 0;

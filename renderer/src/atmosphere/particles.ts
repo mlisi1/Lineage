@@ -82,7 +82,9 @@ export function dropAt(
 
 /** Sprites to be placed afresh each frame: as many as are asked for, the rest hidden. */
 export class SpritePool {
-  readonly container = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly container = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   private used = 0;
 

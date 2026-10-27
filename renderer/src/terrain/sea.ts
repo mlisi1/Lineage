@@ -265,7 +265,9 @@ void main(void) {
 /** The moving sea of one view. */
 export class Sea {
   /** Add this to the world over the ground and its surf. */
-  readonly glints = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly glints = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   /** Each slot's showing, and the view it was placed in when that showing began. */
   private readonly placed: { showing: number; view: CellRect }[] = [];

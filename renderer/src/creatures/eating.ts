@@ -73,7 +73,9 @@ export function bite(
 /** The flecks thrown by eating animals: a few pooled sprites, none made while it runs. */
 export class Flecks {
   /** Add this to the layer, over the animals. */
-  readonly container = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly container = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   private readonly flying: { age: number; x: number; y: number; dx: number }[] = [];
   private next = 0;

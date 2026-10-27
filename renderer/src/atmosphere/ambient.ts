@@ -204,9 +204,11 @@ export interface AmbientView {
 
 export class Ambient {
   /** Over everything in the world: dust behind running animals, birds and butterflies, and their shadows. */
-  readonly over = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly over = new Container({ isRenderGroup: true });
   /** Added over the tint, as the glow: fireflies. */
-  readonly lights = new Container();
+  readonly lights = new Container({ isRenderGroup: true });
 
   private readonly random: Random;
   private textures: {
