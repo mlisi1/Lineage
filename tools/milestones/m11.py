@@ -630,6 +630,156 @@ def _considerations(values: dict[str, float]) -> str:
     return "<h3>Considerations</h3><ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>"
 
 
+# What each mechanism does (ADR 0019): read beside what fails when it is off.
+MECHANISM_ROLES = {
+    "food at sea": "algae on the shallow shelf feed creatures off the shore",
+    "wading": "any creature crosses the shallow shelf without struggling",
+    "reach": "tall plants feed only tall bodies: a niche for size",
+    "cover": "prey hide in dense woody growth",
+    "nutrients": "dung and carcasses feed the soil",
+    "gut seeds": "grazers carry the seeds of fruiting plants",
+    "hunters from the herd": "hunters may prey on kin that eat far more plants",
+    "soft caps": "births wait longer the nearer a kind is to its cap",
+    "resting hunters": "hunters burn a fifth of their resting energy between kills",
+}
+
+# Criteria revised during M11 with the owner (ADR 0019): criterion, before, now, why.
+REVISIONS = (
+    ("M2.5", "terrain step within its budget", "retired",
+     "the whole world's step is what the device pays for; M4.4 budgets it"),
+    ("M4.4, M5.3", "400 ms per sim-day", "600 ms per sim-day on the PC",
+     "five mechanisms cost step time; the sim still needs well under 1 % of the board"),
+    ("M3.5", "no seed without succession", "at most a tenth of the seeds",
+     "the failing seeds were open woodland kept open by big browsers, a real landscape"),
+    ("M6.1", "3–12 species, from the first day", "3–16 species, after the founding",
+     "the founders are one species and need time to diverge; hunters that last bring "
+     "their own species"),
+    ("M8.1", "selection on night traits", "selection on light traits, night or day",
+     "glow and hibernation never respond to any schedule; photosynthesis does"),
+    ("D1", "every body gene has a niche", "at least 9 of 12 genes",
+     "on a closed island of walking founders swimming never finds a niche"),
+    ("D2", "every rare gene thrives", "at least 5 of 14 rare genes",
+     "some rare genes are situational and almost never thrive (listed below)"),
+)  # fmt: skip
+
+# Why a run judged only for harm, or a mechanism switched off, fails what it fails.
+_ROLE_NOTES = {
+    PRESSES: "The owner gardening: powers green the island faster and fill the chronicle. "
+    "This run is judged for harm only (no world ended, no extinction), as the owner decided.",
+    "off:resting hunters": "Hunters starve between kills and none last; with them go most "
+    "of the niches (D1 counts 3 genes instead of 10): the body genes reach their ends "
+    "mostly where there are hunters.",
+    "off:soft caps": "Over ten years it mattered: alone it did little, but with resting "
+    "hunters it lets the pack grow and the herd answer to its losses (ADR 0019).",
+}
+_NOTHING_FAILS = (
+    "Nothing fails without it in three years: what it adds is smaller than one 20-seed run "
+    "resolves, or shows over longer times (the ablation table above)."
+)
+
+
+def _judged_for(values: dict[str, float], role: str) -> list[sc.Judged]:
+    """Every swept criterion judged again on a compared run's metrics."""
+    metrics = {k.removeprefix(f"{role}/"): v for k, v in values.items() if k.startswith(f"{role}/")}
+    groups = [(f"{mid}:", criteria) for mid, (_, criteria) in sc.SOURCES.items()]
+    groups += [("M11:", sc.CRITERIA), ("D:", sc.DIVERSITY)]
+    return [
+        sc.judge(c, metrics, prefix)
+        for prefix, criteria in groups
+        for c in criteria
+        if c.cid not in sc.UNSWEPT
+    ]
+
+
+def _shortfalls_section(values: dict[str, float]) -> Section:
+    title = "Why some criteria are not met"
+    intro = (
+        '<p class="note">Every criterion passes on the main runs (the acceptance table). '
+        "This section says where criteria do fail, in the runs that change one thing, and "
+        "why; which criteria were revised during M11 and why; and what the passing criteria "
+        "still leave out.</p>"
+    )
+    rows: list[list[str]] = []
+    for role in (PRESSES, *(f"off:{name}" for name in MECHANISMS)):
+        if not any(k.startswith(f"{role}/") for k in values):
+            continue
+        failed = [j for j in _judged_for(values, role) if j.status == "FAIL"]
+        listed = "; ".join(
+            f"{html.escape(j.cid)} {j.value:.3g} ({html.escape(j.band)})"
+            for j in failed if j.value is not None
+        ) or "none"  # fmt: skip
+        name = role.removeprefix("off:")
+        does = MECHANISM_ROLES.get(name)
+        why = _ROLE_NOTES.get(role) or (_NOTHING_FAILS if not failed else "")
+        what = html.escape(f"It makes: {does}. {why}" if does else why)
+        label = "weekly presses" if role == PRESSES else f"without {name}"
+        rows.append([html.escape(label), listed, what])
+    runs = (
+        "<h3>Where criteria fail</h3>"
+        + _table(["run", "criteria that fail (value, band)", "why"], rows)
+        if rows
+        else ""
+    )
+    revised = "<h3>Criteria revised during M11</h3>" + _table(
+        ["criterion", "before", "now", "why"],
+        [[html.escape(c) for c in row] for row in REVISIONS],
+    )
+    gaps = _gaps(values)
+    return Section(title, intro + runs + revised + gaps)
+
+
+def _gaps(values: dict[str, float]) -> str:
+    """What passes with room to spare, and what does not happen at all."""
+    items: list[str] = []
+    niche = sorted(
+        (k.split("/D:niche.")[1].removesuffix(".share_of_seeds"), v)
+        for k, v in values.items()
+        if k.startswith(f"{TUNING}/D:niche.") and k.endswith(".share_of_seeds")
+        and not k.endswith("share_of_seeds.min")
+    )  # fmt: skip
+    without = [f"{g} ({v:.0%})" for g, v in niche if v < sc.NICHE_SEEDS]
+    if without:
+        items.append(
+            "<b>Body genes without a niche</b> (share of tuning seeds where both ends held "
+            f"{sc.NICHE_SHARE:.0%} of the creatures): {html.escape(', '.join(without))}. "
+            "The founders walk, so swimmers could only come from slow drift; size finds a "
+            "niche in a few seeds only."
+        )
+    thrive = sorted(
+        (k.split("/D:thrive.")[1].removesuffix(".share_of_seeds"), v)
+        for k, v in values.items()
+        if k.startswith(f"{TUNING}/D:thrive.") and k.endswith(".share_of_seeds")
+        and not k.endswith("share_of_seeds.min")
+    )  # fmt: skip
+    rare = [f"{g.replace('_', ' ')} ({v:.0%})" for g, v in thrive if v < sc.THRIVE_SEEDS]
+    if rare:
+        items.append(
+            "<b>Rare genes that do not thrive</b> (share of tuning seeds where they held "
+            f"{sc.THRIVE_SHARE:.0%} of their population for {sc.THRIVE_DAYS} days): "
+            f"{html.escape(', '.join(rare))}. Several are made to pay only in particular "
+            "places or seasons (fire-pine after fires, hibernation in long dark, amphibious "
+            "on the shore), so they stay rare."
+        )
+    night = [
+        (schedule, values.get(f"M8/{schedule}.night_traits.per_mille.median"))
+        for schedule in m8.SCHEDULES
+    ]
+    shown = [f"{s} {v:.1f} ‰" for s, v in night if v is not None]
+    if shown:
+        items.append(
+            "<b>Night traits do not respond to the owner's absence.</b> Glow and hibernation "
+            f"carriers per creature, median seed: {html.escape(', '.join(shown))}. M8.1 passes "
+            "through photosynthesis, which the office's light holds back."
+        )
+    if not items:
+        return ""
+    return (
+        "<h3>What the passing criteria leave out</h3><ul>"
+        + "".join(f"<li>{i}</li>" for i in items)
+        + "</ul>"
+    )
+
+
 def _sensitivity_section(sweeps: tuple[Path, ...]) -> Section:
     if not sweeps:
         return Section("Sensitivity", '<p class="empty">No sweep was given (--sweep).</p>')
@@ -675,5 +825,6 @@ def _sections(
         _ablation_section(values),
         _engagement_section(values),
         _decade_section(values, roles.get(DECADE)),
+        _shortfalls_section(values),
         _sensitivity_section(sweeps),
     ]
