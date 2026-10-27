@@ -142,6 +142,13 @@ import { WAKE_EVERY_PX, WAKE_FROM, wakePair } from "./wake";
 import type { Random } from "../rng";
 
 /** Wandering: how fast the turn rate drifts and settles (per second). */
+/**
+ * An animal out of sight lives one update in this many, with the time of them all (R5,
+ * the board): staggered across the herd, so a third of them each frame. "In sight" reaches
+ * a body's length and a cell beyond the view, so it is back to every frame before it shows.
+ */
+const OUT_OF_SIGHT_EVERY = 3;
+
 const TURN_JITTER = 6;
 const TURN_DAMPING = 1.5;
 const AVOID_TURN = 3.5;
@@ -266,6 +273,8 @@ interface Creature {
   legs: Leg[];
   /** Within the view of the last update, so worth drawing. */
   inView: boolean;
+  /** Seconds not yet lived out of sight (`OUT_OF_SIGHT_EVERY`). */
+  lag: number;
   /** With anchored life: where the sim has it and what it is doing there. */
   motion: Motion | null;
   /** Its mass, which sets how slowly it breathes. */
@@ -434,6 +443,8 @@ export class CreatureLayer {
   private readonly angle = new Float32Array(16);
   /** Seconds since the layer began: the clock breaths keep. */
   private clock = 0;
+  /** Updates since the layer began: which animals out of sight live this one. */
+  private ticks = 0;
   /** The trees and bushes anchored animals keep clear of (R5), if any. */
   private footprints: Footprints | null = null;
   /** The night the animals sleep in (R5, `sleep.ts`). */
@@ -1458,6 +1469,9 @@ export class CreatureLayer {
           this.container.addChild(creature.container);
         continue;
       }
+      // Out of sight it is not drawn, so it waits where it is: `update` has just said what
+      // is in sight, and an animal coming into it is put in its row in the same frame.
+      if (!creature.inView && creature.container.parent !== null) continue;
       const last = guests.length - 1;
       const rowOf = (y: number): number => Math.min(Math.max(Math.floor(y * rowsPerCell), 0), last);
       let lowest = 0;
@@ -1509,9 +1523,20 @@ export class CreatureLayer {
     const sun = sunny(this.night.depth, this.overcast);
     const fresh = this.fresh;
     this.fresh = false;
+    this.ticks += 1;
+    const lived = dtS;
     for (let index = 0; index < this.active; index++) {
       const creature = this.creatures[index];
       if (creature === undefined) continue;
+      // Out of sight, it lives every few updates, with their time (only with a view: tests
+      // and films without one move every animal every update).
+      dtS = lived;
+      if (view !== undefined && !creature.inView && !fresh && creature.arriving === undefined) {
+        creature.lag += dtS;
+        if ((this.ticks + index) % OUT_OF_SIGHT_EVERY !== 0) continue;
+        dtS = creature.lag;
+      }
+      creature.lag = 0;
       // Asleep at night, or getting up (R5): it lies where it is; a hunter or a mother
       // tending her young does not sleep.
       const busy =
@@ -1575,6 +1600,7 @@ export class CreatureLayer {
         this.reveal(creature, index);
       }
     }
+    dtS = lived;
     this.spray?.update(dtS);
     this.fell = this.falling;
   }
@@ -1813,6 +1839,7 @@ export class CreatureLayer {
       sprites,
       legs,
       inView: true,
+      lag: 0,
     };
   }
 
