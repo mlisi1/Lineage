@@ -4,6 +4,7 @@ import type { Ticker } from "pixi.js";
 import {
   ACCEPTANCE,
   ATMOSPHERE,
+  EVENTS,
   SCENARIOS,
   coastWeights,
   crowdWeights,
@@ -21,7 +22,7 @@ import type { Land } from "../../src/terrain/land";
 import { world } from "../spike/worlds";
 
 describe("the benchmark's scenarios (benchplan)", () => {
-  it("are the nine of ADR 0022: the four judged views, then the atmosphere's five costs", () => {
+  it("are the four judged views, the atmosphere's five costs, then a day's turn", () => {
     expect(SCENARIOS.map((scenario) => scenario.name)).toEqual([
       "map",
       "middle",
@@ -32,9 +33,16 @@ describe("the benchmark's scenarios (benchplan)", () => {
       "fire",
       "apocalypse",
       "shore",
+      "day-turn",
     ]);
     expect(ACCEPTANCE).toEqual(["map", "middle", "middle-crowd", "local"]);
-    expect([...ACCEPTANCE, ...ATMOSPHERE]).toEqual(SCENARIOS.map((scenario) => scenario.name));
+    expect([...ACCEPTANCE, ...ATMOSPHERE, ...EVENTS]).toEqual(
+      SCENARIOS.map((scenario) => scenario.name),
+    );
+    // Only the day's turn lets a day turn while it is measured (the owner, 2026-10-27).
+    expect(SCENARIOS.filter((scenario) => scenario.dayTurn === true).map((s) => s.name)).toEqual([
+      "day-turn",
+    ]);
   });
 
   it("each either presses the view button or pins the camera, and waits for its view", () => {
@@ -49,7 +57,8 @@ describe("the benchmark's scenarios (benchplan)", () => {
   });
 
   it("selects scenarios by name or by set, in table order", () => {
-    expect(selectScenarios(null)).toHaveLength(9);
+    expect(selectScenarios(null)).toHaveLength(10);
+    expect(selectScenarios(["events"]).map((scenario) => scenario.name)).toEqual(EVENTS);
     expect(selectScenarios(["acceptance"]).map((scenario) => scenario.name)).toEqual(ACCEPTANCE);
     expect(selectScenarios(["atmosphere"]).map((scenario) => scenario.name)).toEqual(ATMOSPHERE);
     expect(selectScenarios(["shore", "map"]).map((scenario) => scenario.name)).toEqual([

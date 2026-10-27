@@ -68,6 +68,8 @@ const LOAD_ALLOWANCE_S = 5;
 /** Seconds to wait for the first land to be painted, and then for the view asked for. */
 const READY_TIMEOUT_S = 60;
 const VIEW_TIMEOUT_S = 15;
+/** Seconds the day's turn waits for the next day: a sim-day is 48 s at `BENCH_SPEED`. */
+const DAY_DUE_TIMEOUT_S = 90;
 /** No frame for this long means the page is hidden or the GPU hung: stop waiting. */
 const STALL_MS = 5000;
 /** The frame rate the scenarios are judged against (ADR 0010), the kiosk's cap (ADR 0022). */
@@ -103,6 +105,10 @@ export interface BenchHooks {
   advance(seconds: number): void;
   /** Whether the view shows the latest land, fully painted. */
   settled(): boolean;
+  /** Hold the sim-day as it is drawn, or let it turn (`Landscape.holdDay`). */
+  holdDay(held: boolean): void;
+  /** Whether a new day or land is waiting to be laid out. */
+  dayDue(): boolean;
   /** What the camera shows. */
   camera(): { view: ViewName; dipping: boolean };
   /** The cells in sight. */
@@ -175,6 +181,11 @@ export interface BenchScenarioResult extends FrameStats {
   /** The atmosphere's state and sprite counts at the end. */
   atmosphere: Record<string, unknown>;
   /** Seconds from the page's start to the warm-up's (loading, the first land painted, presses). */
+  /**
+   * The sim-day while it was measured: held as it was, turned in the window (a day's
+   * turn), or "not due" if no new day came in time for the turn.
+   */
+  day: "held" | "turned" | "not due";
   ready_s: number;
   /** Whether the land, and the view measured, were painted when the warm-up began (false: it
    * timed out waiting). */
@@ -691,9 +702,20 @@ export class Bench {
     // ground comes in pieces over several seconds, and a view measured before it would be
     // measured with bare ground.
     const viewSettled = await until(() => hooks.settled(), READY_TIMEOUT_S);
+    // The day held while it is measured, as on the desk where it turns once a day; or, for
+    // a day's turn, held until the next day is due and let go as the measuring begins.
+    hooks.holdDay(true);
+    let turned = false;
+    if (scenario.dayTurn === true) {
+      turned = await until(() => hooks.dayDue(), DAY_DUE_TIMEOUT_S);
+      hooks.holdDay(false);
+    }
     const readyS = performance.now() / 1000;
     const timings = await measure(hooks.app, settings.warmupS, settings.measureS);
-    stored.results.scenarios.push(this.resultOf(hooks, timings, readyS, settled && viewSettled));
+    const day = scenario.dayTurn !== true ? "held" : turned ? "turned" : "not due";
+    stored.results.scenarios.push(
+      this.resultOf(hooks, timings, readyS, settled && viewSettled, day),
+    );
     const next = this.step + 1;
     if (next < stored.names.length && save(this.run, stored)) {
       window.location.replace(stepUrl(this.run, next));
@@ -757,6 +779,7 @@ export class Bench {
     timings: Timings,
     readyS: number,
     settled: boolean,
+    day: BenchScenarioResult["day"],
   ): BenchScenarioResult {
     const { scenario } = this;
     const scripts = [...timings.jsMs].sort((a, b) => a - b);
@@ -808,6 +831,7 @@ export class Bench {
       atmosphere: hooks.atmosphere(),
       ready_s: readyS,
       settled,
+      day,
       started_epoch_ms: timings.startedEpochMs,
       ended_epoch_ms: timings.endedEpochMs,
       stalled: timings.stalled,

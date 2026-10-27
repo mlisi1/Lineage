@@ -34,6 +34,12 @@ export interface BenchScenario {
   stage?: "fire" | "flood" | "glow";
   /** The view the measurement waits for before its warm-up. */
   view: ViewName;
+  /**
+   * A sim-day turns while it is measured (R5, the owner: the day is otherwise held while
+   * a scenario is measured, as on the desk, where it turns once a day; the benchmark plays
+   * its recording 1800 times as fast).
+   */
+  dayTurn?: boolean;
 }
 
 export const SCENARIOS: readonly BenchScenario[] = [
@@ -109,6 +115,17 @@ export const SCENARIOS: readonly BenchScenario[] = [
     pin: { view: "local", at: "shore" },
     view: "local",
   },
+  {
+    name: "day-turn",
+    about:
+      "The crowded middle view as a sim-day turns: the plants and ground of the new day " +
+      "laid out and faded in over the old, the island painted ahead again (once a day on " +
+      "the desk; reported, not judged).",
+    recording: "life",
+    pin: { view: "middle", at: "crowd" },
+    view: "middle",
+    dayTurn: true,
+  },
 ];
 
 /**
@@ -118,10 +135,13 @@ export const SCENARIOS: readonly BenchScenario[] = [
 export const ACCEPTANCE: readonly string[] = ["map", "middle", "middle-crowd", "local"];
 /** The atmosphere's costs, measured beside them. */
 export const ATMOSPHERE: readonly string[] = ["night", "rain", "fire", "apocalypse", "shore"];
+/** What else is measured beside them: a day's turn. */
+export const EVENTS: readonly string[] = ["day-turn"];
 /** Names `?only=` takes for each set. */
 const SETS: Readonly<Record<string, readonly string[]>> = {
   acceptance: ACCEPTANCE,
   atmosphere: ATMOSPHERE,
+  events: EVENTS,
 };
 
 /** Cells burning in the big fire: as many as the atmosphere lights (`MOST_FIRES`). */

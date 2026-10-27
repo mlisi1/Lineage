@@ -708,6 +708,10 @@ async function start(): Promise<void> {
       advance += seconds;
     },
     settled: () => landscape.settled,
+    holdDay: (held) => {
+      landscape.holdDay = held;
+    },
+    dayDue: () => landscape.dayDue,
     camera: () => ({ view: shot.view, dipping: director.state.dipping }),
     sight: () => sight(shot.centre, WIDTH / TILES[shot.view], HEIGHT / TILES[shot.view]),
     land: () => landscape.current,

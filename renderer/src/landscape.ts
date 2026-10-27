@@ -159,6 +159,9 @@ export class Landscape {
   private landVersion = 0;
   /** What has to be laid out again: a new land, or a new day of the year. */
   private stale = false;
+  /** The day held (`holdDay`), and whether a land came while it was. */
+  private held = false;
+  private landWaiting = false;
   private laidOutDay = -1;
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -277,9 +280,32 @@ export class Landscape {
     } else if (message.type === "land") {
       // Several lands in a row (a recording played at once): only the last is drawn.
       this.landMessage = message;
-      this.land = null;
+      if (this.held) this.landWaiting = true;
+      else this.land = null;
       this.stale = true;
     }
+  }
+
+  /**
+   * Hold the day (R5, the benchmark): the land and day drawn stay as they are while it is
+   * held, what comes meanwhile is laid out when it is let go. On the desk a day turns once
+   * a day; the benchmark plays its recording 1800 times as fast, a new day every 48 s.
+   */
+  set holdDay(held: boolean) {
+    this.held = held;
+    if (!held && this.landWaiting) {
+      this.land = null;
+      this.landWaiting = false;
+    }
+  }
+
+  get holdDay(): boolean {
+    return this.held;
+  }
+
+  /** Whether a new day or land is waiting to be laid out. */
+  get dayDue(): boolean {
+    return this.stale;
   }
 
   /** Show `name`, with `cells` of the world in sight. */
@@ -316,7 +342,7 @@ export class Landscape {
 
   /** Lay out what is stale, move the fades on, and ask for the ground the view needs. */
   update(dtS: number): void {
-    if (this.stale && this.landMessage !== null) this.layOut();
+    if (this.stale && this.landMessage !== null && !this.held) this.layOut();
     this.placeFloor();
     const { built, cells } = this;
     built.map?.tick(dtS);

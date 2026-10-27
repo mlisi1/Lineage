@@ -83,7 +83,7 @@ PER_SCENARIO_ALLOWANCE_S = {SCENE_PAGE: 60.0, SPIKE_PAGE: 5.0}
 MEASURE_S = {SCENE_PAGE: 20.0, SPIKE_PAGE: 8.0}
 # Scenarios each page runs when not told which (renderer/src/benchplan.ts,
 # renderer/src/spike/scenarios.ts); a page of neither kind is given the larger.
-SCENARIO_COUNT_ESTIMATE = {SCENE_PAGE: 9, SPIKE_PAGE: 14}
+SCENARIO_COUNT_ESTIMATE = {SCENE_PAGE: 10, SPIKE_PAGE: 14}
 
 # Flags every profile gets: a quiet, full-screen window that is never throttled.
 BASE_FLAGS = (

@@ -389,6 +389,7 @@ def test_r5_judges_what_the_page_judges() -> None:
     for name, expected in (
         ("ACCEPTANCE", r5.ACCEPTANCE_SCENARIOS),
         ("ATMOSPHERE", r5.ATMOSPHERE_SCENARIOS),
+        ("EVENTS", r5.EVENT_SCENARIOS),
     ):
         listed = re.search(rf"export const {name}[^=]*= \[(.*?)\];", plan, re.DOTALL)
         assert listed is not None, name

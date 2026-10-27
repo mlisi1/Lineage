@@ -34,6 +34,10 @@ ACCEPTANCE_SCENARIOS = ("map", "middle", "middle-crowd", "local")
 # What the atmosphere costs (`ATMOSPHERE` in benchplan.ts): measured and reported, with
 # no band.
 ATMOSPHERE_SCENARIOS = ("night", "rain", "fire", "apocalypse", "shore")
+# What else is measured beside them (`EVENTS` in benchplan.ts), with no band: a sim-day's
+# turn. Every other scenario is measured with the day held, as on the desk, where it turns
+# once a day (the owner, 2026-10-27); the benchmark plays its recording 1800 times as fast.
+EVENT_SCENARIOS = ("day-turn",)
 # The costliest judged scenario, whose CPU the report breaks down by process.
 HEAVIEST_SCENARIO = "middle-crowd"
 # The kiosk's cap on the board (ADR 0022), which is also the target of ADR 0010.
@@ -467,7 +471,9 @@ def _by_scenario_table(evidence: dict[str, Any], cell: Callable[[dict[str, Any],
 def _judged_note() -> str:
     return (
         f"judged: {', '.join(ACCEPTANCE_SCENARIOS)}; "
-        f"the atmosphere's, recorded without a band: {', '.join(ATMOSPHERE_SCENARIOS)}"
+        f"the atmosphere's, recorded without a band: {', '.join(ATMOSPHERE_SCENARIOS)}; "
+        f"a day's turn, recorded without a band: {', '.join(EVENT_SCENARIOS)} "
+        "(the others measured with the sim-day held, as on the desk)"
     )
 
 
@@ -677,7 +683,11 @@ def _atmosphere_section(evidence: dict[str, Any]) -> Section:
     best = best_run(evidence)
     if best is None:
         return Section("The atmosphere", '<p class="empty">No profile finished.</p>')
-    measured = [s for name in ATMOSPHERE_SCENARIOS if (s := _scenario(best, name)) is not None]
+    measured = [
+        s
+        for name in (*ATMOSPHERE_SCENARIOS, *EVENT_SCENARIOS)
+        if (s := _scenario(best, name)) is not None
+    ]
     if not measured:
         return Section("The atmosphere", '<p class="empty">Not measured in this run.</p>')
     reference = _scenario(best, HEAVIEST_SCENARIO)
