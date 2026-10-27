@@ -11,6 +11,7 @@
 import { DEFAULT_LOOK, LOOKS } from "../looks";
 import { groundSeasons, type YearTime } from "../plants/turning";
 import { paintGround, type GroundOptions } from "./ground";
+import { NO_CACHE, type GroundCache } from "./groundcache";
 import type { Land } from "./land";
 import type { Pixels } from "./pixels";
 
@@ -20,6 +21,13 @@ export interface PaintRequest extends Omit<GroundOptions, "look" | "seasonAt"> {
   look?: string;
   /** Where the world is in its year: the ground turns place by place around a change of season. */
   time?: YearTime;
+  /**
+   * Keep the painting (`GroundCache`, R5) under `key` for `stamp`, done by the painter so
+   * that the page's thread neither copies nor stores it: one kept for `stamp` already is
+   * handed back unpainted. Painted `ahead` (the island painted ahead of time), it is kept
+   * and not handed back at all.
+   */
+  keep?: { key: string; stamp: string; ahead?: boolean };
 }
 
 /** Height between cells, interpolated as the painter reads it (u, v from the first cell's middle). */
@@ -40,6 +48,7 @@ function heightBetween(land: Land, u: number, v: number): number {
 
 /** Paint `request` on `land`: what the worker and `InlinePainter` both do. */
 export function paintRequest(land: Land, request: PaintRequest): Pixels {
+  // (`keep` is for the painter, not the painting: `paintGround` reads no such option.)
   const { look: name, time, ...options } = request;
   const look = LOOKS.find((candidate) => candidate.name === name) ?? DEFAULT_LOOK;
   return paintGround(look.land === undefined ? land : { ...land, ...look.land }, {
@@ -58,6 +67,30 @@ export function paintRequest(land: Land, request: PaintRequest): Pixels {
 export interface Painted {
   pixels: Pixels;
   landVersion: number;
+  /** Painted now, not taken from what was kept (`PaintRequest.keep`). */
+  fresh?: boolean;
+}
+
+/** No pixels: what a painting done ahead of time hands back. */
+const NONE: Pixels = { width: 0, height: 0, rgba: new Uint8ClampedArray(0) };
+
+/**
+ * Paint `request` on `land`, keeping it in `cache` as `request.keep` asks: what the worker
+ * and `InlinePainter` both do.
+ */
+export async function paintKept(
+  land: Land,
+  request: PaintRequest,
+  cache: GroundCache,
+): Promise<{ pixels: Pixels; fresh: boolean }> {
+  const { keep } = request;
+  if (keep === undefined) return { pixels: paintRequest(land, request), fresh: true };
+  const kept = await cache.get(keep.key);
+  if (kept?.stamp === keep.stamp)
+    return { pixels: keep.ahead === true ? NONE : kept.pixels, fresh: false };
+  const pixels = paintRequest(land, request);
+  cache.put(keep.key, keep.stamp, pixels);
+  return { pixels: keep.ahead === true ? NONE : pixels, fresh: true };
 }
 
 export interface Painter {
@@ -144,12 +177,12 @@ abstract class QueuedPainter implements Painter {
   protected abstract start(request: PaintRequest, slot: number): void;
 
   /** The request running in `slot` is done: hand it its pixels and start the next. */
-  protected finished(pixels: Pixels | Error, landVersion: number, slot = 0): void {
+  protected finished(pixels: Pixels | Error, landVersion: number, slot = 0, fresh = true): void {
     const done = this.running[slot] ?? null;
     this.running[slot] = null;
     if (done !== null) {
       if (pixels instanceof Error) done.reject(pixels);
-      else done.resolve({ pixels, landVersion });
+      else done.resolve({ pixels, landVersion, fresh });
     }
     this.next();
   }
@@ -172,6 +205,11 @@ export class InlinePainter extends QueuedPainter {
   private land: Land | null = null;
   private landVersion = 0;
 
+  /** `cache` is where `PaintRequest.keep` keeps paintings. */
+  constructor(private readonly cache: GroundCache = NO_CACHE) {
+    super();
+  }
+
   protected sendLand(land: Land, version: number): void {
     this.land = land;
     this.landVersion = version;
@@ -184,7 +222,12 @@ export class InlinePainter extends QueuedPainter {
         this.finished(new Error("painter: no land yet"), 0);
         return;
       }
-      this.finished(paintRequest(land, request), this.landVersion);
+      const version = this.landVersion;
+      paintKept(land, request, this.cache).then(
+        ({ pixels, fresh }) => this.finished(pixels, version, 0, fresh),
+        (error: unknown) =>
+          this.finished(error instanceof Error ? error : new Error(String(error)), version),
+      );
     }, 0);
   }
 }
@@ -193,7 +236,7 @@ export class InlinePainter extends QueuedPainter {
 export type ToWorker =
   { kind: "land"; land: Land; version: number } | { kind: "paint"; request: PaintRequest };
 export type FromWorker =
-  | { kind: "painted"; pixels: Pixels; landVersion: number }
+  | { kind: "painted"; pixels: Pixels; landVersion: number; fresh: boolean }
   | { kind: "failed"; message: string; landVersion: number };
 
 /**
@@ -214,6 +257,7 @@ export class WorkerPainter extends QueuedPainter {
           reply.kind === "painted" ? reply.pixels : new Error(reply.message),
           reply.landVersion,
           slot,
+          reply.kind === "painted" ? reply.fresh : true,
         );
       });
       return worker;

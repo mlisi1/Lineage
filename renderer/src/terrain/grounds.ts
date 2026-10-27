@@ -35,6 +35,11 @@ const AHEAD_CELLS = 4;
  * one taken from the frames (R5).
  */
 const PREPAINT_REST_S = 2;
+/**
+ * Pieces put on the screen in one frame at most: kept ones come back together, and each
+ * is a texture sent to the GPU (R5: several in one frame made it late on the board).
+ */
+const PLACED_PER_FRAME = 2;
 
 /** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
 export interface PieceOptions {
@@ -237,6 +242,8 @@ export class PieceGround extends Layers {
   private shadowsOf: ((cells: CellRect) => PaintRequest["shadows"]) | null = null;
   /** What the pieces asked for now are painted from (`GroundCache`); "" keeps none. */
   private stamp = "";
+  /** Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`). */
+  private readonly arriving: (() => void)[] = [];
   private centre = { x: 0, y: 0 };
 
   constructor(
@@ -292,22 +299,22 @@ export class PieceGround extends Layers {
       // One the view has asked for, or shows painted, is not painted twice.
       const shown = this.pieces.get(key);
       if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
-      const kept = await this.cache.get(this.keyOf(key));
-      if (kept?.stamp === stamp || this.stamp !== stamp) continue;
       const { padded } = this.extent(key);
       const shadows = shadowsOf(padded);
       try {
-        const { pixels } = await this.painter.paint(
+        // The painter keeps it (`PaintRequest.keep`), or finds it kept already.
+        const { fresh } = await this.painter.paint(
           {
             ...request,
             tile: this.tile,
             cells: padded,
             ...(shadows === undefined ? {} : { shadows }),
+            keep: { key: this.keyOf(key), stamp, ahead: true },
           },
           BACKGROUND + this.distance(key),
         );
         if (this.stamp !== stamp) break;
-        this.cache.put(this.keyOf(key), stamp, pixels);
+        if (fresh !== true) continue;
         painted += 1;
         if (this.rest > 0) await new Promise((resolve) => setTimeout(resolve, this.rest * 1000));
       } catch (error) {
@@ -349,6 +356,8 @@ export class PieceGround extends Layers {
   }
 
   tick(dtS: number): void {
+    for (let k = 0; k < PLACED_PER_FRAME && this.arriving.length > 0; k++)
+      this.arriving.shift()?.();
     for (const piece of this.pieces.values()) {
       if (piece.fade?.step(dtS) === true) piece.fade = null;
     }
@@ -391,13 +400,15 @@ export class PieceGround extends Layers {
             tile: this.tile,
             cells: padded,
             ...(shadows === undefined ? {} : { shadows }),
+            ...(stamp === "" ? {} : { keep: { key: this.keyOf(key), stamp } }),
           },
           this.distance(key),
         )
         .then(({ pixels }) => {
           if (!wanted()) return;
-          if (stamp !== "") this.cache.put(this.keyOf(key), stamp, pixels);
-          this.place(piece, pixels, cells, padded, version);
+          this.arriving.push(() => {
+            if (wanted()) this.place(piece, pixels, cells, padded, version);
+          });
         })
         .catch((error: unknown) => {
           if (!(error instanceof Dropped)) throw error;
@@ -413,11 +424,17 @@ export class PieceGround extends Layers {
     void this.cache.get(this.keyOf(key)).then((kept) => {
       if (!wanted()) return;
       if (kept?.stamp === stamp) {
-        this.place(piece, kept.pixels, cells, padded, version);
+        this.arriving.push(() => {
+          if (wanted()) this.place(piece, kept.pixels, cells, padded, version);
+        });
         return;
       }
       if (kept !== undefined && piece.painting === null) {
-        this.place(piece, kept.pixels, cells, padded, piece.painted, 0);
+        this.arriving.push(() => {
+          if (wanted() && piece.painting === null) {
+            this.place(piece, kept.pixels, cells, padded, piece.painted, 0);
+          }
+        });
       }
       paint();
     });
