@@ -1257,9 +1257,22 @@ Round 1, items 1–7:
 The R0 spike's role passes to the real page. `index.html?bench` (`src/bench.ts`,
 scenarios in `src/benchplan.ts`) plays the committed creatures' recording
 (`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), there being no server yet,
-and measures nine scenarios, each on a fresh page load (the first load plans where the
+and measures ten scenarios, each on a fresh page load (the first load plans where the
 pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
-never `?film`'s.
+never `?film`'s. A scenario is measured only once the view it measures is painted, for
+20 s, with the sim-day held as on the desk (`Landscape.holdDay`; the recording is played
+1800 times as fast); the tenth, `day-turn`, lets a day turn in its window and is reported,
+not judged (the owner, 2026-10-27).
+
+**What the frames cost on the board** (R5, ADR 0022 "The board"). The page's own work
+decides the frame rate, not the GPU. So: PixiJS's draw list is rebuilt only where
+something changed (effects that show and hide sprites each frame in render groups of
+their own; the plant rows in bands of four cells, each a render group; what stands among
+the plants moved in its row only when its order changes; the grey under cloud given the
+canvas as its filter area); an animal is posed again only when what it is posed from
+changed, but for its breathing chest; out of sight it lives one frame in three; in the
+middle view an animal in sight is posed two frames in three (the owner); objects are not
+made per animal per frame where they can be reused.
 
 | Scenario | View | What it measures |
 |---|---|---|

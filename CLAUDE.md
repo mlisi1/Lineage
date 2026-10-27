@@ -556,8 +556,15 @@ needs a note in `docs/decisions/`.
   their mothers, a pair touching heads before a birth; the scene's benchmark
   (`?bench`, `?cap=30`) and the desk's build (`npm run build:kiosk`). The owner called
   the look final on 2026-10-25; its tests are in (`tests/e2e/final.spec.ts` the stills of
-  what R5 drew). Left: the board run (checklist items 17–19). Checklist and handoff in
-  `docs/milestones.md`; report `reports/R5-final/`.)
+  what R5 drew). Measured on the board 2026-10-27 (`reports/R5-device/`): the four judged
+  views hold the 30 fps cap, 4.6 % of the crowd's frames late at most (R5.2's band 5 %),
+  582 MB; the draw lists kept from rebuilding every frame, the ground in pieces painted
+  by two workers and kept between visits in the browser's storage, the island painted
+  ahead after each new day while frames come on time; the middle view's animals posed
+  two frames in three (the owner); measured with the plain kiosk, 20 s a scenario, the
+  sim-day held, a day's turn reported apart (the owner). Left: the merge (streams
+  re-recorded) and a showcase the owner asked for. Checklist and handoff in
+  `docs/milestones.md`; reports `reports/R5-final/`, `reports/R5-device/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0

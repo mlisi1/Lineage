@@ -1,7 +1,7 @@
 # 0022 — The final rendering pass: the look tuned together, and the board at 30 fps
 
-- **Status**: accepted for the look (the owner called it final, 2026-10-25); the board's
-  measurement (R5.1–R5.4) still to come
+- **Status**: accepted: the look (the owner called it final, 2026-10-25) and the board's
+  measurement (R5.1–R5.4 pass, `reports/R5-device/`, 2026-10-27)
 - **Date**: 2026-10-21
 
 ## Context
@@ -367,6 +367,63 @@ and the owner chose for each:
 
 The report's films (about 60 MB) leave git, as R4's did (the owner, 2026-10-25): the page
 keeps a poster of each, and `npm run final` films them again.
+
+### The board (2026-10-27)
+
+Twelve runs of the scene's benchmark on the board's 7" screen at the 30 fps cap took the
+crowded middle view from 20 fps, 84 % of frames late, to 30 fps and 4.6 %, the other
+judged views to 1–2 %, with memory near 580 MB of 800 and the board under 77 °C. Each
+step was measured on the board before it was kept; every one but two left every pixel
+of the screenshots as it was.
+
+- **What the frames spent.** In the crowd 47 ms of a frame were the page's own work,
+  the GPU far from busy: PixiJS rebuilt its draw list of some 22,000 objects every frame
+  (any sprite shown or hidden, any animal stepping into the next plant row, made the
+  world's structure change), and every animal on the island was moved and placed among
+  the rows each frame. Kept: effects that show and hide sprites each frame in render
+  groups of their own; the plant rows in bands of four cells, each its own render group,
+  so an animal changing row rebuilds one band; what stands among the plants (flames,
+  lava, leaves) put last in its row only where it is not already; the grey under cloud
+  told the canvas as its filter area (Pixi measured the world's bounds for it every
+  frame); an animal posed from just what it was posed from last frame posed again only
+  in its breathing chest; fewer objects made per frame (one walker for every animal, no
+  arrays per leg or map entry).
+- **Two that change what is drawn, a little.** Animals out of sight live one frame in
+  three with the time of all three, and wait in their row until they come into sight
+  (only where they walk while unseen changes; staged stills taken again). In the middle
+  view, where an animal is a few art pixels long, an animal in sight is posed on two
+  frames in three, staggered, with the time it missed (the owner's choice, 2026-10-27,
+  after a film of the crowd before and after).
+- **The ground.** One picture of the middle view's whole island took the board some 25 s
+  before anything showed, and the local view's pieces as long: the middle view is now
+  painted in pieces of 32 cells, the screen and a piece round it first; two workers
+  paint (the cores less two, at most three: three took the frames' time on four cores); pieces come on the screen nearest first, four a frame. The owner: "save
+  the world once generated and pre-compute all we can": every piece painted is kept in
+  the browser's storage under a stamp of what it was painted from (the build, the world,
+  the land message, the day, the look) and shown as it is when the stamp is today's;
+  an older one is shown at once while today's is painted over it, so bare ground shows
+  only the first time a world is seen; the workers read and write it, the page's thread
+  only reads what it shows; after each new day the rest of the island is painted ahead
+  and kept, resting 30 s between pieces and only while the frames have come on time for
+  3 s (painting ahead made the crowd's frames late on four cores). The crowded middle
+  view is ready 10 s after loading instead of 26, the local view 35 s instead of 83.
+- **How it is measured** (the owner's choices). The plain kiosk alone (every GPU profile
+  draws through the same path on the board, ANGLE on OpenGL ES with Panfrost; the CPU's
+  drawing is not run, it cannot draw the scene); 20 s measured a scenario (in 8 s, some
+  240 frames, where a day's turn fell decided the result); a view measured only once it
+  is painted; the sim-day held while a scenario is measured, as on the desk where it
+  turns once a day (the recording is played 1800 times as fast: a day every 48 s, each
+  turn some 12 s of late frames as the new day's plants and ground fade in over the
+  old); a day's turn measured apart, reported and not judged (20 % of its frames late);
+  the page's size read as each scenario is measured (read when the run began it was the
+  kiosk window before it went full screen).
+- **R5.2 near its band.** Run to run the crowd lands between about 4 % and 6 % late
+  frames; the owner (2026-10-27): 5.5 % is acceptable given a 5 % limit. The run kept,
+  the twelfth, measured 4.6 %.
+- **Open.** A big fire draws at 20 fps (300 burning cells, its flames and smoke placed
+  every frame; reported, not judged): capping the flames drawn would change how a big
+  fire looks. A day's turn costs some 12 s of late frames once a day. Rain and night in
+  the crowd are at 6 %.
 
 ## Consequences
 

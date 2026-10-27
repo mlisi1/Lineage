@@ -21,7 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
-| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); left: the board run (17–19), the merge; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
+| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); measured on the board 2026-10-27, R5.1–R5.4 pass (items 17–19, `reports/R5-device/`); left: the merge with M11's `main` (streams re-recorded) and the showcase the owner asked for; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
@@ -145,11 +145,26 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
   films out of git (`reports/R5-final/films/` gitignored, posters kept). The desk's build,
   the benchmark and `tools.report R5` were run end to end on the PC (headless, software
   drawing: not the measurement, and the report says so).
+- **Since** (2026-10-27): the board (items 17–19), twelve runs on the 7" screen; what
+  was cut and kept, and the owner's choices on how it is measured, in ADR 0022 ("The
+  board"); `reports/R5-device/` the twelfth run, R5.1–R5.4 pass. On the board for
+  development (not in the repo): `lineage-r5-quick@.service` runs the scenarios in
+  `~/lineage-r5/quick.args`, `lineage-r5-probe@.service` shows one scenario with remote
+  debugging on port 9222 (`probe.sh`, `probe.conf`: scenario, build, flags).
 - **Next, in order**:
-  1. Items 17–19 on the board with the owner: the procedure is `deploy/README.md`
-     ("Measuring the renderer on the device"), from a boxed board `deploy/board-setup.md`.
-  2. Merge into `main` (M11 re-records the streams if it merges after: `by`, `parent`,
-     `grazing`, `feeding`, `died`, `landed`, `young` are new on the creatures message).
+  1. Merge `main` (M11, merged 2026-10-27) into `r5-final`: R5 merges second, so it
+     re-records the streams (life, office, end, autumn, winter: CLAUDE.md §5) with M11's
+     sim (`by`, `parent`, `grazing`, `feeding`, `died`, `landed`, `young` are new on the
+     creatures message), resolves `sim/tests/test_fauna.py`, re-points the staging
+     (ids 2048, 2184, 2220, 2075, 2113 and the places in `final.spec.ts` and
+     `scripts/final-report.mjs`) and takes the baselines again, looked at first; the
+     final report regenerated.
+  2. The showcase (the owner, 2026-10-27): a scripted tour of about 2½ minutes in the
+     real scene, looping on the board without reloading, captions in the pixel font, an
+     fps counter top right on the board, a launcher printing average fps, late frames,
+     memory and temperature on Ctrl+C; filmed on the PC for the README (a trailer and a
+     teaser GIF; the end card "LINEAGE · Orange Pi Zero 2W · 7″ screen · 30 fps").
+  3. Merge into `main`.
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;
   `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V
   twice to follow an animal), stage by hand what is to be seen (below), regenerate the
@@ -268,14 +283,18 @@ below was taken in scope by the owner. Tests waited until the look was called fi
   `?cap=30`, `kiosk_bench.py --fps-cap 30`; on the PC all four hold 30 fps capped.
   The board's run becomes `reports/R5-device/` (`tools.report R5`, `tools/milestones/r5.py`:
   R5.1 the cap held, R5.2 over budget ≤ 5 %, R5.3 PSS ≤ 800 MB, R5.4 as specified)
-- [ ] 17. Per-frame costs, fixed where the board shows they matter: a filter pass per
+- [x] 17. Per-frame costs, fixed where the board shows they matter (done 2026-10-27, ADR
+  0022 "The board"): a filter pass per
   animal fading in or out (`depart`, `materialise`), the grade matrix rebuilt every frame
   and the cloud's full-screen filter, the shore shader's colours re-parsed each frame,
   `Herd.subjects` and `glowing` allocating each frame, `PlantLayer.fade`, every animal
   moved in the local view, the apocalypse's repaint, the scroll painted while it rolls
-- [ ] 18. The atmosphere on the board (R4 closed): big fires, rain, the apocalypse, the shore
+- [x] 18. The atmosphere on the board (R4 closed; measured 2026-10-27, rain and night at
+  6 %, a big fire at 20 fps, reported): big fires, rain, the apocalypse, the shore
   shader; surf's ~30 MB of GPU memory; the shadows and plant redraws on the page's thread
-- [ ] 19. On-device report; R5 accepted on the 7" screen with the final look
+- [x] 19. On-device report; R5 accepted on the 7" screen with the final look
+  (`reports/R5-device/`, 2026-10-27: R5.1 29.94 fps, R5.2 4.6 %, R5.3 582 MB, R5.4 as
+  specified)
 - [x] 20. Tests for all of the above once the owner calls the look final (called final
   2026-10-25). Done 2026-10-25: vitest for the creatures (steering, trailing, bend limits,
   the gait run through a real `CreatureLayer`, hunting, family, sleep, weather, basking,
