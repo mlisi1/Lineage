@@ -637,19 +637,27 @@ sent to the GPU. Where there is no worker the same code runs on the page's threa
 
 **The ground kept between visits** (R5, the owner: "save the world once generated and
 pre-compute all we can"; `terrain/groundcache.ts`). Every piece painted is kept in the
-browser's storage (IndexedDB), the latest for each place, under a stamp of what it was
-painted from: the build's commit, the world's seed, the land message, the day of the year,
-the look and how the bushes are drawn. A piece kept for today's stamp is shown as it is,
-unpainted; one kept for an older stamp is shown at once and today's, painted, fades in
-over it, so bare ground shows only the first time a world is seen. The workers read and
-write the storage themselves; the page's thread only reads what it shows. After each new
-day, each pieced ground paints the rest of the island ahead (`PieceGround.prepaint`), one
-piece at a time behind everything the view asks for, resting 2 s between pieces (some
-half an hour of a third of a core on the board), and keeps it without showing it: so
-that the camera finds its ground ready wherever it jumps. Requests painted ahead are not
-counted as the painter being busy. Nothing is kept under the development server or from a
-build with changes not committed (the commit would not say what painted it), nor with
-`?ground=fresh`.
+browser's storage (IndexedDB) under a stamp of what it was painted from: the build's
+commit, the world's seed, the land message, the day of the year, the look and how the
+bushes are drawn. Several stamps are kept for each piece (some days, or the land before
+and after an event); beyond twelve the one used longest ago is let go with its pieces.
+The painting workers read and write the storage themselves: asked for a piece, a worker
+hands back the one kept for today's stamp without painting it, or paints and keeps it, and
+the page's thread only puts it on the screen. A piece with nothing to show that has not
+come within a third of a second is shown from the latest kept of any stamp while today's
+is painted over it, so bare ground shows only the first time a place is seen. After each
+new day, each pieced ground paints the rest of the island ahead (`PieceGround.prepaint`),
+one piece at a time behind everything the view asks for, resting 30 s between pieces and
+only while frames have come on time for 3 s, and keeps it without showing it.
+`PieceGround.prefetch` paints ahead the pieces of a place the camera will go to (the
+showcase's next shot). Requests painted ahead are not counted as the painter being busy.
+Nothing is kept under the development server or from a build with changes not committed
+(the commit would not say what painted it), nor with `?ground=fresh`.
+
+**A new land, for the view on the screen.** When a land or a new day comes, only the view
+on the screen is laid out again (its plants placed, its ground repainted); the others are,
+when they come on the screen (R5: laying out every view built held the board's page for
+seconds).
 
 **A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
 plants out again for the day and repaints the grounds of the views that have been
@@ -1313,6 +1321,33 @@ scenarios, the 1 % low, headroom, script time, CPU, temperature and GPU hangs (t
 kernel's `gpu sched timeout` lines counted by the runner before and after each profile,
 where the log can be read) are reported without a band. A file from a PC builds a report
 marked as not the measurement. The bands were confirmed by the owner on 2026-10-23.
+
+### The showcase (R5)
+
+The owner asked for "a demo/showcase of the whole thing ... almost like a trailer, with text
+that describes what is being shown", run on the board itself. `index.html?showcase`
+(`src/showcase/`, kept in the desk's build like the benchmark) plays the creatures'
+recording and tours the scene in thirteen acts, about three minutes a loop, looping
+without reloading: the island's title over the map; the middle view drifting over coasts
+and woods; an animal followed among bushes, its card in the corner; grazing and a hunt; a
+pair touching heads, an egg, the young trailing their mother; the rare genes (basking, a
+venom strike, a swimmer's wake); autumn up close, then snow falling and settling on the
+high ground and lower; rain, the sun back and the animals shaking it off, a thunderstorm;
+night falling over the herd over nine seconds; the meteor, the seed and the ark, each in a
+place of its own; a chronicle entry; the world's end played twelve times as fast; an end
+card ("LINEAGE", "Orange Pi Zero 2W – 7-inch screen – 30 fps"). `script.ts` is the
+timeline (acts, seconds, captions), `showcase.ts` the director: it stages each act with
+the films' hooks (animals put, sent, fed, set hunting, born; rare genes granted), the
+atmosphere's demo light, weather and powers and its own sky, seasons and snow (the clock
+and the land rewritten), and points the camera (shots kept inside the world, as the
+director's). Each cut fades out over 0.6 s and in over 0.8 s, eased, the caption in after
+the picture and out before it, on the showcase's own clock (so a film of it is the same);
+at a cut it waits in the dark until the ground of the next shot is painted, and paints the
+next shot's ground ahead while an act plays. `overlay.ts` writes the caption on a ribbon
+in the scroll's hand and the title in large letters; `meter.ts` counts frames for the
+counter in the top-right corner (`?fps`) and reports every frame's interval, by act, to
+`tools/showcase.py` (`?post=`), which runs it on the board and sums it up on Ctrl+C
+(`deploy/README.md`). Filmed on the PC (`?showcase&film`) it is the README's trailer.
 
 ## What the spike stands in for
 

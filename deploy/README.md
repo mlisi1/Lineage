@@ -152,3 +152,38 @@ sudo systemctl stop lineage-demo; sudo systemctl start getty@tty1
 Left running, the board out of any enclosure creeps towards 80 °C, where it slows itself down
 (`/sys/class/thermal/thermal_zone*/temp`, in thousandths of a degree): the enclosure
 needs a heatsink at least.
+
+## The showcase on the board (R5)
+
+The showcase is a scripted tour of the scene, about three minutes in thirteen acts with a
+caption each (`renderer/src/showcase/`), in the desk's own build: it loops without
+reloading, with a frame counter in the top-right corner, so it shows how the board runs
+the scene over time, the ground painted and kept in the browser's storage from one run to
+the next (the browser's profile is kept in `~/.lineage-showcase`).
+
+1. **On the PC**, build the desk's page and copy it over with the runner and its unit:
+
+   ```sh
+   cd renderer && npm run build:kiosk && cd ..
+   scp -r renderer/dist-kiosk tools/kiosk_bench.py tools/showcase.py \
+     deploy/lineage-showcase@.service deploy/showcase.sh <user>@<board>:lineage-r5/
+   ```
+
+2. **On the board**, once: `sudo cp ~/lineage-r5/lineage-showcase@.service
+   /etc/systemd/system/ && sudo systemctl daemon-reload`. Then, from SSH:
+
+   ```sh
+   cd ~/lineage-r5 && ./showcase.sh
+   ```
+
+   It takes the screen and prints a line every 30 s (loop, act, frames a second, frames
+   late, temperature). **Ctrl+C** stops it and prints the summary: frames a second
+   (average, median, 1 % low), frames late overall, by act and by loop, the peak memory,
+   the peak temperature and GPU hangs; it is also left in `showcase-summary.txt`, and the
+   lines in `showcase.log`. From the board's own console, `cage -s -- python3 showcase.py
+   --dist dist-kiosk` does the same in the foreground.
+
+The first loop after a new build paints the ground of every place the tour visits (the
+stamps of what is kept carry the build's commit); the tour waits in the dark at a cut
+until its ground is painted, and paints the next place's ground while the current act
+plays. Later loops, and later runs of the same build, take it from the storage.

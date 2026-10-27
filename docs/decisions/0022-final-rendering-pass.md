@@ -425,6 +425,49 @@ of the screenshots as it was.
   fire looks. A day's turn costs some 12 s of late frames once a day. Rain and night in
   the crowd are at 6 %.
 
+### M11 merged in, and the showcase (2026-10-27)
+
+`main` (M11) was merged into `r5-final` on 2026-10-27: R5 merged second, so it re-recorded
+the streams with M11's tuned simulation (the creatures message keeps R5's fields), kept
+both sides of `population.py` (R5's outputs for the scene beside M11's soil, wading and
+seeds in guts), regenerated the spike's fixture (M11's phenotype reads
+`meat_diet_exponent`) and took the screenshot baselines again from the new recordings.
+
+The owner, after the board's run: "create a demo/showcase of the whole thing ... the
+overall concept of Lineage, some close ups, effects, animations ... almost like a trailer
+(with text that describes what is being shown) ... a way of seeing the actual thing
+rendered on the board with no memory refreshes and no clear cache", with a frame counter
+in the corner and a summary on Ctrl+C. Chosen: about two and a half minutes (now nearly
+three), the counter on the board only, an end card with the hardware and 30 fps. Built as
+a mode of the page in the desk's build (`?showcase`), run on the board by
+`tools/showcase.py`, filmed on the PC for the README.
+
+What the board showed on its first runs, and what changed:
+
+- **Bare ground at cuts.** The tour jumps between places; the first loop painted each
+  when the camera got there. The showcase now waits in the dark at a cut until the ground
+  of its next shot is painted, and paints the next shot's ground ahead while an act plays
+  (`PieceGround.prefetch`); it paints nothing else ahead.
+- **The cache could not keep up.** It kept the latest painting of each piece only, and the
+  tour goes from autumn to snow to a crater and back each loop. It now keeps several
+  stamps per piece, the least used let go beyond twelve; the painting workers read it
+  themselves and hand pieces over without copying, the page reading it only for a piece
+  late (a third of a second), to show the latest kept at once.
+- **Freezes.** A new land laid out every view built on the page's thread; now only the
+  view on the screen, the others when shown. The showcase's clock steps at most a tenth of
+  a second, so a freeze lengthens the dark rather than cutting a scene short.
+- **The owner's notes.** The meteor left its trees standing (the showcase held the
+  sim-day, and with it the crater's land; it holds none now); the ark's light was where the
+  meteor fell (each power has a place of its own); the snow and the night came too fast
+  (snow now falls and settles on the high ground, then lower, over 18 s; night falls over
+  9 s); the transitions jolted (eased fades out and in, the caption after the picture);
+  the winter shot showed past the world's edge (shots kept inside the world).
+
+Open: on the board's first runs, the weather act (a thunderstorm up close) ran at some 16
+fps and the night act at 22; the world's end and the end card were slow. The owner looks
+at the trailer filmed on the PC first, for what is only of the look; then the showcase is
+tuned on the board.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

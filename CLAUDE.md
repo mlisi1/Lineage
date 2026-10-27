@@ -89,8 +89,10 @@ lineage/
 │   ├── viz/                  # shared plotting style + figure helpers
 │   ├── replay.py             # load a save, inspect, render stills and renderer fixtures
 │   ├── stream.py             # record the state stream from a save, for the renderer (R1)
-│   └── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
-│                             #   standard library only: copied to the board as one file
+│   ├── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
+│   │                         #   standard library only: copied to the board as one file
+│   └── showcase.py           # run the showcase on the board and sum up how it ran (R5);
+│                             #   standard library and kiosk_bench.py, copied beside it
 ├── renderer/                 # TypeScript + PixiJS (WebGL). One renderer for desk and phone.
 │   ├── src/                  # terrain/, plants/, creatures/, camera.ts, captions.ts, protocol.ts
 │   │   │                     #   (generated), stream.ts, landscape.ts, looks.ts, director.ts (R3:
@@ -104,7 +106,9 @@ lineage/
 │   │   │                     #   nursery, sleep), card.ts (the name card),
 │   │   │                     #   marker.ts (a chronicle entry's place), bench.ts and
 │   │   │                     #   benchplan.ts (R5: the scene's benchmark), framecap.ts (the
-│   │   │                     #   30 fps cap), gpu.ts, framestats.ts
+│   │   │                     #   30 fps cap), gpu.ts, framestats.ts, showcase/ (R5: the
+│   │   │                     #   showcase's script, director, captions and frame meter),
+│   │   │                     #   terrain/groundcache.ts (R5: painted ground kept between visits)
 │   │   ├── sheets/           # look sheets of the real scene (land.html, R1)
 │   │   └── spike/            # R0 spike: the scene, its in-page benchmark (spike.html),
 │   │                         #   the look sheet (look.html) and the creature sheet (R2);
@@ -247,6 +251,11 @@ Do not create directories outside this layout without updating this file.
     benchmark, `index.html?bench`, R5; `--page spike.html --dist dist` for the R0 spike;
     procedure in `deploy/README.md`, from a board in its box `deploy/board-setup.md`), then
     for the spike `uv run python -m tools.report R0 --runs <directory holding kiosk-bench.json>`
+  - on the board: `./showcase.sh` (with `lineage-showcase@.service` installed, `deploy/`;
+    `showcase.py`, `kiosk_bench.py` and `dist-kiosk/` in `~/lineage-r5/`) — the showcase
+    (`index.html?showcase`, R5: a scripted tour of the scene in the desk's build, looping,
+    a frame counter top right); Ctrl+C prints frames a second, frames late by act and by
+    loop, memory and temperature (also `showcase-summary.txt`)
   - `uv run python -m tools.report R5 --runs runs/r5-device` — R5's device report from the
     `kiosk-bench.json` the scene's benchmark wrote on the board (`python3 kiosk_bench.py
     --dist dist-kiosk --fps-cap 30`, procedure in `deploy/README.md`) → `reports/R5-device/`,
@@ -599,9 +608,13 @@ needs a note in `docs/decisions/`.
   by two workers and kept between visits in the browser's storage, the island painted
   ahead after each new day while frames come on time; the middle view's animals posed
   two frames in three (the owner); measured with the plain kiosk, 20 s a scenario, the
-  sim-day held, a day's turn reported apart (the owner). Left: the merge (streams
-  re-recorded) and a showcase the owner asked for. Checklist and handoff in
-  `docs/milestones.md`; reports `reports/R5-final/`, `reports/R5-device/`.)
+  sim-day held, a day's turn reported apart (the owner). `main` (M11) merged in on
+  2026-10-27, the streams re-recorded with M11's sim. A showcase the owner asked for
+  (`src/showcase/`, `?showcase`): a scripted tour of about three minutes in thirteen acts
+  with captions, run on the board by `tools/showcase.py` and filmed for the README. Left:
+  the owner's verdict on the showcase's look, tuning it on the board, the final report
+  regenerated, a last board run of the final build, the merge into `main`. Checklist and
+  handoff in `docs/milestones.md`; reports `reports/R5-final/`, `reports/R5-device/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
