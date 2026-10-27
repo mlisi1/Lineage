@@ -332,6 +332,7 @@ class Flora:
         # Plant form of every cell, derived from the genome; None when the genome changed.
         self._forms: Bytes | None = None
         self._form_masks: tuple[Mask, Mask] | None = None
+        self._stature: Grid | None = None  # `stature` of every cell; None when it changed
         self._rare: Bytes = np.zeros(shape, dtype=np.uint8)
         self._scorch: Grid = np.zeros(shape, dtype=_F)
         self._algae: Grid = np.zeros(shape, dtype=_F)
@@ -490,13 +491,36 @@ class Flora:
         plant = (fruit * poison).astype(_F)
         return np.where(self.on_algae(ys, xs), _F(cfg.algae_meal_share), plant).astype(_F)
 
+    def fruiting_at(self, ys: Index, xs: Index) -> Mask:
+        """Cells (ys, xs) where a fruiting plant stands (M11: its seeds go in guts)."""
+        return (self._biomass[ys, xs] > 0.0) & has(self._rare[ys, xs], Rare.FRUITING)
+
+    def drop_seeds(
+        self, rng: Generator, ys: Index, xs: Index, genome: Bytes, rare: Bytes, instant: Instant
+    ) -> int:
+        """Seeds an animal carried (``genome``/``rare``, one column per seed) are dropped
+        on cells (ys, xs) and take as any plant's seeds do (M11). Returns how many took."""
+        if ys.size == 0:
+            return 0
+        terrain = self._terrain
+        elevation = terrain.height - _F(terrain.sea_level)
+        temp = temperature(self._cfg, warmth(instant), elevation)
+        return self._establish(rng, ys, xs, genome, rare, temp, elevation)
+
     def on_algae(self, ys: Index, xs: Index) -> Mask:
         """Cells (ys, xs) where a grazer eats algae: no plant stands there."""
         return self._biomass[ys, xs] <= 0.0
 
     def shade(self) -> Grid:
         """Share of sunlight the plants intercept on every cell, in [0, 1]."""
-        return canopy(self._cfg, self._biomass, stature(self._cfg, self.genes(), self._rare))
+        return canopy(self._cfg, self._biomass, self.stature())
+
+    def stature(self) -> Grid:
+        """Height of every cell's plant (`stature`; 0 where none grows): what light sees,
+        and how high a grazer must reach (M11). Cached until the genome changes."""
+        if self._stature is None:
+            self._stature = stature(self._cfg, self.genes(), self._rare)
+        return self._stature
 
     def grazeable(self) -> Grid:
         """Plant biomass grazers can reach in each cell (what they see as food on land)."""
@@ -654,6 +678,7 @@ class Flora:
         self._biomass, self._genome = biomass, genome
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare = np.array(tree["rare"], dtype=np.uint8)
         self._scorch = np.array(tree["scorch"], dtype=_F)
         self._algae = np.array(tree["algae"], dtype=_F)
@@ -669,6 +694,7 @@ class Flora:
         self._genome[:, dead] = 0
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare[dead] = 0
 
     def _disperse(self, rng: Generator, temp: Grid, elevation: Grid, dt_years: float) -> None:
@@ -690,10 +716,12 @@ class Flora:
             # Seed production is read before this offset's establishments are written.
             ready = np.clip((self._biomass - _F(cfg.seed_min_biomass)) / span, 0.0, 1.0)
             seed_gene = self._genome[Gene.SEED].astype(_F) / _F(_GENE_MAX)
-            if far:
-                # Animals carry fruit far whatever the seed is like.
+            if far and cfg.fruit_by_wind:
+                # The stand-in for gut seeds: fruit goes far whatever the seed is like.
                 fruit = has(self._rare, Rare.FRUITING)
                 weight = np.where(fruit, _F(1.0), _F(1.0) - seed_gene).astype(_F)
+            elif far:
+                weight = _F(1.0) - seed_gene
             else:
                 weight = _F(cfg.near_weight_wind) + _F(1.0 - cfg.near_weight_wind) * seed_gene
             chance = attempts * ready * weight
@@ -792,6 +820,7 @@ class Flora:
         self._genome[:, ys, xs] = genome
         self._forms = None
         self._form_masks = None
+        self._stature = None
         self._rare[ys, xs] = rare
         self._biomass[ys, xs] = np.maximum(kept, _F(cfg.seedling_biomass))
         return count

@@ -295,10 +295,13 @@ mangrove_growth_cost = 0.30
 poisonous_toxicity = 1.5
 poisonous_refusal = 0.5
 poisonous_growth_cost = 0.15
-# Fruiting: animals carry its fruit far, so its far seeds go out as if it had the lightest
-# seed (on top of its near seeds); grazers get this much more energy from it; costs growth.
+# Fruiting: grazers get this much more energy from it; costs growth. Its seeds travel in
+# the guts of the grazers that eat it ([fauna] gut_*, M11). With fruit_by_wind (the
+# stand-in before M11, for runs with gut seeds off) its far seeds go out instead as if it
+# had the lightest seed.
 fruiting_meal_bonus = 0.5
 fruiting_growth_cost = 0.15
+fruit_by_wind = false
 # Emergent: a crown above the canopy: its height counts × (1 + emergent_height_bonus) for
 # light (shade cast and competition), so it matters most in trees; needs this much more
 # fertility (× 1 + factor), catches this many times more wind where the site is exposed,
@@ -380,7 +383,7 @@ species_min_cells = 30
 # above predator_min_diet) are counted apart from everyone else, so a full herd cannot
 # crowd them out.
 population_cap = 200
-predator_cap = 16
+predator_cap = 32
 # Founders arrive when at least this share of the land carries well-grown plants and
 # nobody lives here, in spring or summer, after this delay (days). They are one species: a random genome that
 # leans herbivore (diet gene at most founder_diet_max) and small to medium (size gene at
@@ -394,11 +397,29 @@ founder_size_max = 0.5
 founder_spread = 0.04
 founder_radius_cells = 16.0
 # Strangers: small groups of a new species that reach an inhabited island, all year.
-immigrant_groups_per_year = 6.0
+# 0 since M11 (the owner, ADR 0019): the island is closed, and every species descends
+# from its founders or the ark. Kept as a switch for comparison runs.
+immigrant_groups_per_year = 0.0
 immigrant_group_size = 8
 # Share of stranger groups that are a hunter species (diet gene in the predator range);
 # the others have a fully random genome.
 immigrant_hunter_share = 0.5
+# Hunters, the second wave of founders (M11): once the herd (every creature that is not
+# a predator) reaches hunter_wave_herd, a pack of hunter_wave_count hunters lands, in
+# spring or summer, once per world (never where a lineage already arrived as hunters).
+# After that, predators must live or evolve on their own, or come by the ark. 0 count, or
+# a herd above population_cap: off.
+hunter_wave_herd = 120
+hunter_wave_count = 8
+# Hunters (the pack, or the ark's) land by a member of the herd drawn at random: on a
+# landing spot within this many cells of the spot nearest it (the herd grazes the ground
+# round it bare). They come where they find prey: landed at random, a pack of 8 rarely
+# found the herd (M11).
+hunter_landing_cells = 8.0
+# Their size gene is the herd's mean plus hunter_size_margin: a little larger than their
+# prey, so that a kill feeds them (built at least medium-sized like strangers' hunters,
+# a pack of mass 3–5 among prey of 0.3 starved while it killed, M11).
+hunter_size_margin = 0.1
 
 # --- Body (phenotype) ---
 # Mass grows geometrically with the size gene, from mass_min to mass_max.
@@ -444,6 +465,10 @@ cost_armour = 0.4
 cost_jaw = 0.3
 cost_limb_pair = 0.06
 cost_aquatic = 0.15
+# Hunters (diet at or above predator_min_diet) burn hunter_rest_share of their basal burn
+# at rest: they wait between kills, as real predators do, and a pack outlasts a lean
+# spell (M11). Moving costs the same. 1 turns it off.
+hunter_rest_share = 0.2
 # Energy per cell travelled = move_cost × mass^metabolic_exponent.
 move_cost = 0.35
 # Reserve a creature can hold = capacity_per_mass × mass; newborn founders start at
@@ -452,17 +477,32 @@ capacity_per_mass = 220.0
 founder_energy_share = 0.9
 # Energy burnt per hour per unit mass by a creature in water, at swimming gene 0.
 water_stress = 2.5
+# Wading (M11): no creature struggles in water no deeper than wading_depth (height units
+# below sea level; the algae's shelf, [flora] algae_max_depth): land animals can graze
+# the shallows, slowly, and swimming pays as the next step out to sea. 0 turns it off.
+wading_depth = 0.03
 
 # --- Eating ---
 # Plant biomass (in full cells) grazed per hour = graze_rate × mass^metabolic_exponent ×
 # (graze_jaw_floor + (1 − graze_jaw_floor) × jaw gene).
 graze_rate = 0.05
 graze_jaw_floor = 0.5
+# Reach (M11): a creature reaches plants up to reach_at_unit_mass × mass^(1/3) (in the
+# plants' height units: grass about 0.2, shrubs to 0.6, trees to 1, emergent crowns 1.5).
+# Of a taller plant it bites browse_floor of a full bite (low leaves, seedlings) plus the
+# rest in proportion to the share of the plant's height it reaches, and it smells that
+# plant's food the same way. Big bodies get food small ones cannot reach. 1 turns it off.
+reach_at_unit_mass = 0.5
+browse_floor = 0.3
 # Energy in one full cell of plant biomass, and per unit of prey mass.
 plant_energy = 300.0
 meat_energy = 1600.0
-# Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat diet^diet_exponent.
+# Share of that energy absorbed: plants (1 − diet)^diet_exponent, meat
+# diet^meat_diet_exponent. Below 1 a meat exponent lets a little meat pay well, so a
+# lineage of the herd can take the first steps toward meat while grazers keep their
+# edge on plants (M11).
 diet_exponent = 1.0
+meat_diet_exponent = 1.0
 # Plant defence also poisons: energy from plants is multiplied by
 # 1 − defence_toxicity × the plant's defence gene (beyond 1, a defended plant costs more
 # than it gives). Grazers cannot sense defence, only plant form (M5).
@@ -472,6 +512,12 @@ defence_toxicity = 0.5
 # (1 + armour_strength × armour gene). A hit kills with probability
 # sigmoid(log(power / defence) / attack_softness) × min(1, hunter speed / prey speed).
 attack_min_diet = 0.15
+# A hunter spares its own kind (those it could mate with) unless they eat far more plants:
+# a diet gene at least prey_diet_gap below its own (M11; cannibal morphs, as in spadefoot
+# toad and tiger salamander larvae). Without it a lineage drifting toward meat finds no
+# prey within its own interbreeding herd, and hunters never arise again on an island
+# closed to strangers. 1 or more turns it off.
+prey_diet_gap = 0.3
 # A hunter only looks for prey and attacks while its reserve is below this share of its
 # capacity: fed predators leave the herd alone.
 hunt_below_energy_share = 0.8
@@ -482,6 +528,11 @@ armour_strength = 2.5
 attack_softness = 0.35
 # Energy an attempt costs the hunter, per unit mass.
 attack_cost = 1.5
+# Cover (M11): prey standing among plants taller than it reaches is hidden by the share
+# of the plants' height above its reach, times their density (biomass over [flora]
+# closed_canopy_biomass, at most 1). A kill's chance is × (1 − cover_protection ×
+# hidden): small bodies hide in shrubs and forest, large ones cannot. 0 turns it off.
+cover_protection = 0.6
 
 # --- Carrion (scavenging) ---
 # The dead leave carrion on land, in units of meat mass: what a hunter could not eat of
@@ -491,6 +542,18 @@ attack_cost = 1.5
 # mass^metabolic_exponent meat mass per hour, for meat_energy × their meat efficiency.
 carcass_share = 0.5
 carrion_decay_hours = 72.0
+# Nutrients return to the soil (M11): fertility added to a land cell per unit of plant
+# biomass a creature eats while standing there (dung), and per unit of carrion mass that
+# rots there (carcasses). Herds keep their pastures fertile; a kill leaves a rich patch.
+# 0 turns each off.
+dung_fertility = 0.05
+carrion_fertility = 0.2
+# Seeds in guts (M11): a creature grazing a fruiting plant swallows one of its seeds at
+# gut_seeds_per_hour (per hour of full bites; it holds one at a time) and drops it where
+# it is gut_passage_hours later (0.5–1.5 × that, at random), where it takes as any seed
+# does. 0 turns it off (then set [flora] fruit_by_wind, the stand-in, for a fair compare).
+gut_seeds_per_hour = 0.5
+gut_passage_hours = 12.0
 # A creature on land in a burning cell loses this share of its energy capacity per hour
 # (R4; the owner, 2026-10-20): at 1.0 one that stays in a fire for an hour dies of it
 # (cause: burnt; the burnt leave no carrion). Swimmers in water are safe.
@@ -512,6 +575,13 @@ carrion_scent_cells = 3
 compat_distance = 0.10
 repro_energy_share = 0.6
 repro_cooldown_days = 2.5
+# Soft caps (M11): a pair that may breed first waits, on average,
+# crowding_wait_days × c / (1 − c), with c = (N / cap)^crowding_exponent, N the living of
+# its kind (predators or the rest) and cap population_cap or predator_cap. Near zero on a
+# sparse island, without end at the cap; births then answer to how many died, not only to
+# a hard stop. The caps stay as ceilings. 0 turns the wait off (hard caps alone).
+crowding_wait_days = 5.0
+crowding_exponent = 4.0
 # Each parent invests repro_investment_share of its capacity; birth_efficiency of the sum
 # is shared among 1 + round(brood gene × (brood_max − 1)) young.
 repro_investment_share = 0.25
@@ -690,7 +760,8 @@ plant_light_days = 7.0
 # God powers: a button fires one, at most once per god_cooldown_days (sim-days). The
 # island draws which: power p has weight god_weight_p × (1 + god_need_gain × need_p),
 # needs in [0, 1]: rain, a fire burning (1) or the season's dryness; seed, the share of
-# land without plants; ark, how far creatures are below ark_need_creatures; meteor, none.
+# land without plants; ark, how far creatures are below ark_need_creatures, or 1 when the
+# herd has reached [fauna] hunter_wave_herd with no predators alive; meteor, none.
 god_cooldown_days = 7.0
 god_need_gain = 4.0
 god_weight_meteor = 1.0
@@ -715,7 +786,8 @@ rain_fertility = 0.05
 # probability seed_rare_chance.
 seed_count = 400
 seed_rare_chance = 0.1
-# Ark: a group of ark_count plant eaters lands on a vegetated spot, as founders do.
+# Ark: a group of ark_count plant eaters lands on a vegetated spot, as founders do; hunters
+# instead when the herd has reached [fauna] hunter_wave_herd with no predators alive.
 ark_count = 12
 
 [weather]

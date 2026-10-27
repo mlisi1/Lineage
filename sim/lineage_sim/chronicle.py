@@ -147,7 +147,7 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
         "From the ruins of the last, world {world} begins: a new island, bare rock and sea.",
     ),
     "arrival": (
-        "Strangers landed: {members} {name} came ashore from elsewhere.",
+        "Newcomers landed: {members} {name} came ashore from elsewhere.",
         "{members} {name} arrived from across the sea.",
     ),
     "speciation": (

@@ -232,6 +232,7 @@ class FloraConfig:
     poisonous_growth_cost: float
     fruiting_meal_bonus: float
     fruiting_growth_cost: float
+    fruit_by_wind: bool
     emergent_height_bonus: float
     emergent_need_factor: float
     emergent_growth_cost: float
@@ -364,6 +365,11 @@ class FaunaConfig:
     immigrant_groups_per_year: float
     immigrant_group_size: int
     immigrant_hunter_share: float
+    hunter_wave_herd: int
+    hunter_wave_count: int
+    hunter_landing_cells: float
+    hunter_size_margin: float
+    prey_diet_gap: float
     mass_min: float
     mass_max: float
     limb_pairs_max: int
@@ -393,16 +399,25 @@ class FaunaConfig:
     cost_aquatic: float
     move_cost: float
     capacity_per_mass: float
+    hunter_rest_share: float
     founder_energy_share: float
     water_stress: float
+    wading_depth: float
     graze_rate: float
     graze_jaw_floor: float
+    reach_at_unit_mass: float
+    browse_floor: float
     plant_energy: float
     meat_energy: float
     diet_exponent: float
+    meat_diet_exponent: float
     attack_min_diet: float
     carcass_share: float
     carrion_decay_hours: float
+    dung_fertility: float
+    carrion_fertility: float
+    gut_seeds_per_hour: float
+    gut_passage_hours: float
     fire_damage_per_hour: float
     blast_kill_reach: float
     scavenge_rate: float
@@ -416,9 +431,12 @@ class FaunaConfig:
     armour_strength: float
     attack_softness: float
     attack_cost: float
+    cover_protection: float
     compat_distance: float
     repro_energy_share: float
     repro_cooldown_days: float
+    crowding_wait_days: float
+    crowding_exponent: float
     repro_investment_share: float
     birth_efficiency: float
     brood_max: int
@@ -488,6 +506,7 @@ class FaunaConfig:
             check(value >= 0, f"{key} must not be negative")
         positive = (
             "population_cap",
+            "crowding_exponent",
             "founder_count",
             "mass_min",
             "limb_pairs_max",
@@ -499,6 +518,7 @@ class FaunaConfig:
             "plant_energy",
             "meat_energy",
             "diet_exponent",
+            "meat_diet_exponent",
             "reach_cells",
             "attack_softness",
             "compat_distance",
@@ -517,10 +537,12 @@ class FaunaConfig:
             "forget_hours",
             "meal_memory_hours",
             "competence_hours",
+            "gut_passage_hours",
         )
         for key in positive:
             check(getattr(self, key) > 0, f"{key} must be positive")
         unit = (
+            "cover_protection",
             "founder_min_plant_cover",
             "immigrant_hunter_share",
             "founder_diet_max",
@@ -534,6 +556,7 @@ class FaunaConfig:
             "maturity_share",
             "founder_energy_share",
             "graze_jaw_floor",
+            "browse_floor",
             "attack_min_diet",
             "hunt_below_energy_share",
             "repro_energy_share",
@@ -562,11 +585,13 @@ class FaunaConfig:
                     "longevity_factor", "longevity_cooldown_factor"):  # fmt: skip
             check(getattr(self, key) >= 1.0, f"{key} must be at least 1")
         check(self.herbivore_max_diet < self.predator_min_diet, "diet classes overlap")
+        check(self.hunter_rest_share <= 1.0, "hunter_rest_share above 1")
         check(
             self.repro_investment_share < self.repro_energy_share,
             "breeding would starve the parent",
         )
         check(self.founder_count <= self.population_cap, "more founders than the cap")
+        check(self.hunter_wave_count <= self.predator_cap, "more hunters than their cap")
 
 
 @dataclass(frozen=True)

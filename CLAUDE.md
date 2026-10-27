@@ -81,6 +81,8 @@ lineage/
 │   └── tests/                # fauna_site.py: hand-built site shared by fauna scenario tests
 ├── tools/                    # dev-only CLIs (not deployed)
 │   ├── fastforward.py        # run N sim-years headless for M seeds → runs/<id>/
+│   ├── tune/                 # M11: score a run on every criterion, sweep levers
+│   │                         #   (sweeps/<name>.toml → runs/sweep-<name>/), sensitivity
 │   ├── report.py             # build a milestone report from runs → reports/<milestone>/
 │   ├── runs.py               # on-disk format of runs/<id>/
 │   ├── milestones/           # per-milestone metrics, acceptance criteria, report sections
@@ -175,10 +177,17 @@ Do not create directories outside this layout without updating this file.
     `--set fauna.learning=false` to change one config key for an ablation;
     `--fork-days 60 --fork-length 28` to fork every 60 days with learning on and off, M5;
     `--schedule office` to play the owner's presence: `always`, `office`, `office-august`,
-    `conference`, M8; worlds that end go to `runs/<id>/archives/<seed>/`, M10)
+    `conference`, M8; worlds that end go to `runs/<id>/archives/<seed>/`, M10;
+    `--press-every-days 7` presses the god-power button weekly at the desk, M11)
   - `uv run python -m tools.report <milestone> --runs runs/<id>`
     (`--baseline runs/<id>` for ablation reports, M5: the run with the mechanism off;
-    M8 takes the office run and `--baseline` once per other schedule)
+    M8 takes the office run and `--baseline` once per other schedule; M11 takes the tuned
+    office run and, as `--baseline`, the held-out, 5-year, fork, learning-off, schedule
+    and mechanism-off runs, each recognised by its manifest, plus `--sweep runs/sweep-<name>`)
+  - `uv run python -m tools.tune.sweep tools/tune/sweeps/<name>.toml --jobs 10 --max-load 14`
+    — run and score a sweep (M11; resumes where it stopped; `--dry-run` lists the points),
+    then `uv run python -m tools.tune.sensitivity runs/sweep-<name>` (which levers move
+    which criteria)
   - `uv run python -m tools.replay <save.lzma> [--still out.png] [--renderer-fixture DIR]`
     — inspect a save; `--renderer-fixture renderer/public/spike` regenerates the spike's world
   - `uv run python -m tools.stream <save.lzma> --out renderer/public/stream/recording.json
@@ -317,7 +326,8 @@ needs a note in `docs/decisions/`.
 - **Report** (20 seeds × 10 sim-years): land fraction, sea level, landmass count over time;
   coastline change per year; snapshot grid + GIF; event frequency.
 - **Accept**: land fraction stays in `[0.25, 0.6]`; ≥ 1 split/rejoin per 3 years in
-  `[≥ 50%]` of seeds; no seed loses all land; terrain step within budget.
+  `[≥ 50%]` of seeds; no seed loses all land; terrain step within budget (retired in
+  M11, ADR 0019: M4.4 budgets the whole world, 600 ms per sim-day on the PC).
 
 ### M3 — Flora
 - **Deliver**: vegetation grid, 8-gene plant genome, growth/suitability, dispersal (wind,
@@ -373,8 +383,8 @@ needs a note in `docs/decisions/`.
   scenario, name determinism and uniqueness, phylogeny is a valid tree.
 - **Report**: species count over time, speciation and extinction rates per sim-month,
   rendered phylogenetic tree for 3 seeds, name samples.
-- **Accept**: species alive in `[3–12]` for ≥ 90% of sim-time; speciation `[≥ 1 / month]`
-  median. (As built, ADR 0012: species are genome clusters, finer than who can mate;
+- **Accept**: species alive in `[3–16]` for ≥ 90% of sim-time (3–12 until M11, ADR 0019);
+  speciation `[≥ 1 / month]` median. (As built, ADR 0012: species are genome clusters, finer than who can mate;
   sim-time is inhabited time, median seed; speciation counts splits only. M6.1 measured
   79 % and was deferred to M11 by the owner, 2026-10-18.)
 
@@ -399,13 +409,15 @@ needs a note in `docs/decisions/`.
 - **Report**: compare schedules — always present, office hours, office + August break,
   3-week conference — on populations, nocturnal trait frequency, rare-gene frequencies
   (glow, hibernation, photosynthesis).
-- **Accept**: office schedule produces measurable selection on night traits vs
-  always-present; 3-week absence survival `[≥ 80%]` of seeds; August holiday survival
+- **Accept**: office schedule produces measurable selection on light traits (night or
+  day; night traits alone until M11, ADR 0019) vs always-present; 3-week absence survival `[≥ 80%]` of seeds; August holiday survival
   `[≥ 80%]` of seeds (added by the owner, 2026-10-19). (As built, ADR 0016: a button, not
   a covered switch, fires a power the island draws by need; holidays are long absences;
   plants follow a week's light. M8.2 and M8.3 100 % PASS; M7.2 95 % PASS in office light;
   M8.1 p = 0.15 FAIL: hibernation takes off in a third of office seeds, glow never pays;
-  deferred to M11 by the owner, 2026-10-19.)
+  deferred to M11 by the owner, 2026-10-19; in M11 night traits still never respond, and
+  the owner widened M8.1 to light traits: photosynthesis rarer in office light, p = 0.03
+  after a Bonferroni correction, PASS.)
 
 ### M9 — Chronicle and bestiary
 - **Deliver**: event detectors (speciation, extinction, firsts, records, booms/crashes,
@@ -440,7 +452,27 @@ needs a note in `docs/decisions/`.
 - **Report**: full dashboard — all prior metrics at 3 sim-years, genetic distance from
   ancestors, sensitivity of key metrics to the top tunables.
 - **Accept**: every M2–M10 criterion passes simultaneously; mean genetic distance still
-  rising at year 3 (no stagnation).
+  rising at year 3 (no stagnation). (Done 2026-10-27, ADR 0019: the owner added criteria on
+  diversity and balance, D1–D3, bands set after five new mechanisms: food at sea and
+  wading, reach by height, cover for prey, nutrients back to the soil, seeds carried by
+  grazers; M2.5 retired and the whole-world step budget raised to 600 ms. 2026-10-21, the
+  owner: the island is closed, no strangers (hunters land once as a second wave of
+  founders, the ark brings them back); M3.5 tolerates a tenth of the seeds in open
+  woodland; M6.1 leaves out the founding; the species definition is not tuned; the
+  tuned island is checked with a weekly press of the button. 2026-10-22: hunters land by
+  the herd and are built a little larger than it; the ark waits until an empty island is
+  green enough for founders; every M criterion is judged without presses, press runs
+  only for harm; god-power entries stay major. 2026-10-23, the owner: presses cannot be
+  relied on for predators; hunters may prey on kin that eat far more plants
+  (`prey_diet_gap`), so they can arise from the herd; a gentler diet trade-off brings them
+  back but turns herds omnivore. 2026-10-24: the hunting levers do not help. 2026-10-25,
+  the owner: soft caps (births wait longer near a cap) and resting hunters
+  (`hunter_rest_share`), with `predator_cap` 32: hunters last beside grazers in 15 of 20
+  ten-year seeds and every M criterion passes; M6.1's band is now 3–16 species; D1 asks
+  9 of 12 body genes with a niche, D2 5 of 14 rare genes thriving; M8.1 judges light
+  traits. The report `reports/M11-long-run` (e08aece and after): every criterion passes
+  on tuning and held-out seeds; merged into `main` 2026-10-27. R5, merging second,
+  re-records the stream recordings; the sim's Orange Pi measurement is left to S1/S7.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,

@@ -31,6 +31,7 @@ FOREST_MONTHS = (12.0, 24.0)
 FORM_SHARE = 0.01
 FORMS_YEAR = 3.0
 MIN_FORMS = 4
+WITHOUT_SUCCESSION_MAX = 0.1  # M3.5: share of seeds (ADR 0019)
 MAP_YEARS = (1, 3, 5)
 SEASON_YEAR = 1  # index of the year shown season by season (0 is the first)
 REPRESENTATIVE_SEEDS = 3
@@ -91,11 +92,15 @@ CRITERIA: list[Criterion] = [
         low=0.8,
     ),
     Criterion("M3.4", "Seeds that end as a single land-cover class", "seeds_single_class", high=0),
+    # A few seeds may keep their woods open: since the reach mechanism (M11), a lineage
+    # of big browsers can hold the trees below a closed canopy, like a wood-pasture. The
+    # band allows that in a tenth of the seeds (ADR 0019, the owner's OK); M3.5 catches
+    # an island where succession fails as a rule.
     Criterion(
         "M3.5",
-        "Seeds where grass never reached half the land or no forest closed",
-        "seeds_without_succession",
-        high=0,
+        "Share of seeds where grass never reached half the land or no forest closed",
+        "seeds_without_succession.share",
+        high=WITHOUT_SUCCESSION_MAX,
     ),
 ]
 
@@ -139,6 +144,7 @@ def metrics(run: Run) -> dict[str, float]:
     out = {
         "seeds_single_class": float(np.count_nonzero(final.max(axis=1) >= 1.0)),
         "seeds_without_succession": float(np.count_nonzero(np.isnan(grass) | np.isnan(forest))),
+        "seeds_without_succession.share": float(np.mean(np.isnan(grass) | np.isnan(forest))),
         "forms.share_of_seeds_with_four": float(np.mean(forms >= MIN_FORMS)),
         "forms.median": float(np.median(forms)),
         "forms.min": float(forms.min()),

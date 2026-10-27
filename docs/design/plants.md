@@ -30,7 +30,7 @@ probability `rare_gain_probability` (0.0002) and is lost with `rare_loss_probabi
 | `NITROGEN_FIXER` | needs 60 % less fertility, builds soil 3× faster | growth | `clover` |
 | `MANGROVE` | lives in shallow water, ignores shore wind | growth | `stilts` |
 | `POISONOUS` | grazers refuse half of each bite, and what they eat costs them energy (× 1 − 1.5) | growth | `berries` |
-| `FRUITING` | animals carry its fruit far: far seeds go out as from the lightest seed | growth; grazers get 1.5× the energy from it | `fruit` |
+| `FRUITING` | grazers that eat it carry its seeds in their guts and drop them where they go (M11, ADR 0019; `[flora] fruit_by_wind` brings back the stand-in before it: far seeds as from the lightest seed) | growth; grazers get 1.5× the energy from it | `fruit` |
 | `EMERGENT` | a crown above the canopy: height × 1.5 for light (shade and competition) | 30 % more fertility needed, 2× wind exposure, growth | `crown` |
 
 Poison makes the diet learning of M5 matter: a grazer's meal value from a poisonous
@@ -48,7 +48,8 @@ renderer. A tree cell with biomass ≥ 0.55 is closed forest.
 
 - **Temperature** falls with altitude and follows the seasons (warmest in mid-summer of
   the configured hemisphere). Each plant has an optimum set by its `COLD` gene.
-- **Fertility** comes from the terrain. A plant needs more of it the taller it is and
+- **Fertility** comes from the terrain, and from animals (M11: dung and rotting
+  carcasses, `creatures.md`, "Nutrients"). A plant needs more of it the taller it is and
   less the more frugal it is: trees cannot establish on infertile soil.
 - **Wind exposure** is full on the wave-swept shore and on summits, and breaks tall
   plants. It sorts the forms into belts: forest in sheltered ground, then shrub, grass,
@@ -120,8 +121,10 @@ for 60 days. The world emits `FireStarted` and `FireEnded` (with the size).
 
 - `Flora.graze(ys, xs, demand)` for fauna (M4): defended plants refuse part of a bite;
   grazers on one cell share what is there; where no plant stands they eat algae (M11:
-  `Flora.algae`, `grazeable_algae`, `on_algae`). What is eaten is also worth less to the grazer
-  (`[fauna] defence_toxicity`, M5), and grazers see plant form, not defence:
+  `Flora.algae`, `grazeable_algae`, `on_algae`). `Flora.stature()` (cached) is how
+  high a grazer must reach (M11, `creatures.md`, "Reach"). What is eaten is also worth
+  less to the grazer (`[fauna] defence_toxicity`, M5), and grazers see plant form, not
+  defence:
   `Flora.forms()` (cached until the genome changes) and `Flora.defence_at`.
 - `Flora.set_daylight(level)` and `Flora.set_rain(factor)` for presence (M8).
 - God powers (M8): `Flora.clear(ys, xs)` (a meteor's bowl), `Flora.sow(rng, count,

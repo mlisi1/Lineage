@@ -18,6 +18,7 @@ One save per released schema version (`vN.lzma`). **Never edit or delete these**
 | `v10.lzma` | 10 | Default M10 world 2 (worlds end, are numbered and archived): the v9 fixture restored, stepped 7 days, then the meteor god power with `[presence] meteor_blast_factor` 1000 at 00:00 on day 527 kills every creature, ending world 1 (seed 42); world 2 (seed 660476933, epoch 2027-08-10 00:00 UTC) restored with the default config and stepped 30 days. Holds one past-world record |
 | `v11.lzma` | 11 | Default M11 world 2 (algae on the shallow sea): the v10 fixture restored with the default config and stepped 10 days (to day 40 of world 2); saved by the v11 code |
 | `v12.lzma` | 12 | Default R4 world (the island's own weather, fire that burns animals): the v9 fixture restored with the default config, stepped 7 days, then hour by hour until rain fell (day 556, 2027-09-08, a plain rain spell till 2027-09-09); 32 creatures; saved by the v12 code |
+| `v13.lzma` | 13 | Default M11 world (seeds in guts, the closed island): the v12 fixture restored with the default config and stepped 3 days (2027-09-11); 24 creatures, none carrying a seed; saved by the v13 code |
 
 When bumping the schema to vN+1, add `vN+1.lzma` saved by the new code, alongside the
 `vN_to_vN+1.py` migration and its test.

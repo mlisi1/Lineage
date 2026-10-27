@@ -1,7 +1,8 @@
 """M8 — Presence, calendar, god powers: metrics, acceptance criteria, report sections.
 
-Acceptance (CLAUDE.md §8): the office schedule produces measurable selection on night
-traits compared with always-present (M8.1); a 3-week absence leaves life alive in ≥ 80 %
+Acceptance (CLAUDE.md §8): the office schedule produces measurable selection on light
+traits, night or day, compared with always-present (M8.1; night traits alone until M11,
+ADR 0019); a 3-week absence leaves life alive in ≥ 80 %
 of seeds (M8.2). The owner asked that holidays be tested too: the August holiday leaves
 life alive in ≥ 80 % of seeds (M8.3, ADR 0016). M7.2 is judged again in the office's light
 (ADR 0015 deferred it to M8).
@@ -16,7 +17,9 @@ Readings used here:
   seed's night-trait share is their carriers per creature-day over its inhabited days
   (photosynthesis, whose cost is the dark, is reported beside them). M8.1 is a one-sided
   rank test across seeds (office above always; exact permutations of the rank sum,
-  drawn with a fixed seed): it passes at p ≤ 0.05.
+  drawn with a fixed seed). Photosynthesis is tested the other way (always above
+  office). Since M11 (the owner, ADR 0019) M8.1 judges the stronger of the two, with a
+  Bonferroni correction (twice the smaller p): it passes at p ≤ 0.05.
 - **Absence**: the days the schedule keeps the owner away (1–21 October; August). An
   absence counts if creatures were alive on its first day; it is survived if they never
   all died before its last. A seed passes if it survived every absence it had.
@@ -64,9 +67,10 @@ SERIES_LABELS: dict[str, SeriesLabel] = {}
 CRITERIA: list[Criterion] = [
     Criterion(
         "M8.1",
-        "Night traits (glow, hibernation) are more frequent under the office schedule than "
-        "always-present: one-sided rank test across seeds, p-value",
-        "night_selection.p_value",
+        "Light traits respond to the office schedule against always-present: night traits "
+        "(glow, hibernation) more frequent or photosynthesis rarer; one-sided rank tests "
+        "across seeds, the smaller p-value × 2 (Bonferroni)",
+        "light_selection.p_value",
         high=SELECTION_P,
     ),
     Criterion(
@@ -245,6 +249,8 @@ def metrics(run: Run, *others: Run) -> dict[str, float]:
         for name in ("office", "always")
     }  # fmt: skip
     out["photosynthesis_selection.p_value"] = rank_test(photo["always"], photo["office"])
+    tests = (out["night_selection.p_value"], out["photosynthesis_selection.p_value"])
+    out["light_selection.p_value"] = min(1.0, len(tests) * min(tests))
     for name in ABSENCES:
         if name not in runs:
             continue

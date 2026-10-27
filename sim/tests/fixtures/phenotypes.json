@@ -49,6 +49,7 @@
   "graze_rate": 0.05,
   "graze_jaw_floor": 0.5,
   "diet_exponent": 1.0,
+  "meat_diet_exponent": 1.0,
   "attack_jaw_floor": 0.4,
   "armour_strength": 2.5,
   "maturity_share": 0.15,

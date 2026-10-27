@@ -52,6 +52,7 @@ CONFIG_KEYS = (
     "graze_rate",
     "graze_jaw_floor",
     "diet_exponent",
+    "meat_diet_exponent",
     "attack_jaw_floor",
     "armour_strength",
     "maturity_share",
@@ -150,7 +151,7 @@ def phenotype(cfg: FaunaConfig, genes: Genes) -> Phenotype:
             cfg.graze_rate * scaled * (cfg.graze_jaw_floor + (1.0 - cfg.graze_jaw_floor) * jaw)
         ),
         plant_efficiency=out((1.0 - diet) ** cfg.diet_exponent),
-        meat_efficiency=out(diet**cfg.diet_exponent),
+        meat_efficiency=out(diet**cfg.meat_diet_exponent),
         attack=out(mass * (cfg.attack_jaw_floor + jaw)),
         defence=out(mass * (1.0 + cfg.armour_strength * armour)),
         lifespan_h=out(lifespan_h),

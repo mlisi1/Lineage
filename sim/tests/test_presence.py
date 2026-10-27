@@ -26,6 +26,7 @@ from lineage_sim.events import (
     PresenceChanged,
     VolcanoErupted,
 )
+from lineage_sim.fauna.genome import Gene
 from lineage_sim.presence import (
     POWERS,
     Power,
@@ -267,13 +268,36 @@ def test_seed_sows_bare_land(config: Config) -> None:
     assert np.count_nonzero(land & (world.flora.biomass <= 0)) < np.count_nonzero(bare)
 
 
+def _without_hunters(config: Config, herd: int) -> Config:
+    """No hunters land by themselves; the ark brings them once the herd reaches ``herd``."""
+    fauna = replace(config.fauna, hunter_wave_count=0, hunter_wave_herd=herd)
+    return replace(config, fauna=fauna)
+
+
 def test_the_ark_brings_plant_eaters(config: Config) -> None:
-    world = _ready_world(config)
+    world = _ready_world(_without_hunters(config, config.fauna.population_cap + 1))
+    assert not world.fauna.lacks_hunters()
     before = world.fauna.count
     outputs = world.apply(GodPower(Power.ARK.value))
     (arrived,) = _of(outputs, CreaturesArrived)
     assert arrived.founders
     assert world.fauna.count == before + arrived.count > before
+    new = world.fauna.genes[-arrived.count :, Gene.DIET]
+    assert (new < config.fauna.predator_min_diet).all()
+
+
+def test_the_ark_brings_hunters_to_a_herd_without_them(config: Config) -> None:
+    world = _ready_world(_without_hunters(config, 50))
+    assert world.fauna.diet_counts()[2] == 0
+    assert world.fauna.lacks_hunters()
+    assert world.presence.needs(world.instant)[Power.ARK] == 1.0
+    outputs = world.apply(GodPower(Power.ARK.value))
+    (arrived,) = _of(outputs, CreaturesArrived)
+    assert arrived.founders
+    assert arrived.count == config.presence.ark_count
+    new = world.fauna.genes[-arrived.count :, Gene.DIET]
+    assert (new >= config.fauna.predator_min_diet).all()
+    assert not world.fauna.lacks_hunters()
 
 
 def test_the_island_asks_for_the_ark_when_empty(config: Config) -> None:
@@ -285,6 +309,30 @@ def test_the_island_asks_for_the_ark_when_empty(config: Config) -> None:
     world.fauna.strike(x, y, 1e6, world.t_ms)
     assert world.fauna.count == 0
     assert world.presence.needs(world.instant)[Power.ARK] == 1.0
+
+
+def test_the_ark_waits_for_an_island_green_enough_for_founders(config: Config) -> None:
+    bare, _ = World.create(config, 3, EPOCH_UNIX_MS)  # bare rock, nobody yet
+    assert bare.fauna.count == 0
+    assert not bare.fauna.green_enough()
+    assert bare.presence.closed() == frozenset({Power.ARK})
+    drawn = {
+        choose(Generator(PCG64(k)), config.presence, {Power.ARK: 1.0}, bare.presence.closed())
+        for k in range(200)
+    }
+    assert drawn
+    assert Power.ARK not in drawn  # the island never draws it
+    closed = power_weights(config.presence, {}, frozenset({Power.ARK}))
+    assert closed[POWERS.index(Power.ARK)] == 0
+    # An inhabited island may draw it whatever its plants; an emptied one once green.
+    world = _ready_world(config)
+    assert world.presence.closed() == frozenset()
+    x, y = (float(v) for v in world.fauna.positions.mean(axis=0))
+    world.fauna.strike(x, y, 1e6, world.t_ms)
+    expected: frozenset[Power] = (
+        frozenset() if world.fauna.green_enough() else frozenset({Power.ARK})
+    )
+    assert world.presence.closed() == expected
 
 
 def test_a_power_is_drawn_from_the_presence_stream(config: Config) -> None:

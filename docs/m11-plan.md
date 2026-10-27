@@ -9,7 +9,9 @@ it as M6–M10 land; each milestone should add its own findings below.
 ## 1. Goal: what "engaging" means, in numbers
 
 Passing the criteria is necessary, not enough. The gadget sits on a desk for years; it
-must keep producing stories. M11 should tune for these, measured on held-out seeds:
+must keep producing stories. M11 should tune for these, measured on held-out seeds. The
+owner accepted the targets on 2026-10-20 (ADR 0019), with worlds ending rarely, about
+once a decade, and added three criteria on diversity and balance (D1–D3, §7):
 
 | Quality | Measure (per seed, 3 and 10 sim-years) | Target to agree with the owner |
 |---|---|---|
@@ -113,6 +115,9 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 
 ## 5. Order of work in M11
 
+(As planned at M5. What actually happened is in §7: steps 1 and 2 are done, step 3 was
+interrupted to add mechanisms first, with the owner.)
+
 1. Held-out validation of the M10 state (seeds 20–39), office schedule.
 2. Build `tools/tune/`: sweep runner, multi-criteria score, sensitivity report.
 3. Sweep the predator and plant levers first (they move everything), then learning, then
@@ -174,7 +179,8 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
 
 ### M8 — presence and god powers (ADR 0016, reports/M8-presence)
 
-- **M8.1 is deferred here** by the owner (p = 0.15 vs 0.05, 2026-10-19). Hibernation is
+- **M8.1 is deferred here** by the owner (p = 0.15 vs 0.05, 2026-10-19). (Closed
+  2026-10-25: the owner widened it to light traits, see §7.) Hibernation is
   selected by the nights in about a third of office seeds; glow never is. Levers:
   `glow_burn_cost`, `night_sight` (how blind the dark is), and whether a glower is seen
   as far as it sees (a glow that lights the way without lighting the glower would pay
@@ -209,3 +215,109 @@ Values as of M5 (`sim/config/default.toml`). History and evidence in ADR 0009.
   founding bottleneck of §3 again). Criteria computed over a whole run (M4.1 extinct
   seed-years, M6.1 inhabited time) must treat a new world as a new start; check
   `worlds_ended` in each run before reading them.
+
+## 7. M11 so far (2026-10-20 and 21; details and numbers in ADR 0019)
+
+- **Held-out check of the M10 defaults** (seeds 20–39): the same two criteria fail as on
+  0–19 (M6.1, and M3.5 in 3-year runs), so M2–M10 did not overfit their seeds.
+- **`tools/tune/`** scores a run on every criterion at once, sweeps levers and ranks
+  their effects. The first sweep (`fauna-1`) was stopped after 15 points.
+- **Looking at the island as an evolving world**, the owner asked for diversity (every
+  gene should find conditions where it thrives) and for a balance of hunters and
+  grazers. Measured then: swimming never had a niche, rare plant genes never
+  established, predators were 1–2 % of creatures. New criteria: **D1** every gene has a
+  niche, **D2** rare genes can thrive, **D3** hunters a real share and present. Bands are
+  set after the mechanisms.
+- **Five mechanisms** were approved and built one at a time with on/off runs: food at
+  sea (algae, schema v11) and wading on the shelf; reach by height; cover for prey;
+  nutrients from dung and carcasses; seeds carried by grazers (schema v13, after R4).
+  Reach raised body size and the niches of size and limbs; cover widened the diet,
+  armour and speed niches but starved hunters further (M4.3 fails at 0.53–0.56); nutrients
+  made every seed's forest close in 3 years (M3.5 passes).
+- **Step budget** raised to 600 ms per sim-day on the PC; M2.5 retired.
+- **Sweeps.** `mechanisms-1` (41 points): no point passes every M criterion; M6.1
+  follows body mutation, predators follow meat energy and immigration, later founding
+  protects succession and prevents world endings. `mechanisms-2` (13 points, stopped):
+  past a mutation of about 0.037 species collapse to two and splits stop, so M6.1 peaks
+  near 0.036 (0.89). `species-1` (paused at 5 of 31): the species definition
+  (`link_distance`) swings M6.1 and M6.2 hard; the best point so far fails only M3.5 and
+  M6.1 (0.77) and passes D1 and D3.
+- **The M11 report** (`tools/milestones/m11.py`) is ready: every criterion on its run and
+  on both seed sets, D1–D3, mechanisms on and off, engagement, sensitivity heat maps.
+- **D2** cannot pass until the plant rare genes can establish (fire-pine and
+  nitrogen-fixer never hold 100 cells for 30 days): their levers come after R4 (fire)
+  and mechanism 4 (fruit carried by grazers).
+- **R4 changes the sim too** (weather, fire only in storms, burnt deaths, barren land
+  after eruptions; schema v12): re-check the tuned config once R4 is on `main`.
+
+
+**2026-10-21** (ADR 0019, "Fourth round" onward):
+
+- **Why criteria fail, not only by how much.** M3.5's failing seeds were open woodland
+  kept by big browsers (reach), not broken succession: a tenth of the seeds may now stay
+  open. M6.1 missed by its founding months, which a 3-year run weighs five times more
+  than a decade: it now starts after the founding. Tuning `link_distance` would redefine
+  a species until the band passed, so the species definition is fixed. D2's test does not
+  fit niche plant genes.
+- **A closed island** (the owner): no strangers; every species descends from the
+  founders, a pack of hunters that lands once, or the ark (which brings hunters to a herd
+  without them). R4 merged; seeds in guts built (v13); runs can press the button weekly,
+  as the owner will.
+- **First closed run**: predators die out within months in 19 of 20 seeds and never
+  evolve from the herd (M4.3 0.08); D1 falls to 0 without strangers' random genomes;
+  longevity sweeps in 4 seeds. Next: weekly presses, 10 years, predator levers in the
+  sweep, then (only if needed, with the owner) hunters that arise from the herd.
+
+**2026-10-22** (ADR 0019, "Hunters that find their prey; the first weekly presses"):
+
+- **Why the hunters died**, found by replaying seeds: they landed far from the herd and
+  were built for prey ten times their size, so they starved among plenty. They now land
+  by the herd and are built a little larger than it; the defaults then fail only M4.3
+  among the M criteria (hunters present on a quarter of the days after year 1).
+- **Weekly presses keep hunters** (present 73 % of days) through the ark; early arks on
+  bare ground starved, so the ark now waits until an empty island is green. The owner:
+  criteria are judged without presses; god-power entries stay major.
+- **Ten years without presses**: hunters gone by year 3 in every seed, never back; the
+  rest of the island holds (no world ended, evolution still moving). Open for the owner:
+  predators kept by the weekly presses (the ark), or a mechanism by which hunters arise
+  from the herd. The sweep `closed-1` waits at 2 of 31 points until then.
+
+**2026-10-23**: the predator sweep `closed-1` (23 of 31 points) and a second weekly-press
+run settle it: levers (a bigger, better-built pack) lengthen the hunters' first stay, but
+no point keeps them past it without the god (best M4.3 0.29); with weekly presses and the
+ark rule hunters are present 77 % of the time and nothing goes extinct. The choice
+(presses, or hunters arising from the herd) is the owner's, pending.
+
+**2026-10-23/24** (ADR 0019, "Hunters from the herd", "Two islands, and why"): the owner
+cannot rely on presses for predators. Hunters may now prey on kin that eat far more
+plants; with a gentler diet trade-off (`diet_exponent` 0.5–0.6) hunters come back from
+the herd in about 3–4 seeds of 10 over 10 years, but the herd turns omnivore where they
+do: seeds settle as grazers without hunters or omnivores with hunters. Pure meat-eaters
+starve among grazers (too few kills), so the next lever family is hunting itself (chase
+instinct, strike reach, attack rate and cost); a mechanism only with the owner.
+
+**2026-10-24** (ADR 0019, "The hunting levers, and what replays show instead"): the
+hunting levers (chase instinct, strike reach, attack rate and cost, sight at night), one
+at a time over 10 years, keep hunters beside grazers in 0–1 seeds of 10, no better than
+before. Replays show the hunters are not short of kills while the herd is full: both
+hard caps bind for years (herd 200, hunters 16), the herd evolves larger and faster, and
+when it dips the capped pack starves out. Next is a mechanism, the owner's choice: soft
+caps, hunters that wait out lean times, or a hunting reach apart from mating.
+
+**2026-10-25** (ADR 0019, "Soft caps and resting hunters"): the owner chose two
+mechanisms. Soft caps (births wait longer the nearer a kind is to its cap) alone kept
+hunters in 1 seed of 10; replays showed packs eating a young herd out or starving slowly
+beside a full one. Resting hunters (a fifth of the resting burn) with a pack cap of 32
+keep hunters beside grazers in 15 of 20 ten-year seeds, no world ended, and today's
+defaults pass every M criterion; M6.1's band is now 3–16 species (the owner). Next: the
+held-out check, D1 with the owner, the report.
+
+**2026-10-25, evening** (ADR 0019, "Closing the criteria"): held-out seeds 20–39 pass
+everything; the owner set the D bands (D1 ≥ 9 of 12 genes with a niche, D2 ≥ 5 of 14 rare
+genes thriving) and widened M8.1 to light traits (glow and hibernation never respond;
+photosynthesis is rarer in office light). The M11 report (`reports/M11-long-run`, 17 runs)
+passes every criterion on both seed sets; the slow suite passes. Left: the stream
+recordings, the Orange Pi measurement, the merge.
+
+**2026-10-27**: M11 closed and merged into `main`. The owner left the sim's Orange Pi
+measurement to S1/S7; R5, merging second, re-records the stream recordings.

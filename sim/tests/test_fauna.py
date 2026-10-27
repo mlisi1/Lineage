@@ -24,7 +24,7 @@ from lineage_sim.events import (
     PopulationExtinct,
     VolcanoErupted,
 )
-from lineage_sim.fauna import brain, creature
+from lineage_sim.fauna import brain, creature, population
 from lineage_sim.fauna import genome as gn
 from lineage_sim.fauna.brain import Sense
 from lineage_sim.fauna.creature import cells_of
@@ -39,12 +39,12 @@ from numpy.random import PCG64, Generator
 EPOCH_UNIX_MS = 1_772_323_200_000  # 2026-03-01 00:00 UTC
 DAY_S = 86_400
 # Fixture v7: the default world, seed 42, after 520 days, as saved by the code of its day.
-GOLDEN_FAUNA_SEED_42 = "1bd9023cd1be8e499c86ae8d594dd527636a0346bfd70bcfd805d5471af0a6ea"
+GOLDEN_FAUNA_SEED_42 = "622ef3ee26dcfde279ad08404a550f1068a6f1225cf42014367f2915d2125539"
 # The fixture stepped three more days by today's code.
-GOLDEN_AFTER_THREE_DAYS = "5094a09a7ee4e03d4d390f31010eb4e66f7d9058a283d2756a76f0974ca3f2ff"
+GOLDEN_AFTER_THREE_DAYS = "7ce83724e3e8c9d1235476fd67c23104dd3cca712b75e03498e3b2bcd3cd663b"
 # The default world, seed 42, after 520 days from bare rock with today's code. It equals
 # the fixture only while fauna behaves as it did when the fixture was saved.
-GOLDEN_BARE_ROCK_520_DAYS = "8e12e26884acbb660196d3039ce29d1ff8031bbf9af5d1be5ac6454fb1649d78"
+GOLDEN_BARE_ROCK_520_DAYS = "353bb176bfad305dc040113963a907bc34f0a3e4ce5537b8317c1b92a6849d83"
 SPECIMENS = Path(__file__).resolve().parent / "fixtures" / "phenotypes.json"
 
 
@@ -287,6 +287,32 @@ def test_upkeep_adds_rest_movement_and_water(config: Config) -> None:
     assert float(at_home[0]) < 1.3 * rest
 
 
+def test_hunters_rest_cheaper(config: Config) -> None:
+    cfg = replace(config.fauna, hunter_rest_share=0.5)
+    genes = _genes(GRAZER, HUNTER)
+    body = phenotype(cfg, genes)
+    rest = creature.resting_burn(cfg, genes, body)
+    assert float(rest[0]) == pytest.approx(float(body.basal_burn[0]))  # a grazer: all of it
+    assert float(rest[1]) == pytest.approx(0.5 * float(body.basal_burn[1]))
+    still, dry = np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.bool_)
+    np.testing.assert_allclose(creature.upkeep(cfg, genes, body, still, dry, 2.0), 2.0 * rest)
+    # Moving costs a hunter as much as before.
+    walked = creature.upkeep(cfg, genes, body, still + 3.0, dry, 2.0)
+    np.testing.assert_allclose(walked - 2.0 * rest, 3.0 * body.move_cost, rtol=1e-5)
+
+
+def test_a_resting_hunter_outlasts_a_lean_spell(config: Config) -> None:
+    def alive_after(share: float, days: float) -> int:
+        cfg = replace(config.fauna, hunter_rest_share=share)
+        site = Site(config, biomass=0.0, fauna=cfg)  # no plants, no prey
+        ids = site.add(HUNTER, [(20.0, 20.0)], energy_share=0.9)
+        site.run(24.0 * days)
+        return site.alive(ids)
+
+    assert alive_after(1.0, 10.0) == 0
+    assert alive_after(0.3, 10.0) == 1
+
+
 def test_appetite(config: Config) -> None:
     cfg = config.fauna
     body = _body(config, GRAZER, GRAZER, _with(GRAZER, Gene.DIET, 1.0))
@@ -323,6 +349,22 @@ def test_who_can_kill_whom(config: Config) -> None:
     assert not kills[0, 1]  # never its own kind
     assert not kills[2].any()  # grazers do not hunt
     assert not kills[0, 3]  # too big to tackle
+    # Its own kind, if it eats far more plants (M11): a meat-eating morph of the herd.
+    jaw = _with(GRAZER, Gene.JAW, 0.8)  # strong enough for prey of its own size
+    morph = _with(jaw, Gene.DIET, GRAZER[Gene.DIET] + cfg.prey_diet_gap + 0.05)
+    mild = _with(jaw, Gene.DIET, GRAZER[Gene.DIET] + cfg.prey_diet_gap - 0.05)
+    herd = _genes(morph, mild, GRAZER)
+    herd_body = phenotype(cfg, herd)
+    kin = gn.distance_matrix(herd) <= cfg.compat_distance
+    np.fill_diagonal(kin, False)
+    assert kin[0, 2]
+    assert kin[1, 2]
+    morphs = creature.can_kill(herd, herd_body, kin, cfg)
+    assert morphs[0, 2]  # the morph hunts the grazers it could mate with
+    assert not morphs[1, 2]  # too small a gap: still its own kind
+    assert not morphs[2, 0]  # never the other way
+    off = creature.can_kill(herd, herd_body, kin, replace(cfg, prey_diet_gap=1.0))
+    assert not off[0, 2]
     easy = creature.kill_chance(cfg, body, np.array([0]), np.array([2]))
     hard = creature.kill_chance(cfg, body, np.array([0]), np.array([3]))
     assert float(easy[0]) > 0.8 > 0.2 > float(hard[0])
@@ -541,6 +583,34 @@ def test_population_caps_stop_births(config: Config) -> None:
     assert site.fauna.tally.births <= 1 + site.fauna.tally.deaths
 
 
+def test_breeding_waits_longer_the_more_crowded() -> None:
+    crowding = np.array([0.0, 0.5, 0.8, 0.95, 1.0, 1.3], dtype=np.float32)
+    chance = population.breeding_chance(crowding, wait_days=5.0, exponent=4.0, hours=1.0)
+    assert chance[0] == 1.0  # an empty island: no wait
+    assert chance[4] == chance[5] == 0.0  # at or past the cap: no birth
+    assert np.all(np.diff(chance[:5]) < 0.0)
+    # A rate: one tick of two hours is as likely as two ticks of one.
+    one = population.breeding_chance(crowding[1:4], 5.0, 4.0, hours=1.0)
+    two = population.breeding_chance(crowding[1:4], 5.0, 4.0, hours=2.0)
+    np.testing.assert_allclose(two, 1.0 - (1.0 - one) ** 2, atol=1e-6)
+
+
+def test_soft_caps_slow_births_near_the_cap(config: Config) -> None:
+    def births(wait_days: float) -> int:
+        cfg = replace(
+            config.fauna, population_cap=12, founder_count=2, immigrant_groups_per_year=0.0,
+            crowding_wait_days=wait_days,
+        )  # fmt: skip
+        site = Site(config, fauna=cfg)
+        spots = [(20.0 + 0.3 * k, 20.0) for k in range(8)]
+        site.add(_with(GRAZER, Gene.BROOD, 0.0), spots, idle_days=5.0)
+        site.run(24.0)
+        return site.fauna.tally.births
+
+    assert births(0.0) == 4  # the hard cap alone fills the room at once
+    assert births(5.0) < 4
+
+
 def test_hungry_hunter_kills_and_feeds(config: Config) -> None:
     cfg = config.fauna
     site = Site(config)
@@ -614,6 +684,78 @@ def test_strangers_join_an_inhabited_world(config: Config) -> None:
     hunters = site.fauna.genes[:, Gene.DIET] >= busy.predator_min_diet
     assert hunters.any()
     assert not hunters.all()
+
+
+def test_the_island_is_closed_to_strangers(config: Config) -> None:
+    assert config.fauna.immigrant_groups_per_year == 0.0
+
+
+def _waiting_for_hunters(config: Config, herd: int = 10, count: int = 4) -> Site:
+    cfg = replace(config.fauna, hunter_wave_herd=herd, hunter_wave_count=count)
+    return Site(config, fauna=cfg)
+
+
+def test_hunters_follow_a_grown_herd(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    outputs = site.run(24.0 * 2)
+    arrivals = [o for o in outputs if isinstance(o, CreaturesArrived)]
+    assert len(arrivals) == 1
+    assert arrivals[0].founders
+    assert arrivals[0].count == 4
+    hunters = site.fauna.genes[:, Gene.DIET] >= site.cfg.predator_min_diet
+    assert np.count_nonzero(hunters) == 4
+    assert not site.fauna.lacks_hunters()
+
+
+def test_hunters_wait_for_the_herd_and_for_spring(config: Config) -> None:
+    small = _waiting_for_hunters(config)
+    small.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(5)])
+    assert not [o for o in small.run(24.0 * 2) if isinstance(o, CreaturesArrived)]
+
+    winter = _waiting_for_hunters(config)
+    winter.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    outputs = winter.run(24.0 * 2, when=dt.date(2026, 12, 25))
+    assert not [o for o in outputs if isinstance(o, CreaturesArrived)]
+
+
+def test_hunters_land_by_the_herd_and_are_built_for_it(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    site.run(24.0 * 2)
+    hunters = site.fauna.genes[:, Gene.DIET] >= site.cfg.predator_min_diet
+    assert np.count_nonzero(hunters) == 4
+    # A little larger than their prey (founder spread aside).
+    size = site.fauna.genes[hunters, Gene.SIZE].mean()
+    expected = GRAZER[Gene.SIZE] + site.cfg.hunter_size_margin
+    assert float(size) == pytest.approx(expected, abs=3 * site.cfg.founder_spread)
+
+
+def test_hunters_land_on_the_green_nearest_a_member_of_the_herd(config: Config) -> None:
+    site = Site(config)
+    site.add(GRAZER, [(50.0, 30.0)])
+    ys, xs = np.nonzero(site.terrain.land)
+    reach = site.cfg.hunter_landing_cells
+    near = site.fauna._near_the_herd(Generator(PCG64(3)), ys, xs)  # pyright: ignore[reportPrivateUsage]
+    assert 0 < near[0].size < ys.size
+    assert float(np.hypot(near[1] - 50.0, near[0] - 30.0).max()) <= reach
+    # The herd has grazed the ground round it bare: the nearest green, and a little beyond.
+    far = np.hypot(xs - 50.0, ys - 30.0) > 12.0
+    ys, xs = ys[far], xs[far]
+    near = site.fauna._near_the_herd(Generator(PCG64(3)), ys, xs)  # pyright: ignore[reportPrivateUsage]
+    apart = np.hypot(near[1] - 50.0, near[0] - 30.0)
+    assert float(apart.min()) > 12.0
+    assert float(apart.max()) <= 12.0 + 1.0 + reach
+
+
+def test_hunters_land_once_per_world(config: Config) -> None:
+    site = _waiting_for_hunters(config)
+    site.add(GRAZER, [(float(10 + 2 * k), 20.0) for k in range(12)])
+    site.add(HUNTER, [(50.0, 50.0)])  # a lineage that arrived as hunters, then died out
+    site.fauna.strike(50.0, 50.0, 2.0, site.t_ms)
+    assert site.fauna.lacks_hunters()
+    outputs = site.run(24.0 * 2)
+    assert not [o for o in outputs if isinstance(o, CreaturesArrived)]
 
 
 # --- The world as a whole ---------------------------------------------------------------

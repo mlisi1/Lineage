@@ -130,14 +130,17 @@ test("a world ends on the map, the button waits, and the next world rises", asyn
     timeout: 60_000,
   });
   expect(await page.evaluate(() => window.__camera?.().view)).toBe("map");
-  // The world's last lines are told as it ends.
-  await page.waitForFunction(() => window.__captions?.().text !== null, null, { timeout: 10_000 });
-  expect(await page.evaluate(() => window.__captions?.().text)).toContain("last creature");
+  // The world's last lines are told as it ends (hunters landing on the starving herd first).
+  // Each line stays open for its reading time, on the page's own clock; the end goes on.
+  const told = Date.now();
+  await page.waitForFunction(() => window.__captions?.().text?.includes("last creature"), null, {
+    timeout: 45_000,
+  });
   // The button does nothing while the world ends.
   await page.evaluate(() => window.__press?.());
   await advance(page, 1);
   expect(await page.evaluate(() => window.__camera?.().view)).toBe("map");
-  await advance(page, 124);
+  await advance(page, Math.max(0, 124 - (Date.now() - told) / 1000));
   expect(await page.evaluate(() => window.__atmosphere?.().act)).toBe("dark");
   await advance(page, 60);
   expect(await page.evaluate(() => window.__atmosphere?.().act)).toBeNull();

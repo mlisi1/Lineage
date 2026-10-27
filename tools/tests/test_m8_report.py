@@ -94,6 +94,9 @@ def test_metrics(tmp_path: Path) -> None:
     values = m8.metrics(*runs)
     assert values["night_selection.p_value"] < 0.05
     assert values["photosynthesis_selection.p_value"] < 0.05
+    # M8.1 judges the stronger of the two tests, Bonferroni-corrected.
+    smaller = min(values["night_selection.p_value"], values["photosynthesis_selection.p_value"])
+    assert values["light_selection.p_value"] == pytest.approx(min(1.0, 2 * smaller))
     assert values["conference.absence_survival.share_of_seeds"] == 0.75
     assert values["conference.absence_survival.seeds_judged"] == 4
     assert values["conference.absences_judged"] == 8

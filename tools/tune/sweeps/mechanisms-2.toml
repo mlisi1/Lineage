@@ -1,0 +1,27 @@
+# M11 third sweep (ADR 0019), narrowed by mechanisms-1's sensitivity (41 points):
+# M6.1 follows the body mutation size (rho +0.84) and is still rising at mechanisms-1's top
+# (0.04), so mutation is pushed higher; larger mutations leave seeds without succession
+# (M3.5) and end worlds, which waiting for more plant cover before founding prevents
+# (rho -0.59 and -0.64), so founding is pushed later; predators (D3, M4.3) follow meat
+# energy and stranger groups and fall with a larger predator cap and plant toxicity;
+# a higher hunter share among strangers costs D1. Levers that moved nothing beyond noise
+# (cover, browse floor, algae value, dung, founder count) stay at their defaults.
+# Tuning seeds 0–19, office; 30 Latin-hypercube points besides the defaults.
+[sweep]
+name = "mechanisms-2"
+seeds = 20
+seed_base = 0
+years = 3
+schedule = "office"
+samples = 30
+sampler = "lhs"
+rng_seed = 31
+
+[levers]
+"fauna.mutation_sigma_body" = { low = 0.035, high = 0.055 }
+"fauna.founder_min_plant_cover" = { low = 0.5, high = 0.7 }
+"fauna.meat_energy" = { low = 2200, high = 3200, integer = true }
+"fauna.immigrant_groups_per_year" = { low = 9.0, high = 15.0 }
+"fauna.immigrant_hunter_share" = { low = 0.35, high = 0.6 }
+"fauna.predator_cap" = { low = 12, high = 24, integer = true }
+"fauna.defence_toxicity" = { low = 0.25, high = 0.6 }

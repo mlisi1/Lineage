@@ -1,0 +1,29 @@
+# M11 fourth sweep (ADR 0019). mechanisms-2 showed that M6.1 does not keep rising with
+# mutation: past a body mutation of about 0.037 the herd becomes one continuous cloud,
+# species fall from 9 to 2 and splits stop (M6.2). M6.1 peaks near 0.036 at 0.89, the
+# rest being the months after founding with one or two species. So: mutation in its sweet
+# spot, the species definition itself (m11-plan: recheck [species] after fauna tuning;
+# the species census only watches), more variation among founders to shorten the
+# one-species phase, and the predator and founding levers where D3 and M3.5 passed.
+# Tuning seeds 0–19, office; 30 Latin-hypercube points besides the defaults.
+[sweep]
+name = "species-1"
+seeds = 20
+seed_base = 0
+years = 3
+schedule = "office"
+samples = 30
+sampler = "lhs"
+rng_seed = 41
+
+[levers]
+"fauna.mutation_sigma_body" = { low = 0.025, high = 0.038 }
+"species.link_distance" = { low = 0.025, high = 0.045 }
+"species.min_members" = { low = 5, high = 10, integer = true }
+"fauna.founder_spread" = { low = 0.04, high = 0.12 }
+"fauna.founder_min_plant_cover" = { low = 0.5, high = 0.65 }
+"fauna.meat_energy" = { low = 2200, high = 3000, integer = true }
+"fauna.immigrant_groups_per_year" = { low = 8.0, high = 14.0 }
+"fauna.immigrant_hunter_share" = { low = 0.4, high = 0.6 }
+"fauna.predator_cap" = { low = 14, high = 22, integer = true }
+"fauna.defence_toxicity" = { low = 0.3, high = 0.5 }

@@ -33,6 +33,9 @@ leave the main world untouched.
 ``office``, ``office-august``, ``conference``): the owner's arrivals and departures reach
 the world as `PresenceChanged` events at their hour of the day, so the island lives in the
 light the gadget will give it (M8). Each day's light is recorded (``_presence_daily``).
+With ``--press-every-days N`` the owner also presses the god-power button in their first
+hour at the desk once N days have passed since the last press (M11; the owner expects to
+press about once a week): the island chooses the power.
 """
 
 from __future__ import annotations
@@ -54,6 +57,8 @@ from lineage_sim.events import (
     CreaturesArrived,
     EarthquakeStruck,
     FireEnded,
+    GodPower,
+    GodPowerUsed,
     JuvenileGrown,
     LandmassesRejoined,
     LandmassSplit,
@@ -101,6 +106,7 @@ EVENT_SERIES: dict[str, type[OutputEvent]] = {
     "extinctions": PopulationExtinct,
     "arrivals": CreaturesArrived,
     "worlds_ended": WorldEnded,
+    "god_powers": GodPowerUsed,
 }
 # Arrays that are not sampled series (their length differs from the time axis) carry
 # this prefix; reports read them by name.
@@ -169,6 +175,10 @@ def override_config(text: str, assignment: str) -> str:
     parse_config(changed)  # fail early on a bad value
     return changed
 
+
+# A gene value at or above NICHE_HIGH, or at or below NICHE_LOW, is one end of its range:
+# the M11 niche measure (D1) counts the creatures at each end.
+NICHE_HIGH, NICHE_LOW = 2.0 / 3.0, 1.0 / 3.0
 
 # Diet fit (M5): half-width, in cells, of the neighbourhood whose plants a grazer is
 # compared with; and how many cells of each form it must hold to count.
@@ -255,6 +265,7 @@ class SeedJob:
     fork_days: int = 0
     fork_length: int = 28
     schedule: str = "always"
+    press_every_days: int = 0
 
 
 def epoch_unix_ms(start: dt.date) -> int:
@@ -270,11 +281,24 @@ def desk(world: World) -> tuple[int, int]:
     return world.seed, world.epoch_unix_ms
 
 
-def live_day(world: World, schedule: str) -> tuple[list[OutputEvent], list[float]]:
+def press_due(world: World, every_days: int) -> bool:
+    """Whether the owner, at the desk, presses the god-power button now: it is ready, and
+    ``every_days`` have passed since the last press (0: never presses)."""
+    if every_days <= 0 or not world.presence.present or world.t_ms < world.presence.ready_t_ms:
+        return False
+    cooldown_ms = round(world.presence.config.god_cooldown_days * DAY_MS)
+    return world.t_ms - (world.presence.ready_t_ms - cooldown_ms) >= every_days * DAY_MS
+
+
+def live_day(
+    world: World, schedule: str, press_every_days: int = 0
+) -> tuple[list[OutputEvent], list[float]]:
     """Advance ``world`` one day from UTC midnight, hour by hour, delivering the owner's
-    arrivals and departures of ``schedule`` at their hour. Times are the desk's (Unix), so
-    a day carries on in the next world if this one ends. Returns the outputs and a
-    `PRESENCE_DAILY_COLUMNS` row."""
+    arrivals and departures of ``schedule`` at their hour. With ``press_every_days`` the
+    owner presses the god-power button in the first hour at the desk once that many days
+    have passed since the last press (the island chooses the power). Times are the desk's
+    (Unix), so a day carries on in the next world if this one ends. Returns the outputs
+    and a `PRESENCE_DAILY_COLUMNS` row."""
     hour_ms = DAY_MS // 24
     start = world.unix_ms
     if start % DAY_MS:
@@ -288,6 +312,8 @@ def live_day(world: World, schedule: str) -> tuple[list[OutputEvent], list[float
             outputs += world.advance_to_unix(start + round(events[k][0] * hour_ms))
             outputs += world.apply(PresenceChanged(events[k][1]))
             k += 1
+        if press_due(world, press_every_days):
+            outputs += world.apply(GodPower())
         outputs += world.advance_to_unix(start + hour * hour_ms)
         light += world.presence.light
         present_hours += float(world.presence.present)
@@ -443,6 +469,10 @@ class Probes:
         for gene in Gene:
             mean = float(fauna.genes[:, gene].mean()) if n else np.nan
             row[f"gene_{gene.name.lower()}"] = mean
+            # Niches (M11 D1): shares of creatures at either end of the gene's range.
+            values, name = fauna.genes[:, gene], f"gene_{gene.name.lower()}"
+            row[f"{name}_high"] = float(np.mean(values >= NICHE_HIGH)) if n else np.nan
+            row[f"{name}_low"] = float(np.mean(values <= NICHE_LOW)) if n else np.nan
         # Habitat: share of creatures standing on each land-cover class.
         if n:
             xs = np.clip(np.rint(fauna.positions[:, 0]), 0, flora.biomass.shape[1] - 1)
@@ -509,7 +539,9 @@ def chronicle_tables(world: World) -> dict[str, np.ndarray]:
     }
 
 
-def fork(config_text: str, world: World, days: int, schedule: str = "always") -> list[list[float]]:
+def fork(
+    config_text: str, world: World, days: int, schedule: str = "always", press_every_days: int = 0
+) -> list[list[float]]:
     """Run copies of ``world`` on for ``days`` with lifetime learning on and off. Returns
     a `FORK_COLUMNS` row for every youth of a creature born in the first half of that
     time (so that each had time to grow up)."""
@@ -520,7 +552,7 @@ def fork(config_text: str, world: World, days: int, schedule: str = "always") ->
         text = override_config(config_text, f"fauna.learning={'true' if learning else 'false'}")
         arm = World.restore(parse_config(text), snapshot)
         for _ in range(days):
-            for output in live_day(arm, schedule)[0]:
+            for output in live_day(arm, schedule, press_every_days)[0]:
                 if not isinstance(output, JuvenileGrown) or output.generation == 0:
                     continue
                 born = output.t_ms / DAY_MS - output.age_h / 24.0
@@ -583,7 +615,7 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
     day = 0
     while day < job.days:
         started = time.perf_counter()
-        outputs, light_row = live_day(world, job.schedule)
+        outputs, light_row = live_day(world, job.schedule, job.press_every_days)
         probes.observe(outputs, time.perf_counter() - started)
         archive(outputs)
         probes.presence_daily.append(light_row)
@@ -599,13 +631,15 @@ def simulate_seed(job: SeedJob) -> tuple[dict[str, np.ndarray], str]:
             and day + job.fork_length <= job.days
             and world.fauna.count > 0
         ):
-            forks += fork(job.config_text, world, job.fork_length, job.schedule)
+            forks += fork(
+                job.config_text, world, job.fork_length, job.schedule, job.press_every_days
+            )
         if day == job.power_cut_day:
             world.step(DAY_S / 2)  # lost: the power fails before the next save
             world = World.restore(config, io.loads(save_path.read_bytes()))
             # Replay the days since the last save; their samples were already recorded.
             for _ in range(day - (world.unix_ms - epoch_unix_ms(job.start)) // DAY_MS):
-                archive(live_day(world, job.schedule)[0])
+                archive(live_day(world, job.schedule, job.press_every_days)[0])
 
     if snapshots:
         path = job.out_dir / "snapshots" / f"{job.seed}.npz"
@@ -643,6 +677,7 @@ def fastforward(
     fork_days: int = 0,
     fork_length: int = 28,
     schedule: str = "always",
+    press_every_days: int = 0,
 ) -> Run:
     if years <= 0:
         raise ValueError(f"years must be positive, got {years}")
@@ -665,7 +700,7 @@ def fastforward(
     todo = [
         SeedJob(
             seed, days, config_text, start, out_dir, save_days, sample_days, snapshot_days,
-            power_cut_day, fork_days, fork_length, schedule,
+            power_cut_day, fork_days, fork_length, schedule, press_every_days,
         )
         for seed in seeds
     ]  # fmt: skip
@@ -688,7 +723,8 @@ def fastforward(
         + (f"; power cut after day {power_cut_day}" if power_cut_day else "")
         + "".join(f"; {assignment}" for assignment in overrides)
         + (f"; forks every {fork_days} days for {fork_length}" if fork_days else "")
-        + (f"; schedule {schedule}" if schedule != "always" else ""),
+        + (f"; schedule {schedule}" if schedule != "always" else "")
+        + (f"; presses every {press_every_days} days" if press_every_days else ""),
         final_state_hashes=hashes,
     )
     run = Run(manifest, config_text, series)
@@ -734,6 +770,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--schedule", choices=SCHEDULES, default="always", help="owner's presence (M8)"
     )
+    parser.add_argument(
+        "--press-every-days",
+        type=int,
+        default=0,
+        help="the owner presses the god-power button every N days at the desk (0: never)",
+    )
     parser.add_argument("--out", type=Path, required=True, help="output dir, e.g. runs/<id>")
     args = parser.parse_args(argv)
     seeds = list(range(args.seed_base, args.seed_base + args.seeds))
@@ -742,7 +784,7 @@ def main(argv: list[str] | None = None) -> None:
         save_days=args.save_days, sample_days=args.sample_days,
         snapshot_days=args.snapshot_days, jobs=min(args.jobs, len(seeds)),
         overrides=tuple(args.overrides), fork_days=args.fork_days, fork_length=args.fork_length,
-        schedule=args.schedule,
+        schedule=args.schedule, press_every_days=args.press_every_days,
     )  # fmt: skip
     print(
         f"wrote {args.out} ({len(seeds)} seeds × {args.years} sim-years, "

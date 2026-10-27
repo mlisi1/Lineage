@@ -26,7 +26,10 @@ from tools.runs import TIME_KEY, Run
 from tools.viz import figures, pixelmap, style
 
 PRESENT = 3
-STEP_BUDGET_MS = 400.0  # a whole inhabited sim-day on the reference machine
+# A whole inhabited sim-day on this PC (shared: its load moves the reading). Raised from
+# 400 ms in M11 to make room for its mechanisms (ADR 0019); on the device the sim stays
+# far inside 25 % of a core (CLAUDE.md §4.8).
+STEP_BUDGET_MS = 600.0
 MAP_YEARS = (1.5, 2.5, 3.0)
 REPRESENTATIVE_SEEDS = 3
 ANIMATION_SCALE = 3

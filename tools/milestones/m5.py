@@ -194,12 +194,7 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
         out[f"{arm}energy_share.mean"] = float(np.nanmean(_stack(which, "energy_share")))
         out[f"{arm}step_ms.median"] = float(np.median(_stack(which, "step_ms")[:, 1:]))
         out[f"{arm}generation.end.median"] = float(np.nanmedian(_stack(which, "generation")[:, -1]))
-    fit = _stack(run, "diet_fit")
-    last_year = _times(run) >= run.manifest.sim_years - 1.0
-    out["diet_fit.last_year.median"] = float(np.nanmedian(np.nanmean(fit[:, last_year], axis=1)))
-    out["diet_fit.last_year.share_of_seeds_positive"] = float(
-        np.mean(np.nanmean(fit[:, last_year], axis=1) > 0)
-    )
+    out |= diet_fit_metrics(run)
     for gene in ("learning", "exploration", "social"):
         values = _stack(run, f"gene_{gene}")
         out[f"gene_{gene}.end.median"] = float(np.nanmedian(values[:, -1]))
@@ -233,6 +228,17 @@ def metrics(run: Run, baseline: Run) -> dict[str, float]:
             )
         out[f"{arm}population_min.winter_share"] = winter_share_of_minima(which)
     return out
+
+
+def diet_fit_metrics(run: Run) -> dict[str, float]:
+    """M5.1 from one run, without the fork or the baseline (M11 sweeps score it alone)."""
+    fit = _stack(run, "diet_fit")
+    last_year = _times(run) >= run.manifest.sim_years - 1.0
+    per_seed = np.nanmean(fit[:, last_year], axis=1)
+    return {
+        "diet_fit.last_year.median": float(np.nanmedian(per_seed)),
+        "diet_fit.last_year.share_of_seeds_positive": float(np.mean(per_seed > 0)),
+    }
 
 
 def first_landing_years(run: Run) -> np.ndarray:

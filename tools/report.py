@@ -33,7 +33,7 @@ from typing import Any
 
 import numpy as np
 
-from tools.milestones import m2, m3, m4, m5, m6, m7, m8, m9, r0
+from tools.milestones import m2, m3, m4, m5, m6, m7, m8, m9, m11, r0
 from tools.milestones.base import Criterion, Section, SeriesLabel, figure_html
 from tools.runs import REPO_ROOT, TIME_KEY, Run, read_run
 from tools.viz import figures, style
@@ -79,6 +79,7 @@ MODULES: dict[str, ModuleType] = {
     "M7": m7,
     "M8": m8,
     "M9": m9,
+    "M11": m11,
 }
 
 # Milestones measured on the device rather than by fast-forward: the module reads its
@@ -95,6 +96,7 @@ CRITERIA: dict[str, list[Criterion]] = {
     "M7": m7.CRITERIA,
     "M8": m8.CRITERIA,
     "M9": m9.CRITERIA,
+    "M11": m11.CRITERIA,
     "R0": r0.CRITERIA,
 }
 
@@ -110,6 +112,7 @@ SERIES_LABELS: dict[str, SeriesLabel] = {
     **m7.SERIES_LABELS,
     **m8.SERIES_LABELS,
     **m9.SERIES_LABELS,
+    **m11.SERIES_LABELS,
 }
 
 
@@ -376,6 +379,7 @@ def build_report(
     run_dir: Path,
     out_root: Path = DEFAULT_OUT,
     baseline_dir: Path | Sequence[Path] | None = None,
+    sweeps: Sequence[Path] = (),
 ) -> Path:
     try:
         milestone = MILESTONES[milestone_id]
@@ -398,13 +402,20 @@ def build_report(
             raise ValueError(f"{milestone.mid} compares runs: pass --baseline runs/<id>")
         dirs = [baseline_dir] if isinstance(baseline_dir, Path) else list(baseline_dir)
         compared = tuple(read_run(d) for d in dirs)
-        if any(b.manifest.seeds != run.manifest.seeds for b in compared):
+        mixed = getattr(module, "MIXED_RUNS", False)  # M11: held-out seeds, longer runs
+        if not mixed and any(b.manifest.seeds != run.manifest.seeds for b in compared):
             raise ValueError("the baseline run must use the same seeds")
+    # A module that reads sweeps (M11) takes them as a keyword.
+    extra: dict[str, Any] = (
+        {"sweeps": tuple(sweeps)}
+        if module is not None and getattr(module, "TAKES_SWEEPS", False)
+        else {}
+    )
     # A milestone module reports its own, curated numbers; the generic per-series spread
     # is for milestones without one.
-    metrics = compute_metrics(run) if module is None else module.metrics(run, *compared)
+    metrics = compute_metrics(run) if module is None else module.metrics(run, *compared, **extra)
     if module is not None:
-        sections: list[Section] = module.sections(run, run_dir, *compared)
+        sections: list[Section] = module.sections(run, run_dir, *compared, **extra)
     else:
         sections = generic_sections(run)
     header, summary = run_header(run), run_summary(run)
@@ -448,9 +459,16 @@ def main(argv: list[str] | None = None) -> None:
         action="append",
         help="run to compare with: the mechanism off (M5); other schedules (M8, repeatable)",
     )
+    parser.add_argument(
+        "--sweep",
+        type=Path,
+        action="append",
+        default=[],
+        help="sweep directory runs/sweep-<name> for the sensitivity section (M11, repeatable)",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="reports root")
     args = parser.parse_args(argv)
-    out_dir = build_report(args.milestone, args.runs, args.out, args.baseline)
+    out_dir = build_report(args.milestone, args.runs, args.out, args.baseline, args.sweep)
     print(f"wrote {out_dir}")
 
 
