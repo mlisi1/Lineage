@@ -265,6 +265,10 @@ async function start(): Promise<void> {
   layout();
 
   const world = new Container({ isRenderGroup: true });
+  // The grey under cloud is a full-screen pass: it is told the canvas as its area, or Pixi
+  // measures the bounds of the whole world for it every frame (R5: a seventh of a frame on
+  // the board in rain).
+  world.filterArea = app.screen;
   let graded = false;
   app.stage.addChild(world);
   const landscape = new Landscape(
