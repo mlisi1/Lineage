@@ -28,6 +28,8 @@ export interface Act {
   title?: string;
   /** The line on the ribbon at the foot of the screen. */
   line: string;
+  /** The ribbon at the top instead, out of the way of what the act shows at the foot. */
+  top?: boolean;
 }
 
 /** The fonts have no middle dot or inch mark: the end card's parts are set off by dashes. */
@@ -57,7 +59,8 @@ export const ACTS: readonly Act[] = [
   { name: "weather", seconds: 14, line: "It has its own weather." },
   { name: "night", seconds: 12, line: "Your presence is its sun. When you leave, night falls." },
   { name: "powers", seconds: 15, line: "One button. Once a week, the island asks for help." },
-  { name: "chronicle", seconds: 9, line: "It writes its own history." },
+  // The chronicle's scroll unrolls at the foot of the screen: the line goes at the top.
+  { name: "chronicle", seconds: 9, line: "It writes its own history.", top: true },
   { name: "end", seconds: 15, line: "And when life ends, a new world begins." },
   { name: "card", seconds: 8, title: "LINEAGE", line: HARDWARE },
 ];

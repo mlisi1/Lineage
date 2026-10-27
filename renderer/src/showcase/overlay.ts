@@ -49,30 +49,34 @@ function layer(width: number, height: number): HTMLCanvasElement {
   return canvas;
 }
 
-/** Paint `line` on a ribbon centred at the foot of a `width` x `height` picture. */
-export function paintLine(line: string, width: number, height: number, put: Put): void {
+/** Paint `line` on a ribbon centred at the foot of a `width` x `height` picture (its top). */
+export function paintLine(
+  line: string,
+  width: number,
+  height: number,
+  put: Put,
+  top = false,
+): void {
   const text = HAND_FONT.measure(line);
   const ribbonWidth = text + 2 * RIBBON_PAD_X;
   const ribbonHeight = HAND_ROWS + 2 * RIBBON_PAD_Y;
   const left = Math.round((width - ribbonWidth) / 2);
-  const top = height - RIBBON_FOOT - ribbonHeight;
+  const y0 = top ? RIBBON_FOOT : height - RIBBON_FOOT - ribbonHeight;
   for (let y = 0; y < ribbonHeight; y++) {
     for (let x = 0; x < ribbonWidth; x++) {
       const edge = y === 0 || y === ribbonHeight - 1;
-      put(left + x, top + y, edge ? RIBBON_SHADE : RIBBON);
+      put(left + x, y0 + y, edge ? RIBBON_SHADE : RIBBON);
     }
   }
   // Its forked tails, a little lower, either side.
   for (let y = 0; y < ribbonHeight; y++) {
     const cut = Math.abs(y - ribbonHeight / 2) < 2 ? 3 : 0;
     for (let x = cut; x < 6; x++) {
-      put(left - 6 + x, top + 3 + y, RIBBON_TAIL);
-      put(left + ribbonWidth + 5 - x, top + 3 + y, RIBBON_TAIL);
+      put(left - 6 + x, y0 + 3 + y, RIBBON_TAIL);
+      put(left + ribbonWidth + 5 - x, y0 + 3 + y, RIBBON_TAIL);
     }
   }
-  HAND_FONT.draw(line, left + RIBBON_PAD_X, top + RIBBON_PAD_Y, (x, y) =>
-    put(x, y, RIBBON_LETTERS),
-  );
+  HAND_FONT.draw(line, left + RIBBON_PAD_X, y0 + RIBBON_PAD_Y, (x, y) => put(x, y, RIBBON_LETTERS));
 }
 
 /** Paint `title` in large letters, outlined, centred a little above the middle. */
@@ -141,12 +145,13 @@ export class Overlay {
    * Show `line` and `title` ("" for none), `shown` of the way in (0–1): the showcase eases
    * them in and out on its own clock, so that a film of it fades them as the screen does.
    */
-  show(line: string, title: string, shown: number): void {
-    if (line !== this.lineShown) {
-      this.lineShown = line;
+  show(line: string, title: string, shown: number, top = false): void {
+    const key = `${top ? "^" : ""}${line}`;
+    if (key !== this.lineShown) {
+      this.lineShown = key;
       this.repaint(
         this.line,
-        line === "" ? null : (put) => paintLine(line, this.width, this.height, put),
+        line === "" ? null : (put) => paintLine(line, this.width, this.height, put, top),
       );
     }
     if (title !== this.titleShown) {

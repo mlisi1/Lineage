@@ -29,8 +29,6 @@ export interface ShowcaseHost {
   demo(shows: readonly Show[], x: number, y: number): void;
   /** Move the atmosphere on by so many seconds more this frame (the world's end, sped up). */
   advance(seconds: number): void;
-  /** Hold the sim-day as drawn, or let what came be laid out (`Landscape.holdDay`). */
-  holdDay(held: boolean): void;
   /** Whether the ground under the shot last returned is painted (`Landscape.groundShown`). */
   groundShown(): boolean;
   herd: Herd;
@@ -51,6 +49,10 @@ const PLACES = {
   /** A middle view of coasts and woods, its drift from one to the other. */
   driftFrom: { x: 70, y: 60 },
   driftTo: { x: 120, y: 95 },
+  /** The god powers, each in a place of its own. */
+  meteor: { x: 70, y: 75 },
+  seed: { x: 130, y: 105 },
+  ark: { x: 176, y: 43 },
 } as const;
 
 /** The animals the films stage, by id, in the creatures' recording; others stand in. */
@@ -99,6 +101,8 @@ export function captionAt(intoS: number, seconds: number): number {
  * most `MOST_HELD_S` at a time.
  */
 const HOLD_FROM_DIM = 0.85;
+/** The most the showcase's clock moves in one frame (seconds). */
+const MOST_STEP_S = 0.1;
 const MOST_HELD_S = 20;
 /** How much faster the world's end plays than it would (three minutes in some fifteen s). */
 const END_SPEED = 12;
@@ -131,8 +135,6 @@ export class Showcase {
   private clockAtStart: ClockMessage | null = null;
   /** Prey already taken: a hunt in a later loop takes another. */
   private readonly eaten = new Set<number>();
-  /** Let the day be held again next frame, after what the showcase sent was laid out. */
-  private holdNext = false;
   /** How dark the last shot was, and how long the showcase has waited in it. */
   private lastDim = 1;
   /** How much of the act's caption shows (0–1). */
@@ -155,10 +157,9 @@ export class Showcase {
   update(dtS: number): Shot | null {
     const size = this.host.size();
     if (size === null) return null;
-    if (this.holdNext) {
-      this.host.holdDay(true);
-      this.holdNext = false;
-    }
+    // A frame the page was held up for (a new land laid out) moves the showcase on no
+    // more than an ordinary one: its scene is not skipped, its dark lasts a little longer.
+    dtS = Math.min(dtS, MOST_STEP_S);
     // Waiting in the dark for the ground of the shot (shown since the last frame).
     if (this.lastDim >= HOLD_FROM_DIM && !this.host.groundShown() && this.heldS < MOST_HELD_S) {
       this.heldS += dtS;
@@ -413,15 +414,21 @@ export class Showcase {
           ],
           shot: fixed("middle", crowd),
         };
-      case "powers":
+      case "powers": {
+        // Each power in a place of its own (the owner: not the god light on the meteor's).
+        const { meteor, seed, ark } = PLACES;
+        const at = (intoS: number): { x: number; y: number } =>
+          intoS < 5 ? meteor : intoS < 10 ? seed : ark;
         return {
           cues: [
-            { atS: 0, run: () => host.demo(["day", "meteor"], grass.x + 6, grass.y + 4) },
-            { atS: 5, run: () => host.demo(["day", "seed"], grass.x + 6, grass.y + 4) },
-            { atS: 10, run: () => host.demo(["day", "ark"], grass.x + 6, grass.y + 4) },
+            { atS: CUT_S, run: () => host.demo(["day", "meteor"], meteor.x, meteor.y) },
+            { atS: 5 + CUT_S, run: () => host.demo(["day", "seed"], seed.x, seed.y) },
+            { atS: 10 + CUT_S, run: () => host.demo(["day", "ark"], ark.x, ark.y) },
           ],
-          shot: fixed("middle", { x: grass.x + 6, y: grass.y + 4 }),
+          cuts: [5, 10],
+          shot: (intoS) => ({ view: "middle", centre: { ...at(intoS) }, dim: 0, subject: null }),
         };
+      }
       case "chronicle":
         return {
           cues: [
@@ -496,20 +503,16 @@ export class Showcase {
     this.keepStart();
     const clock = this.clockAtStart;
     if (clock === null) return;
-    this.host.holdDay(false);
     if (land !== null) this.host.receive(land);
     this.host.receive({ ...clock, season, season_progress: progress, day_of_year: day });
-    this.holdNext = true;
   }
 
   /** Put back the day the recording had: its land and clock. */
   private restore(): void {
     this.keepStart();
     if (this.landAtStart === null || this.clockAtStart === null) return;
-    this.host.holdDay(false);
     this.host.receive(this.landAtStart);
     this.host.receive(this.clockAtStart);
-    this.holdNext = true;
   }
 
   private keepStart(): void {

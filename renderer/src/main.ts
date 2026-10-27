@@ -571,9 +571,6 @@ async function start(): Promise<void> {
         advance: (seconds) => {
           advance += seconds;
         },
-        holdDay: (held) => {
-          landscape.holdDay = held;
-        },
         groundShown: () => landscape.groundShown,
         herd,
       })
@@ -723,7 +720,7 @@ async function start(): Promise<void> {
     );
     if (showcase !== null && overlay !== null) {
       const { act } = showcase.now;
-      overlay.show(act.line, act.title ?? "", showcase.caption);
+      overlay.show(act.line, act.title ?? "", showcase.caption, act.top === true);
     }
   };
   if (film) {

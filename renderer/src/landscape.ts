@@ -171,6 +171,14 @@ export class Landscape {
   private held = false;
   private landWaiting = false;
   private laidOutDay = -1;
+  /**
+   * Bumped by every lay-out; each view built remembers the one it was built for, and is
+   * built again when next shown if it is behind (R5: building every view at each new land
+   * held the board's page for seconds; the view on the screen is built at once, the others
+   * when they come on it).
+   */
+  private layoutVersion = 0;
+  private readonly builtFor = new Map<ViewName, number>();
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly built: Built = { map: null, middle: null, local: null };
@@ -334,7 +342,7 @@ export class Landscape {
     this.view = name;
     this.cells = cells;
     for (const view of VIEWS) this.layers[view].visible = view === name;
-    if (this.land !== null && this.built[name] === null) this.build(name);
+    if (this.land !== null && (this.built[name] === null || this.behind(name))) this.build(name);
     this.placeFloor();
   }
 
@@ -437,9 +445,13 @@ export class Landscape {
     } else {
       this.land = { ...this.land, season: this.clock?.season ?? this.land.season };
     }
-    for (const name of VIEWS) {
-      if (this.built[name] !== null || name === this.view) this.build(name);
-    }
+    this.layoutVersion += 1;
+    this.build(this.view);
+  }
+
+  /** Whether view `name` was built for an older lay-out than the latest. */
+  private behind(name: ViewName): boolean {
+    return (this.builtFor.get(name) ?? -1) !== this.layoutVersion;
   }
 
   /**
@@ -466,6 +478,7 @@ export class Landscape {
   private build(name: ViewName): void {
     const { land, look } = this;
     if (land === null) return;
+    this.builtFor.set(name, this.layoutVersion);
     const time = this.time();
     const close = name !== "map";
     // Waves break on every coast in every view, the map's too (the owner, 2026-10-20).
