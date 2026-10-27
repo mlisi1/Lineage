@@ -39,7 +39,7 @@ const PREPAINT_REST_S = 2;
  * Pieces put on the screen in one frame at most: kept ones come back together, and each
  * is a texture sent to the GPU (R5: several in one frame made it late on the board).
  */
-const PLACED_PER_FRAME = 2;
+const PLACED_PER_FRAME = 4;
 
 /** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
 export interface PieceOptions {
@@ -242,8 +242,12 @@ export class PieceGround extends Layers {
   private shadowsOf: ((cells: CellRect) => PaintRequest["shadows"]) | null = null;
   /** What the pieces asked for now are painted from (`GroundCache`); "" keeps none. */
   private stamp = "";
-  /** Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`). */
-  private readonly arriving: (() => void)[] = [];
+  /**
+   * Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`),
+   * the nearest the view first: by their key (a painting that comes overtakes a kept one
+   * still waiting for the same piece).
+   */
+  private readonly arriving = new Map<number, () => void>();
   private centre = { x: 0, y: 0 };
 
   constructor(
@@ -356,8 +360,16 @@ export class PieceGround extends Layers {
   }
 
   tick(dtS: number): void {
-    for (let k = 0; k < PLACED_PER_FRAME && this.arriving.length > 0; k++)
-      this.arriving.shift()?.();
+    if (this.arriving.size > 0) {
+      const nearest = [...this.arriving.keys()]
+        .sort((a, b) => this.distance(a) - this.distance(b))
+        .slice(0, PLACED_PER_FRAME);
+      for (const key of nearest) {
+        const put = this.arriving.get(key);
+        this.arriving.delete(key);
+        put?.();
+      }
+    }
     for (const piece of this.pieces.values()) {
       if (piece.fade?.step(dtS) === true) piece.fade = null;
     }
@@ -406,7 +418,7 @@ export class PieceGround extends Layers {
         )
         .then(({ pixels }) => {
           if (!wanted()) return;
-          this.arriving.push(() => {
+          this.arriving.set(key, () => {
             if (wanted()) this.place(piece, pixels, cells, padded, version);
           });
         })
@@ -424,13 +436,13 @@ export class PieceGround extends Layers {
     void this.cache.get(this.keyOf(key)).then((kept) => {
       if (!wanted()) return;
       if (kept?.stamp === stamp) {
-        this.arriving.push(() => {
+        this.arriving.set(key, () => {
           if (wanted()) this.place(piece, kept.pixels, cells, padded, version);
         });
         return;
       }
       if (kept !== undefined && piece.painting === null) {
-        this.arriving.push(() => {
+        this.arriving.set(key, () => {
           if (wanted() && piece.painting === null) {
             this.place(piece, kept.pixels, cells, padded, piece.painted, 0);
           }
