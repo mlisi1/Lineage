@@ -268,6 +268,8 @@ export class Sea {
   // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
   // group's draw list, not the scene's with its thousands of plants.
   readonly glints = new Container({ isRenderGroup: true });
+  /** The shallows' colour the shore's uniforms were last set from. */
+  private shallowOf = "";
   private readonly sprites: Sprite[] = [];
   /** Each slot's showing, and the view it was placed in when that showing began. */
   private readonly placed: { showing: number; view: CellRect }[] = [];
@@ -334,8 +336,12 @@ export class Sea {
       uniforms.uCrest = (timeS / SWELL_S) % 1;
       uniforms.uDash = (timeS / SWELL_DASH_S) % 1;
       uniforms.uTide = tide;
-      uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
-      uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
+      // The shallows' colours, worked out again only when the land's palette changes.
+      if (shallow !== this.shallowOf) {
+        this.shallowOf = shallow;
+        uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
+        uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
+      }
     }
     const { tile } = this;
     // Texture.WHITE is 16 texels: sized in cells, a stroke `length` art pixels long and one tall.

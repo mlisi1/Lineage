@@ -397,6 +397,7 @@ export class Herd {
   }
 
   receive(message: Message): void {
+    this.subjectsKept = null;
     if (message.type === "fauna") this.takeFauna(message);
     else if (message.type === "rare") {
       this.signatures = new Map(
@@ -673,8 +674,13 @@ export class Herd {
     return { key, seed, plans, body: BODIES.local };
   }
 
-  /** The animals alive, where the view's layer draws them (the local view's, when hidden). */
+  /**
+   * The animals alive, where the view's layer draws them (the local view's, when hidden):
+   * worked out once a frame (R5: the director asks several times a frame), new each frame
+   * (it keeps one it chose from frame to frame).
+   */
   subjects(): Subject[] {
+    if (this.subjectsKept !== null) return this.subjectsKept;
     const layer = this.view === "middle" ? this.layers.middle : this.layers.local;
     const subjects: Subject[] = [];
     for (const id of this.roster.ids) {
@@ -689,8 +695,14 @@ export class Herd {
         torpid: this.roster.torpid.has(id),
       });
     }
+    this.subjectsKept = subjects;
     return subjects;
   }
+
+  /** This frame's `subjects`, until the herd moves on. */
+  private subjectsKept: Subject[] | null = null;
+  /** The spots `glowing` hands out, reused from frame to frame. */
+  private readonly glowSpots: Spot[] = [];
 
   /**
    * Where the animals with the glow gene shine (R4): a spot at every other joint of their
@@ -700,7 +712,19 @@ export class Herd {
     if (this.view === null) return [];
     // The map's dots are the middle view's animals.
     const layer = this.view === "local" ? this.layers.local : this.layers.middle;
-    const spots: Spot[] = [];
+    // Read at once by the atmosphere: the same array and spots, refilled each frame.
+    const spots = this.glowSpots;
+    let count = 0;
+    const spot = (x: number, y: number, size: number): void => {
+      const reused = spots[count];
+      if (reused === undefined) spots.push({ x, y, size });
+      else {
+        reused.x = x;
+        reused.y = y;
+        reused.size = size;
+      }
+      count += 1;
+    };
     for (const id of this.roster.ids) {
       const slot = this.roster.slotOf(id);
       const known = this.roster.genomes.get(id);
@@ -715,18 +739,20 @@ export class Herd {
           at.y >= cells.y0 - 1 &&
           at.y <= cells.y1 + 1
         ) {
-          spots.push({ x: at.x, y: at.y, size: 0 });
+          spot(at.x, at.y, 0);
         }
         continue;
       }
       const { joints, radii } = layer.spine(slot);
-      joints.forEach((joint, i) => {
-        if (i % 2 === 1 || i === joints.length - 1) return;
-        if (joint.x < cells.x0 - 1 || joint.x > cells.x1 + 1) return;
-        if (joint.y < cells.y0 - 1 || joint.y > cells.y1 + 1) return;
-        spots.push({ x: joint.x, y: joint.y, size: radii[i] ?? 0 });
-      });
+      for (let i = 0; i < joints.length - 1; i += 2) {
+        const joint = joints[i];
+        if (joint === undefined) continue;
+        if (joint.x < cells.x0 - 1 || joint.x > cells.x1 + 1) continue;
+        if (joint.y < cells.y0 - 1 || joint.y > cells.y1 + 1) continue;
+        spot(joint.x, joint.y, radii[i] ?? 0);
+      }
     }
+    spots.length = count;
     return spots;
   }
 
@@ -747,6 +773,7 @@ export class Herd {
     plants: PlantLayer | null,
     subject: number | null,
   ): void {
+    this.subjectsKept = null;
     if (view !== this.view) {
       this.view = view;
       this.snores.clear();

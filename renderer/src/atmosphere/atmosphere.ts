@@ -357,6 +357,8 @@ export class Atmosphere {
    * The colour grade of the world under cloud: put on the world's container while the sky
    * is overcast (`graded`), and nothing otherwise, so a clear day costs no filter pass.
    */
+  /** The cloud the grade's matrix was last built for (`setGrade`). */
+  private gradedFor = Number.NaN;
   readonly grade = new ColorMatrixFilter();
   readonly lights = new Container();
   readonly flash: Sprite;
@@ -689,6 +691,9 @@ export class Atmosphere {
 
   /** Grey the world's colours by `overcast` (0–1): toward their luminance, cooled a little. */
   private setGrade(overcast: number): void {
+    // Built again only when the cloud has changed (R5: it was rebuilt every frame).
+    if (overcast === this.gradedFor) return;
+    this.gradedFor = overcast;
     const k = GREY_OUT * overcast;
     const cast = mixRgb([1, 1, 1], CLOUD_CAST, overcast);
     const luma = [0.299, 0.587, 0.114];

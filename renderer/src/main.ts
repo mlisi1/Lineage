@@ -711,8 +711,11 @@ async function start(): Promise<void> {
     const device = window.devicePixelRatio || 1;
     const slide = (value: number): number =>
       Math.round((value - Math.floor(value)) * artPixel * device) / device;
-    canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
-    dim.style.opacity = String(shot.dim);
+    // Written only when they change: each write makes the browser restyle the page.
+    const transform = `translate(${slide(x)}px, ${slide(y)}px)`;
+    if (canvas.style.transform !== transform) canvas.style.transform = transform;
+    const opacity = String(shot.dim);
+    if (dim.style.opacity !== opacity) dim.style.opacity = opacity;
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
     const { light, tint, rain } = atmosphere.state;
