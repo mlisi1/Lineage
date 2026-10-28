@@ -428,6 +428,12 @@ export function scrollSize(caption: Caption): { width: number; height: number } 
   };
 }
 
+/** How much paper of `caption`'s scroll shows `open` of the way open: whole pixels either side of the middle. */
+export function paperShown(caption: Caption, open: number): number {
+  const fullHalf = Math.floor((scrollSize(caption).width - SHADOW) / 2) - ROLL_WIDTH;
+  return Math.round(fullHalf * Math.min(Math.max(open, 0), 1));
+}
+
 /**
  * Paint the scroll of `caption`, `open` of the way open (0–1), at its full size; its
  * initial in `colour` (0xRRGGBB: its species', or vermilion when it names none).
@@ -448,9 +454,7 @@ export function paintScroll(caption: Caption, open: number, colour = VERMILION):
   const middle = Math.floor(outer.width / 2);
   const paperTop = ROLL_OVER + KNOB;
   const paperBottom = outer.height - ROLL_OVER - KNOB - 1;
-  // How much paper shows, in whole pixels either side of the middle.
-  const fullHalf = middle - ROLL_WIDTH;
-  const half = Math.round(fullHalf * Math.min(Math.max(open, 0), 1));
+  const half = paperShown(caption, open);
   const left = middle - half;
   const right = middle + half;
 
@@ -528,7 +532,7 @@ const FOOT = 6;
 export class Captions {
   readonly element = document.createElement("canvas");
   private readonly queue = new CaptionQueue();
-  private painted: { number: number; open: number; lamp: number } | null = null;
+  private painted: { number: number; shown: number; lamp: number } | null = null;
   private lamp: Rgb = DAYLIGHT;
   /** The colour of the initial of the caption shown, looked up once when it comes out. */
   private initial: { number: number; colour: number } | null = null;
@@ -598,10 +602,12 @@ export class Captions {
     }
     const key = lampKey(lamp);
     const painted = this.painted;
-    if (painted?.number === caption.number && painted.open === open && painted.lamp === key) {
+    // The picture changes with `open` only by whole pixels of paper (R5, review P7).
+    const shown = paperShown(caption, open);
+    if (painted?.number === caption.number && painted.shown === shown && painted.lamp === key) {
       return;
     }
-    this.painted = { number: caption.number, open, lamp: key };
+    this.painted = { number: caption.number, shown, lamp: key };
     const picture = paintScroll(caption, open, this.initialColour(caption));
     lightPicture(picture, lamp);
     this.show(picture);
