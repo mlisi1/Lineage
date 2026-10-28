@@ -42,21 +42,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from lineage_server.protocol import encode
+from lineage_server.feed import Feed
 from lineage_sim import terrain as tr
 from lineage_sim.config import parse_config
 from lineage_sim.events import (
-    ChronicleEntry,
-    CraterFormed,
     EarthquakeStruck,
-    FireEnded,
     GodPower,
-    GodPowerUsed,
     InputEvent,
     OutputEvent,
     PresenceChanged,
     VolcanoErupted,
-    WorldEnded,
 )
 from lineage_sim.flora import Cover
 from lineage_sim.state import io
@@ -76,8 +71,6 @@ PRESS_HOUR = 12
 FAMINE_ENERGY = -1e6
 
 
-# What changes the land, so that a server sends the land again at once.
-LAND_CHANGES = (VolcanoErupted, EarthquakeStruck, CraterFormed, GodPowerUsed, FireEnded)
 # A staged spell of rain lasts this long; the thunderstorm of a staged fire passes after one
 # hour, as a dry summer storm does, so that the fire then runs on dry land.
 STAGED_STORM_HOURS = 4
@@ -196,37 +189,6 @@ def _stage(text: str) -> tuple[int, float, str, tuple[int, int] | None]:
     return int(day), float(hour), what, at
 
 
-class _Census:
-    """What has been sent of the world now living: its genomes and its species."""
-
-    def __init__(self, world: World) -> None:
-        self.sent: set[int] = set()
-        self.species = encode.species_message(world)
-
-
-def _connect(world: World, census: _Census, creatures: bool, sky: bool) -> list[dict[str, Any]]:
-    messages = encode.connect_messages(world, census.sent)
-    if not creatures:
-        messages = [message for message in messages if message["type"] != "creatures"]
-    if not sky:
-        messages = [message for message in messages if message["type"] != "sky"]
-    return messages
-
-
-def _news(world: World, outputs: Sequence[OutputEvent], sky: bool) -> list[dict[str, Any]]:
-    """The chronicle entries and events (with ``sky``) among ``outputs``, as messages: the
-    entries first, so that a world's last lines come before its end."""
-    messages: list[dict[str, Any]] = []
-    entries = [output for output in outputs if isinstance(output, ChronicleEntry)]
-    chronicle = encode.entries_message(world, entries)
-    if chronicle is not None:
-        messages.append(chronicle)
-    events = encode.events_message(outputs) if sky else None
-    if events is not None:
-        messages.append(events)
-    return messages
-
-
 def record(
     world: World,
     days: int,
@@ -247,10 +209,8 @@ def record(
     sky = sky_every_s > 0
     sky_ms = _every_ms(sky_every_s, "sky") if sky else every_ms
     tick_ms = math.gcd(every_ms, sky_ms)
-    census = _Census(world)
-    messages = _connect(world, census, creatures, sky)
-    # The world's outputs since the last creatures message: who died of what, who landed.
-    news: list[OutputEvent] = []
+    feed = Feed(world, creatures=creatures, sky=sky)
+    messages = feed.start(world)
     # The owner's schedule follows the desk: the run's seed and Unix days, whatever world.
     desk_seed, start_unix = world.seed, world.unix_ms
     # The schedule's owner, from the first moment: at the desk for "always", even when the
@@ -285,38 +245,13 @@ def record(
         for tick in range(1, MS_PER_DAY // tick_ms + 1):
             elapsed = tick * tick_ms
             outputs = live_to(day_start + elapsed, inputs)
-            # A world that ends: its news, then the next world as a renderer meets it.
-            ended = [i for i, output in enumerate(outputs) if isinstance(output, WorldEnded)]
-            if ended:
-                split = ended[-1] + 1
-                messages += _news(world, outputs[:split], sky)
-                census = _Census(world)
-                messages += _connect(world, census, creatures, sky)
-                outputs = outputs[split:]
-                news = []
-            news += outputs
-            step = elapsed % every_ms == 0
-            if step:
-                messages.append(encode.clock_message(world))
-            # The land after an event that changes it comes after the event's news, so that
-            # a renderer knows what is coming (a meteor's crater shows once it has struck).
-            changed = sky and any(isinstance(output, LAND_CHANGES) for output in outputs)
-            if elapsed == MS_PER_DAY and day % land_every == 0 and not changed:
-                messages.append(encode.land_message(world))
-            # A species born or gone is sent, as a server would, before the animals of it.
-            species = encode.species_message(world)
-            if species is not None and species != census.species:
-                messages.append(species)
-                census.species = species
-            if creatures and step:
-                messages.append(encode.creatures_message(world, census.sent, news))
-            if step:
-                news = []
-            if sky and elapsed % sky_ms == 0:
-                messages.append(encode.sky_message(world))
-            messages += _news(world, outputs, sky)
-            if changed:
-                messages.append(encode.land_message(world))
+            messages += feed.advance(
+                world,
+                outputs,
+                step=elapsed % every_ms == 0,
+                sky_due=sky and elapsed % sky_ms == 0,
+                land_due=elapsed == MS_PER_DAY and day % land_every == 0,
+            )
     return messages
 
 
