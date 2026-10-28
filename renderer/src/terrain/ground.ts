@@ -65,6 +65,12 @@ export interface GroundOptions {
   /** Whole cells to paint; the whole world when left out. */
   cells?: CellRect;
   /**
+   * The cells of `cells` whose pixels are kept (a piece's, without the margin it is painted
+   * with so that its shore meets its neighbours'): the rest are worked out only as far as
+   * the shore needs them, land or sea, and their colours are not to be shown.
+   */
+  shown?: CellRect;
+  /**
    * Grain: growth in patches that thin with biomass, blades, pebbles, waves and foam.
    * Without it (the map view) every pixel takes the flat colour of what covers it.
    */
@@ -374,6 +380,9 @@ const DETAIL: Readonly<Record<Matter, readonly (readonly [readonly Motif[], numb
     [TWIGS, 0.05],
   ],
 };
+
+/** Pixels round those shown (`GroundOptions.shown`) painted in full (`paintGround`). */
+const SHOWN_RIM = 8;
 
 /** Weights of a binomial kernel reaching `reach` cells either side. */
 function kernel(reach: number): number[] {
@@ -760,6 +769,18 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     MATTER.burnt,
   ];
 
+  // The pixels painted in full: those shown, and a rim round them that the drawings of the
+  // detail (up to three pixels either side and four above where they stand) and the lip of
+  // growth may reach in from (R5, the optimization plan: a close piece's margin of a cell
+  // was painted in full, 56 % more than shown). Past that only whether a pixel is land,
+  // which the shore's distances are counted from.
+  const shown = options.shown;
+  const marginOnly = shown !== undefined && style === "blended";
+  const fullX0 = shown === undefined ? 0 : (shown.x0 - rect.x0) * tile - SHOWN_RIM;
+  const fullY0 = shown === undefined ? 0 : (shown.y0 - rect.y0) * tile - SHOWN_RIM;
+  const fullX1 = shown === undefined ? wide : (shown.x1 - rect.x0) * tile + SHOWN_RIM;
+  const fullY1 = shown === undefined ? tall : (shown.y1 - rect.y0) * tile + SHOWN_RIM;
+
   for (let py = 0; py < tall; py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
@@ -768,6 +789,17 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const worldY = originY + py;
       const u = (worldX + 0.5) / tile - 0.5;
       const v = (worldY + 0.5) / tile - 0.5;
+      if (marginOnly && (px < fullX0 || py < fullY0 || px >= fullX1 || py >= fullY1)) {
+        // Land or sea, as `between` would find it at the same wandering place.
+        let du = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 1) - 0.5) * 2 * WOBBLE;
+        let dv = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 2) - 0.5) * 2 * WOBBLE;
+        if (close) {
+          du += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 11) - 0.5) * 2 * FINE_WOBBLE;
+          dv += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 12) - 0.5) * 2 * FINE_WOBBLE;
+        }
+        if (heightAt(u + du, v + dv) - seaLevel > 0) isLand[at] = 1;
+        continue;
+      }
       hereU = u;
       hereV = v;
       if (style === "squares") {

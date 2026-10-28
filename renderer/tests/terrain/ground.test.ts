@@ -516,3 +516,36 @@ describe("valueNoise", () => {
     expect(valueNoise(2.5, 7.25, 1)).not.toBe(valueNoise(2.5, 7.25, 2));
   });
 });
+
+describe("a piece's margin painted as land or sea only (R5, the optimization plan)", () => {
+  it("leaves every pixel shown the same, and the shore's data with it", () => {
+    const fixture = world([
+      "~~~~~~~~~~~~",
+      "~~~ggggg..~~",
+      "~~gggbbbg.~~",
+      "~~ggbbccgg.~",
+      "~~~gg..sgg~~",
+      "~~~~~gggg~~~",
+      "~~~~~~~~~~~~",
+    ]);
+    for (const tile of [8, 32]) {
+      const cells = { x0: 4, y0: 2, x1: 8, y1: 5 };
+      const padded = { x0: 3, y0: 1, x1: 9, y1: 6 };
+      const options = { tile, style: "blended", grain: true, surf: true, cells: padded } as const;
+      const full = paintGround(fixture, options);
+      const cut = paintGround(fixture, { ...options, shown: cells });
+      const wide = full.width;
+      for (let py = tile; py < tile + 3 * tile; py++) {
+        for (let px = tile; px < tile + 4 * tile; px++) {
+          const at = 4 * (py * wide + px);
+          expect(Array.from(cut.rgba.subarray(at, at + 4))).toEqual(
+            Array.from(full.rgba.subarray(at, at + 4)),
+          );
+          expect(Array.from(cut.shore?.subarray(at, at + 4) ?? [])).toEqual(
+            Array.from(full.shore?.subarray(at, at + 4) ?? []),
+          );
+        }
+      }
+    }
+  });
+});

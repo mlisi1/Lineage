@@ -324,7 +324,7 @@ export class PieceGround extends Layers {
       // One the view has asked for, or shows painted, is not painted twice.
       const shown = this.pieces.get(key);
       if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
-      const { padded } = this.extent(key);
+      const { cells, padded } = this.extent(key);
       const shadows = shadowsOf(padded);
       try {
         // The painter keeps it (`PaintRequest.keep`), or finds it kept already.
@@ -333,6 +333,7 @@ export class PieceGround extends Layers {
             ...request,
             tile: this.tile,
             cells: padded,
+            shown: cells,
             ...(shadows === undefined ? {} : { shadows }),
             keep: { key: this.keyOf(key), stamp, ahead: true },
           },
@@ -368,7 +369,7 @@ export class PieceGround extends Layers {
       const shown = this.pieces.get(key);
       if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
       this.prefetched.add(key);
-      const { padded } = this.extent(key);
+      const { cells, padded } = this.extent(key);
       const shadows = shadowsOf(padded);
       const x = ((key % 1024) + 0.5) * this.cut.cells;
       const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
@@ -378,6 +379,7 @@ export class PieceGround extends Layers {
             ...request,
             tile: this.tile,
             cells: padded,
+            shown: cells,
             ...(shadows === undefined ? {} : { shadows }),
             keep: { key: this.keyOf(key), stamp, ahead: true },
           },
@@ -472,6 +474,7 @@ export class PieceGround extends Layers {
             ...request,
             tile: this.tile,
             cells: padded,
+            shown: cells,
             ...(shadows === undefined ? {} : { shadows }),
             ...(stamp === "" ? {} : { keep: { key: this.keyOf(key), stamp } }),
           },
