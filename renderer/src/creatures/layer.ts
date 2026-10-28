@@ -1504,7 +1504,7 @@ export class CreatureLayer {
   ): number {
     const { joints } = creature;
     const changes = occluders.changes;
-    const kept = creature.over;
+    let kept = creature.over;
     if (
       changes !== undefined &&
       kept !== null &&
@@ -1512,20 +1512,32 @@ export class CreatureLayer {
       kept.changes === changes &&
       kept.highest === highest &&
       kept.lowest === lowest &&
-      kept.joints.length === joints.length * 2 &&
-      joints.every(
-        (joint, i) => kept.joints[2 * i] === joint.x && kept.joints[2 * i + 1] === joint.y,
-      )
+      sameJoints(kept.joints, joints)
     ) {
       return kept.answer;
     }
     const answer = occluders.over(this.box(index), highest, lowest, joints, creature.plan.radii);
-    const at = new Float64Array(joints.length * 2);
-    joints.forEach((joint, i) => {
-      at[2 * i] = joint.x;
-      at[2 * i + 1] = joint.y;
-    });
-    creature.over = { occluders, changes: changes ?? -1, highest, lowest, joints: at, answer };
+    if (kept === null || kept.joints.length !== joints.length * 2) {
+      kept = {
+        occluders,
+        changes: -1,
+        highest,
+        lowest,
+        joints: new Float64Array(joints.length * 2),
+        answer,
+      };
+      creature.over = kept;
+    }
+    for (let i = 0; i < joints.length; i++) {
+      const joint = joints[i] as Point;
+      kept.joints[2 * i] = joint.x;
+      kept.joints[2 * i + 1] = joint.y;
+    }
+    kept.occluders = occluders;
+    kept.changes = changes ?? -1;
+    kept.highest = highest;
+    kept.lowest = lowest;
+    kept.answer = answer;
     return answer;
   }
 
@@ -2550,4 +2562,14 @@ export class CreatureLayer {
       thickness / WHITE_TEXELS,
     );
   }
+}
+
+/** Whether `joints` stand where `kept` (x, y after x, y) says they stood. */
+function sameJoints(kept: Float64Array, joints: readonly Point[]): boolean {
+  if (kept.length !== joints.length * 2) return false;
+  for (let i = 0; i < joints.length; i++) {
+    const joint = joints[i] as Point;
+    if (kept[2 * i] !== joint.x || kept[2 * i + 1] !== joint.y) return false;
+  }
+  return true;
 }
