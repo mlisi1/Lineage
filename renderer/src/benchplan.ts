@@ -118,9 +118,9 @@ export const SCENARIOS: readonly BenchScenario[] = [
   {
     name: "day-turn",
     about:
-      "The crowded middle view as a sim-day turns: the plants and ground of the new day " +
-      "laid out and faded in over the old, the island painted ahead again (once a day on " +
-      "the desk; reported, not judged).",
+      "The crowded middle view as a day brings a new land: the plants and ground of it " +
+      "laid out and faded in over the old, the island painted ahead again (on the desk " +
+      "as often as the server sends a land; reported, not judged).",
     recording: "life",
     pin: { view: "middle", at: "crowd" },
     view: "middle",

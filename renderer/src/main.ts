@@ -129,6 +129,8 @@ const LIFE_SPEED = 1800;
  * The desk's build (`vite build --mode kiosk`): the demo paths are compiled out (the
  * bundler drops every branch behind `!KIOSK`) and the page takes the server's stream.
  */
+/** Milliseconds in a sim-day (the benchmark's new land comes a day after the last). */
+const MS_PER_DAY = 86_400_000;
 const KIOSK = import.meta.env.MODE === "kiosk";
 /** Each view's size in cells. */
 const VIEW_CELLS: Readonly<Record<ViewName, { width: number; height: number }>> = {
@@ -829,6 +831,10 @@ async function start(): Promise<void> {
       landscape.holdDay = held;
     },
     dayDue: () => landscape.dayDue,
+    newLand: () => {
+      const message = landscape.lastMessage;
+      if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });
+    },
     camera: () => ({ view: shot.view, dipping: director.state.dipping }),
     sight: () => sight(shot.centre, WIDTH / TILES[shot.view], HEIGHT / TILES[shot.view]),
     land: () => landscape.current,

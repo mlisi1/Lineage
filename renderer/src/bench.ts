@@ -110,6 +110,8 @@ export interface BenchHooks {
   holdDay(held: boolean): void;
   /** Whether a new day or land is waiting to be laid out. */
   dayDue(): boolean;
+  /** Send the latest land again as the next day's, as the stream would bring a new one. */
+  newLand(): void;
   /** What the camera shows. */
   camera(): { view: ViewName; dipping: boolean };
   /** The cells in sight. */
@@ -718,6 +720,9 @@ export class Bench {
     hooks.holdDay(true);
     let turned = false;
     if (scenario.dayTurn === true) {
+      // A day that brings a new land (R5: a day that brings none, away from a turn of the
+      // season, is not laid out again at all, so it is not what is measured here).
+      hooks.newLand();
       turned = await until(() => hooks.dayDue(), DAY_DUE_TIMEOUT_S);
       hooks.holdDay(false);
     }

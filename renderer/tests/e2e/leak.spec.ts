@@ -23,7 +23,9 @@ test("a day's plants and grounds are let go when the next day comes", async ({ p
         t_ms: 86_400_000 * (600 + day),
         date: "2027-10-01",
         season: "autumn",
-        season_progress: Math.min(0.1 + day / 91, 0.99),
+        // In the turn to winter, where every day is laid out again (out of a turn, a day
+        // that brings no land changes nothing drawn and is not).
+        season_progress: 0.86 + day / 200,
         day_of_year: 274 + day,
         days_in_year: 365,
       };

@@ -17,7 +17,7 @@ import { PROBE } from "./frameprobe";
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
 import { standingPlants, type PlantLayer } from "./plants/plants";
-import type { YearTime } from "./plants/turning";
+import { isTurning, type YearTime } from "./plants/turning";
 import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
 import { landOf, yearOf } from "./stream";
@@ -177,7 +177,8 @@ export class Landscape {
   /** The day held (`holdDay`), and whether a land came while it was. */
   private held = false;
   private landWaiting = false;
-  private laidOutDay = -1;
+  /** The look of the day last laid out (`dayLook`). */
+  private laidOutLook = "";
   /**
    * Bumped by every lay-out; each view built remembers the one it was built for, and is
    * built again when next shown if it is behind (R5: building every view at each new land
@@ -304,7 +305,10 @@ export class Landscape {
   receive(message: Message): void {
     if (message.type === "clock") {
       this.clock = message;
-      if (message.day_of_year !== this.laidOutDay) this.stale = true;
+      // A new day is laid out only if it looks different (R5, the optimization plan): away
+      // from a turn of the season the ground and the plants show the season alone, the
+      // same from one day to the next, and were laid out and painted again for nothing.
+      if (this.dayLook() !== this.laidOutLook) this.stale = true;
     } else if (message.type === "land") {
       // Several lands in a row (a recording played at once): only the last is drawn.
       this.landMessage = message;
@@ -449,6 +453,16 @@ export class Landscape {
     );
   }
 
+  /**
+   * What the day changes in how the land looks: away from a turn of the season, the season
+   * alone (every place shows it, `seasonsInPlay`); in a turn, the day itself, as the turn
+   * moves across the land from day to day.
+   */
+  private dayLook(): string {
+    const time = this.time();
+    return isTurning(time) ? `turn:${this.clock?.day_of_year ?? -1}` : time.season;
+  }
+
   private time(): YearTime {
     return this.clock === null ? { season: "summer", progress: 0.5 } : yearOf(this.clock);
   }
@@ -458,7 +472,7 @@ export class Landscape {
     const message = this.landMessage;
     if (message === null) return;
     this.stale = false;
-    this.laidOutDay = this.clock?.day_of_year ?? -1;
+    this.laidOutLook = this.dayLook();
     if (this.land === null) {
       this.land = landOf(message, this.clock);
       this.landVersion = this.painter.setLand(this.land);
@@ -487,7 +501,7 @@ export class Landscape {
       PAINTER_CODE,
       message.world.seed,
       message.t_ms,
-      this.clock?.day_of_year ?? -1,
+      this.dayLook(),
       this.look.name,
       this.bushPieces ? "pieces" : "whole",
       this.covered === null ? "open" : "covered",

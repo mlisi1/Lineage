@@ -56,3 +56,39 @@ describe("the day held (the benchmark, R5)", () => {
     expect(landscape.framesOnTime).toBe(true);
   });
 });
+
+describe("a new day laid out only when it looks different (R5, the optimization plan)", () => {
+  const at = (day: number, season: ClockMessage["season"], progress: number): ClockMessage => ({
+    ...clock,
+    day_of_year: day,
+    season,
+    season_progress: progress,
+  });
+
+  it("does not lay out a day of the same season away from its turns", () => {
+    const landscape = laidOut();
+    landscape.receive(at(clock.day_of_year, "summer", 0.4));
+    landscape.update(1 / 30);
+    const drawn = landscape.current;
+    landscape.receive(at(clock.day_of_year + 1, "summer", 0.41));
+    expect(landscape.dayDue).toBe(false);
+    landscape.update(1 / 30);
+    expect(landscape.current).toBe(drawn);
+  });
+
+  it("lays out every day of a turn, and a land whenever one comes", () => {
+    const landscape = laidOut();
+    landscape.receive(at(clock.day_of_year, "summer", 0.9));
+    expect(landscape.dayDue).toBe(true);
+    landscape.update(1 / 30);
+    expect(landscape.dayDue).toBe(false);
+    // The same day again: nothing new.
+    landscape.receive(at(clock.day_of_year, "summer", 0.905));
+    expect(landscape.dayDue).toBe(false);
+    landscape.receive(at(clock.day_of_year + 1, "summer", 0.91));
+    expect(landscape.dayDue).toBe(true);
+    landscape.update(1 / 30);
+    landscape.receive({ ...land, t_ms: land.t_ms + 86_400_000 });
+    expect(landscape.dayDue).toBe(true);
+  });
+});
