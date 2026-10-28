@@ -38,9 +38,7 @@ const BEFORE = env.R5_REPORT_BEFORE ?? "80e4a4c";
  * The sections the owner has not seen yet, tagged "new" in the contents and on their
  * headings; emptied once the owner has looked (`R5_REPORT_NEW=family,rare` to choose).
  */
-const NEW = new Set(
-  (env.R5_REPORT_NEW ?? "").split(",").filter((id) => id !== ""),
-);
+const NEW = new Set((env.R5_REPORT_NEW ?? "").split(",").filter((id) => id !== ""));
 /** The desk's screen (CLAUDE.md §2). */
 const WIDTH = 1024;
 const HEIGHT = 600;
