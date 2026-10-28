@@ -522,8 +522,15 @@ its status: `docs/renderer-optimization-plan.md`. Kept, all the same pixels:
   pixel adding only the kinds of cover around it. Then a piece's margin painted only as
   land or sea past a rim of 8 pixels: a local piece in a little over half the time it
   took (checked on every piece of the island in three seasons, every pixel shown the
-  same). Left to the owner: WebAssembly (same bits, a new toolchain) or a shader (much
-  faster, not the same bits).
+  same). A land's cells are worked out once, not for every piece.
+- **The ground's colour pass on the GPU.** The owner, 2026-10-28: "If you tell me that the
+  result with the shader is identical to the eye and not byte per byte, then fine". Only
+  the colour pass (three quarters of a painting) moved: each painter worker draws it with
+  one fragment shader in a WebGL2 context of its own and reads it back there, the passes
+  after it stay on the CPU. Moving them too would mean the shore's distance sweeps and the
+  detail's drawings, which depend on their order, for the last quarter. The GPU's floats
+  are single: 2 or 3 pixels of 65 536 fall the other way on a threshold. The CPU paints
+  where a worker has no WebGL2, in tests and with `?painter=cpu`.
 
 Not done: each animal as one batch (it would have to redo what sleep, the rare overlays,
 eating and the water do to a body's sprites, for some 7–10 % of the crowd's script by the

@@ -75,10 +75,18 @@ kept: each claimed win is measured there against the board's own noise.
   autumn turn and winter snow, the same in every pixel shown. All told a local piece
   paints in a little over half the time it took before (608 pieces: about 38 s → 21 s on
   the PC), a middle one some 8 % faster, the map some 12 %.
-  Left, each the owner's call: the painter in WebAssembly (the same arithmetic in the same
-  order, so the same bits; perhaps 1.5–2× faster; a new toolchain, so a new dependency);
-  or the ground painted on the GPU by a shader (tens of times faster, but not the same
-  bits: GPU float arithmetic differs, so it would be the same to the eye, not to the byte).
+  Then, the owner's choice (2026-10-28: "If you tell me that the result with the shader is
+  identical to the eye and not byte per byte, then fine"): the colour pass on the GPU
+  (`terrain/gpuground.ts`), three quarters of a painting's time on the CPU. Each painter
+  worker has a WebGL2 context of its own (an `OffscreenCanvas`) and reads the pass back
+  there; the passes after it stay on the CPU; the CPU paints it all where a worker has no
+  WebGL2, in tests, and with `?painter=cpu` (kept paintings are stamped `gpu` or `cpu`).
+  Against the CPU's painting: 2 or 3 pixels of 65 536 differ, on the edge of a threshold,
+  in the cases looked at (summer, an autumn turn, winter snow; local, middle, map). What
+  stays on the CPU: about 3 ms of a local piece's 29 and 7 ms of a middle piece's 26 on the
+  PC, now that a land's cells are worked out once rather than for every piece. On the PC
+  the GPU is SwiftShader, the CPU pretending: the gain is the board's to measure (the
+  benchmark's `ground_made` and `?painter=cpu` to compare).
   Tried and dropped: a cache of the noise's corners (no gain: the fine noise changes cell
   every pixel); one texture for the ground's pieces (the scene binds some 40–50 textures a
   frame, counted on the PC, few of them the ground's; their share of the PC's profile is

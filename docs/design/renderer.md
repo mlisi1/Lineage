@@ -1308,7 +1308,15 @@ view add only the kinds of cover around a pixel (8–13 % faster, every painting
 a piece's margin of a cell, painted so that its shore meets its neighbours' and then cut
 off, is painted only as land or sea past a rim of 8 pixels the detail's drawings may
 reach in from (`GroundOptions.shown`; a local piece some 35–40 % faster again, every
-pixel shown the same over the whole island).
+pixel shown the same over the whole island); a land's cells are worked out once, not for
+each piece. And the colour pass, three quarters of a painting, is done on the GPU
+(`terrain/gpuground.ts`, the owner's choice: the same to the eye, not to the byte): each
+painter worker has a WebGL2 context of its own (an `OffscreenCanvas`), draws the pass with
+one fragment shader written from the same constants as the CPU's loop, reads it back in
+the worker, and does the passes after it on the CPU as before; 2 or 3 pixels of 65 536
+come out otherwise, on the edge of a threshold. The CPU paints it all where a worker has
+no WebGL2, in tests and with `?painter=cpu`; kept paintings are stamped `gpu` or `cpu`;
+the benchmark counts the paintings made each way (`ground_made`).
 
 | Scenario | View | What it measures |
 |---|---|---|
