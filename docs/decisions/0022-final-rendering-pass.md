@@ -501,6 +501,31 @@ animal as one batch rather than some 45 sprites (the review's §2), both to be m
 there before they are kept. Left for the owner, since they change pixels: dots on the map
 at a lower cadence (P5), simpler bodies in the middle view, and leans on alternate frames.
 
+### The optimization plan (2026-10-28)
+
+The owner: "Make a thorough plan on how to further optimize the rendering", then "Go on,
+and implement the changes. Be sure also to optimize the terrain rendering". The plan and
+its status: `docs/renderer-optimization-plan.md`. Kept, all the same pixels:
+
+- **A frame probe** in the benchmark (`src/frameprobe.ts`): each frame's phases and what
+  happened in it, and for each late frame the phase that took most of it or "outside".
+  The board's long frames (230–320 ms in every scenario) are to be named by it before the
+  work that can wait is put under a budget.
+- **The card's portrait** drawn in the dark of the dip and read back without waiting for
+  the GPU (a pixel-pack buffer and a fence); its `readPixels` had waited for every draw
+  queued before it, up to four times per portrait.
+- **A day that looks the same is not laid out.** Away from a turn of the season, a day
+  that brings no land shows exactly what the day before showed; it was laid out and
+  painted again all the same. Now only a new land or a day in a turn is, and the kept
+  paintings are stamped by the season. The benchmark's `day-turn` has a land come instead.
+- **The painters** 8–13 % faster: a pixel's season worked out only in a turn, a calm
+  pixel adding only the kinds of cover around it.
+
+Not done: each animal as one batch (it would have to redo what sleep, the rare overlays,
+eating and the water do to a body's sprites, for some 7–10 % of the crowd's script by the
+PC's profile), left to the owner and the board's probe; one texture for the ground's
+pieces (few binds are the ground's).
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

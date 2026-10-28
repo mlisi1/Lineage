@@ -60,3 +60,24 @@ kept: each claimed win is measured there against the board's own noise.
 
 - Phase 0: done (probe, bench fields, `kiosk_bench.py` summary, `compare-films.mjs`). The
   GPU trace waits for the board.
+- Phase 1: the portrait done (drawn in the dip, read back without waiting, once per shape;
+  the same bytes, checked in the browser). The per-frame budget waits for what the probe
+  names on the board.
+- Terrain: done, all [same pixels]: a day that brings no land and is not in a turn of the
+  season is no longer laid out or repainted (about 70 % of the year's days on the desk);
+  kept paintings stamped by the season, so they last all season; the painters 8–13 %
+  faster (a pixel's season only in a turn; a calm pixel adds only the cover around it),
+  52 paintings over four times of year, with and without snow, byte for byte the same.
+  Tried and dropped: a cache of the noise's corners (no gain: the fine noise changes cell
+  every pixel); one texture for the ground's pieces (the scene binds some 40–50 textures a
+  frame, counted on the PC, few of them the ground's; their share of the PC's profile is
+  SwiftShader's, not the board's). The `day-turn`
+  scenario now has a new land come, the case left on the desk.
+- Phase 2 (each animal one batch): not started. A closer look: a body's sprites are
+  reached by sleep, the rare overlays, eating, ripples and the water's colouring and glass
+  filter; a batch element must redo all of that and Pixi's vertex maths to the bit; and
+  in the crowd's profile it can save some 7–10 % of the script (the packing and the GPU
+  stay), not the 15–20 % first estimated. The owner's call whether to build it before the
+  board's probe says where the late frames come from.
+- Phase 3 (fire): working out each burning cell's fixed parts once would save some 3 % of
+  the fire scenario; its frame is mostly the animals and Pixi's draw. Not done.

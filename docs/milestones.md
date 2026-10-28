@@ -199,6 +199,10 @@ Runs behind the report stay in `runs/` (gitignored): `m11-report-*`, `m11-tuned-
 - **Since** (2026-10-28): the review of the pipeline (`docs/renderer-performance-review.md`)
   implemented where it leaves the pixels as they are (P1–P3, P6–P8; ADR 0022, "The review
   of the pipeline"), checked by every screenshot and by film frames before and after.
+  Then the optimization plan (`docs/renderer-optimization-plan.md`, its status there): a
+  frame probe in the bench, `scripts/compare-films.mjs`, the card's portrait read back
+  without waiting, a day without a new land laid out only in a turn of the season, the
+  ground's painters 8–13 % faster; all the same pixels.
 - **Next, in order**:
   1. The final report regenerated (`npm run final`) from the new recordings.
   2. A last full board run of the final build, `reports/R5-device/` taken again from it;

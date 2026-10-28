@@ -243,6 +243,11 @@ Do not create directories outside this layout without updating this file.
   - `cd renderer && npm run creatures` — write the creature sheet (phenotype port against
     the sim, creature styles side by side) to `reports/R2-creature-sheet/`; live at
     `/creatures.html`
+  - `cd renderer && node scripts/compare-films.mjs <url before> <url after> [frames] [scenes]`
+    — film moving scenes (fire, bushes, the card, the scroll, the map, rain, snow) from two
+    servings of the page (the commit before a change in a `git worktree`, `npx vite --port
+    5392`) and compare them frame by frame: a change that claims the same pixels must give
+    every frame byte for byte the same
   - `cd renderer && npm run build:kiosk` — the desk's build (`vite build --mode kiosk`) into
     `renderer/dist-kiosk/`: the scene alone, demo paths compiled out (`?film`, `?file=`;
     `?show=`/`?recording=` only under `?bench`), the server's stream `ws://<host>/stream` by

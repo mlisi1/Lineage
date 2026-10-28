@@ -659,9 +659,13 @@ on the screen is laid out again (its plants placed, its ground repainted); the o
 when they come on the screen (R5: laying out every view built held the board's page for
 seconds).
 
-**A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
-plants out again for the day and repaints the grounds of the views that have been
-shown; the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
+**A day at a time.** On a new land, or a new day of the year that looks different,
+`landscape.ts` lays the plants out again for the day and repaints the grounds of the views
+that have been shown. Away from a turn of the season every place shows the clock's season,
+so a day that brings no land looks as the day before and is not laid out at all; in a turn
+every day is, as the turn moves across the land; the kept paintings are stamped with the
+season (or the day, in a turn) rather than the day (R5, the optimization plan: the
+day's turn had a fifth of its frames late on the board, every day); the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
 growth, a fire's scar or the turn of the season comes over the land gently. The
 drawings a plant layer is made of depend only on the view, the look, the seasons in play
 and the snow, not on the land: they are drawn once and shared by the layers that want
@@ -1269,8 +1273,14 @@ and measures ten scenarios, each on a fresh page load (the first load plans wher
 pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
 never `?film`'s. A scenario is measured only once the view it measures is painted, for
 20 s, with the sim-day held as on the desk (`Landscape.holdDay`; the recording is played
-1800 times as fast); the tenth, `day-turn`, lets a day turn in its window and is reported,
-not judged (the owner, 2026-10-27).
+1800 times as fast); the tenth, `day-turn`, has a new land come in its window (the latest
+sent again a day later: a day without one is no longer laid out) and is reported, not
+judged (the owner, 2026-10-27). A frame probe (`src/frameprobe.ts`) times each frame's
+phases (messages, director, landscape, herd, atmosphere, overlays, render) and notes what
+happened in it (a message's type, a portrait drawn, a ground piece placed, a lay-out,
+plants built, shadows); each scenario's `probe` gives the phases' median and p99, the
+late frames by the phase that took most of them (or "outside": garbage collection, the
+GPU), what they held, and the five worst; `kiosk_bench.py` prints the late frames' causes.
 
 **What the frames cost on the board** (R5, ADR 0022 "The board"). The page's own work
 decides the frame rate, not the GPU. So: PixiJS's draw list is rebuilt only where
@@ -1289,7 +1299,12 @@ transforms, the grade and the sea's shore uniforms are written only when they ch
 rolling scroll is repainted only when its paper moves a pixel; the ground's pieces go to
 the GPU from the painter's pixels, with no canvas between; a fire's sprites keep their
 places in their pools when one is passed over, its tints are written only when they
-change, and it makes no objects per cell per frame.
+change, and it makes no objects per cell per frame. Then (the optimization plan,
+`docs/renderer-optimization-plan.md`): the card's portrait is drawn in the dark of the
+dip, read back from the GPU without waiting for it (a pixel-pack buffer and a fence,
+WebGL2; at once for films and stills), and drawn once rather than measured first when only
+its colours changed; the painters work out a pixel's season only in a turn, and in a calm
+view add only the kinds of cover around a pixel (8–13 % faster, every painting the same).
 
 | Scenario | View | What it measures |
 |---|---|---|
