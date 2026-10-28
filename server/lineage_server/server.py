@@ -201,6 +201,13 @@ class Server:
             "wall_s": round(wall, 1),
             "sim_cpu_s": round(numbers.sim_cpu_s, 3),
             "sim_core_share": round(numbers.sim_cpu_s / wall, 4) if wall > 0 else 0.0,
+            "caught_up_days": round(numbers.caught_up_days, 3),
+            "catch_up_cpu_s": round(numbers.catch_up_cpu_s, 3),
+            "catch_up_s_per_day": (
+                round(numbers.catch_up_cpu_s / numbers.caught_up_days, 3)
+                if numbers.caught_up_days > 0
+                else None
+            ),
             "saves": numbers.saves,
             "last_save_s": round(numbers.last_save_s, 3),
             "longest_save_s": round(numbers.longest_save_s, 3),

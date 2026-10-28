@@ -7,7 +7,8 @@ run days of island time in a moment.
 
 - `open`: load the newest save that loads (or make world 1), then catch up to now: the
   device was off, so the owner was away (the owner, 2026-10-28). A save at every UTC
-  midnight on the way, so a long catch-up cut short does not start over.
+  midnight on the way, so a long catch-up cut short does not start over, and one at its
+  end.
 - `advance`: bring the world to now. It steps through the ticks of the creatures, the
   light and the plants (the sim's ``[schedule]``) so that the feed sends each in turn. A
   clock that jumped far ahead (``jump_seconds``) is caught up on instead, and the island
@@ -85,6 +86,10 @@ class Numbers:
     """What the island costs (for /status and the log, S1/S7)."""
 
     sim_cpu_s: float = 0.0
+    # Catching up (on opening, or after a clock jump): sim-days lived and the CPU they took,
+    # saves apart: the device's cost of a sim-day.
+    caught_up_days: float = 0.0
+    catch_up_cpu_s: float = 0.0
     saves: int = 0
     last_save_s: float = 0.0
     longest_save_s: float = 0.0
@@ -159,7 +164,10 @@ class Island:
             self._world = World.restore(self._config, loaded.value)
             log.info("loaded %s (world %d)", loaded.path.name, self._world.number)
             opened = Opened(loaded.path, loaded.skipped, max(0, now_ms - self._world.unix_ms))
-            self._catch_up(now_ms)
+            if opened.caught_up_ms > 0:
+                self._catch_up(now_ms)
+                # What was caught up is not lost to a crash before the next midnight.
+                self.save()
         self._feed = Feed(self.world)
         self.feed.start(self.world)
         self._store.prune(self._settings.daily_kept, self._settings.monthly_kept)
@@ -173,11 +181,24 @@ class Island:
         log.info("catching up %.1f days", (now_ms - world.unix_ms) / clock.MS_PER_DAY)
         if world.presence.present:
             self._keep(self._timed(lambda: world.apply(PresenceChanged(False))))
+        numbers, start_ms, cpu = self.numbers, world.unix_ms, 0.0
         while world.unix_ms < now_ms:
             midnight = clock.next_midnight_t_ms(world.epoch_unix_ms, world.t_ms)
             days = self._settings.catch_up_days - 1
             target = min(now_ms, world.epoch_unix_ms + midnight + days * clock.MS_PER_DAY)
-            self._keep(self._timed(lambda target=target: world.advance_to_unix(target)))
+            before = numbers.sim_cpu_s
+            outputs = self._timed(lambda target=target: world.advance_to_unix(target))
+            cpu += numbers.sim_cpu_s - before
+            self._keep(outputs)
+        days_lived = (now_ms - start_ms) / clock.MS_PER_DAY
+        numbers.caught_up_days += days_lived
+        numbers.catch_up_cpu_s += cpu
+        log.info(
+            "caught up %.2f days in %.1f s of CPU (%.2f s a sim-day)",
+            days_lived,
+            cpu,
+            cpu / days_lived,
+        )
 
     # --- Living ---------------------------------------------------------------------------
 
@@ -213,6 +234,7 @@ class Island:
         self._catch_up(now_ms)
         if present:
             self._keep(self.world.apply(PresenceChanged(True)))
+        self.save()
         self._feed = Feed(self.world)
         return self.feed.start(self.world)
 

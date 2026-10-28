@@ -34,7 +34,9 @@ each in turn.
 
 - **Starting** (the owner, 2026-10-28): the newest save that loads is opened, and the time
   the device was off is lived at once, with the owner away. There is a save at each UTC
-  midnight on the way, so a catch-up of months that is cut short does not start over.
+  midnight on the way, so a catch-up of months that is cut short does not start over,
+  and one at the end. `/status` gives what it cost (`catch_up_s_per_day`: the device's
+  CPU per sim-day).
   A world that ends on the way is archived as usual. On the PC a sim-day takes about
   0.4 s of CPU.
 - **A clock that jumps** more than `jump_seconds` (an hour) ahead while running is

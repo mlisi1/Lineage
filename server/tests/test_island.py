@@ -96,6 +96,8 @@ def test_a_restart_after_downtime_lives_it_with_the_owner_away(
     again = _island(config, tmp_path)
     opened = again.open(later)
     assert opened.caught_up_ms == later - start
+    assert again.numbers.caught_up_days == pytest.approx((later - start) / DAY)
+    assert again.numbers.catch_up_cpu_s > 0
     assert not again.world.presence.present
     # The same as a world that went on uninterrupted, the owner leaving at the cut.
     world = World.restore(config, io.loads(SAVE.read_bytes()))
@@ -103,9 +105,14 @@ def test_a_restart_after_downtime_lives_it_with_the_owner_away(
     world.apply(PresenceChanged(False))
     world.advance_to_unix(later)
     assert again.world.state_hash() == world.state_hash()
-    # A save at each midnight on the way (the saves of the start kept by the retention).
-    midnights = (later // DAY) - (start // DAY)
-    assert len(Store(tmp_path).saves()) == saves_before + midnights
+    # A save at each midnight on the way and one at the end; the retention keeps the newest
+    # of each day, so every day crossed has one, and the newest is the end.
+    saves = Store(tmp_path).saves()
+    days = {path.name[:10] for path in saves}
+    for day in range(start // DAY, later // DAY + 1):
+        assert save_name(day * DAY)[:10] in days
+    assert saves[-1].name == save_name(later)
+    assert len(saves) > saves_before
 
 
 def test_a_day_of_life_streams_creatures_light_and_land_on_the_sims_schedule(
