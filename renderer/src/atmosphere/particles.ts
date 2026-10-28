@@ -34,7 +34,8 @@ export function puffAt(
   slot: number,
   timeS: number,
   tile: number,
-): { x: number; y: number; size: number; alpha: number } {
+  out: Puff = { x: 0, y: 0, size: 0, alpha: 0 },
+): Puff {
   const phase = cellHash(slot, plume.salt, 301);
   const shifted = timeS + phase * plume.life;
   const cycle = Math.floor(shifted / plume.life);
@@ -44,12 +45,24 @@ export function puffAt(
   const travelled = age * plume.life;
   // Each puff leans a little its own way as it rises.
   const lean = 0.5 + cellHash(slot, cycle + plume.salt, 304);
-  return {
-    x: plume.x + reach * Math.cos(angle) + (plume.drift * lean * travelled) / tile,
-    y: plume.y + reach * Math.sin(angle) - (plume.rise * travelled) / tile,
-    size: plume.from + (plume.to - plume.from) * age,
-    alpha: plume.alpha * (1 - age) * Math.min(age * 6, 1),
-  };
+  out.x = plume.x + reach * Math.cos(angle) + (plume.drift * lean * travelled) / tile;
+  out.y = plume.y + reach * Math.sin(angle) - (plume.rise * travelled) / tile;
+  out.size = plume.from + (plume.to - plume.from) * age;
+  out.alpha = plume.alpha * (1 - age) * Math.min(age * 6, 1);
+  return out;
+}
+
+/** A puff where `puffAt` puts it: x, y in cells, its size in art pixels, its opacity. */
+export interface Puff {
+  x: number;
+  y: number;
+  size: number;
+  alpha: number;
+}
+
+/** Tint `sprite` `colour`, written only when it changes (Pixi parses a colour on every write). */
+export function tint(sprite: Sprite, colour: number): void {
+  if (sprite.tint !== colour) sprite.tint = colour;
 }
 
 /** Something falling across the screen: rain, falling ash. In art pixels of the screen. */
@@ -87,11 +100,13 @@ export class SpritePool {
   readonly container = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   private used = 0;
+  private skipped = 0;
 
   constructor(private readonly blendMode: "normal" | "add" = "normal") {}
 
   begin(): void {
     this.used = 0;
+    this.skipped = 0;
   }
 
   /** The next sprite, shown, with `texture`. */
@@ -109,6 +124,19 @@ export class SpritePool {
     return sprite;
   }
 
+  /**
+   * Pass over a sprite not drawn this frame, keeping its place: those asked for after it
+   * keep theirs, rather than each taking its neighbour's texture and place and being
+   * written afresh (R5, review P1). What is drawn, and in what order, is the same.
+   */
+  skip(): void {
+    const sprite = this.sprites[this.used];
+    if (sprite === undefined) return;
+    sprite.visible = false;
+    this.used += 1;
+    this.skipped += 1;
+  }
+
   end(): void {
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
@@ -118,7 +146,7 @@ export class SpritePool {
 
   /** Sprites shown after the last `end` (tests). */
   get shown(): number {
-    return this.used;
+    return this.used - this.skipped;
   }
 }
 
