@@ -14,7 +14,7 @@
  * Asked for the surf (`PaintRequest.surf`), a painting comes with its shore's data, which
  * goes in a layer of its own (`surf`) for the sea's shader to draw the waves from.
  */
-import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
+import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
 import { NO_CACHE, type GroundCache } from "./groundcache";
 import { BACKGROUND, Dropped, type PaintRequest, type Painter } from "./painter";
@@ -74,8 +74,9 @@ interface Placing {
 
 /**
  * RGBA as a sprite of `tile` texels to the cell, its corner on cell (x, y); `offsetX` and
- * `offsetY` shift the image within a canvas of `width` × `height`, which cuts off what
- * falls outside it.
+ * `offsetY` (0 or less) shift the image within a frame of `width` × `height`, which cuts
+ * off what falls outside it. The pixels go to the GPU as they are, with no canvas between
+ * (R5, review P8: a canvas copied them twice and kept a third copy per piece).
  */
 function rgbaSprite(
   rgba: Uint8ClampedArray<ArrayBuffer>,
@@ -83,19 +84,20 @@ function rgbaSprite(
   tile: number,
   at: Placing,
 ): Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = at.width ?? size.width;
-  canvas.height = at.height ?? size.height;
-  const context = canvas.getContext("2d");
-  if (context === null) throw new Error("no 2D canvas");
-  context.putImageData(
-    new ImageData(rgba, size.width, size.height),
-    at.offsetX ?? 0,
-    at.offsetY ?? 0,
+  const source = new BufferImageSource({
+    resource: new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.length),
+    width: size.width,
+    height: size.height,
+    format: "rgba8unorm",
+    scaleMode: "nearest",
+  });
+  const frame = new Rectangle(
+    0 - (at.offsetX ?? 0),
+    0 - (at.offsetY ?? 0),
+    at.width ?? size.width,
+    at.height ?? size.height,
   );
-  const sprite = new Sprite(
-    new Texture({ source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) }),
-  );
+  const sprite = new Sprite(new Texture({ source, frame }));
   sprite.scale.set(1 / tile);
   sprite.position.set(at.x, at.y);
   return sprite;
