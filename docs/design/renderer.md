@@ -1280,7 +1280,16 @@ the plants moved in its row only when its order changes; the grey under cloud gi
 canvas as its filter area); an animal is posed again only when what it is posed from
 changed, but for its breathing chest; out of sight it lives one frame in three; in the
 middle view an animal in sight is posed two frames in three (the owner); objects are not
-made per animal per frame where they can be reused.
+made per animal per frame where they can be reused. After the review of the pipeline
+(`docs/renderer-performance-review.md`, every change pixel for pixel the same): what
+stands over an animal is asked of the plants again only when the animal moved or the
+plants changed (built, a bush's piece slid in the wind); the plants are culled and blown
+only in the view shown, and only plants whose lean can reach a whole pixel are blown;
+transforms, the grade and the sea's shore uniforms are written only when they change; a
+rolling scroll is repainted only when its paper moves a pixel; the ground's pieces go to
+the GPU from the painter's pixels, with no canvas between; a fire's sprites keep their
+places in their pools when one is passed over, its tints are written only when they
+change, and it makes no objects per cell per frame.
 
 | Scenario | View | What it measures |
 |---|---|---|

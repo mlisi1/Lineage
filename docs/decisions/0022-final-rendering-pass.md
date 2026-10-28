@@ -471,6 +471,36 @@ stays on `r5-final` as R6's start, only on `?showcase` (the desk's page is uncha
 it). The changes to the ground it led to (several stamps kept, the workers reading the
 cache, a new land laid out per view) are R5's and stay.
 
+### The review of the pipeline (2026-10-28)
+
+A review of the renderer's per-frame costs (`docs/renderer-performance-review.md`,
+profiled on the PC) ranked what could be made cheaper, each change marked as leaving the
+pixels as they are or not. Those that leave them were made, checked against every
+screenshot and against film frames before and after, byte for byte:
+
+- **What stands over an animal** (P2): asked of the plants again only when the animal
+  has moved or the plants have changed (built, a bush's piece slid, a drawing of another
+  size swapped in); in the crowd seven questions in ten are answered from what was kept.
+- **Plants** (P3): culled and blown in the view shown only; a plant whose lean cannot
+  reach a whole pixel is not blown; only rows near the view are looked at.
+- **Small writes** (P6): transforms, opacity, the grade and the sea's shore uniforms
+  written only when they change; the animals in sight and the glowing spots kept for the
+  frame.
+- **The scroll** (P7): repainted only when its paper moves a pixel (a repaint costs some
+  0.2 ms on the PC and lasts the second and a half a scroll rolls, so no more than that).
+- **The ground** (P8): pieces go to the GPU from the painter's pixels, no canvas between
+  (two copies fewer, and no canvas kept per piece).
+- **Fire** (P1): a sprite passed over keeps its place in its pool, so those after it are
+  not rewritten; tints written only when they change; no objects per cell per frame. On
+  the PC, `drawFires` fell from 23 % to 16 % of the fire scenario's script. Keeping a set
+  of sprites per burning cell, as the review suggested, would have changed the order in
+  which overlapping flames are drawn: not done.
+
+Left for the board, which alone decides: the plant bands' size (P4), and drawing each
+animal as one batch rather than some 45 sprites (the review's §2), both to be measured
+there before they are kept. Left for the owner, since they change pixels: dots on the map
+at a lower cadence (P5), simpler bodies in the middle view, and leans on alternate frames.
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

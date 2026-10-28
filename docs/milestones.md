@@ -196,9 +196,14 @@ Runs behind the report stay in `runs/` (gitignored): `m11-report-*`, `m11-tuned-
   `showcase.sh`. Its trailer, one loop filmed on the PC, is with the owner for what is only
   of the look. On the board (dev only): `lineage-showcase@.service` installed, the
   browser's profile in `~/.lineage-showcase`.
+- **Since** (2026-10-28): the review of the pipeline (`docs/renderer-performance-review.md`)
+  implemented where it leaves the pixels as they are (P1–P3, P6–P8; ADR 0022, "The review
+  of the pipeline"), checked by every screenshot and by film frames before and after.
 - **Next, in order**:
   1. The final report regenerated (`npm run final`) from the new recordings.
-  2. A last full board run of the final build, `reports/R5-device/` taken again from it.
+  2. A last full board run of the final build, `reports/R5-device/` taken again from it;
+     with it, measure the review's P4 (band size) and §2 (each animal one batch), kept
+     only if the board gains.
   3. Merge `r5-final` into `main` (ask the owner). The showcase (R6) goes with it: it is
      only on `?showcase`, and the desk's page is unchanged by it.
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;

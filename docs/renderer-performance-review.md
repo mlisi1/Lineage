@@ -5,6 +5,13 @@ Written 2026-10-27 on branch `r5-final` (HEAD `6f8cd4d`) as a review only: nothi
 Read `CLAUDE.md` (§4.7–4.8, §5, §6, §8 R5/R6), `docs/design/renderer.md` ("What the frames
 cost on the board", "Measuring the scene on the device") and ADR 0022 "The board" first.
 
+**Status (2026-10-28).** Done, all [same pixels]: P1 (in part: slots kept, tints, no
+garbage; not keyed per-cell sprites, which would reorder overlapping flames), P2, P3, P6,
+P7 (in part: repaint per pixel of paper; the roll is not composed of separate elements),
+P8 (direct upload; `PLACED_PER_FRAME` unchanged). Waiting for the board: P4, P10, §2.
+Waiting for the owner: P5 and the other [changes pixels] items. ADR 0022, "The review of
+the pipeline", records what was kept.
+
 ## 0. Ground rules for whoever implements this
 
 - **The look is final** (the owner, 2026-10-25). Every change below is tagged
