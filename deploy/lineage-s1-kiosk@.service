@@ -1,0 +1,35 @@
+# The desk's kiosk on the board's screen, drawing the island from the server (S1's board
+# session), as user %i: Chromium full screen on http://localhost:8080/, capped at 30 fps as
+# the desk is (ADR 0022), with the flags R5 measured the scene with
+# (tools/kiosk_bench.py BASE_FLAGS, the "default" profile). A development unit, like
+# lineage-r5@: S6 writes the deployment's own kiosk.
+#
+#   sudo cp lineage-s1-kiosk@.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl start lineage-s1-kiosk@<user>      # needs lineage-server@<user> running
+#   sudo systemctl stop lineage-s1-kiosk@<user>; sudo systemctl start getty@tty1
+#
+# cage shows one application full screen; the unit takes the first console for it, as
+# lineage-r5@ does.
+[Unit]
+Description=Lineage desk kiosk on the display, as %i
+Requires=lineage-server@%i.service
+After=lineage-server@%i.service systemd-user-sessions.service systemd-logind.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_SESSION_TYPE=wayland
+UtmpIdentifier=tty1
+UtmpMode=user
+ExecStart=/usr/bin/cage -s -- /usr/bin/chromium --no-first-run --no-default-browser-check --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-component-update --disable-background-networking --disable-features=Translate,MediaRouter --password-store=basic --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --ozone-platform-hint=auto --user-data-dir=/home/%i/.lineage-s1-kiosk --kiosk --window-position=0,0 --window-size=1024,600 http://localhost:8080/?cap=30
+Restart=no

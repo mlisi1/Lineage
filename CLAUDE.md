@@ -90,6 +90,7 @@ lineage/
 │   ├── replay.py             # load a save, inspect, render stills and renderer fixtures
 │   ├── stream.py             # record the state stream from a save, for the renderer (R1),
 │                             #   through the server's feed (S1)
+│   ├── server_watch.py       # sample a running server's /status, judge it against §4.8 (S1)
 │   ├── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
 │   │                         #   standard library only: copied to the board as one file
 │   └── showcase.py           # run the showcase on the board and sum up how it ran (R6);
@@ -136,7 +137,8 @@ lineage/
 ├── app/                      # phone PWA shell, reuses renderer/
 ├── journal/                  # static site templates
 ├── deploy/                   # os notes, systemd units (lineage-r0@, lineage-r5@: the board
-│                             #   benchmarks; lineage-server@: the island, S1), setup.sh,
+│                             #   benchmarks; lineage-server@: the island, lineage-s1-kiosk@
+│                             #   and s1-board.sh: S1's board session), setup.sh,
 │                             #   kiosk, backups, tailscale
 ├── mockups/                  # HTML mockups and enclosure concepts (reference only)
 ├── reports/                  # committed milestone reports (HTML + metrics.json), see §7
@@ -235,6 +237,10 @@ Do not create directories outside this layout without updating this file.
     `--seed N`), the time it was off caught up, the kiosk at `http://localhost:8080/`, the
     stream at `/stream`, its numbers at `/status`; keys on stdin play the device (`p`
     presence, `g` god power, `v` view, `l`/`r` power lost/restored); Ctrl+C saves and stops
+  - `deploy/s1-board.sh setup|start|status|stop lineage@<board>` — the server and the kiosk
+    on the board (procedure in `deploy/README.md`), then `uv run python -m
+    tools.server_watch http://<board>:8080 --minutes 180 --out runs/s1-board/status.jsonl`
+    — its numbers against the budgets of §4.8
   - `uv run python -m tools.viz.pixelmap` — write the renderer's copy of the palette
     (`renderer/src/terrain/palette.json`)
   - `cd renderer && npm run protocol` — regenerate `src/protocol.ts` from the wire schema

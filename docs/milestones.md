@@ -50,11 +50,15 @@ conflicts only in the docs.
   jump), end to end with real clients, a save benchmark (197 ms on the PC), renderer
   `SocketSource`.
 - **Left:**
-  1. The board's numbers, in the session shared with R5's last run. Run the server for a
-     few hours with the kiosk on it; read `/status`: `sim_core_share` ≤ 0.25,
-     `longest_save_s` ≤ 2, `rss_mb` ≤ 300 (§4.8). Record them in ADR 0023 and here. If
-     the save comes near 2 s, weigh xz preset 1 in `io.dumps` (a sim change; same format
-     and state hashes).
+  1. The board's numbers, in the session shared with R5's last run, by the procedure in
+     `deploy/README.md` ("The island in real time on the board"): `deploy/s1-board.sh`
+     sets up, starts and stops; `tools.server_watch` judges `/status` (`sim_core_share` ≤
+     0.25, `longest_save_s` ≤ 2, `rss_mb` ≤ 300, §4.8) and gives the board's CPU per
+     sim-day from the catch-up. Rehearsed on the PC from the wheels: the island (seed 3, a
+     year old today, `runs/s1-board-island`) catches up at 0.37 s a sim-day, saves in
+     0.19 s, 64 MB. Record the board's numbers in ADR 0023 and here. If the save comes
+     near 2 s, weigh xz preset 1 in `io.dumps` (a sim change; same format and state
+     hashes).
   2. Merge `main` in once R5 is there, re-run the suites, merge S1 (ask the owner).
 - **For S2:**
   - Implement `lineage_device.interface.Device` on GPIO: presence first, then events;
