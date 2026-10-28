@@ -56,4 +56,6 @@ herbivores and predators both present at year 3 in at least 60 % of seeds.
   predator lineages, newborn hunters need a better start (parental care, or carcasses to
   scavenge).
 - A full save is ~590 KiB and ~100 ms on a PC: close to the device's 2 s budget once
-  scaled; S1 should measure it early.
+  scaled; S1 should measure it early. (S1, ADR 0023: a full world of about 200 animals,
+  0.68 MB, saved through the server's store in 197 ms on the PC, nearly all of it xz;
+  the board's number comes from its session.)

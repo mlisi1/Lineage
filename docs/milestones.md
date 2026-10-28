@@ -56,7 +56,8 @@ conflicts only in the docs.
      0.25, `longest_save_s` ≤ 2, `rss_mb` ≤ 300, §4.8) and gives the board's CPU per
      sim-day from the catch-up. Rehearsed on the PC from the wheels: the island (seed 3, a
      year old today, `runs/s1-board-island`) catches up at 0.37 s a sim-day, saves in
-     0.19 s, 64 MB. Record the board's numbers in ADR 0023 and here. If the save comes
+     0.19 s, 64 MB. The board's Python is 3.13: setup installs uv in `~/.lineage-uv` and
+     makes the server's environment with uv's Python 3.11 (rehearsed from a system 3.12). Record the board's numbers in ADR 0023 and here. If the save comes
      near 2 s, weigh xz preset 1 in `io.dumps` (a sim change; same format and state
      hashes).
   2. Merge `main` in once R5 is there, re-run the suites, merge S1 (ask the owner).
@@ -612,6 +613,17 @@ under `--schedule office` (ADR 0016).
 - Scripts in the session scratchpad (`/tmp/…`) are lost on reboot; fixture recipes live
   in the fixtures README.
 - ruff rejects `# fmt: skip` inside an expression (RUF028); use it only on statements.
+- Python 3.12 syntax (`class Box[T]:`, `def f[T](…)`) slips in easily and fails on the
+  project's 3.11: use `TypeVar` and `Generic` (S1).
+- The board's own Python is Debian's (3.13 on Trixie), not the project's 3.11: anything
+  installed there goes through uv's Python 3.11 (`deploy/s1-board.sh`), and a PC
+  rehearsal from the system's 3.11 hides it (S1).
+- An installed wheel cannot find files by paths relative to the repository
+  (`Path(__file__).parents[…]`): pass config paths on the command line where it runs
+  from a wheel (the board), keep data files inside the package (`schema.json`) (S1).
+- A websockets handler that waits on something other than its socket (a queue) also
+  waits on the socket closing, or the server's shutdown waits for it forever (S1,
+  `server.py` `_client`).
 
 ### M9 closed (merged into `main` at `1a1513c`, 2026-10-19)
 
@@ -777,10 +789,12 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Parallel work (other agents)
 
-No other agent is active (2026-10-19): R1, R2, M6–M9 are merged and closed. Agents
-coordinate through `/home/elechim/Lineage-coord` (README with the worktree table and
-claimed ADR numbers, a status file and an inbox per agent); a new milestone adds its row
-and claims its ADR there. ADRs so far: 0001–0017; the next free is 0018.
+Active on 2026-10-28: R5 (with R6) on `r5-final` in `../Lineage-r5`, and S1 on
+`s1-server` in `../Lineage-s1`, branched from `r5-final`; R5 merges into `main` first.
+Everything else is merged and closed. Agents coordinate through `/home/elechim/Lineage-coord`
+(README with the worktree table and claimed ADR and schema numbers, a status file and an
+inbox per agent); a new milestone adds its row and claims its ADR there. ADRs so far:
+0001–0023; the next free is 0024; the next free schema version is 14.
 
 ### Working notes
 

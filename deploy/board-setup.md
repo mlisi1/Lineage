@@ -119,7 +119,7 @@ answer the questions; it asks for the Wi-Fi among them.
 ```sh
 sudo apt update && sudo apt full-upgrade -y
 sudo apt install -y --no-install-recommends \
-  chromium cage python3 kmscube mesa-utils fonts-dejavu-core
+  chromium cage python3 python3-venv kmscube mesa-utils fonts-dejavu-core
 sudo reboot
 ```
 
@@ -127,9 +127,13 @@ sudo reboot
 - `cage`: a Wayland compositor that shows one application full screen and nothing else,
   which is what a kiosk is.
 - `kmscube`, `mesa-utils`: to see what draws, in step 8.
+- `python3-venv`: for the server's environment (S1).
 
-The benchmark needs Python 3.9 or newer and nothing else. (Trixie has 3.13. The project's
-own 3.11 comes with `uv` when the server goes on the board, in S6.)
+The benchmark needs Python 3.9 or newer and nothing else. (Trixie has 3.13.) The server
+runs on the project's own 3.11, which `uv` brings: `deploy/s1-board.sh setup` installs
+`uv` in a small environment of the system's Python (`~/.lineage-uv`) and makes the
+server's with uv's Python 3.11 (see `README.md`, "The island in real time on the board";
+S6 makes it the deployment's).
 
 ## 4. Note what the board is
 

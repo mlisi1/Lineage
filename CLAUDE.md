@@ -37,7 +37,8 @@ sync when behaviour changes.
 
 ## 2. Target hardware (for context; hardware work comes later)
 
-- Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS, Python 3.11.
+- Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS (Trixie,
+  whose Python is 3.13; the project runs on its own Python 3.11, brought by `uv`, S1).
 - Waveshare 70H-1024600 7" IPS, 1024×600, HDMI via adapter board + 15 cm FPC; backlight
   enable/PWM pins driven from GPIO.
 - PIR sensor, god-power push button, view push button (steps the screen's views, ADR 0020),
@@ -185,7 +186,7 @@ Do not create directories outside this layout without updating this file.
 
 ## 5. Tooling and conventions
 
-- **Python** 3.11 (device OS version). Managed with `uv`; one workspace with `sim`,
+- **Python** 3.11 (the project's, on the board too through `uv`). Managed with `uv`; one workspace with `sim`,
   `server`, `device`, `tools` as members.
 - **Numerics**: NumPy, vectorised over grids and populations. No per-cell Python loops in
   hot paths (flora/terrain); creatures may loop in Python only if the benchmark allows it.
@@ -673,6 +674,14 @@ needs a note in `docs/decisions/`.
 - **Deliver**: run the sim in real time, daily atomic saves (write temp → fsync → rename),
   keep last N saves, WebSocket state stream, recovery on start.
 - **Tests**: integration with fake device; kill -9 during save leaves a loadable save.
+- (As built so far, ADR 0023: one process and port for the kiosk's pages, `/stream` and
+  `/status`; the time the device was off is caught up on start with the owner away, a
+  save at each midnight on the way and one at the end (the owner, 2026-10-28); saves kept:
+  the newest of each of the last 7 days and the oldest of each month, archives forever; a
+  save on shutdown, on power loss and at a world's end; creatures streamed at each fauna
+  tick; the view button sent to the desk only, as a `view` message; a minimal fake device,
+  S2 completes it; `tools/stream.py` records through the server's feed. Left: the board's
+  numbers, by `deploy/s1-board.sh` and `tools.server_watch`.)
 
 ### S2 — Device layer
 - **Deliver**: PIR with configurable hold, god-power and view buttons with debounce, LED, backlight

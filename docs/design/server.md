@@ -96,7 +96,10 @@ standard input (`p` presence, `g` god power, `v` view, `l`/`r` power lost/restor
 
 ## On the board
 
-`deploy/lineage-server@.service` runs the server as a user. The numbers to hold (§4.8):
+`deploy/lineage-server@.service` runs the server as a user, in an environment of the
+project's Python 3.11 that `deploy/s1-board.sh setup` makes with `uv` (the board's own
+Python is Debian's 3.13); `deploy/lineage-s1-kiosk@.service` shows the kiosk on the
+screen, and `tools/server_watch.py` samples `/status` from the PC (`deploy/README.md`). The numbers to hold (§4.8):
 - sim at most 25 % of one core on average (`/status` `sim_core_share`);
 - the daily save at most 2 s (`longest_save_s`);
 - sim and server together at most 300 MB (`rss_mb`).

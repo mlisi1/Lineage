@@ -1268,7 +1268,8 @@ Round 1, items 1–7:
 
 The R0 spike's role passes to the real page. `index.html?bench` (`src/bench.ts`,
 scenarios in `src/benchplan.ts`) plays the committed creatures' recording
-(`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), there being no server yet,
+(`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), a recording rather than
+the server's stream so that every run measures the same island,
 and measures ten scenarios, each on a fresh page load (the first load plans where the
 pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
 never `?film`'s. A scenario is measured only once the view it measures is painted, for

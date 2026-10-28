@@ -13,8 +13,9 @@
 #       --out runs/s1-board/status.jsonl
 #
 # setup copies to ~<user>/lineage/: wheels of lineage-sim, -device and -server built here,
-# a virtual environment with the pinned numpy and websockets (from uv.lock; the board
-# needs the network for them), the desk's build, the sim's config and the server's
+# a virtual environment of Python 3.11 (uv's, in ~/.lineage-uv: the board's own Python is
+# Debian's 3.13) with the pinned numpy and websockets (from uv.lock; the board needs the
+# network for them), the desk's build, the sim's config and the server's
 # settings; and to ~<user>/lineage-data/saves/ the island to start from, if there is none
 # yet (default: seed 3 of runs/s1-board-island, grown one year to today: `uv run python -m
 # tools.fastforward --years 1 --seeds 1 --seed-base 3 --start <a year ago> --schedule
@@ -64,11 +65,18 @@ print(save_name(state.epoch_unix_ms + state.t_ms))
     "$board:lineage/"
   ssh "$board" "ls lineage-data/saves/*.lzma >/dev/null 2>&1" ||
     scp -q "$stage/$name" "$board:lineage-data/saves/$name"
-  ssh "$board" 'cd lineage && python3 -m venv .venv &&
-    .venv/bin/pip install -q --upgrade pip &&
-    .venv/bin/pip install -q -r requirements.txt &&
-    .venv/bin/pip install -q --no-deps --force-reinstall wheels/*.whl &&
-    .venv/bin/python -c "import lineage_server.main, numpy, websockets; print(\"environment ok\")"'
+  # The board's Python is Debian's (3.13 on Trixie); the project's is 3.11, which uv brings
+  # (a standalone CPython). uv itself goes into a small venv of the system's Python, from
+  # PyPI, so that nothing is piped into a shell.
+  ssh "$board" 'set -e
+    [ -x ~/.lineage-uv/bin/uv ] || { python3 -m venv ~/.lineage-uv &&
+      ~/.lineage-uv/bin/pip install -q uv; }
+    uv=~/.lineage-uv/bin/uv
+    cd lineage
+    $uv venv -q --python 3.11 --allow-existing .venv
+    $uv pip install -q --python .venv -r requirements.txt
+    $uv pip install -q --python .venv --no-deps --reinstall wheels/*.whl
+    .venv/bin/python -c "import sys, lineage_server.main, numpy, websockets; print(\"environment ok, Python\", sys.version.split()[0])"'
   ssh_t "cd lineage && sudo cp lineage-server@.service lineage-s1-kiosk@.service \
     /etc/systemd/system/ && sudo systemctl daemon-reload &&
     sudo systemctl enable systemd-time-wait-sync >/dev/null 2>&1; echo 'units installed'"

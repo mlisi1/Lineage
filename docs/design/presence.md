@@ -35,7 +35,8 @@ them again after a restore.
 A push button (no covered switch: the owner's decision, 2026-10-19) sends `GodPower()`.
 At most one power fires per `god_cooldown_days` (7); a press during the cooldown returns
 `GodPowerRefused(ready_t_ms)`, and `GodPowerReady` is emitted once when it ends: the
-LED's cue. The cooldown is in the saved state.
+LED's cue. The cooldown is in the saved state. The server lights the LED while the world's
+time is before `Presence.ready_t_ms` (S1, `server.md`).
 
 **Which power**: the island draws it from the presence stream. Power *p* has weight
 `god_weight_p × (1 + god_need_gain × need_p)`, with needs in [0, 1] (`Presence.needs`):

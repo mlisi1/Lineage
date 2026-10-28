@@ -72,6 +72,16 @@ On the PC, 2026-10-28:
   that is xz at preset 6; preset 1 gives the same 0.68 MB in about 68 ms.
 - A new island starts in 0.1 s.
 - The kiosk build draws the live stream: map view of a new world, no errors.
+- The board's session rehearsed from the wheels in a fresh environment, with the unit's
+  command line: an island a year old today (seed 3, office schedule, 203 animals in 15
+  species) catches up at 0.37 s of CPU a sim-day, saves in 0.19 s, holds 64 MB.
+
+Added while preparing the board:
+- A save straight after a catch-up, so caught-up time is not lost to a crash before
+  midnight.
+- `/status` reports the catch-up's CPU per sim-day: the board's cost of a sim-day, the
+  number M11 left to S1.
+- `deploy/s1-board.sh` and `tools/server_watch.py` run and judge the session from the PC.
 
 Tests:
 - Store: 20 seeded `kill -9`s while saving; a save loads after every one.
@@ -84,8 +94,10 @@ shared with R5's last run.
 
 ## Consequences
 
-- The board needs the Python workspace (`uv sync --no-dev`) and the desk's build; S6
-  writes the full setup.
+- The board's Python is Debian's 3.13 (Trixie), the project's 3.11. `deploy/s1-board.sh`
+  installs `uv` in `~/.lineage-uv` (from PyPI) and makes the server's environment with
+  uv's Python 3.11, from wheels built on the PC and the versions pinned in `uv.lock`. S6
+  writes the deployment's own setup.
 - If the board's save comes near 2 s, a lighter xz preset in `io.dumps` is the remedy.
   The format and the state hashes stay the same, but it is a sim change, to be weighed
   then.

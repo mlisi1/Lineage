@@ -205,8 +205,9 @@ repository's root, with the board on the network:
    ```sh
    deploy/s1-board.sh setup lineage@<board>
    ```
-   This needs Python 3.11 with `venv` on the board (`sudo apt install python3-venv`) and
-   the network, for numpy and websockets.
+   This needs `python3-venv` on the board (`sudo apt install python3-venv`) and the
+   network: `uv` goes into `~/.lineage-uv` (from PyPI), and brings the project's Python
+   3.11 (the board's own is Debian's 3.13), numpy and websockets.
 3. Start the server, then the kiosk on the screen:
    ```sh
    deploy/s1-board.sh start lineage@<board>

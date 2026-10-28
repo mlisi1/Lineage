@@ -20,5 +20,14 @@ cd renderer && npm ci && npm test && npx playwright test
 npm run dev                               # then / (the scene: V or a click steps the views) or /land.html
 ```
 
+Run the island in real time (S1), as the device does, with the desk's page:
+
+```sh
+cd renderer && npm run build:kiosk && cd ..
+uv run python -m lineage_server.main --data runs/island --dist renderer/dist-kiosk --fake-device
+# then http://localhost:8080/ ; keys typed in the terminal play the device:
+# p presence, g god power, v view, l/r power lost/restored; Ctrl+C saves and stops
+```
+
 If your shell exports `PYTHONPATH` (for example a sourced ROS environment), prefix the
 Python commands with `env -u PYTHONPATH`.
