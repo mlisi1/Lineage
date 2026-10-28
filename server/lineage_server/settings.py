@@ -26,13 +26,20 @@ class Settings:
     port: int
     poll_seconds: float
     catch_up_days: int
+    client_backlog: int
     daily_kept: int
     monthly_kept: bool
     log_every_seconds: float
 
 
 _KEYS: Mapping[str, Mapping[str, type]] = {
-    "server": {"host": str, "port": int, "poll_seconds": float, "catch_up_days": int},
+    "server": {
+        "host": str,
+        "port": int,
+        "poll_seconds": float,
+        "catch_up_days": int,
+        "client_backlog": int,
+    },
     "saves": {"daily_kept": int, "monthly_kept": bool},
     "status": {"log_every_seconds": float},
 }
@@ -77,8 +84,8 @@ def parse_settings(text: str) -> Settings:
         raise SettingsError(f"port {settings.port} out of range")
     if settings.poll_seconds <= 0 or settings.log_every_seconds <= 0:
         raise SettingsError("poll_seconds and log_every_seconds must be positive")
-    if settings.catch_up_days < 1 or settings.daily_kept < 1:
-        raise SettingsError("catch_up_days and daily_kept must be at least 1")
+    if min(settings.catch_up_days, settings.daily_kept, settings.client_backlog) < 1:
+        raise SettingsError("catch_up_days, daily_kept and client_backlog must be at least 1")
     return settings
 
 

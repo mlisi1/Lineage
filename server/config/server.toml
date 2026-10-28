@@ -13,6 +13,9 @@ port = 8080
 poll_seconds = 1.0
 # Catching up after the device was off: sim-days advanced per step, with a save after each.
 catch_up_days = 1
+# A client that has this many batches of messages waiting unsent (a phone on a stalled
+# network) is let go; the renderer reconnects and is sent everything anew.
+client_backlog = 256
 
 [saves]
 # Saves kept on the SD card: the newest save of each of the last daily_kept days that have
