@@ -525,6 +525,10 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const calmGrowth = new Float32Array(fieldSize * kinds);
   const calmLand = new Uint8Array(fieldSize);
   const calmHeights = new Float32Array(fieldSize);
+  // The kinds each place of the field has a share of, the others none: a pixel adds only
+  // those (adding a share of nothing leaves a sum as it is, to the last bit).
+  const calmKinds = new Uint8Array(fieldSize * kinds);
+  const calmKindCount = new Uint8Array(fieldSize);
   if (calm > 0) {
     const weightsOf = kernel(calm);
     for (let fy = 0; fy < fieldTall; fy++) {
@@ -548,10 +552,16 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         calmHeights[at] = level;
         if (landed <= 0) continue;
         calmLand[at] = 1;
+        let present = 0;
         for (let voted = 0; voted < kinds; voted++) {
           calmShares[at * kinds + voted] = (calmShares[at * kinds + voted] ?? 0) / landed;
           calmGrowth[at * kinds + voted] = (calmGrowth[at * kinds + voted] ?? 0) / landed;
+          if (calmShares[at * kinds + voted] !== 0 || calmGrowth[at * kinds + voted] !== 0) {
+            calmKinds[at * kinds + present] = voted;
+            present += 1;
+          }
         }
+        calmKindCount[at] = present;
       }
     }
   }
@@ -633,7 +643,9 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       if (calm > 0) {
         const at = (y0 + dy - fieldY) * fieldWide + (x0 + dx - fieldX);
         if (calmLand[at] !== 1) continue;
-        for (let voted = 0; voted < kinds; voted++) {
+        const present = calmKindCount[at] ?? 0;
+        for (let k = 0; k < present; k++) {
+          const voted = calmKinds[at * kinds + k] ?? 0;
           weights[voted] = (weights[voted] ?? 0) + weight * (calmShares[at * kinds + voted] ?? 0);
           growth[voted] = (growth[voted] ?? 0) + weight * (calmGrowth[at * kinds + voted] ?? 0);
         }
