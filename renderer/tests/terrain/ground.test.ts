@@ -549,3 +549,15 @@ describe("a piece's margin painted as land or sea only (R5, the optimization pla
     }
   });
 });
+
+describe("the cells of a land worked out once (R5, the optimization plan)", () => {
+  it("paints a new land from its own cells, not the last one's", () => {
+    const options = { tile: 8, style: "blended", grain: true } as const;
+    const first = world(["~~~~~~", "~ggbb~", "~ggbb~", "~~~~~~"]);
+    const second = world(["~~~~~~", "~ccss~", "~ccss~", "~~~~~~"]);
+    const fresh = paintGround(second, options);
+    paintGround(first, options);
+    expect(paintGround(second, options).rgba).toEqual(fresh.rgba);
+    expect(paintGround(first, options).rgba).not.toEqual(fresh.rgba);
+  });
+});

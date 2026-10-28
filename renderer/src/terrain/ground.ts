@@ -415,23 +415,43 @@ function kernel(reach: number): number[] {
   return row.map((value) => value / sum);
 }
 
-/** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
-export function paintGround(
-  world: Land,
-  options: GroundOptions,
-  gpu: GroundGpu | null = null,
-): Pixels {
-  const { width, height, heights, seaLevel, relief } = world;
-  const { tile, style, grain } = options;
-  const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
+/** What each cell of a land is, for the painter (`paintGround`). */
+interface Cells {
+  sea: Uint8Array;
+  kind: Uint8Array;
+  biomass: Float32Array;
+  slope: Float32Array;
+  coastal: Uint8Array;
+}
+
+/**
+ * The cells of the land last painted, by its grids: a piece of the island after another
+ * of the same land reads them again rather than working them out over the whole island
+ * (R5, the optimization plan: some 38 000 cells for each piece). The grids of a land do
+ * not change; a new land has new ones.
+ */
+let cellsKept: {
+  heights: Float32Array;
+  cover: Uint8Array;
+  biomass: Uint8Array;
+  classes: readonly string[];
+  cells: Cells;
+} | null = null;
+
+function cellsOf(world: Land): Cells {
+  const kept = cellsKept;
+  if (
+    kept !== null &&
+    kept.heights === world.heights &&
+    kept.cover === world.cover &&
+    kept.biomass === world.biomass &&
+    kept.classes === world.coverClasses
+  ) {
+    return kept.cells;
+  }
+  const { width, height, heights } = world;
   const count = width * height;
   const waterClass = world.coverClasses.indexOf("WATER");
-  const interpolated = style === "smooth" || style === "blended";
-  const dithered = style === "blended";
-  const close = tile >= CLOSE_FROM_TILE;
-  const calm = interpolated ? Math.max(0, Math.round(options.calm ?? (close ? CALM_CELLS : 0))) : 0;
-
-  // What each cell is: sea or land, what grows on it, how thickly, how it slopes.
   const sea = new Uint8Array(count);
   const kind = new Uint8Array(count);
   const biomass = new Float32Array(count);
@@ -457,6 +477,35 @@ export function paintGround(
       else if (form >= 0 && grown >= VISIBLE_FROM) kind[cell] = form + 1;
     }
   }
+
+  const cells = { sea, kind, biomass, slope, coastal };
+  cellsKept = {
+    heights,
+    cover: world.cover,
+    biomass: world.biomass,
+    classes: world.coverClasses,
+    cells,
+  };
+  return cells;
+}
+
+/** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
+export function paintGround(
+  world: Land,
+  options: GroundOptions,
+  gpu: GroundGpu | null = null,
+): Pixels {
+  const { width, height, heights, seaLevel, relief } = world;
+  const { tile, style, grain } = options;
+  const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
+  const interpolated = style === "smooth" || style === "blended";
+  const dithered = style === "blended";
+  const close = tile >= CLOSE_FROM_TILE;
+  const calm = interpolated ? Math.max(0, Math.round(options.calm ?? (close ? CALM_CELLS : 0))) : 0;
+
+  // What each cell is: sea or land, what grows on it, how thickly, how it slopes; worked
+  // out once for each land, not for each piece painted of it (`cellsOf`).
+  const { sea, kind, biomass, slope, coastal } = cellsOf(world);
 
   const bare = packRamp(world.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
   const rock = packRamp(relief.highRock);
