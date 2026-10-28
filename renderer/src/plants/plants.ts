@@ -225,6 +225,8 @@ export class PlantLayer {
   /** Where the creatures of each row go, top row first; `rowsPerCell` rows to the cell. */
   readonly guests: readonly Container[];
   readonly rowsPerCell: number;
+  /** Bumped when plants are built or a bush's piece slides: `Occluders.changes`. */
+  changes = 0;
   private readonly rows: Row[] = [];
   /** The rows' bands, top first, each `BAND_CELLS` cells of rows (`BAND_CELLS`). */
   private readonly bands: Container[] = [];
@@ -437,7 +439,10 @@ export class PlantLayer {
     for (let y = firstY; y <= lastY; y++) {
       for (let chunk = firstChunk; chunk <= lastChunk; chunk++) this.build(y, chunk * CHUNK_CELLS);
     }
-    if (this.built.size !== before) this.onBuilt?.();
+    if (this.built.size !== before) {
+      this.changes += 1;
+      this.onBuilt?.();
+    }
     let drawn = 0;
     // The rows that show are one run (a row shows from its foot up to the tallest plant's
     // top): only rows round the view and those shown last time are looked at, the others
@@ -512,10 +517,17 @@ export class PlantLayer {
           plant.lean = lean;
           if (plant.slide !== undefined) {
             plant.sprite.x = plant.slide.x + lean * plant.slide.pixel;
+            // A piece moved: what is over an animal may have changed (`changes`).
+            this.changes += 1;
             continue;
           }
           const frame = plant.frames[lean - plant.lowest];
-          if (frame !== undefined) plant.sprite.texture = frame;
+          if (frame !== undefined) {
+            const was = plant.sprite.texture;
+            // A drawing of another size: what is over an animal may have changed.
+            if (frame.width !== was.width || frame.height !== was.height) this.changes += 1;
+            plant.sprite.texture = frame;
+          }
         }
       });
     }

@@ -1,4 +1,4 @@
-import { Texture } from "pixi.js";
+import { Container, Texture } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import type { Look } from "../../src/creatures/body";
 import type { Point, Stiffness } from "../../src/creatures/chain";
@@ -228,5 +228,40 @@ describe("a body turning back on itself", () => {
       expect(over).toBeLessThan(0.25);
       expect(mostBend(creature.joints)).toBeLessThanOrEqual(creature.stiffness.bend + 1e-4);
     }
+  });
+});
+
+describe("what stands over an animal (R5, review P2)", () => {
+  it("asks the plants again only when the animal, its rows or the plants have changed", () => {
+    const layer = new CreatureLayer(ATLAS, [], () => true, mulberry32(2), MID_BODY, "anchored");
+    layer.show("bodies");
+    layer.place(0, seed());
+    layer.update(STEP_S);
+    const guests = Array.from({ length: 30 }, () => new Container());
+    let asked = 0;
+    const plants = {
+      changes: 0,
+      over: () => {
+        asked += 1;
+        return 5;
+      },
+    };
+    layer.hostIn(guests, 1, plants);
+    layer.hostIn(guests, 1, plants);
+    expect(asked).toBe(1);
+    // Its leaves over it all the same: in the row before the plant's.
+    expect(guests[4]?.children).toHaveLength(1);
+    plants.changes += 1;
+    layer.hostIn(guests, 1, plants);
+    expect(asked).toBe(2);
+    layer.send(0, 16, 10);
+    layer.update(STEP_S);
+    layer.hostIn(guests, 1, plants);
+    expect(asked).toBe(3);
+    // Plants that do not count their changes are asked every time.
+    const counted = { over: plants.over };
+    layer.hostIn(guests, 1, counted);
+    layer.hostIn(guests, 1, counted);
+    expect(asked).toBe(5);
   });
 });

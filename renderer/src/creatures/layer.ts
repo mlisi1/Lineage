@@ -287,6 +287,15 @@ interface Creature {
   poseLag: number;
   /** What it was last posed from (`posedAsBefore`); null before its first pose. */
   posed: Float64Array | null;
+  /** The plant over it as last asked (`overOf`), and what that was asked from. */
+  over: {
+    occluders: Occluders;
+    changes: number;
+    highest: number;
+    lowest: number;
+    joints: Float64Array;
+    answer: number;
+  } | null;
   /** With anchored life: where the sim has it and what it is doing there. */
   motion: Motion | null;
   /** Its mass, which sets how slowly it breathes. */
@@ -386,6 +395,11 @@ const WAKE_MARKS = 192;
  * `radii`) are behind each piece.
  */
 export interface Occluders {
+  /**
+   * Bumped whenever what `over` answers could change for the same question: plants built,
+   * a piece of a bush slid in the wind (a cache of answers is good while it stays).
+   */
+  readonly changes?: number;
   over(
     box: CellRect,
     from: number,
@@ -1476,6 +1490,45 @@ export class CreatureLayer {
     creature.motion.goal.y = y;
   }
 
+  /**
+   * What `occluders.over` answers for `creature` (slot `index`, rows `highest` to `lowest`),
+   * asked again only when its joints, the rows or the plants have changed since (R5,
+   * review P2: asked of every animal in sight every frame, most of them standing still).
+   */
+  private overOf(
+    creature: Creature,
+    index: number,
+    occluders: Occluders,
+    highest: number,
+    lowest: number,
+  ): number {
+    const { joints } = creature;
+    const changes = occluders.changes;
+    const kept = creature.over;
+    if (
+      changes !== undefined &&
+      kept !== null &&
+      kept.occluders === occluders &&
+      kept.changes === changes &&
+      kept.highest === highest &&
+      kept.lowest === lowest &&
+      kept.joints.length === joints.length * 2 &&
+      joints.every(
+        (joint, i) => kept.joints[2 * i] === joint.x && kept.joints[2 * i + 1] === joint.y,
+      )
+    ) {
+      return kept.answer;
+    }
+    const answer = occluders.over(this.box(index), highest, lowest, joints, creature.plan.radii);
+    const at = new Float64Array(joints.length * 2);
+    joints.forEach((joint, i) => {
+      at[2 * i] = joint.x;
+      at[2 * i + 1] = joint.y;
+    });
+    creature.over = { occluders, changes: changes ?? -1, highest, lowest, joints: at, answer };
+    return answer;
+  }
+
   /** The lowest point of slot `index`'s body (cells): the row `hostIn` stands it in. */
   footOf(index: number): number {
     let lowest = -Infinity;
@@ -1519,13 +1572,7 @@ export class CreatureLayer {
         !creature.plan.swims &&
         creature.arriving === undefined
       ) {
-        const under = occluders.over(
-          this.box(index),
-          highest,
-          lowest,
-          creature.joints,
-          creature.plan.radii,
-        );
+        const under = this.overOf(creature, index, occluders, highest, lowest);
         if (under >= 0) row = Math.min(lowest, Math.max(under - 1, 0));
       }
       const host = guests[row] ?? this.container;
@@ -1873,6 +1920,7 @@ export class CreatureLayer {
       lag: 0,
       poseLag: 0,
       posed: null,
+      over: null,
     };
   }
 
