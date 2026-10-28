@@ -587,7 +587,7 @@ state stream in one of the three views; its animals and the camera's choices are
 | `every=1000` | instead, wall milliseconds between the recording's messages; 0: all at once, the last day (the default for `autumn` and `winter`, 1000) |
 | `follow=…`, `idle=…`, `seed=…` | seconds on one animal and before the map comes back, and the camera's random draws (tests) |
 | `quiet` | no captions of the stream's own entries |
-| `source=ws://…` | the server's stream instead of a recording (S1; not tried yet: there is no server) |
+| `source=ws://…` | the server's stream instead of a recording (S1: the kiosk build takes `ws://<host>/stream` by default; it reconnects when the socket closes, and a `view` message presses the view button) |
 | `still` | the sea does not move: for pictures that must not change |
 | `painter=inline` | paint the ground on the page's thread, to compare with the worker |
 
@@ -1429,7 +1429,8 @@ there.)
   a day (0.3 s at the board's estimated speed), and drawing the plants again when the
   seasons in play change (entering or leaving a turn, eight times a year; about 1 s).
   Both could go to the worker if R5 shows a stutter on the board.
-- **The server's stream** has not been tried: there is no server until S1.
+- **The server's stream**: S1 serves it (`docs/design/server.md`); the kiosk build draws a live
+  world from it, and `SocketSource` reconnects after a restart.
 - **Creature motion between sim ticks**: done in R2 (see Creatures, "Between sim ticks");
   whom the camera follows and when it cuts, R3 (ADR 0020).
 - **Seasons**: done; a plant layer is laid out again once a sim-day, which carries the

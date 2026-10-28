@@ -88,7 +88,8 @@ lineage/
 │   ├── milestones/           # per-milestone metrics, acceptance criteria, report sections
 │   ├── viz/                  # shared plotting style + figure helpers
 │   ├── replay.py             # load a save, inspect, render stills and renderer fixtures
-│   ├── stream.py             # record the state stream from a save, for the renderer (R1)
+│   ├── stream.py             # record the state stream from a save, for the renderer (R1),
+│                             #   through the server's feed (S1)
 │   ├── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
 │   │                         #   standard library only: copied to the board as one file
 │   └── showcase.py           # run the showcase on the board and sum up how it ran (R6);
@@ -122,14 +123,21 @@ lineage/
 │   │                         #   tools/stream.py
 │   └── tests/                # vitest unit tests + Playwright visual snapshots
 ├── server/                   # Python package `lineage_server` — runs on the device
-│   └── lineage_server/       # main.py (sim loop + persistence), ws.py, api.py, notify.py, journal.py,
+│   ├── config/server.toml    # the server's settings (port, polling, saves kept), S1
+│   └── lineage_server/       # main.py (the command), island.py (the world in real time, its
+│                             #   saves), server.py (WebSocket /stream, pages, /status), feed.py
+│                             #   (which messages a step makes), store.py (saves on disk),
+│                             #   settings.py (S1); later api.py, notify.py, journal.py;
 │                             #   protocol/ (schema.json: the wire format; encode.py)
 ├── device/                   # Python package `lineage_device` — the ONLY code touching GPIO
-│   └── lineage_device/       # presence.py, button.py, led.py, backlight.py, power.py, fake.py
+│   └── lineage_device/       # interface.py (what the server gets, S1), fake.py (S1's minimal
+│                             #   fake; S2 completes it), presence.py, button.py, led.py,
+│                             #   backlight.py, power.py
 ├── app/                      # phone PWA shell, reuses renderer/
 ├── journal/                  # static site templates
 ├── deploy/                   # os notes, systemd units (lineage-r0@, lineage-r5@: the board
-│                             #   benchmarks), setup.sh, kiosk, backups, tailscale
+│                             #   benchmarks; lineage-server@: the island, S1), setup.sh,
+│                             #   kiosk, backups, tailscale
 ├── mockups/                  # HTML mockups and enclosure concepts (reference only)
 ├── reports/                  # committed milestone reports (HTML + metrics.json), see §7
 ├── runs/                     # gitignored raw fast-forward output
@@ -222,6 +230,11 @@ Do not create directories outside this layout without updating this file.
     --famine-day 2`, R4; `--stage DAY:HOUR:WHAT[@X,Y]` stages a fire, a rain kind
     (`shower`, `thunder`, `storm`) or an overcast (`cloud`), a volcano, a quake or a god
     power by name, as the report's streams do)
+  - `uv run python -m lineage_server.main --data DIR --dist renderer/dist-kiosk --fake-device`
+    — run the island in real time (S1): the newest save under `DIR/saves` (or a new world,
+    `--seed N`), the time it was off caught up, the kiosk at `http://localhost:8080/`, the
+    stream at `/stream`, its numbers at `/status`; keys on stdin play the device (`p`
+    presence, `g` god power, `v` view, `l`/`r` power lost/restored); Ctrl+C saves and stops
   - `uv run python -m tools.viz.pixelmap` — write the renderer's copy of the palette
     (`renderer/src/terrain/palette.json`)
   - `cd renderer && npm run protocol` — regenerate `src/protocol.ts` from the wire schema
