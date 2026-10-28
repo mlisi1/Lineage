@@ -224,6 +224,8 @@ export class Landscape {
    * on 2026-10-24; `?bushes=whole` draws them whole). Set before the first land comes.
    */
   bushPieces = true;
+  /** The ground's colour pass on the painters' GPU where they have one (`gpuground.ts`); off with `?painter=cpu`. */
+  groundOnGpu = true;
 
   /** `still` keeps the sea as it is at its first moment: for pictures that must not change. */
   constructor(
@@ -505,6 +507,8 @@ export class Landscape {
       this.look.name,
       this.bushPieces ? "pieces" : "whole",
       this.covered === null ? "open" : "covered",
+      // The GPU's paintings differ from the CPU's in a few pixels: kept apart.
+      this.groundOnGpu ? "gpu" : "cpu",
     ].join("|");
   }
 
@@ -516,7 +520,14 @@ export class Landscape {
     const time = this.time();
     const close = name !== "map";
     // Waves break on every coast in every view, the map's too (the owner, 2026-10-20).
-    const request = { style: STYLES[name], grain: close, surf: true, look: look.name, time };
+    const request = {
+      style: STYLES[name],
+      grain: close,
+      surf: true,
+      look: look.name,
+      time,
+      ...(this.groundOnGpu ? {} : { cpu: true }),
+    };
     const stamp = this.stampOf();
     if (name === "map") {
       if (this.built.map === null) {

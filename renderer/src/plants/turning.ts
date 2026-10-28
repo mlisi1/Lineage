@@ -124,6 +124,18 @@ export function groundSeasons(
   };
 }
 
+/** What the ground's seasons are worked out from, for the painter on the GPU (`gpuground.ts`). */
+export const GROUND_TURN = { FRONT_CELLS, FRONT, HEIGHT, HILLS, DITHER, TURN_SEASONS } as const;
+
+/**
+ * In a turn, what is the same for every place (`groundSeasons`): the year's phase, and
+ * whether being high makes a place early (1) or late (−1); null away from a turn.
+ */
+export function turnOf(time: YearTime): { phase: number; hills: number } | null {
+  const [, other] = seasonsInPlay(time);
+  return other === undefined ? null : { phase: phaseOf(time), hills: hillsFirst(time) };
+}
+
 /** Whether, at `time`, some places show one season and some another. */
 export function isTurning(time: YearTime): boolean {
   const phase = phaseOf(time);

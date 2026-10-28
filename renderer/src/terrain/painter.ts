@@ -9,14 +9,16 @@
  * Where there is no worker (tests, Node), `InlinePainter` does the same on the thread.
  */
 import { DEFAULT_LOOK, LOOKS } from "../looks";
-import { groundSeasons, type YearTime } from "../plants/turning";
-import { paintGround, type GroundOptions } from "./ground";
+import { groundSeasons, turnOf, type YearTime } from "../plants/turning";
+import { paintGround, type GroundGpu, type GroundOptions } from "./ground";
 import { NO_CACHE, type GroundCache } from "./groundcache";
 import type { Land } from "./land";
 import type { Pixels } from "./pixels";
 
 /** What to paint: the painter's options, without what cannot cross to a worker. */
-export interface PaintRequest extends Omit<GroundOptions, "look" | "seasonAt"> {
+export interface PaintRequest extends Omit<GroundOptions, "look" | "seasonAt" | "turn"> {
+  /** Paint on the CPU even where the painter has a GPU (`?painter=cpu`, to compare them). */
+  cpu?: boolean;
   /** The name of a look (`looks.ts`); the default look if left out. */
   look?: string;
   /** Where the world is in its year: the ground turns place by place around a change of season. */
@@ -47,20 +49,29 @@ function heightBetween(land: Land, u: number, v: number): number {
 }
 
 /** Paint `request` on `land`: what the worker and `InlinePainter` both do. */
-export function paintRequest(land: Land, request: PaintRequest): Pixels {
+export function paintRequest(
+  land: Land,
+  request: PaintRequest,
+  gpu: GroundGpu | null = null,
+): Pixels {
   // (`keep` is for the painter, not the painting: `paintGround` reads no such option.)
-  const { look: name, time, ...options } = request;
+  const { look: name, time, cpu, ...options } = request;
   const look = LOOKS.find((candidate) => candidate.name === name) ?? DEFAULT_LOOK;
-  return paintGround(look.land === undefined ? land : { ...land, ...look.land }, {
-    ...options,
-    look,
-    ...(time === undefined
-      ? {}
-      : {
-          season: time.season,
-          seasonAt: groundSeasons(time, (u, v) => heightBetween(land, u, v), land.seaLevel),
-        }),
-  });
+  return paintGround(
+    look.land === undefined ? land : { ...land, ...look.land },
+    {
+      ...options,
+      look,
+      ...(time === undefined
+        ? {}
+        : {
+            season: time.season,
+            seasonAt: groundSeasons(time, (u, v) => heightBetween(land, u, v), land.seaLevel),
+            turn: turnOf(time),
+          }),
+    },
+    cpu === true ? null : gpu,
+  );
 }
 
 /** A painted piece, and the land it was painted from (`Painter.setLand` counts them). */
@@ -83,12 +94,13 @@ export async function paintKept(
   land: Land,
   request: PaintRequest,
   cache: GroundCache,
+  gpu: GroundGpu | null = null,
 ): Promise<{ pixels: Pixels; fresh: boolean }> {
   const { keep } = request;
-  if (keep === undefined) return { pixels: paintRequest(land, request), fresh: true };
+  if (keep === undefined) return { pixels: paintRequest(land, request, gpu), fresh: true };
   const kept = await cache.get(keep.key, keep.stamp);
   if (kept !== undefined) return { pixels: keep.ahead === true ? none() : kept, fresh: false };
-  const pixels = paintRequest(land, request);
+  const pixels = paintRequest(land, request, gpu);
   cache.put(keep.key, keep.stamp, pixels);
   return { pixels: keep.ahead === true ? none() : pixels, fresh: true };
 }
@@ -236,7 +248,14 @@ export class InlinePainter extends QueuedPainter {
 export type ToWorker =
   { kind: "land"; land: Land; version: number } | { kind: "paint"; request: PaintRequest };
 export type FromWorker =
-  | { kind: "painted"; pixels: Pixels; landVersion: number; fresh: boolean }
+  | {
+      kind: "painted";
+      pixels: Pixels;
+      landVersion: number;
+      fresh: boolean;
+      /** Whether its colour pass was done on the worker's GPU (`gpuground.ts`). */
+      gpu?: boolean;
+    }
   | { kind: "failed"; message: string; landVersion: number };
 
 /**
@@ -246,6 +265,8 @@ export type FromWorker =
  */
 export class WorkerPainter extends QueuedPainter {
   private readonly workers: Worker[];
+  /** Paintings made (not taken from the cache) with the colour pass on the GPU and on the CPU. */
+  readonly made = { gpu: 0, cpu: 0 };
 
   constructor(count = 1) {
     super(count);
@@ -253,6 +274,8 @@ export class WorkerPainter extends QueuedPainter {
       const worker = new Worker(new URL("./paint.worker.ts", import.meta.url), { type: "module" });
       worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
         const reply = event.data;
+        if (reply.kind === "painted" && reply.fresh)
+          this.made[reply.gpu === true ? "gpu" : "cpu"] += 1;
         this.finished(
           reply.kind === "painted" ? reply.pixels : new Error(reply.message),
           reply.landVersion,

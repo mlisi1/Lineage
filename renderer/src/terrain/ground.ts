@@ -23,8 +23,9 @@
  */
 import { VISIBLE_FROM } from "../plants/look";
 import { DEFAULT_LOOK, type Look } from "../looks";
-import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
+import { SEASONS, floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
+import type { ColourPassInput, ColourPassOutput } from "./gpuground";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
 import { BREATH_S, shoreSizes, swellAt, swellSizes, tidePhase } from "./tide";
 
@@ -109,6 +110,16 @@ export interface GroundOptions {
   surf?: boolean;
   /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
   look?: Look;
+  /**
+   * In a turn of the season, what `seasonAt` is worked out from (`turnOf`): for the
+   * colour pass on the GPU, which cannot call `seasonAt`.
+   */
+  turn?: { phase: number; hills: number } | null;
+}
+
+/** Where the colour pass may be done instead of on the CPU (`gpuground.ts`). */
+export interface GroundGpu {
+  colourPass(input: ColourPassInput): ColourPassOutput | null;
 }
 
 /** The forms that grow, in the order of their class numbers here (1 to 5); 0 is bare. */
@@ -273,6 +284,16 @@ const MATTER = {
   burnt: 11,
 } as const;
 type Matter = (typeof MATTER)[keyof typeof MATTER];
+/** What a pixel of each class of growth is made of, bare first. */
+const MATTER_OF: readonly Matter[] = [
+  MATTER.soil,
+  MATTER.lichen,
+  MATTER.grass,
+  MATTER.scrub,
+  MATTER.wood,
+  MATTER.pines,
+  MATTER.burnt,
+];
 
 /**
  * Detail, as small drawings: one letter per pixel, the last row lowest. `d` and `l` are
@@ -395,7 +416,11 @@ function kernel(reach: number): number[] {
 }
 
 /** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
-export function paintGround(world: Land, options: GroundOptions): Pixels {
+export function paintGround(
+  world: Land,
+  options: GroundOptions,
+  gpu: GroundGpu | null = null,
+): Pixels {
   const { width, height, heights, seaLevel, relief } = world;
   const { tile, style, grain } = options;
   const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
@@ -759,16 +784,6 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     if (blade < lit) return ramp[Math.min(step + 1, 2)] ?? tone;
     return grows === 2 && blade < lit + 0.04 ? (ramp[Math.max(step - 1, 0)] ?? tone) : tone;
   };
-  const MATTER_OF: readonly Matter[] = [
-    MATTER.soil,
-    MATTER.lichen,
-    MATTER.grass,
-    MATTER.scrub,
-    MATTER.wood,
-    MATTER.pines,
-    MATTER.burnt,
-  ];
-
   // The pixels painted in full: those shown, and a rim round them that the drawings of the
   // detail (up to three pixels either side and four above where they stand) and the lip of
   // growth may reach in from (R5, the optimization plan: a close piece's margin of a cell
@@ -781,7 +796,82 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const fullX1 = shown === undefined ? wide : (shown.x1 - rect.x0) * tile + SHOWN_RIM;
   const fullY1 = shown === undefined ? tall : (shown.y1 - rect.y0) * tile + SHOWN_RIM;
 
-  for (let py = 0; py < tall; py++) {
+  // On the GPU where there is one (R5, the optimization plan): the same pass, in single
+  // floats rather than doubles. Only for the views' styles, and a turn it knows of.
+  const onGpu =
+    gpu !== null &&
+    (style === "blended" || style === "smooth") &&
+    (seasonAt === undefined || options.turn !== undefined)
+      ? gpu.colourPass({
+          world: {
+            width,
+            height,
+            heights,
+            seaLevel,
+            sea,
+            kind,
+            biomass: world.biomass,
+            ...(snowCells === undefined ? {} : { snow: snowCells }),
+            ...(world.algae === undefined ? {} : { algae: world.algae }),
+          },
+          wide,
+          tall,
+          originX,
+          originY,
+          tile,
+          full: marginOnly ? { x0: fullX0, y0: fullY0, x1: fullX1, y1: fullY1 } : null,
+          interpolated,
+          dithered,
+          close,
+          detailed,
+          grain,
+          calm,
+          field: {
+            x: fieldX,
+            y: fieldY,
+            wide: fieldWide,
+            tall: fieldTall,
+            shares: calmShares,
+            growth: calmGrowth,
+            land: calmLand,
+            heights: calmHeights,
+          },
+          mixClass,
+          mixSlope,
+          fine,
+          bladeRows,
+          dash,
+          relief: {
+            slope: relief.slope,
+            snowFrom: relief.snowFrom,
+            highRockFrom: relief.highRockFrom,
+          },
+          dryBelow,
+          dries,
+          seasons: SEASONS.map((season) => seasonalOf(season)),
+          season: Math.max(SEASONS.indexOf(now.season), 0),
+          turn: seasonAt === undefined ? null : (options.turn ?? null),
+          bare,
+          rock,
+          snow,
+          burnt,
+          sand,
+          foam,
+          litter: tones.litter,
+          bands,
+        })
+      : null;
+  if (onGpu !== null) {
+    colours.set(onGpu.colours);
+    isLand.set(onGpu.isLand);
+    if (detailed) {
+      matter.set(onGpu.matter);
+      toned.set(onGpu.toned);
+      thick.set(onGpu.thick);
+    }
+  }
+
+  for (let py = 0; py < (onGpu === null ? tall : 0); py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
       // Position in cells, measured from the middle of the world's first cell.
@@ -1206,3 +1296,39 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   }
   return { width: wide, height: tall, rgba, shore };
 }
+
+/** The constants of the colour pass, for the same pass on the GPU (`gpuground.ts`). */
+export const GROUND_CONSTANTS = {
+  WOBBLE,
+  WOBBLE_FREQUENCY,
+  FINE_WOBBLE,
+  FINE_FREQUENCY,
+  KIND_WANDER,
+  KIND_WANDER_FREQUENCY,
+  PATCH,
+  SNOW_PATCH,
+  SNOW_UNDER_TREES,
+  SNOW_OPEN,
+  SNOW_FULL_FROM,
+  DRY_DRIFT,
+  CALM_PATCH,
+  CALM_RAGGED,
+  EDGE_FROM,
+  EDGE_TO,
+  GRIT,
+  WAVES,
+  ALGAE_FULL,
+  ALGAE_CLUMP,
+  ALGAE_COVER,
+  ALGAE_MIX,
+  ALGAE,
+  MIX_DEPTH,
+  BEACH,
+  BURNT,
+  LOW,
+  COVERAGE,
+  FLOOR_LITTER,
+  BAYER,
+  MATTER,
+  MATTER_OF,
+} as const;

@@ -93,7 +93,14 @@ import { heightAt } from "./creatures/habitat";
 import type { RareLook } from "./creatures/rare";
 import { Recording, SocketSource, type Source } from "./stream";
 import { makeGroundCache } from "./terrain/groundcache";
-import { InlinePainter, makePainter } from "./terrain/painter";
+import { GpuGround } from "./terrain/gpuground";
+import {
+  InlinePainter,
+  WorkerPainter,
+  makePainter,
+  paintRequest,
+  type PaintRequest,
+} from "./terrain/painter";
 import { Bench } from "./bench";
 import { capFrames } from "./framecap";
 
@@ -168,6 +175,10 @@ declare global {
       initial: number | null;
     };
     /** What the name card of the animal followed shows (tests; S3 shows the same card). */
+    /** Paint `request` on the land shown with the colour pass on the CPU and on the GPU: how many pixels differ (tests). */
+    __paintBoth?: (request: PaintRequest) => { differ: number; pixels: number } | null;
+    /** Paintings of the ground made with the colour pass on the GPU and on the CPU (`WorkerPainter.made`). */
+    __groundMade?: () => { gpu: number; cpu: number } | null;
     /** Whether the followed animal's portrait, read back without waiting, is the one read at once (tests). */
     __portraitCheck?: () => boolean | null;
     __card?: () => {
@@ -285,13 +296,12 @@ async function start(): Promise<void> {
   world.filterArea = app.screen;
   let graded = false;
   app.stage.addChild(world);
-  const landscape = new Landscape(
-    params.get("painter") === "inline" ? new InlinePainter() : makePainter(),
-    undefined,
-    undefined,
-    params.get("still") !== null,
-  );
+  const painter = params.get("painter") === "inline" ? new InlinePainter() : makePainter();
+  // How many of the ground's paintings had their colour pass on the painters' GPU (tests, the benchmark).
+  window.__groundMade = () => (painter instanceof WorkerPainter ? { ...painter.made } : null);
+  const landscape = new Landscape(painter, undefined, undefined, params.get("still") !== null);
   landscape.bushPieces = params.get("bushes") !== "whole";
+  landscape.groundOnGpu = params.get("painter") !== "cpu";
   // The ground painted is kept between visits (R5); `?ground=fresh` paints it all anew.
   if (params.get("ground") !== "fresh") landscape.cache = makeGroundCache();
   world.addChild(landscape.container);
@@ -533,6 +543,24 @@ async function start(): Promise<void> {
   };
   window.__card = () => card.state;
   if (!KIOSK) {
+    let gpu: GpuGround | null | undefined;
+    window.__paintBoth = (request) => {
+      const land = landscape.current;
+      gpu ??= GpuGround.create();
+      if (land === null || gpu === null) return null;
+      const cpu = paintRequest(land, request);
+      const onGpu = paintRequest(land, request, gpu);
+      let differ = 0;
+      for (let at = 0; at < cpu.rgba.length; at += 4) {
+        if (
+          cpu.rgba[at] !== onGpu.rgba[at] ||
+          cpu.rgba[at + 1] !== onGpu.rgba[at + 1] ||
+          cpu.rgba[at + 2] !== onGpu.rgba[at + 2]
+        )
+          differ += 1;
+      }
+      return { differ, pixels: cpu.rgba.length / 4 };
+    };
     window.__portraitCheck = () => {
       const subject = shot.subject;
       const look = subject === null ? null : herd.portraitOf(subject);
