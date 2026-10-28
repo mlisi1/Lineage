@@ -1304,7 +1304,11 @@ change, and it makes no objects per cell per frame. Then (the optimization plan,
 dip, read back from the GPU without waiting for it (a pixel-pack buffer and a fence,
 WebGL2; at once for films and stills), and drawn once rather than measured first when only
 its colours changed; the painters work out a pixel's season only in a turn, and in a calm
-view add only the kinds of cover around a pixel (8–13 % faster, every painting the same).
+view add only the kinds of cover around a pixel (8–13 % faster, every painting the same);
+a piece's margin of a cell, painted so that its shore meets its neighbours' and then cut
+off, is painted only as land or sea past a rim of 8 pixels the detail's drawings may
+reach in from (`GroundOptions.shown`; a local piece some 35–40 % faster again, every
+pixel shown the same over the whole island).
 
 | Scenario | View | What it measures |
 |---|---|---|

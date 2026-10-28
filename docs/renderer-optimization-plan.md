@@ -68,6 +68,17 @@ kept: each claimed win is measured there against the board's own noise.
   kept paintings stamped by the season, so they last all season; the painters 8–13 %
   faster (a pixel's season only in a turn; a calm pixel adds only the cover around it),
   52 paintings over four times of year, with and without snow, byte for byte the same.
+  Then a piece's margin (a cell round it, painted so that its shore meets its
+  neighbours', then cut off) painted only as land or sea past a rim of 8 pixels the
+  detail's drawings can reach in from: a local piece some 35–40 % faster again (it is 320
+  pixels square to show 256); every piece of the island, 1 296 in all over summer, an
+  autumn turn and winter snow, the same in every pixel shown. All told a local piece
+  paints in a little over half the time it took before (608 pieces: about 38 s → 21 s on
+  the PC), a middle one some 8 % faster, the map some 12 %.
+  Left, each the owner's call: the painter in WebAssembly (the same arithmetic in the same
+  order, so the same bits; perhaps 1.5–2× faster; a new toolchain, so a new dependency);
+  or the ground painted on the GPU by a shader (tens of times faster, but not the same
+  bits: GPU float arithmetic differs, so it would be the same to the eye, not to the byte).
   Tried and dropped: a cache of the noise's corners (no gain: the fine noise changes cell
   every pixel); one texture for the ground's pieces (the scene binds some 40–50 textures a
   frame, counted on the PC, few of them the ground's; their share of the PC's profile is

@@ -519,7 +519,11 @@ its status: `docs/renderer-optimization-plan.md`. Kept, all the same pixels:
   painted again all the same. Now only a new land or a day in a turn is, and the kept
   paintings are stamped by the season. The benchmark's `day-turn` has a land come instead.
 - **The painters** 8–13 % faster: a pixel's season worked out only in a turn, a calm
-  pixel adding only the kinds of cover around it.
+  pixel adding only the kinds of cover around it. Then a piece's margin painted only as
+  land or sea past a rim of 8 pixels: a local piece in a little over half the time it
+  took (checked on every piece of the island in three seasons, every pixel shown the
+  same). Left to the owner: WebAssembly (same bits, a new toolchain) or a shader (much
+  faster, not the same bits).
 
 Not done: each animal as one batch (it would have to redo what sleep, the rare overlays,
 eating and the water do to a body's sprites, for some 7–10 % of the crowd's script by the
