@@ -314,6 +314,7 @@ def test_summary_table() -> None:
                                 "late_by_phase": {"outside": 2, "herd": 5},
                                 "late_notes": {"creatures": 3},
                             },
+                            "ground_made": {"gpu": 12, "cpu": 1},
                         },
                     ],
                     "acceptance": {
@@ -347,6 +348,7 @@ def test_summary_table() -> None:
     )
     # And where its late frames came from, as the page's frame probe saw them.
     assert "late frames by phase: herd 5, outside 2; with creatures 3" in text
+    assert "ground painted on the GPU: 12 of 13" in text
     assert "[software] timeout no results after 210 s" in text
     assert "GPU jobs the kernel killed (hangs): 3" in text
     # Where the kernel log could not be read nothing is claimed.

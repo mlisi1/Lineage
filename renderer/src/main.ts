@@ -859,6 +859,7 @@ async function start(): Promise<void> {
       landscape.holdDay = held;
     },
     dayDue: () => landscape.dayDue,
+    groundMade: () => (painter instanceof WorkerPainter ? { ...painter.made } : null),
     newLand: () => {
       const message = landscape.lastMessage;
       if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });

@@ -741,6 +741,12 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                 f"{memory if memory is not None else float('nan'):>8.0f}"
             )
             lines.extend(_late_causes(scenario))
+            made = scenario.get("ground_made")
+            if made and made.get("gpu", 0) + made.get("cpu", 0) > 0:
+                lines.append(
+                    f"    ground painted on the GPU: {made.get('gpu', 0)}"
+                    f" of {made.get('gpu', 0) + made.get('cpu', 0)}"
+                )
         acceptance = results.get("acceptance") or {}
         if acceptance.get("pass") is not None:
             verdict = "PASS" if acceptance["pass"] else "FAIL"

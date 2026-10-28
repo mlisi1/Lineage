@@ -112,6 +112,8 @@ export interface BenchHooks {
   dayDue(): boolean;
   /** Send the latest land again as the next day's, as the stream would bring a new one. */
   newLand(): void;
+  /** Paintings of the ground made so far with the colour pass on the GPU and on the CPU. */
+  groundMade(): { gpu: number; cpu: number } | null;
   /** What the camera shows. */
   camera(): { view: ViewName; dipping: boolean };
   /** The cells in sight. */
@@ -181,6 +183,8 @@ export interface BenchScenarioResult extends FrameStats {
   js_ms_p99: number;
   /** Where the frames' time went, phase by phase, and what the late ones held (`frameprobe.ts`). */
   probe: ProbeSummary;
+  /** The ground's paintings made in this page, their colour pass on the GPU or the CPU (`gpuground.ts`). */
+  ground_made: { gpu: number; cpu: number } | null;
   /** JavaScript heap in use after the scenario, in MB (0 where the browser hides it). */
   js_heap_mb: number;
   /** The atmosphere's state and sprite counts at the end. */
@@ -853,6 +857,7 @@ export class Bench {
       js_ms_median: jsMedian,
       js_ms_p99: jsP99,
       js_heap_mb: heapMb(),
+      ground_made: hooks.groundMade(),
       probe: summariseProbe(
         timings.frameMs.map((frameMs, k) => ({
           frameMs,
