@@ -666,6 +666,77 @@ def _headroom_section(evidence: dict[str, Any]) -> Section:
     )
 
 
+# The phases of a frame as the page's probe times them (`renderer/src/frameprobe.ts`).
+PROBE_PHASES = ("messages", "director", "landscape", "herd", "atmosphere", "overlays", "render")
+
+
+def _counts(counts: dict[str, Any]) -> str:
+    """``{"herd": 5, "outside": 2}`` as "herd 5, outside 2", the most first."""
+    ranked = sorted(counts.items(), key=lambda item: (-int(item[1]), item[0]))
+    return ", ".join(f"{html.escape(str(name))} {int(count)}" for name, count in ranked) or "—"
+
+
+def _late_frames_section(evidence: dict[str, Any]) -> Section:
+    """Where the frames' time went, what the late ones held, and the ground's paintings."""
+    title = "Where the frames go"
+    run = best_run(evidence)
+    scenarios = [] if run is None else _scenarios(run)
+    probed = [scenario for scenario in scenarios if scenario.get("probe")]
+    if not probed:
+        return Section(
+            title,
+            '<p class="empty">Not recorded in this run: the page\'s frame probe and the count '
+            "of the ground's paintings came after it.</p>",
+        )
+    e = html.escape
+
+    def phase_cell(scenario: dict[str, Any], phase: str) -> str:
+        probe = scenario["probe"]
+        median = (probe.get("phases_ms_median") or {}).get(phase)
+        p99 = (probe.get("phases_ms_p99") or {}).get(phase)
+        return f"{_number(median, '.1f')} <small>({_number(p99, '.1f')})</small>"
+
+    phase_rows = [
+        [e(scenario["name"]), *(phase_cell(scenario, phase) for phase in PROBE_PHASES)]
+        for scenario in probed
+    ]
+    late_rows = [
+        [
+            e(scenario["name"]),
+            _counts(scenario["probe"].get("late_by_phase") or {}),
+            _counts(scenario["probe"].get("late_notes") or {}),
+            _ground_made(scenario.get("ground_made")),
+        ]
+        for scenario in probed
+    ]
+    profile = e(run["profile"]) if run is not None else ""
+    return Section(
+        title,
+        f'<p class="note">The {profile} profile. Each frame\'s script by phase, in '
+        "milliseconds: median, and in brackets the 99th percentile. Render is Pixi's draw "
+        "(handing the frame to the GPU); messages is the stream's, received between "
+        "frames.</p>"
+        + _table(["Scenario", *(e(phase) for phase in PROBE_PHASES)], phase_rows)
+        + '<p class="note">The frames over budget, each put down to the phase that took '
+        'most of it, or "outside" when the script took less than half of it (garbage '
+        "collection, the GPU, the compositor); what happened in them (a message's type, "
+        "a ground piece placed, a lay-out, plants built, a portrait drawn); and of the "
+        "ground's paintings made in the scenario's page, how many had their colour pass "
+        "on the GPU.</p>"
+        + _table(
+            ["Scenario", "Late frames by phase", "What they held", "Ground on the GPU"], late_rows
+        ),
+    )
+
+
+def _ground_made(made: Any) -> str:
+    if not isinstance(made, dict):
+        return "—"
+    gpu = int(made.get("gpu", 0))
+    total = gpu + int(made.get("cpu", 0))
+    return "—" if total == 0 else f"{gpu} of {total}"
+
+
 def _atmosphere_counts(scenarios: list[dict[str, Any]]) -> list[str]:
     """The atmosphere's sprite counts any of ``scenarios`` reported, known ones first."""
     found: list[str] = []
@@ -925,6 +996,7 @@ def sections(evidence: dict[str, Any]) -> list[Section]:
         _frame_rate_section(evidence),
         _over_budget_section(evidence),
         _headroom_section(evidence),
+        _late_frames_section(evidence),
         _atmosphere_section(evidence),
         _cpu_section(evidence),
         _memory_section(evidence),

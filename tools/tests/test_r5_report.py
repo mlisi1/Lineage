@@ -91,6 +91,14 @@ def _scenario(
         "started_epoch_ms": started,
         "ended_epoch_ms": started + 3000.0,
         "stalled": False,
+        "probe": {
+            "phases_ms_median": {"herd": 2.3, "render": 1.6},
+            "phases_ms_p99": {"herd": 8.2, "render": 3.8},
+            "late_by_phase": {"outside": 2, "herd": 5},
+            "late_notes": {"creatures": 3},
+            "worst": [],
+        },
+        "ground_made": {"gpu": 12, "cpu": 1},
     }
 
 
@@ -271,6 +279,9 @@ def test_r5_report_from_the_board(tmp_path: Path) -> None:
         "not recorded (kernel log not readable)",
         "capped at 30 fps",
         "1342",  # the fire's glow halos, in the atmosphere's table
+        "Where the frames go",
+        "herd 5, outside 2",  # the late frames by phase, the most first
+        "12 of 13",  # the ground's paintings on the GPU
     ):
         assert expected in text, expected
     assert "not the R5 measurement" not in text
@@ -398,3 +409,13 @@ def test_r5_judges_what_the_page_judges() -> None:
     assert f"TARGET_FPS = {r5.TARGET_FPS:g};" in bench
     assert f"TARGET_SLACK_FPS = {r5.TARGET_SLACK_FPS:g};" in bench
     assert r5.HEAVIEST_SCENARIO in r5.ACCEPTANCE_SCENARIOS
+
+
+def test_r5_says_when_a_run_has_no_frame_probe(tmp_path: Path) -> None:
+    run = _run("default", 30.0)
+    for scenario in run["results"]["scenarios"]:
+        del scenario["probe"]
+        del scenario["ground_made"]
+    out = build_report("R5", _evidence(tmp_path, [run]), tmp_path / "reports")
+    text = " ".join(_page(out / "report.html").text)
+    assert "Not recorded in this run" in text
