@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { SEASONS } from "../../src/plants/seasons";
 import {
+  DITHER,
   TURN_SEASONS,
+  groundSeasons,
   groundEarliness,
   isTurning,
   later,
@@ -83,5 +85,28 @@ describe("the turn of the year", () => {
     const time = { season: "summer" as const, progress: 0.95 };
     const own = [0, 1, 2, 3, 4, 5].map((x) => plantEarliness(time, 20 + x, 20, 0.1));
     expect(new Set(own.map((value) => value.toFixed(3))).size).toBeGreaterThan(3);
+  });
+});
+
+describe("the ground's seasons, worked out once where they can be (R5, the optimization plan)", () => {
+  it("gives every place the season the earliness formula gives it, in a turn and out of one", () => {
+    const heightAt = (u: number, v: number): number =>
+      0.3 + 0.2 * Math.sin(u / 7) * Math.cos(v / 5);
+    for (const season of ["spring", "summer", "autumn", "winter"] as const) {
+      for (const progress of [0, 0.03, 0.2, 0.5, 0.86, 0.9, 0.97, 0.999]) {
+        const time = { season, progress };
+        const at = groundSeasons(time, heightAt, 0.25);
+        for (let k = 0; k < 400; k++) {
+          const u = (k * 7.31) % 97;
+          const v = (k * 3.17) % 61;
+          const dither = ((k * 13) % 17) / 16 - 0.5;
+          const formula = seasonShown(
+            time,
+            groundEarliness(time, u, v, heightAt(u, v) - 0.25) + DITHER * dither,
+          );
+          expect(at(u, v, dither)).toBe(formula);
+        }
+      }
+    }
   });
 });
