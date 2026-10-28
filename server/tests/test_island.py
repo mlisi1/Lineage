@@ -68,7 +68,9 @@ def test_a_restart_without_downtime_goes_on_as_if_never_stopped(
     first = _island(config, tmp_path / "a")
     first.open(start)
     first.handle(Presence(True), start)
-    first.advance(start + 5 * 60 * MINUTE + 1234)
+    # Polled as the server does (here every ten minutes), never a jump of the clock.
+    for now in range(start, start + 5 * 60 * MINUTE + 1234, 10 * MINUTE):
+        first.advance(now + 1234)
     cut = first.world.unix_ms
     first.save()
     shutil.copytree(tmp_path / "a", tmp_path / "b")
@@ -76,7 +78,8 @@ def test_a_restart_without_downtime_goes_on_as_if_never_stopped(
     opened = again.open(cut)
     assert opened.caught_up_ms == 0
     for island in (first, again):
-        island.advance(cut + 3 * 60 * MINUTE)
+        for now in range(cut, cut + 3 * 60 * MINUTE, 10 * MINUTE):
+            island.advance(now + 10 * MINUTE)
     assert again.world.state_hash() == first.world.state_hash()
 
 
@@ -155,6 +158,24 @@ def test_the_god_power_fires_and_the_led_says_it_cools_down(config: Config, tmp_
     # Pressed again while it cools down: refused, nothing shown.
     again = island.handle(GodPowerPressed(), start + 2 * MINUTE)
     assert "events" not in _types(again.everyone)
+
+
+def test_a_clock_that_jumps_ahead_is_caught_up_on_and_the_island_sent_anew(
+    config: Config, tmp_path: Path, saved_unix_ms: int
+) -> None:
+    island = _island(config, tmp_path)
+    island.open(saved_unix_ms)
+    island.handle(Presence(True), saved_unix_ms)
+    later = saved_unix_ms + round(SETTINGS.jump_seconds * 1000) + 10 * MINUTE
+    messages = island.advance(later)
+    types = _types(messages)
+    # The opening alone, not every tick of the time jumped over.
+    assert types[:4] == ["clock", "sky", "land", "fauna"]
+    assert types.count("creatures") == 1
+    assert island.world.unix_ms == later
+    assert island.world.presence.present
+    # A small step is lived as usual.
+    assert "creatures" in _types(island.advance(later + 10 * MINUTE))
 
 
 def test_power_lost_saves_at_once(config: Config, tmp_path: Path, saved_unix_ms: int) -> None:

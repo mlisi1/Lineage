@@ -13,6 +13,10 @@ port = 8080
 poll_seconds = 1.0
 # Catching up after the device was off: sim-days advanced per step, with a save after each.
 catch_up_days = 1
+# A wall clock found this far ahead of the island while it runs (the network setting the
+# board's time late: it has no clock of its own) is lived as a catch-up, in wall seconds:
+# quietly, the owner away meanwhile, then every client is sent the island anew.
+jump_seconds = 3600.0
 # A client that has this many batches of messages waiting unsent (a phone on a stalled
 # network) is let go; the renderer reconnects and is sent everything anew.
 client_backlog = 256

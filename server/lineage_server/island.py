@@ -9,7 +9,9 @@ run days of island time in a moment.
   device was off, so the owner was away (the owner, 2026-10-28). A save at every UTC
   midnight on the way, so a long catch-up cut short does not start over.
 - `advance`: bring the world to now. It steps through the ticks of the creatures, the
-  light and the plants (the sim's ``[schedule]``) so that the feed sends each in turn.
+  light and the plants (the sim's ``[schedule]``) so that the feed sends each in turn. A
+  clock that jumped far ahead (``jump_seconds``) is caught up on instead, and the island
+  sent anew.
 - `handle`: what the device says: presence, the god-power button, power lost or back; and
   the view button, which only the desk is told.
 - Saves: at every UTC midnight (``DayStarted``), on `save` (a clean shutdown), at once on
@@ -188,6 +190,8 @@ class Island:
         return self._timed(lambda: self._advance(now_ms))
 
     def _advance(self, now_ms: int) -> list[Message]:
+        if now_ms - self.world.unix_ms > self._settings.jump_seconds * 1000:
+            return self._jump(now_ms)
         world = self.world
         messages: list[Message] = []
         while True:
@@ -200,6 +204,17 @@ class Island:
         if now_ms > world.unix_ms:
             messages += self._after(world.advance_to_unix(now_ms), due=False)
         return messages
+
+    def _jump(self, now_ms: int) -> list[Message]:
+        """The wall clock jumped ahead: catch up as on opening, then the owner as they were,
+        and the island anew for every client."""
+        present = self.world.presence.present
+        log.warning("the clock jumped %.1f h ahead", (now_ms - self.world.unix_ms) / 3.6e6)
+        self._catch_up(now_ms)
+        if present:
+            self._keep(self.world.apply(PresenceChanged(True)))
+        self._feed = Feed(self.world)
+        return self.feed.start(self.world)
 
     def _after(self, outputs: Sequence[OutputEvent], due: bool) -> list[Message]:
         """Keep what must be kept of ``outputs``, then the feed's messages for them; at a
