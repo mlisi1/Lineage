@@ -130,12 +130,18 @@ class PlantFade {
   }
 
   /** Move the fade on by `dtS` for `view`, the plants leaning in `wind` (none: standing straight). */
-  tick(dtS: number, view: CellRect, wind: Wind | null): void {
-    this.current?.cull(view);
-    this.current?.blow(wind);
+  tick(dtS: number, view: CellRect, wind: Wind | null, shown = true): void {
+    // A view not on the screen is neither culled nor blown (R5, review P3): both are worked
+    // out afresh on the frame it comes back. Its fade goes on.
+    if (shown) {
+      this.current?.cull(view);
+      this.current?.blow(wind);
+    }
     if (this.outgoing === null || this.current === null) return;
-    this.outgoing.cull(view);
-    this.outgoing.blow(wind);
+    if (shown) {
+      this.outgoing.cull(view);
+      this.outgoing.blow(wind);
+    }
     this.age += dtS;
     const half = this.fadeS / 2;
     this.current.container.alpha = Math.min(this.age / half, 1);
@@ -403,12 +409,14 @@ export class Landscape {
     }
     if (built.middle !== null) {
       built.middle.ground.tick(dtS);
-      built.middle.plants.tick(dtS, cells, this.view === "middle" ? this.wind : null);
+      const shown = this.view === "middle";
+      built.middle.plants.tick(dtS, cells, shown ? this.wind : null, shown);
       if (this.view === "middle") built.middle.ground.cover(cells);
     }
     if (built.local !== null) {
       built.local.ground.tick(dtS);
-      built.local.plants.tick(dtS, cells, this.view === "local" ? this.wind : null);
+      const shown = this.view === "local";
+      built.local.plants.tick(dtS, cells, shown ? this.wind : null, shown);
       if (this.view === "local") built.local.ground.cover(cells);
     }
   }

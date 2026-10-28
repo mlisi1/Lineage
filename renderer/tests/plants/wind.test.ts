@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MOST_LEAN_PER_REACH,
   ROCK_JITTER,
   bendOf,
   gustAt,
@@ -317,5 +318,19 @@ describe("storms lean more than calm", () => {
     expect(leanOf(windStrength(1, 1, 0), reach, crest, grass, height)).toBe(
       leansOf(grass, height).highest,
     );
+  });
+});
+
+describe("the most a plant leans (review P3)", () => {
+  it("is never outleant: a plant under half a pixel of it never leans", () => {
+    const random = mulberry32(7);
+    let most = 0;
+    for (let k = 0; k < 20000; k++) {
+      const strength = windStrength(random(), random() < 0.5 ? 1 : random(), 0);
+      const gust = gustAt(random() * 200, random() * 120, random() * 600, random() * 6);
+      most = Math.max(most, Math.abs(strength * gust));
+    }
+    expect(most).toBeLessThanOrEqual(MOST_LEAN_PER_REACH);
+    expect(most).toBeGreaterThan(MOST_LEAN_PER_REACH * 0.6);
   });
 });

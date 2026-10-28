@@ -70,7 +70,16 @@ import {
   seasonsInPlay,
   type YearTime,
 } from "./turning";
-import { ROCK_JITTER, bendOf, gustAt, leanedPixels, leansOf, type Bend, type Wind } from "./wind";
+import {
+  MOST_LEAN_PER_REACH,
+  ROCK_JITTER,
+  bendOf,
+  gustAt,
+  leanedPixels,
+  leansOf,
+  type Bend,
+  type Wind,
+} from "./wind";
 
 /** Cells per chunk of a row; whole chunks are built, and skipped, together. */
 const CHUNK_CELLS = 16;
@@ -220,6 +229,8 @@ export class PlantLayer {
   /** The rows' bands, top first, each `BAND_CELLS` cells of rows (`BAND_CELLS`). */
   private readonly bands: Container[] = [];
   private readonly rowsPerBand: number;
+  /** The first and last rows `cull` left shown (none: an empty range); at first, all. */
+  private rowsShown: [number, number] = [0, Number.MAX_SAFE_INTEGER];
   private readonly built = new Set<number>();
   private readonly tall: number;
   private readonly onBuilt: (() => void) | undefined;
@@ -428,25 +439,42 @@ export class PlantLayer {
     }
     if (this.built.size !== before) this.onBuilt?.();
     let drawn = 0;
-    const bandsShown = new Array<boolean>(this.bands.length).fill(false);
-    this.rows.forEach((row, index) => {
+    // The rows that show are one run (a row shows from its foot up to the tallest plant's
+    // top): only rows round the view and those shown last time are looked at, the others
+    // being hidden and staying so (R5, review P3: every row of the island was, each frame).
+    const lastRow = this.rows.length - 1;
+    const near0 = Math.floor((view.y0 - REACH_CELLS) * this.rowsPerCell) - 2;
+    const near1 = Math.ceil((view.y1 + this.tall) * this.rowsPerCell) + 2;
+    const from = Math.max(Math.min(near0, this.rowsShown[0]), 0);
+    const to = Math.min(Math.max(near1, this.rowsShown[1]), lastRow);
+    let shownFrom = Infinity;
+    let shownTo = -Infinity;
+    for (let index = from; index <= to; index++) {
+      const row = this.rows[index];
+      if (row === undefined) continue;
       const top = index / this.rowsPerCell;
       const bottom = (index + 1) / this.rowsPerCell;
       const visible = bottom + REACH_CELLS >= view.y0 && top - this.tall <= view.y1;
       if (row.container.visible !== visible) row.container.visible = visible;
-      if (!visible) return;
-      bandsShown[Math.floor(index / this.rowsPerBand)] = true;
+      if (!visible) continue;
+      shownFrom = Math.min(shownFrom, index);
+      shownTo = Math.max(shownTo, index);
       row.chunks.forEach((chunk, x) => {
         const inside = x + CHUNK_CELLS + REACH_CELLS >= view.x0 && x - REACH_CELLS <= view.x1;
         if (chunk.visible !== inside) chunk.visible = inside;
         if (inside) drawn += chunk.children.length;
       });
-    });
-    // A band none of whose rows shows is left out whole.
-    this.bands.forEach((band, index) => {
-      const shown = bandsShown[index] === true;
-      if (band.visible !== shown) band.visible = shown;
-    });
+    }
+    // A band none of whose rows shows is left out whole: those of the rows looked at.
+    const band = (row: number): number => Math.floor(row / this.rowsPerBand);
+    const bandFrom = band(from);
+    const bandTo = band(to);
+    for (let index = bandFrom; index <= bandTo; index++) {
+      const shown = index >= band(shownFrom) && index <= band(shownTo);
+      const each = this.bands[index];
+      if (each !== undefined && each.visible !== shown) each.visible = shown;
+    }
+    this.rowsShown = shownFrom === Infinity ? [lastRow + 1, -1] : [shownFrom, shownTo];
     return drawn;
   }
 
@@ -463,6 +491,8 @@ export class PlantLayer {
       row.swaying.forEach((swaying, x) => {
         if (row.chunks.get(x)?.visible !== true) return;
         for (const plant of swaying) {
+          // Too stiff ever to lean a whole pixel: it never moves (review P3).
+          if (Math.abs(plant.reach) * MOST_LEAN_PER_REACH < 0.5) continue;
           const last = plant.lowest + plant.frames.length - 1;
           const lean =
             wind === null
@@ -554,6 +584,8 @@ export class PlantLayer {
    * as the animal walked past it was seen to pop), at once when `dtS` is left out.
    */
   fade(subject: CellRect | null, foot = subject?.y1 ?? 0, dtS = Infinity): void {
+    // Switched off (the owner, 2026-10-24) and nothing see-through: nothing to do (review P3).
+    if (FADED === 1 && FADED_SMALL === 1 && this.faded.size === 0) return;
     const wanted = new Map<Sprite, number>();
     if (subject !== null) {
       const last = this.rows.length - 1;

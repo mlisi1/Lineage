@@ -491,3 +491,31 @@ describe("the island's trees and bushes (standingPlants)", () => {
     expect(a.count).toBe(b.count);
   });
 });
+
+describe("culling, row by row (review P3)", () => {
+  it("leaves the rows and bands shown as a layer culled once at the last view would", () => {
+    const land = landOf(Array<string>(40).fill("gggggggggggggggggggg"));
+    const put = (): Placed[] => [plant(8, 8, 12)];
+    const moved = layerOf(land, put, 4);
+    // The camera wanders, up and down and back, by fractions of a cell and by jumps.
+    const views = [
+      { x0: 0, y0: 0, x1: 10, y1: 6 },
+      { x0: 2, y0: 3.3, x1: 12, y1: 9.3 },
+      { x0: 4, y0: 20.7, x1: 14, y1: 26.7 },
+      { x0: 3, y0: 19.1, x1: 13, y1: 25.1 },
+      { x0: 0, y0: 33, x1: 10, y1: 39 },
+      { x0: 1, y0: 8.6, x1: 11, y1: 14.6 },
+    ];
+    for (const view of views) moved.cull(view);
+    const fresh = layerOf(land, put, 4);
+    const last = views.at(-1) ?? views[0];
+    if (last === undefined) throw new Error("no view");
+    expect(moved.cull(last)).toBe(fresh.cull(last));
+    const shown = (layer: PlantLayer): boolean[] =>
+      layer.container.children.flatMap((band) => [
+        band.visible,
+        ...band.children.map((row) => row.visible),
+      ]);
+    expect(shown(moved)).toEqual(shown(fresh));
+  });
+});

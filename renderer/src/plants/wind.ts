@@ -173,6 +173,15 @@ const GUST_SALT = 913;
  * steady breeze, gusts that roll across the land with the wind, and a gentle rocking that
  * rolls with them, `jitter` (radians, up to `ROCK_JITTER`) out of step with its neighbours'.
  */
+/**
+ * The most a plant of `reach` 1 leans (pixels): the strongest wind (a storm in rain, by day)
+ * at a gust's crest, the rock with it, or a lull's spring back the other way. A plant whose
+ * reach times this is under half a pixel never leans: `PlantLayer.blow` passes it by.
+ */
+export const MOST_LEAN_PER_REACH =
+  (CALM_WIND + RAIN_WIND + STORM_WIND) *
+  Math.max(BREEZE + GUST + ROCK, Math.abs(BREEZE - (GUST * GUST_FROM) / (1 - GUST_FROM) - ROCK));
+
 export function gustAt(x: number, y: number, timeS: number, jitter: number): number {
   const along = x * BLOWS_X + y * BLOWS_Y - GUST_SPEED_CELLS * timeS;
   const across = y * BLOWS_X - x * BLOWS_Y;
