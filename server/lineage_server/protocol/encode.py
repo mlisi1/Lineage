@@ -380,6 +380,11 @@ def events_message(outputs: Sequence[OutputEvent]) -> Message | None:
     return {"type": "events", "protocol": PROTOCOL, "events": events}
 
 
+def view_message() -> Message:
+    """The desk's view button (S1): for the kiosk on the device only."""
+    return {"type": "view", "protocol": PROTOCOL}
+
+
 def connect_messages(world: World, sent: set[int] | None = None) -> list[Message]:
     """Everything a renderer needs when it connects, in the order to send it."""
     messages = [clock_message(world), sky_message(world), land_message(world), fauna_message(world)]

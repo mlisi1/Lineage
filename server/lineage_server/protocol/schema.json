@@ -30,6 +30,9 @@
     },
     {
       "$ref": "#/$defs/EventsMessage"
+    },
+    {
+      "$ref": "#/$defs/ViewMessage"
     }
   ],
   "$defs": {
@@ -775,6 +778,23 @@
               }
             }
           }
+        }
+      }
+    },
+    "ViewMessage": {
+      "description": "The desk's view button was pressed (S1, ADR 0020): the scene steps to its next view, as a key or click does. Sent by the server only to the desk's own kiosk (a client on the device itself), never to a phone, which steers its own view.",
+      "type": "object",
+      "required": [
+        "type",
+        "protocol"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "view"
+        },
+        "protocol": {
+          "$ref": "#/$defs/Protocol"
         }
       }
     }

@@ -95,17 +95,55 @@ export function isMessage(value: unknown): value is Message {
   );
 }
 
-/** The server's stream, over a WebSocket at `url`. */
-export class SocketSource implements Source {
-  private readonly socket: WebSocket;
-  private handler: ((message: Message) => void) | null = null;
+/** What `SocketSource` needs of a WebSocket (the browser's, or a test's stand-in). */
+export interface SocketLike {
+  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  addEventListener(type: "open" | "close", listener: () => void): void;
+  close(): void;
+}
 
-  constructor(url: string) {
-    this.socket = new WebSocket(url);
-    this.socket.addEventListener("message", (event) => {
+/** How long `SocketSource` waits before trying again, doubling from the first to the last. */
+export const RECONNECT_FIRST_MS = 1000;
+export const RECONNECT_LAST_MS = 30_000;
+
+/**
+ * The server's stream, over a WebSocket at `url` (S1). When the socket closes (the server
+ * restarted, the network dropped) it tries again, waiting longer each time up to
+ * `RECONNECT_LAST_MS`, and from the first again once connected; on each connection the
+ * server sends everything anew, which the scene takes as it takes a new world.
+ */
+export class SocketSource implements Source {
+  private socket: SocketLike | null = null;
+  private handler: ((message: Message) => void) | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private waitMs = RECONNECT_FIRST_MS;
+  private closed = false;
+
+  constructor(
+    private readonly url: string,
+    private readonly open: (url: string) => SocketLike = (at) => new WebSocket(at),
+  ) {
+    this.connect();
+  }
+
+  private connect(): void {
+    const socket = this.open(this.url);
+    this.socket = socket;
+    socket.addEventListener("open", () => {
+      this.waitMs = RECONNECT_FIRST_MS;
+    });
+    socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       const parsed: unknown = JSON.parse(event.data);
       if (isMessage(parsed)) this.handler?.(parsed);
+    });
+    socket.addEventListener("close", () => {
+      if (this.closed || this.socket !== socket) return;
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        if (!this.closed) this.connect();
+      }, this.waitMs);
+      this.waitMs = Math.min(this.waitMs * 2, RECONNECT_LAST_MS);
     });
   }
 
@@ -114,7 +152,9 @@ export class SocketSource implements Source {
   }
 
   close(): void {
-    this.socket.close();
+    this.closed = true;
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.socket?.close();
   }
 }
 
