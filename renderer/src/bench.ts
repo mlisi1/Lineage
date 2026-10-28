@@ -20,6 +20,7 @@
  * (never `?film`'s stepped ones). After the last the page shows the results and POSTs
  * them, in the shape `tools/kiosk_bench.py` reads from the R0 spike, with more numbers.
  */
+import { PROBE, summariseProbe, type ProbeSummary, type ProbedFrame } from "./frameprobe";
 import {
   UPDATE_PRIORITY,
   ViewContainer,
@@ -176,6 +177,8 @@ export interface BenchScenarioResult extends FrameStats {
   /** Milliseconds of script a frame (moving the scene and handing it to the GPU). */
   js_ms_median: number;
   js_ms_p99: number;
+  /** Where the frames' time went, phase by phase, and what the late ones held (`frameprobe.ts`). */
+  probe: ProbeSummary;
   /** JavaScript heap in use after the scenario, in MB (0 where the browser hides it). */
   js_heap_mb: number;
   /** The atmosphere's state and sprite counts at the end. */
@@ -418,6 +421,8 @@ function countDraws(app: Application): { draws: number } {
 
 interface Timings {
   frameMs: number[];
+  /** What the frame probe saw of each frame measured (`frameprobe.ts`). */
+  probed: ProbedFrame[];
   jsMs: number[];
   draws: number[];
   startedEpochMs: number;
@@ -436,6 +441,7 @@ function measure(app: Application, warmupS: number, measureS: number): Promise<T
   return new Promise((resolve) => {
     const timings: Timings = {
       frameMs: [],
+      probed: [],
       jsMs: [],
       draws: [],
       startedEpochMs: 0,
@@ -467,9 +473,12 @@ function measure(app: Application, warmupS: number, measureS: number): Promise<T
     };
     const last = (): void => {
       const now = performance.now();
+      PROBE.leave();
+      const probed = PROBE.next();
       if (measuring) {
         timings.jsMs.push(now - scriptStart);
         timings.draws.push(counter.draws);
+        timings.probed.push(probed);
       }
       const elapsedS = (now - begun) / 1000;
       if (!measuring && elapsedS >= warmupS) {
@@ -675,6 +684,7 @@ export class Bench {
 
   /** The scene is built: run this page's scenario on it, then go on to the next. */
   attach(hooks: BenchHooks): void {
+    PROBE.enabled = true;
     void this.runScenario(hooks).catch(async (error: unknown) => {
       this.stored.results.error = `${this.scenario.name}: ${errorText(error)}`;
       await Bench.finish(this.run, this.settings, this.stored.results);
@@ -838,6 +848,13 @@ export class Bench {
       js_ms_median: jsMedian,
       js_ms_p99: jsP99,
       js_heap_mb: heapMb(),
+      probe: summariseProbe(
+        timings.frameMs.map((frameMs, k) => ({
+          frameMs,
+          probed: timings.probed[k] ?? PROBE.next(),
+        })),
+        BUDGET_MS + LATE_SLACK_MS,
+      ),
       atmosphere: hooks.atmosphere(),
       ready_s: readyS,
       settled,

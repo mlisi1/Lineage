@@ -87,6 +87,7 @@ import { Showcase } from "./showcase/showcase";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
 import { creatureAtlas } from "./creatures/atlas";
+import { PROBE } from "./frameprobe";
 import { Portraits } from "./creatures/portrait";
 import { heightAt } from "./creatures/habitat";
 import type { RareLook } from "./creatures/rare";
@@ -407,7 +408,10 @@ async function start(): Promise<void> {
   // The ark's newcomers come into being where its light is.
   herd.arrival = (x, y) => atmosphere.arrival(x, y);
   const receive = (message: Message): void => {
+    const begun = PROBE.enabled ? performance.now() : 0;
+    PROBE.note(message.type);
     if (!atmosphere.hold(message)) deliver(message);
+    if (PROBE.enabled) PROBE.charge("messages", performance.now() - begun);
   };
   // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
   const shows = KIOSK && bench === null ? [] : showsOf(params.get("show"));
@@ -588,6 +592,7 @@ async function start(): Promise<void> {
   let sceneRain: SkyMessage["rain"] = "none";
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
+    PROBE.enter("director");
     const size = landscape.size;
     if (size === null) {
       // Nothing drawn until the first land: let it be laid out.
@@ -639,8 +644,10 @@ async function start(): Promise<void> {
     }
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
+    PROBE.enter("landscape");
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    PROBE.enter("herd");
     // The animals sleep by the light of the moment (R5), as last drawn.
     herd.nightfall(sceneLight, atmosphere.overcastNow);
     // Out in the rain they shake it off when it ends, and hunch in a thunderstorm (R5).
@@ -662,6 +669,7 @@ async function start(): Promise<void> {
       if (due.some(({ message }) => message.type === "sky")) atmosphere.settleLight();
     }
     if (still) atmosphere.settleLight();
+    PROBE.enter("atmosphere");
     const shake = atmosphere.update(stepS, {
       view: shot.view,
       cells,
@@ -722,6 +730,7 @@ async function start(): Promise<void> {
     sceneLight = light;
     sceneRain = rain;
     const lamp = lantern(light, tint, atmosphere.ending);
+    PROBE.enter("overlays");
     captions.update(dtS, lamp);
     // The card is out while the local view follows an animal and is not dipped to dark,
     // nor away visiting the place of an entry (or on its way back): it would name an
@@ -739,6 +748,8 @@ async function start(): Promise<void> {
       const { act } = showcase.now;
       overlay.show(act.line, act.title ?? "", showcase.caption, act.top === true);
     }
+    // Pixi draws next (the benchmark ends the phase after the draw).
+    PROBE.enter("render");
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.

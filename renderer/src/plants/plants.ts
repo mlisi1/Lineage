@@ -14,6 +14,7 @@
  * logs, and stumps and snags where it burnt. No plant carries a shadow: the layer lists
  * them, for the ground to paint.
  */
+import { PROBE } from "../frameprobe";
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_LOOK, type Look, type PlantInks } from "../looks";
 import { mulberry32 } from "../rng";
@@ -386,6 +387,7 @@ export class PlantLayer {
    * the ground to paint. Whether or not the plants themselves are built yet.
    */
   shadows(cells: CellRect): Shadow[] {
+    PROBE.note("shadows");
     const { land } = this;
     const out: Shadow[] = [];
     const reach = Math.ceil(this.tall) + REACH_CELLS;
@@ -441,6 +443,7 @@ export class PlantLayer {
     }
     if (this.built.size !== before) {
       this.changes += 1;
+      PROBE.note("plants-built");
       this.onBuilt?.();
     }
     let drawn = 0;

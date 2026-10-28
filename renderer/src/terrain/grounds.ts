@@ -14,6 +14,7 @@
  * Asked for the surf (`PaintRequest.surf`), a painting comes with its shore's data, which
  * goes in a layer of its own (`surf`) for the sea's shader to draw the waves from.
  */
+import { PROBE } from "../frameprobe";
 import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
 import { NO_CACHE, type GroundCache } from "./groundcache";
@@ -551,6 +552,7 @@ export class PieceGround extends Layers {
     version: number,
     fadeS = this.fadeS,
   ): void {
+    PROBE.note("ground-piece");
     // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
     const painting = show(pixels, this.tile, this.layers, {
       x: cells.x0,

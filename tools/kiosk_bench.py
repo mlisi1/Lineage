@@ -740,6 +740,7 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                 f"{usage.get('cpu_pct', float('nan')):>7.0f}"
                 f"{memory if memory is not None else float('nan'):>8.0f}"
             )
+            lines.extend(_late_causes(scenario))
         acceptance = results.get("acceptance") or {}
         if acceptance.get("pass") is not None:
             verdict = "PASS" if acceptance["pass"] else "FAIL"
@@ -748,6 +749,24 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                 f"median at the lowest, target {acceptance['target_fps']}: {verdict}"
             )
     return lines
+
+
+def _late_causes(scenario: dict[str, Any]) -> list[str]:
+    """Where a scenario's late frames came from, as the page's frame probe saw them."""
+    probe = scenario.get("probe")
+    if not probe or not probe.get("late_by_phase"):
+        return []
+    by_phase = ", ".join(
+        f"{phase} {count}"
+        for phase, count in sorted(probe["late_by_phase"].items(), key=lambda kv: -kv[1])
+    )
+    line = f"    late frames by phase: {by_phase}"
+    notes = probe.get("late_notes") or {}
+    if notes:
+        line += "; with " + ", ".join(
+            f"{note} {count}" for note, count in sorted(notes.items(), key=lambda kv: -kv[1])
+        )
+    return [line]
 
 
 def main(argv: list[str] | None = None) -> int:

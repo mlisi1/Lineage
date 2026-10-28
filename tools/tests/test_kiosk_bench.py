@@ -310,6 +310,10 @@ def test_summary_table() -> None:
                             "fps_1pct_low": 29.4,
                             "over_budget_pct": 2.5,
                             "js_ms_median": 9.1,
+                            "probe": {
+                                "late_by_phase": {"outside": 2, "herd": 5},
+                                "late_notes": {"creatures": 3},
+                            },
                         },
                     ],
                     "acceptance": {
@@ -341,6 +345,8 @@ def test_summary_table() -> None:
     assert any(
         line.split()[:4] == ["middle-crowd", "30.0", "29.4", "2.5"] for line in text.splitlines()
     )
+    # And where its late frames came from, as the page's frame probe saw them.
+    assert "late frames by phase: herd 5, outside 2; with creatures 3" in text
     assert "[software] timeout no results after 210 s" in text
     assert "GPU jobs the kernel killed (hangs): 3" in text
     # Where the kernel log could not be read nothing is claimed.

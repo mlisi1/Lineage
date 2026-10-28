@@ -13,6 +13,7 @@
  * that have been shown are kept up to date. The sea moves all the while (`terrain/sea.ts`).
  * Creatures (`herd.ts`) stand among the plants; the camera (`director.ts`) chooses the view.
  */
+import { PROBE } from "./frameprobe";
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
 import { standingPlants, type PlantLayer } from "./plants/plants";
@@ -453,6 +454,7 @@ export class Landscape {
   }
 
   private layOut(): void {
+    PROBE.note("lay-out");
     const message = this.landMessage;
     if (message === null) return;
     this.stale = false;

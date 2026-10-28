@@ -11,6 +11,7 @@
  * its pixels are read back. Portraits are kept by the herd's key (`Herd.portraitOf`), which
  * changes when the drawing would, so each animal is drawn once while it looks the same.
  */
+import { PROBE } from "../frameprobe";
 import { Container, Rectangle, type Renderer } from "pixi.js";
 import type { Atlas } from "./atlas";
 import type { BodyOptions } from "./body";
@@ -91,6 +92,7 @@ export class Portraits {
 
   /** The animal drawn at `zoom` art pixels to the cell, cropped to what it covers. */
   private draw(portrait: Portrait, zoom: number): Pixels {
+    PROBE.note("portrait-draw");
     const layer = new CreatureLayer(
       this.atlas,
       [],
