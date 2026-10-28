@@ -166,6 +166,8 @@ declare global {
       initial: number | null;
     };
     /** What the name card of the animal followed shows (tests; S3 shows the same card). */
+    /** Whether the followed animal's portrait, read back without waiting, is the one read at once (tests). */
+    __portraitCheck?: () => boolean | null;
     __card?: () => {
       phase: CardPhase;
       open: number;
@@ -295,7 +297,13 @@ async function start(): Promise<void> {
   const atlas = creatureAtlas();
   const herd = new Herd(atlas, mulberry32(seed + 1), () => landscape.current);
   // The name card's portraits, drawn by the scene's own renderer (R5).
-  const portraits = new Portraits(app.renderer, atlas);
+  // Read back without waiting for the GPU while the scene runs live; at once for films and
+  // stills, so that a frame is the same however fast the machine is.
+  const portraits = new Portraits(
+    app.renderer,
+    atlas,
+    params.get("film") === null && params.get("still") === null,
+  );
   herd.swash = (x, y) => landscape.swashCovers(x, y);
   world.addChild(...herd.containers);
   // Small life about the island (R5): fireflies, dust from running feet, birds, butterflies.
@@ -522,6 +530,20 @@ async function start(): Promise<void> {
     advance += seconds;
   };
   window.__card = () => card.state;
+  if (!KIOSK) {
+    window.__portraitCheck = () => {
+      const subject = shot.subject;
+      const look = subject === null ? null : herd.portraitOf(subject);
+      const kept = look === null ? null : portraits.of(look);
+      if (look === null || kept === null) return null;
+      const atOnce = new Portraits(app.renderer, atlas, false).of(look);
+      return (
+        atOnce !== null &&
+        atOnce.rgba.length === kept.rgba.length &&
+        atOnce.rgba.every((value, at) => value === kept.rgba[at])
+      );
+    };
+  }
   window.__captions = () => {
     const { phase, caption, waiting, lamp, icon, initial } = captions.state;
     return {
@@ -736,14 +758,16 @@ async function start(): Promise<void> {
     // nor away visiting the place of an entry (or on its way back): it would name an
     // animal off screen.
     const away = AWAY.has(director.state.motion);
+    // Its portrait is drawn as soon as the animal is chosen, in the dark of the dip (R5,
+    // the optimization plan's Phase 1), over a few frames; the card waits for it, or shows
+    // the animal's last one while it grows into the next.
+    const chosen = shot.view === "local" && shot.subject !== null ? shot.subject : null;
+    const look = chosen === null ? null : herd.portraitOf(chosen);
+    const portrait = look === null ? null : (portraits.of(look) ?? portraits.latestOf(look.id));
     const following = shot.view === "local" && shot.dim < CARD_DIM && !away ? shot.subject : null;
-    const facts = following === null ? null : herd.cardOf(following);
-    const look = facts === null ? null : herd.portraitOf(facts.id);
-    card.update(
-      dtS,
-      facts === null ? null : { ...facts, portrait: look === null ? null : portraits.of(look) },
-      lamp,
-    );
+    const facts =
+      following === null || (look !== null && portrait === null) ? null : herd.cardOf(following);
+    card.update(dtS, facts === null ? null : { ...facts, portrait }, lamp);
     if (showcase !== null && overlay !== null) {
       const { act } = showcase.now;
       overlay.show(act.line, act.title ?? "", showcase.caption, act.top === true);

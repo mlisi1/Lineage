@@ -664,14 +664,11 @@ export class Herd {
     const seed = this.seedOf(id);
     if (seed === null) return null;
     const plans = this.layers.local.speciesPlans;
-    const key = JSON.stringify([
-      id,
-      kindFor(seed, plans),
-      seed.colours ?? null,
-      seed.growth ?? 1,
-      seed.torpid,
-    ]);
-    return { key, seed, plans, body: BODIES.local };
+    const kind = kindFor(seed, plans);
+    const growth = seed.growth ?? 1;
+    const key = JSON.stringify([id, kind, seed.colours ?? null, growth, seed.torpid]);
+    const shape = JSON.stringify([id, kind, growth, seed.torpid]);
+    return { id, key, shape, seed, plans, body: BODIES.local };
   }
 
   /**

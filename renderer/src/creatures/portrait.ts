@@ -12,7 +12,7 @@
  * changes when the drawing would, so each animal is drawn once while it looks the same.
  */
 import { PROBE } from "../frameprobe";
-import { Container, Rectangle, type Renderer } from "pixi.js";
+import { Container, Rectangle, WebGLRenderer, type Renderer, type Texture } from "pixi.js";
 import type { Atlas } from "./atlas";
 import type { BodyOptions } from "./body";
 import { CreatureLayer } from "./layer";
@@ -24,8 +24,12 @@ import type { Pixels } from "../terrain/pixels";
 
 /** What a portrait is drawn from (`Herd.portraitOf`). */
 export interface Portrait {
+  /** The animal's id. */
+  id: number;
   /** Changes whenever the drawing would. */
   key: string;
+  /** Changes whenever the drawing's size would (not with its colours alone). */
+  shape: string;
   seed: CreatureSeed;
   /** What each species is drawn as in the scene. */
   plans: ReadonlyMap<number, SpeciesPlan>;
@@ -56,42 +60,136 @@ const OPAQUE = 255;
 
 export class Portraits {
   private readonly kept = new Map<string, Pixels>();
+  /** The zoom each body's portrait was last fitted at, by its shape (`Portrait.shape`). */
+  private readonly zooms = new Map<string, number>();
+  /** The latest portrait of each animal (shown while its next one is drawn). */
+  private readonly latest = new Map<number, Pixels>();
+  /** A portrait being drawn over a few frames (`asynchronous`): its steps and the read in flight. */
+  private pending: {
+    key: string;
+    portrait: Portrait;
+    steps: Generator<number, Pixels, Pixels>;
+    reading: PixelRead | null;
+  } | null = null;
 
+  /**
+   * With `asynchronous`, a portrait's pixels are read back from the GPU without waiting
+   * for it (R5, the optimization plan's Phase 1: `readPixels` waited for every draw queued
+   * before it, a long frame each time); `of` then answers null until they come, a frame
+   * or a few later. Without (films, stills and tests), they are read at once, as before.
+   */
   constructor(
     private readonly renderer: Renderer,
     private readonly atlas: Atlas,
+    private readonly asynchronous = false,
   ) {}
 
-  /** The portrait of `portrait`'s animal, `PORTRAIT_SIZE` square, drawn once per key. */
-  of(portrait: Portrait): Pixels {
+  /**
+   * The portrait of `portrait`'s animal, `PORTRAIT_SIZE` square, drawn once per key; null
+   * while it is still being drawn (asynchronous only).
+   */
+  of(portrait: Portrait): Pixels | null {
     const known = this.kept.get(portrait.key);
     if (known !== undefined) return known;
-    const drawn = this.fit(portrait);
+    if (!this.asynchronous) {
+      const steps = this.fit(portrait);
+      let step = steps.next();
+      while (step.done !== true) step = steps.next(this.drawNow(portrait, step.value));
+      return this.keep(portrait, step.value);
+    }
+    let pending = this.pending;
+    if (pending?.key !== portrait.key) {
+      // Another animal (or look) asked for: what was being drawn is dropped.
+      pending?.reading?.cancel();
+      const steps = this.fit(portrait);
+      pending = { key: portrait.key, portrait, steps, reading: null };
+      this.pending = pending;
+      const first = steps.next();
+      if (first.done === true) return this.keep(portrait, first.value);
+      pending.reading = this.drawLater(portrait, first.value);
+    }
+    const read = pending.reading?.poll() ?? null;
+    if (read === null) return null;
+    const step = pending.steps.next(read);
+    if (step.done === true) {
+      this.pending = null;
+      return this.keep(portrait, step.value);
+    }
+    pending.reading = this.drawLater(portrait, step.value);
+    return null;
+  }
+
+  /** The latest portrait drawn of animal `id`, if any. */
+  latestOf(id: number): Pixels | null {
+    return this.latest.get(id) ?? null;
+  }
+
+  private keep(portrait: Portrait, drawn: Pixels): Pixels {
     this.kept.set(portrait.key, drawn);
-    for (const key of this.kept.keys()) {
-      if (this.kept.size <= PORTRAITS_KEPT) break;
-      this.kept.delete(key);
+    this.latest.delete(portrait.id);
+    this.latest.set(portrait.id, drawn);
+    for (const map of [this.kept, this.latest] as Map<unknown, Pixels>[]) {
+      for (const key of map.keys()) {
+        if (map.size <= PORTRAITS_KEPT) break;
+        map.delete(key);
+      }
     }
     return drawn;
   }
 
-  /** Drawn at the zoom that makes it fill the square, centred in it. */
-  private fit(portrait: Portrait): Pixels {
+  /**
+   * Drawn at the zoom that makes it fill the square, centred in it: the zooms to draw at,
+   * one after another, each answered with what it drew. A body of a shape fitted before
+   * starts at the zoom it ended at, which it would come to again (its colours do not
+   * change its size): drawn once instead of measured first.
+   */
+  private *fit(portrait: Portrait): Generator<number, Pixels, Pixels> {
     const base = portrait.body.pixels;
+    const known = this.zooms.get(portrait.shape);
+    if (known !== undefined) return centred(yield known, PORTRAIT_SIZE);
     let zoom = base;
-    let drawn = this.draw(portrait, zoom);
+    let drawn = yield zoom;
     for (let tries = 0; tries < FIT_TRIES; tries++) {
       const longest = Math.max(drawn.width, drawn.height, 1);
       const wanted = Math.min((zoom * PORTRAIT_FIT) / longest, base * MOST_ENLARGED);
       if (longest <= PORTRAIT_FIT && Math.abs(wanted - zoom) < 1) break;
       zoom = wanted;
-      drawn = this.draw(portrait, zoom);
+      drawn = yield zoom;
     }
+    this.zooms.set(portrait.shape, zoom);
     return centred(drawn, PORTRAIT_SIZE);
   }
 
   /** The animal drawn at `zoom` art pixels to the cell, cropped to what it covers. */
-  private draw(portrait: Portrait, zoom: number): Pixels {
+  private drawNow(portrait: Portrait, zoom: number): Pixels {
+    const { holder, frame } = this.stage(portrait, zoom);
+    const read = this.renderer.extract.pixels({
+      target: holder,
+      frame,
+      resolution: 1,
+      antialias: false,
+      clearColor: [0, 0, 0, 0],
+    });
+    holder.destroy({ children: true });
+    return finish(read.pixels, read.width, read.height);
+  }
+
+  /** As `drawNow`, its pixels read back without waiting for the GPU (WebGL2; else at once). */
+  private drawLater(portrait: Portrait, zoom: number): PixelRead {
+    const { holder, frame } = this.stage(portrait, zoom);
+    const texture = this.renderer.textureGenerator.generateTexture({
+      target: holder,
+      frame,
+      resolution: 1,
+      antialias: false,
+      clearColor: [0, 0, 0, 0],
+    });
+    holder.destroy({ children: true });
+    return readLater(this.renderer, texture);
+  }
+
+  /** The animal laid out at `zoom`, and the box of whole art pixels it covers. */
+  private stage(portrait: Portrait, zoom: number): { holder: Container; frame: Rectangle } {
     PROBE.note("portrait-draw");
     const layer = new CreatureLayer(
       this.atlas,
@@ -125,18 +223,85 @@ export class Portraits {
       Math.max(Math.ceil(bounds.maxX) - x0, 1),
       Math.max(Math.ceil(bounds.maxY) - y0, 1),
     );
-    const read = this.renderer.extract.pixels({
-      target: holder,
-      frame,
-      resolution: 1,
-      antialias: false,
-      clearColor: [0, 0, 0, 0],
-    });
-    holder.destroy({ children: true });
-    const rgba = new Uint8ClampedArray(read.pixels);
-    unpremultiply(rgba);
-    return cropped({ width: read.width, height: read.height, rgba });
+    return { holder, frame };
   }
+}
+
+/** Pixels read back from the GPU: unpremultiplied, and cut to what is not see-through. */
+function finish(pixels: Uint8ClampedArray | Uint8Array, width: number, height: number): Pixels {
+  const rgba = new Uint8ClampedArray(pixels);
+  unpremultiply(rgba);
+  return cropped({ width, height, rgba });
+}
+
+/** A read of a texture's pixels under way: `poll` answers them once they have come. */
+export interface PixelRead {
+  poll(): Pixels | null;
+  cancel(): void;
+}
+
+/**
+ * Read `texture`'s pixels as Pixi's `getPixels` does, the same bytes, but into a buffer on
+ * the GPU and fetched once a fence says the GPU is done (WebGL2), so that the page does
+ * not wait for every draw queued before it. Without WebGL2, read at once.
+ */
+function readLater(renderer: Renderer, texture: Texture): PixelRead {
+  const frame = texture.frame;
+  const resolution = texture.source.resolution;
+  const width = Math.max(Math.round(frame.width * resolution), 1);
+  const height = Math.max(Math.round(frame.height * resolution), 1);
+  const gl = renderer instanceof WebGLRenderer ? renderer.gl : null;
+  if (gl === null || !(gl instanceof WebGL2RenderingContext)) {
+    const read = renderer.texture.getPixels(texture);
+    texture.destroy(true);
+    const done = finish(read.pixels, read.width, read.height);
+    return { poll: () => done, cancel: () => undefined };
+  }
+  const webgl = renderer as WebGLRenderer;
+  const target = webgl.renderTarget.getRenderTarget(texture);
+  const glTarget = webgl.renderTarget.getGpuRenderTarget(target) as {
+    resolveTargetFramebuffer: WebGLFramebuffer;
+  };
+  webgl.renderTarget.adaptor.bindFramebuffer(glTarget.resolveTargetFramebuffer);
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, 4 * width * height, gl.STREAM_READ);
+  gl.readPixels(
+    Math.round(frame.x * resolution),
+    Math.round(frame.y * resolution),
+    width,
+    height,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    0,
+  );
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+  let done: Pixels | null = null;
+  let open = true;
+  const close = (): void => {
+    if (!open) return;
+    open = false;
+    gl.deleteSync(fence);
+    gl.deleteBuffer(buffer);
+    texture.destroy(true);
+  };
+  return {
+    poll: () => {
+      if (done !== null || !open) return done;
+      const status = gl.clientWaitSync(fence as WebGLSync, 0, 0);
+      if (status !== gl.ALREADY_SIGNALED && status !== gl.CONDITION_SATISFIED) return null;
+      const pixels = new Uint8Array(4 * width * height);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+      gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pixels);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      close();
+      done = finish(pixels, width, height);
+      return done;
+    },
+    cancel: close,
+  };
 }
 
 /** The colours read back are multiplied by their alpha (the shadow's): divided out again. */
