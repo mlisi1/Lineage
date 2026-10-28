@@ -616,9 +616,18 @@ needs a note in `docs/decisions/`.
   sim-day held, a day's turn reported apart (the owner). `main` (M11) merged in on
   2026-10-27, the streams re-recorded with M11's sim. The showcase the owner asked for
   was begun here and moved to R6 by the owner (2026-10-27); its first version is on
-  `r5-final`. Left: the final report regenerated, a last board run of the final build, the
-  merge into `main`. Checklist and handoff in `docs/milestones.md`; reports
-  `reports/R5-final/`, `reports/R5-device/`.)
+  `r5-final`. Then (2026-10-28) a review of the renderer's per-frame costs and an
+  optimization plan (`docs/renderer-performance-review.md`,
+  `docs/renderer-optimization-plan.md`, ADR 0022), all the same pixels but one: a frame
+  probe in the benchmark naming what late frames held; the card's portrait read back
+  without waiting for the GPU; a day without a new land laid out only in a turn of the
+  season; the ground's painters faster (a piece's margin as land or sea only, a land's
+  cells once), and their colour pass on the GPU (the owner: the same to the eye, not to
+  the byte; `?painter=cpu` paints on the CPU). Left: a last board run of the final build
+  (with the probe, and the ground on the GPU against the CPU), the owner's calls after it
+  (each animal one batch, the [owner's call] items of the plan), the merge into `main`.
+  Checklist and handoff in `docs/milestones.md`; reports `reports/R5-final/`,
+  `reports/R5-device/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
