@@ -100,3 +100,23 @@ kept: each claimed win is measured there against the board's own noise.
   board's probe says where the late frames come from.
 - Phase 3 (fire): working out each burning cell's fixed parts once would save some 3 % of
   the fire scenario; its frame is mostly the animals and Pixi's draw. Not done.
+- 2026-10-29, the board's numbers (build 33e218c) and what followed. Ground on the GPU
+  against the CPU: a piece 0.7–0.9 s in the worker against 1.3–2.1 s (its GPU pass
+  0.13–0.26 s; the rest, 0.5–0.7 s, is the CPU's passes and the cache, to be split next),
+  the views ready 6–9 s sooner (middle 23.5 → 17.5 s, local 29.3 → 22.1 s, shore 25.3 →
+  16.7 s), the day's turn 24 → 14 % late. Pieces wait 3–5 s in the queue of two workers.
+  The board's traces: in the crowd's late frames the page's script and its garbage
+  collection (a quarter), the GPU process busy alongside; the big fire held by the page's
+  script, Pixi's updates of changed sprites a third of it.
+  Kept, same pixels: a pool's unused sprites see-through before hidden (draw lists not
+  rebuilt every frame; the fire's draw −27 % at the board's speed on the PC) and the
+  visible flag written only when it changes. Kept, a timing change only: an animal is
+  drawn again only when its drawing changed, and in the view not in use only when that
+  view comes on (it was drawn again in both at once, every body straightened behind its
+  head); two stills taken again (`follow`, `eating`: the same animals a moment further
+  on). Tried and dropped, measured: each burning cell's fixed parts worked out once (no
+  gain); each animal drawn as one view (the same pixels, but slower: the parts' maths is
+  the cost, whoever does it). The owner kept every flame (no limit on the cells drawn).
+  At the board's speed on the PC (`--throttle` 20, which matches the board's crowd), every
+  scenario but the big fire holds the cap with ≤ 2.5 % late; the big fire ~30 %, held by
+  its ~2 400 sprites and the animals' posing.
