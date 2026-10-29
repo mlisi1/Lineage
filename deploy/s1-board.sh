@@ -79,7 +79,7 @@ print(save_name(state.epoch_unix_ms + state.t_ms))
     .venv/bin/python -c "import sys, lineage_server.main, numpy, websockets; print(\"environment ok, Python\", sys.version.split()[0])"'
   ssh_t "cd lineage && sudo cp lineage-server@.service lineage-s1-kiosk@.service \
     /etc/systemd/system/ && sudo systemctl daemon-reload &&
-    sudo systemctl enable systemd-time-wait-sync >/dev/null 2>&1; echo 'units installed'"
+    sudo systemctl enable systemd-time-wait-sync >/dev/null 2>&1 && echo 'units installed'"
   ;;
 start)
   ssh_t "sudo systemctl start lineage-server@$user && sleep 1 &&

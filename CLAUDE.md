@@ -680,8 +680,9 @@ needs a note in `docs/decisions/`.
   the newest of each of the last 7 days and the oldest of each month, archives forever; a
   save on shutdown, on power loss and at a world's end; creatures streamed at each fauna
   tick; the view button sent to the desk only, as a `view` message; a minimal fake device,
-  S2 completes it; `tools/stream.py` records through the server's feed. Left: the board's
-  numbers, by `deploy/s1-board.sh` and `tools.server_watch`.)
+  S2 completes it; `tools/stream.py` records through the server's feed. On the board,
+  2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves
+  1.2–1.6 s, 89 MB: every budget of §4.8 met.)
 
 ### S2 — Device layer
 - **Deliver**: PIR with configurable hold, god-power and view buttons with debounce, LED, backlight

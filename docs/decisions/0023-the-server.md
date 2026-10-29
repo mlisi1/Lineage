@@ -1,6 +1,6 @@
 # 0023 — The server: real time, catching up, saves, one stream
 
-- **Status**: accepted (the board's numbers pending)
+- **Status**: accepted
 - **Date**: 2026-10-28
 
 ## Context
@@ -89,8 +89,19 @@ Tests:
   after downtime equals a run where the owner left at the cut.
 - End to end: real WebSocket and HTTP clients, with the view button reaching the desk only.
 
-The board's numbers (sim CPU share, save time, memory) are taken in the board session
-shared with R5's last run.
+On the board, 2026-10-29 (Orange Pi Zero 2W, the 7" screen, after R5's last run; the
+island of seed 3, a year old, office schedule, about 200 animals; `runs/s1-board/`):
+
+| | Board | Budget (§4.8) |
+|---|---|---|
+| Sim's share of one core, 20 min with the kiosk drawing | 0.0011 | ≤ 0.25 |
+| Catching up 1.78 sim-days on start | 10.8 s of CPU: 6.1 s a sim-day (16× the PC) | — |
+| Saves | 1.34 s, 1.22 s; 1.61 s with the kiosk drawing | ≤ 2 s |
+| Server's resident memory | 88–89 MB, flat | ≤ 300 MB |
+
+The whole board with the kiosk: 495 MB of 1.97 GB in use, 63 °C, Chromium about 60 % of a
+core. The kiosk reconnected by itself when the server was restarted. Every budget is met;
+the save has the least margin (1.61 of 2 s), and grows with the island.
 
 ## Consequences
 
@@ -98,9 +109,10 @@ shared with R5's last run.
   installs `uv` in `~/.lineage-uv` (from PyPI) and makes the server's environment with
   uv's Python 3.11, from wheels built on the PC and the versions pinned in `uv.lock`. S6
   writes the deployment's own setup.
-- If the board's save comes near 2 s, a lighter xz preset in `io.dumps` is the remedy.
-  The format and the state hashes stay the same, but it is a sim change, to be weighed
-  then.
+- The save is the budget with the least margin on the board (1.61 s of 2 s with the
+  kiosk drawing). A lighter xz preset in `io.dumps` (1 instead of 6: the same size in a
+  third of the time on the PC) is the remedy; the format and the state hashes stay the
+  same, but it is a sim change, left to the owner.
 - S2 implements `Device` on GPIO and keeps the fake in step (parity test, web panel).
 - S3 adds the API beside `/status` and a phone page, the same stream without `view`.
 - S4 reads the island's major chronicle entries; the server is where they come out.
