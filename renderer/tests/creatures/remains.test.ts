@@ -23,7 +23,8 @@ function shown(container: Container): Sprite[] {
   const out: Sprite[] = [];
   const walk = (node: Container): void => {
     for (const child of node.children) {
-      if (!child.visible) continue;
+      // A pool's sprite it has no use for is see-through before it is hidden (`Parking`).
+      if (!child.visible || child.alpha === 0) continue;
       if (child instanceof Sprite) out.push(child);
       else walk(child);
     }

@@ -7,7 +7,8 @@
  *   on the board: probe.conf "<scenario> dist-kiosk", then start lineage-r5-probe@<user>
  *   on the PC:    ssh -N -L 9222:localhost:9222 lineage@<board> &
  *                 node scripts/board-trace.mjs [seconds=8] [wait=20] [out=board-trace.json]
- *                 (`CDP_PORT=…` for another port than 9222)
+ *                 (`CDP_PORT=…` for another port than 9222; on a PC, `THROTTLE=6` slows the
+ *                 page's CPU about to the board's)
  *
  * It waits `wait` seconds (the scenario loads, settles and starts measuring), records
  * `seconds` of trace through the page's DevTools port, writes the raw trace to `out`
@@ -36,6 +37,15 @@ const CATEGORIES = [
 const LATE_MS = 35.3;
 
 const browser = await chromium.connectOverCDP(`http://localhost:${process.env.CDP_PORT ?? "9222"}`);
+// On a PC, `THROTTLE=6` slows the page's CPU about to the board's, so that frames come late.
+const throttle = Number(process.env.THROTTLE ?? "1");
+if (throttle > 1) {
+  const page = browser.contexts().flatMap((context) => context.pages())[0];
+  if (page === undefined) throw new Error("no page to slow down");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+  console.log(`page's CPU slowed ${throttle} times`);
+}
 console.log(`connected; waiting ${wait} s for the scenario to settle`);
 await sleep(Number(wait) * 1000);
 const session = await browser.newBrowserCDPSession();
