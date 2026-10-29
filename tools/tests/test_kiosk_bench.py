@@ -201,7 +201,7 @@ def test_browser_command_for_kiosk_and_for_a_pc(tmp_path: Path) -> None:
 
 
 def test_profiles_and_page_url() -> None:
-    assert list(PROFILES) == ["default", "gpu", "gpu-gles", "software", "canvas"]
+    assert list(PROFILES) == ["default", "gpu", "gpu-gles", "software", "canvas", "cpu-ground"]
     assert PROFILES["default"].flags == ()
     url = kb.page_url(8137, "spike.html", PROFILES["canvas"], 8.0, 2.0, "floor,spec-1x")
     assert url.startswith("http://127.0.0.1:8137/spike.html?")
@@ -230,10 +230,16 @@ def test_the_scene_page_is_asked_for_its_benchmark_and_cap() -> None:
     # is the CPU's drawing run by default (the owner), though it can be asked for.
     assert kb.default_profiles(kb.SCENE_PAGE) == "default"
     assert [p.name for p in kb.chosen_profiles("software", None, kb.SCENE_PAGE)] == ["software"]
-    assert kb.default_profiles(kb.SPIKE_PAGE) == ",".join(PROFILES)
+    assert kb.default_profiles(kb.SPIKE_PAGE) == "default,gpu,gpu-gles,software,canvas"
     with pytest.raises(ValueError, match="canvas: only the R0 spike"):
         kb.chosen_profiles("gpu,canvas", None, kb.SCENE_PAGE)
     assert [p.name for p in kb.chosen_profiles("gpu", None, kb.SCENE_PAGE)] == ["gpu"]
+    # The ground's colour pass on the CPU, to compare with the GPU's: the scene's alone.
+    ground = kb.page_url(1, kb.SCENE_PAGE, PROFILES["cpu-ground"], 1.0, 0.0, None)
+    assert "painter=cpu" in ground
+    assert PROFILES["cpu-ground"].flags == ()
+    with pytest.raises(ValueError, match="cpu-ground: only the scene"):
+        kb.chosen_profiles("cpu-ground", None, kb.SPIKE_PAGE)
 
 
 def test_choosing_profiles() -> None:

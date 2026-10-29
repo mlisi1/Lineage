@@ -141,12 +141,20 @@ PROFILES: dict[str, Profile] = {
             ("--use-angle=swiftshader", "--enable-unsafe-swiftshader"),
         ),
         Profile("canvas", "PixiJS on the 2D canvas, no WebGL", (), (("backend", "canvas"),)),
+        Profile(
+            "cpu-ground",
+            "as default, the ground's colour pass on the CPU (?painter=cpu), to compare",
+            (),
+            (("painter", "cpu"),),
+        ),
     )
 }
 
 
 # Profiles that ask the page for a backend only the spike has.
 SPIKE_ONLY_PROFILES = ("canvas",)
+# Profiles that ask the scene for something the spike does not have.
+SCENE_ONLY_PROFILES = ("cpu-ground",)
 
 
 def is_spike(page: str) -> bool:
@@ -161,7 +169,7 @@ def default_profiles(page: str) -> str:
     through the same path, ANGLE on OpenGL ES with Panfrost, so the others are run only
     when asked for, as after a Chromium or Mesa update)."""
     if is_spike(page):
-        return ",".join(PROFILES)
+        return ",".join(name for name in PROFILES if name not in SCENE_ONLY_PROFILES)
     names = ["default"]
     return ",".join(names)
 
@@ -174,6 +182,9 @@ def chosen_profiles(names: str, extra_flags: str | None, page: str = SPIKE_PAGE)
     spike_only = [n for n in names.split(",") if n in SPIKE_ONLY_PROFILES and not is_spike(page)]
     if spike_only:
         raise ValueError(f"{', '.join(spike_only)}: only the R0 spike ({SPIKE_PAGE}) has it")
+    scene_only = [n for n in names.split(",") if n in SCENE_ONLY_PROFILES and is_spike(page)]
+    if scene_only:
+        raise ValueError(f"{', '.join(scene_only)}: only the scene ({SCENE_PAGE}) has it")
     profiles = [PROFILES[name] for name in names.split(",")]
     if extra_flags:
         profiles.append(
