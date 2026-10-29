@@ -758,6 +758,20 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                     f"    ground painted on the GPU: {made.get('gpu', 0)}"
                     f" of {made.get('gpu', 0) + made.get('cpu', 0)}"
                 )
+            timing = scenario.get("ground_timing")
+            if timing:
+                m = timing.get("median", {})
+                gpu = (
+                    f"{m.get('gpu_upload', 0):.0f} + {m.get('gpu_draw', 0):.0f}"
+                    f" + {m.get('gpu_unpack', 0):.0f}"
+                )
+                made_in = ", ".join(f"{c:.0f}" for c in timing.get("compile_ms", [])) or "—"
+                lines.append(
+                    f"    ground: {timing.get('pieces', 0)} pieces,"
+                    f" median {m.get('total', 0):.0f} ms in the worker"
+                    f" (GPU {gpu}, CPU {m.get('cpu', 0):.0f}),"
+                    f" {m.get('queue', 0):.0f} queued; shader made in {made_in} ms"
+                )
         acceptance = results.get("acceptance") or {}
         if acceptance.get("pass") is not None:
             verdict = "PASS" if acceptance["pass"] else "FAIL"

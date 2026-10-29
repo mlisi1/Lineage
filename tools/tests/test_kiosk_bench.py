@@ -321,6 +321,20 @@ def test_summary_table() -> None:
                                 "late_notes": {"creatures": 3},
                             },
                             "ground_made": {"gpu": 12, "cpu": 1},
+                            "ground_timing": {
+                                "pieces": 13,
+                                "median": {
+                                    "total": 120,
+                                    "gpu_upload": 2,
+                                    "gpu_draw": 60,
+                                    "gpu_unpack": 8,
+                                    "cpu": 50,
+                                    "queue": 400,
+                                    "run": 130,
+                                },
+                                "max": {},
+                                "compile_ms": [900, 950],
+                            },
                         },
                     ],
                     "acceptance": {
@@ -355,6 +369,8 @@ def test_summary_table() -> None:
     # And where its late frames came from, as the page's frame probe saw them.
     assert "late frames by phase: herd 5, outside 2; with creatures 3" in text
     assert "ground painted on the GPU: 12 of 13" in text
+    assert "ground: 13 pieces, median 120 ms in the worker (GPU 2 + 60 + 8, CPU 50)" in text
+    assert "shader made in 900, 950 ms" in text
     assert "[software] timeout no results after 210 s" in text
     assert "GPU jobs the kernel killed (hangs): 3" in text
     # Where the kernel log could not be read nothing is claimed.

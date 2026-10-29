@@ -860,6 +860,7 @@ async function start(): Promise<void> {
     },
     dayDue: () => landscape.dayDue,
     groundMade: () => (painter instanceof WorkerPainter ? { ...painter.made } : null),
+    groundTimings: () => (painter instanceof WorkerPainter ? [...painter.timings] : []),
     newLand: () => {
       const message = landscape.lastMessage;
       if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });

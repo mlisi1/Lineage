@@ -547,6 +547,8 @@ export class GpuGround {
   /** Whether the framebuffer at `size` can be drawn into. */
   private complete = false;
   private readonly at: Map<string, WebGLUniformLocation | null> = new Map();
+  /** Where the last pass's time went (ms): uploading, drawing and reading back, unpacking. */
+  readonly last = { uploadMs: 0, drawMs: 0, unpackMs: 0 };
 
   private constructor(
     private readonly gl: WebGL2RenderingContext,
@@ -581,12 +583,14 @@ export class GpuGround {
     const { gl } = this;
     if (gl.isContextLost()) return null;
     const { wide, tall } = input;
+    const begun = performance.now();
     gl.useProgram(this.program);
     this.bindWorld(input);
     this.bindField(input);
     this.bindTargets(wide, tall);
     if (!this.complete) return null;
     this.setUniforms(input);
+    const uploaded = performance.now();
     gl.viewport(0, 0, wide, tall);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const first = new Uint8Array(wide * tall * 4);
@@ -596,6 +600,7 @@ export class GpuGround {
     gl.readBuffer(gl.COLOR_ATTACHMENT1);
     gl.readPixels(0, 0, wide, tall, gl.RGBA, gl.UNSIGNED_BYTE, second);
     if (gl.getError() !== gl.NO_ERROR) return null;
+    const read = performance.now();
     const count = wide * tall;
     const colours = new Uint32Array(count);
     const isLand = new Uint8Array(count);
@@ -613,6 +618,9 @@ export class GpuGround {
         thick[at] = second[o + 1] ?? 0;
       }
     }
+    this.last.uploadMs = uploaded - begun;
+    this.last.drawMs = read - uploaded;
+    this.last.unpackMs = performance.now() - read;
     return { colours, isLand, matter, toned, thick };
   }
 
