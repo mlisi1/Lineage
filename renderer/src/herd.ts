@@ -178,6 +178,7 @@ export class Herd {
     if (!granted.includes(look)) this.granted.set(id, [...granted, look]);
     const seed = this.seedOf(id);
     if (slot === undefined || seed === null) return false;
+    this.drawnKeys.set(id, this.drawnKey(seed));
     for (const layer of Object.values(this.layers)) layer.rebuild(slot, seed);
     return true;
   }
@@ -447,6 +448,18 @@ export class Herd {
   private genomeOrder: readonly number[] = GENE_NAMES.map((_, index) => index);
   /** The growth step each young animal was last drawn at. */
   private readonly drawnGrowth = new Map<number, number>();
+  /**
+   * What each animal was last drawn from (`drawnKey`): one whose drawing would come out the
+   * same is not drawn again (R5, the optimization plan: a species come or gone redrew every
+   * animal in every view in one frame, and straightened every body behind its head).
+   */
+  private readonly drawnKeys = new Map<number, string>();
+  /**
+   * Animals to be drawn again in the layer not in use, when it comes into use (R5, the
+   * optimization plan: a growth step or a species' new colours redrew each animal in both
+   * layers at once; the other is not seen until the view changes, in the dark of a dip).
+   */
+  private readonly redrawLater = { middle: new Set<number>(), local: new Set<number>() };
   /** Each living species' colours, ranked against the others (`colours.ts`). */
   private colours = new Map<number, SpeciesColour>();
 
@@ -477,6 +490,23 @@ export class Herd {
   }
 
   /** The seed a layer draws animal `id` from, where the sim has it now. */
+  /** Draw again in layer `name` the animals whose drawing changed while it was not in use. */
+  private redrawWaiting(name: "middle" | "local"): void {
+    const waiting = this.redrawLater[name];
+    for (const id of waiting) {
+      const slot = this.roster.slotOf(id);
+      const seed = slot === undefined ? null : this.seedOf(id);
+      if (slot !== undefined && seed !== null) this.layers[name].rebuild(slot, seed);
+    }
+    waiting.clear();
+  }
+
+  /** What `seed`'s drawing is made of in every view: all of it but where it stands. */
+  private drawnKey(seed: CreatureSeed): string {
+    const kinds = Object.values(this.layers).map((layer) => kindFor(seed, layer.speciesPlans));
+    return JSON.stringify([{ ...seed, x: 0, y: 0 }, kinds]);
+  }
+
   private seedOf(id: number): CreatureSeed | null {
     const config = this.phenotypeConfig;
     const known = this.roster.genomes.get(id);
@@ -563,14 +593,22 @@ export class Herd {
       const slot = this.roster.slotOf(id);
       const seed = slot === undefined ? null : this.seedOf(id);
       if (slot === undefined || seed === null) continue;
-      for (const layer of layers) layer.rebuild(slot, seed);
+      const key = this.drawnKey(seed);
+      if (key === this.drawnKeys.get(id)) continue;
+      this.drawnKeys.set(id, key);
+      const using = this.view === "local" ? "local" : "middle";
+      this.layers[using].rebuild(slot, seed);
+      this.redrawLater[using === "local" ? "middle" : "local"].add(id);
     }
     for (const id of this.drawnGrowth.keys())
       if (!this.roster.where.has(id)) this.drawnGrowth.delete(id);
+    for (const id of this.drawnKeys.keys())
+      if (!this.roster.where.has(id)) this.drawnKeys.delete(id);
     const landed = new Set(message.landed ?? []);
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
+      this.drawnKeys.set(id, this.drawnKey(seed));
       // An ark's newcomer comes into being under its light; one born, quickly; one landed
       // from the sea is there at once, under a splash (R5).
       const ark = this.arrival?.(seed.x, seed.y) ?? 0;
@@ -774,6 +812,7 @@ export class Herd {
     if (view !== this.view) {
       this.view = view;
       this.snores.clear();
+      this.redrawWaiting(view === "local" ? "local" : "middle");
       this.layers.middle.show(view === "middle" ? "bodies" : view === "map" ? "markers" : "hidden");
       this.layers.local.show(view === "local" ? "bodies" : "hidden");
     }

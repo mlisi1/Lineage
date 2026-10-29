@@ -266,3 +266,27 @@ describe("the herd over a recorded fortnight", () => {
     expect(herd.portraitOf(b)?.seed.growth).toBeUndefined();
   });
 });
+
+describe("the herd redrawing what changed (R5, the optimization plan)", () => {
+  const [a] = first.ids as [number];
+
+  it("draws a young one that grew a step again in the view in use, and in the other when shown", () => {
+    const { herd, inside } = herdOfOffice();
+    herd.receive(creatures({ ids: [a], born: [born(a)], young: [[a, 2]] }));
+    herd.update(STEP_S, "middle", EVERYWHERE, null, null);
+    const slot = inside.roster.slotOf(a) ?? -1;
+    const bodyIn = (layer: "middle" | "local"): unknown => inside.layers[layer].creatures[slot];
+    const middle = bodyIn("middle");
+    const local = bodyIn("local");
+    herd.receive(creatures({ ids: [a], young: [[a, 3]] }));
+    // Grown a step: drawn again in the middle view at once; the local view waits.
+    expect(bodyIn("middle")).not.toBe(middle);
+    expect(bodyIn("local")).toBe(local);
+    herd.update(STEP_S, "local", EVERYWHERE, null, null);
+    expect(bodyIn("local")).not.toBe(local);
+    // The same again: nothing drawn anew.
+    const now = bodyIn("local");
+    herd.receive(creatures({ ids: [a], young: [[a, 3]] }));
+    expect(bodyIn("local")).toBe(now);
+  });
+});
