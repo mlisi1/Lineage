@@ -84,7 +84,7 @@ const KINDS = [
     (e, t) =>
       t === "CrRendererMain" && /FunctionCall|FireAnimationFrame|EvaluateScript/.test(e.name),
   ],
-  ["page other", (e, t) => t === "CrRendererMain" && e.name === "RunTask"],
+  ["page busy", (e, t) => t === "CrRendererMain" && e.name === "RunTask"],
   [
     "gpu process",
     (e, t) =>
@@ -104,6 +104,16 @@ const spans = KINDS.map(([kind, test]) => ({
     .filter((e) => e.ph === "X" && typeof e.dur === "number" && test(e, threadOf(e)))
     .map((e) => [e.ts / 1000, (e.ts + e.dur) / 1000]),
 }));
+// Nested events of a kind (a function call inside an animation frame) are counted once.
+for (const entry of spans) {
+  const merged = [];
+  for (const [a, b] of entry.spans.sort((x, y) => x[0] - y[0])) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  entry.spans = merged;
+}
 const overlap = (list, from, to) => {
   let total = 0;
   for (const [a, b] of list) total += Math.max(0, Math.min(b, to) - Math.max(a, from));
