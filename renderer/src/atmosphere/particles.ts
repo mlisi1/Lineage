@@ -129,7 +129,8 @@ class Parking {
       sprite.alpha = this.alpha[index] ?? 1;
       this.idle[index] = -1;
     }
-    sprite.visible = true;
+    // Read first: the setter's work is not free, and it is asked of every sprite every frame.
+    if (!sprite.visible) sprite.visible = true;
   }
 }
 
