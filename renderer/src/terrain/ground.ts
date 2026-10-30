@@ -489,6 +489,14 @@ function cellsOf(world: Land): Cells {
   return cells;
 }
 
+/**
+ * Where the last painting's time went, step by step (ms): the land's cells and the calm
+ * field, the colour pass, the lip, the detail, shadows, burnt ground, the shore, the
+ * shore's data (R5, the optimization plan: what is left of a piece once its colour pass
+ * is on the GPU). The painter's worker reads it after each painting.
+ */
+export const paintSteps = new Map<string, number>();
+
 /** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
 export function paintGround(
   world: Land,
@@ -505,6 +513,13 @@ export function paintGround(
 
   // What each cell is: sea or land, what grows on it, how thickly, how it slopes; worked
   // out once for each land, not for each piece painted of it (`cellsOf`).
+  paintSteps.clear();
+  let stepAt = performance.now();
+  const step = (name: string): void => {
+    const now = performance.now();
+    paintSteps.set(name, (paintSteps.get(name) ?? 0) + now - stepAt);
+    stepAt = now;
+  };
   const { sea, kind, biomass, slope, coastal } = cellsOf(world);
 
   const bare = packRamp(world.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
@@ -847,6 +862,7 @@ export function paintGround(
 
   // On the GPU where there is one (R5, the optimization plan): the same pass, in single
   // floats rather than doubles. Only for the views' styles, and a turn it knows of.
+  step("setup");
   const onGpu =
     gpu !== null &&
     (style === "blended" || style === "smooth") &&
@@ -1069,6 +1085,7 @@ export function paintGround(
     }
   }
 
+  step("colour");
   // Growth has a lip where bare ground shows beside it, lit from the upper left as
   // everything is (R5): a pixel of shadow on its lower edge, one of light on its upper.
   if (detailed) {
@@ -1089,6 +1106,7 @@ export function paintGround(
     }
   }
 
+  step("lip");
   // The detail of a close view: on a grid of places a few pixels apart, each a little
   // off its place, a small drawing of what the ground there is made of. A drawing keeps
   // to its own kind of ground, so borders stay where they were painted.
@@ -1186,6 +1204,7 @@ export function paintGround(
     }
   }
 
+  step("detail");
   // Shadows of what stands on the land: darker, with a dithered rim, and no darker where
   // two of them overlap.
   if (options.shadows !== undefined && options.shadows.length > 0) {
@@ -1213,6 +1232,7 @@ export function paintGround(
     }
   }
 
+  step("shadows");
   // Burnt ground (R4): every cell that burnt is charcoal, darker the more recent the fire,
   // with drifts of pale ash; its edge follows the cells, wandering by half a cell or so.
   if (scorchCells !== undefined) {
@@ -1240,6 +1260,7 @@ export function paintGround(
     }
   }
 
+  step("burnt");
   // The shore: the map's outline on the last pixel of land, then foam on the water and
   // wet sand on the land, as far out as the view is close. `away` is how many pixels a
   // pixel is from the other side of the shore, counted up to twice that reach.
@@ -1311,6 +1332,7 @@ export function paintGround(
     rgba[at * 4 + 2] = colour & 255;
     rgba[at * 4 + 3] = 255;
   }
+  step("shore");
   if (!surfing) return { width: wide, height: tall, rgba };
 
   // The shore's data for the sea's shader (`Pixels.shore`): how far each pixel is from the
@@ -1343,6 +1365,7 @@ export function paintGround(
       shore[at * 4 + 3] = 255;
     }
   }
+  step("shore data");
   return { width: wide, height: tall, rgba, shore };
 }
 

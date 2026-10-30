@@ -90,6 +90,9 @@ const none = (): Pixels => ({ width: 0, height: 0, rgba: new Uint8ClampedArray(0
  * Paint `request` on `land`, keeping it in `cache` as `request.keep` asks: what the worker
  * and `InlinePainter` both do.
  */
+/** How long the last `paintKept` spent reading the cache, and handing it the painting (ms). */
+export const cacheTimes = { getMs: 0, putMs: 0 };
+
 export async function paintKept(
   land: Land,
   request: PaintRequest,
@@ -97,11 +100,17 @@ export async function paintKept(
   gpu: GroundGpu | null = null,
 ): Promise<{ pixels: Pixels; fresh: boolean }> {
   const { keep } = request;
+  cacheTimes.getMs = 0;
+  cacheTimes.putMs = 0;
   if (keep === undefined) return { pixels: paintRequest(land, request, gpu), fresh: true };
+  const looked = performance.now();
   const kept = await cache.get(keep.key, keep.stamp);
+  cacheTimes.getMs = performance.now() - looked;
   if (kept !== undefined) return { pixels: keep.ahead === true ? none() : kept, fresh: false };
   const pixels = paintRequest(land, request, gpu);
+  const putting = performance.now();
   cache.put(keep.key, keep.stamp, pixels);
+  cacheTimes.putMs = performance.now() - putting;
   return { pixels: keep.ahead === true ? none() : pixels, fresh: true };
 }
 
@@ -348,6 +357,11 @@ export interface WorkerTiming {
   gpuUnpackMs: number;
   /** Making the worker's GPU context and compiling its shader, the first time only. */
   compileMs: number;
+  /** Reading the cache before painting, and handing it the painting after. */
+  cacheGetMs: number;
+  cachePutMs: number;
+  /** The painting's own steps (`paintSteps`). */
+  steps: Record<string, number>;
 }
 
 /** A painting timed from the page's side too (R5, the optimization plan). */

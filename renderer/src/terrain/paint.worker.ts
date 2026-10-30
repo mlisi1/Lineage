@@ -8,7 +8,8 @@
 import { GpuGround, type ColourPassInput, type ColourPassOutput } from "./gpuground";
 import { makeGroundCache } from "./groundcache";
 import type { Land } from "./land";
-import { paintKept, type FromWorker, type ToWorker } from "./painter";
+import { cacheTimes, paintKept, type FromWorker, type ToWorker } from "./painter";
+import { paintSteps } from "./ground";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -90,6 +91,9 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
           gpuDrawMs: gpuTime.drawMs,
           gpuUnpackMs: gpuTime.unpackMs,
           compileMs,
+          cacheGetMs: cacheTimes.getMs,
+          cachePutMs: cacheTimes.putMs,
+          steps: fresh ? Object.fromEntries(paintSteps) : {},
         },
       });
       compileMs = 0;

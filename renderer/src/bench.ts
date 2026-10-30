@@ -468,6 +468,8 @@ export interface GroundTiming {
   max: Record<GroundTimingKey, number>;
   /** Making a worker's GPU context and shader, each time it was made. */
   compile_ms: number[];
+  /** Median of each of the painting's own steps and of the cache's reading and writing (ms). */
+  steps_median: Record<string, number>;
 }
 type GroundTimingKey = "total" | "gpu_upload" | "gpu_draw" | "gpu_unpack" | "cpu" | "queue" | "run";
 
@@ -492,7 +494,16 @@ export function groundTiming(timings: readonly PieceTiming[]): GroundTiming | nu
     max[key] = round(values[values.length - 1] ?? 0);
   }
   const compile_ms = timings.filter((t) => t.compileMs > 0).map((t) => round(t.compileMs));
-  return { pieces: timings.length, median, max, compile_ms };
+  const medianOf = (values: number[]): number =>
+    round([...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0);
+  const steps_median: Record<string, number> = {};
+  const names = new Set(timings.flatMap((t) => Object.keys(t.steps)));
+  for (const name of [...names].sort()) {
+    steps_median[name] = medianOf(timings.map((t) => t.steps[name] ?? 0));
+  }
+  steps_median["cache read"] = medianOf(timings.map((t) => t.cacheGetMs));
+  steps_median["cache write"] = medianOf(timings.map((t) => t.cachePutMs));
+  return { pieces: timings.length, median, max, compile_ms, steps_median };
 }
 
 /** The mark each frame drawn leaves in the browser's trace. */
