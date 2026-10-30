@@ -111,6 +111,8 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
+/** Seconds between two asks for the ground round the next animal the local view will follow. */
+const AHEAD_EVERY_S = 0.5;
 /** The dip between views: the night's deep purple. */
 const DIP_COLOUR = 0x10081c;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
@@ -502,6 +504,9 @@ async function start(): Promise<void> {
     followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
     followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
   });
+  // Live, the next animal to follow is chosen ahead and its ground painted (the director's
+  // choices drawn earlier); films and stills draw them when they always did.
+  director.looksAhead = params.get("film") === null && params.get("still") === null;
 
   toMap = () => {
     if (pinned === null) director.toMap();
@@ -660,6 +665,8 @@ async function start(): Promise<void> {
   let sceneLight = 1;
   /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
   let sceneRain: SkyMessage["rain"] = "none";
+  /** Seconds since the ground round the next animal to follow was last asked for. */
+  let aheadS = 0;
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
     PROBE.enter("director");
@@ -714,6 +721,22 @@ async function start(): Promise<void> {
     }
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
+    // Ahead of the view button (R5, the optimization plan): in the dark of a dip the views
+    // not shown are laid out, and every so often the ground round the animal the local
+    // view will follow next is painted and kept, so that a view comes already painted.
+    if (director.looksAhead) {
+      if (shot.dim >= 1) {
+        landscape.prepare("middle");
+        landscape.prepare("local");
+      }
+      aheadS += deltaMS / 1000;
+      const upcoming = director.upcoming;
+      if (aheadS >= AHEAD_EVERY_S && upcoming !== null) {
+        aheadS = 0;
+        const localTile = TILES.local;
+        landscape.prefetch("local", sight(upcoming, WIDTH / localTile, HEIGHT / localTile));
+      }
+    }
     PROBE.enter("landscape");
     const laying = boot.painted === null ? performance.now() : 0;
     landscape.show(shot.view, cells);

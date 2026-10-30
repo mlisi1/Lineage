@@ -305,3 +305,20 @@ describe("the documentary camera", () => {
     expect(run(director, scene, DIP_S)).toMatchObject({ view: "map", dim: 0 });
   });
 });
+
+describe("the next animal to follow chosen ahead (R5, the optimization plan)", () => {
+  it("knows where the local view's next animal is before the view comes, and follows it", () => {
+    const director = new Director(SIZES, mulberry32(7));
+    director.looksAhead = true;
+    const scene = sceneWith(herd());
+    run(director, scene, 0.1);
+    const upcoming = director.upcoming;
+    expect(upcoming).not.toBeNull();
+    const chosen = scene.subjects.find((s) => s.x === upcoming?.x && s.y === upcoming.y);
+    director.press();
+    director.press();
+    const shot = run(director, scene, DIP_OUT_S * 2 + WAIT_MAX_S + DIP_IN_S + 0.5);
+    expect(shot.view).toBe("local");
+    expect(shot.subject).toBe(chosen?.id);
+  });
+});

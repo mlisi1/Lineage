@@ -139,6 +139,13 @@ export class Director {
   private readonly spring: Spring;
   private readonly walking = new Velocity(VELOCITY_SMOOTH_S);
   private dip: Dip | null = null;
+  /**
+   * Whether the next animal to follow is chosen ahead (`lookAhead`): live, as on the desk;
+   * not for films and stills, whose camera draws its choices when it always did.
+   */
+  looksAhead = false;
+  private upcomingId: number | null = null;
+  private upcomingAt: Point | null = null;
   /** Frames drawn fully dark so far before the cut (`DARK_FRAMES`). */
   private darkFrames = 0;
   /** The view a press during a dip leads on from: the one the dip is going to. */
@@ -204,6 +211,7 @@ export class Director {
       this.go("map");
     this.moveDip(dtS, scene);
     this.film(dtS, scene);
+    if (this.looksAhead) this.lookAhead(scene);
     const size = this.sizes[this.view];
     const centre =
       this.view === "map"
@@ -252,7 +260,7 @@ export class Director {
       } else {
         this.spring.options = FOLLOWING;
         this.motion = "follow";
-        const next = this.choose(scene, null);
+        const next = this.takeUpcoming(scene, null) ?? this.choose(scene, null);
         this.subject = next?.id ?? null;
         this.follow = this.followTime();
         this.spring.snap(next ?? { x: scene.width / 2, y: scene.height / 2 });
@@ -358,6 +366,39 @@ export class Director {
    * awake (all of them if every one sleeps), then one of its animals, awake if it can
    * be, and not `current` while there is anyone else.
    */
+  /**
+   * Choose the animal the local view will follow next, ahead of time (R5, the optimization
+   * plan: its ground is painted while the camera is elsewhere, `upcoming`, so that the
+   * local view finds it painted).
+   */
+  private lookAhead(scene: Scene): void {
+    const current = this.view === "local" ? this.subject : null;
+    const known =
+      this.upcomingId === null ? undefined : scene.subjects.find((s) => s.id === this.upcomingId);
+    if (known !== undefined && known.id !== current && !known.torpid) {
+      this.upcomingAt = { x: known.x, y: known.y };
+      return;
+    }
+    const next = this.choose(scene, current);
+    this.upcomingId = next?.id ?? null;
+    this.upcomingAt = next === null ? null : { x: next.x, y: next.y };
+  }
+
+  /** The animal chosen ahead (`lookAhead`), if it is still about and awake; it is chosen anew after. */
+  private takeUpcoming(scene: Scene, current: number | null): Subject | null {
+    const id = this.upcomingId;
+    this.upcomingId = null;
+    this.upcomingAt = null;
+    if (id === null || id === current) return null;
+    const subject = scene.subjects.find((s) => s.id === id);
+    return subject === undefined || subject.torpid ? null : subject;
+  }
+
+  /** Where the animal the local view will follow next is now (`lookAhead`); null if none chosen. */
+  get upcoming(): Point | null {
+    return this.upcomingAt;
+  }
+
   private choose(scene: Scene, current: number | null): Subject | null {
     const others = scene.subjects.filter((subject) => subject.id !== current);
     const pool = others.length > 0 ? others : scene.subjects;
@@ -381,7 +422,7 @@ export class Director {
     let subject = scene.subjects.find((candidate) => candidate.id === this.subject) ?? null;
     if (subject === null || (this.follow <= 0 && this.dip === null)) {
       // Its time is up, or it died: on to the next.
-      const next = this.choose(scene, this.subject);
+      const next = this.takeUpcoming(scene, this.subject) ?? this.choose(scene, this.subject);
       this.follow = this.followTime();
       if (next === null) {
         this.subject = null;

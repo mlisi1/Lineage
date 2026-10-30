@@ -72,6 +72,13 @@ const MIDDLE_CALM = 1;
  */
 const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: 32, kept: Infinity };
 /**
+ * Seconds the middle view's ground rests between two pieces painted ahead: none to speak
+ * of (R5, the optimization plan: some forty pieces make the whole island, painted in under
+ * a minute, so that the middle view always comes painted; still only while frames are on
+ * time). The local view's six hundred keep their half minute's rest.
+ */
+const MIDDLE_PREPAINT_REST_S = 0.5;
+/**
  * A frame later than this (seconds; the cap's is a thirtieth) came late; the island is
  * painted ahead only once frames have come on time for `ON_TIME_S` (R5, the board).
  */
@@ -346,6 +353,16 @@ export class Landscape {
   }
 
   /**
+   * Lay view `name` out for the latest land without showing it, if it is not already (R5,
+   * the optimization plan: so that its ground can be painted ahead, `prefetch`). Its plants
+   * are laid out on the page's thread: asked for while the screen is dark.
+   */
+  prepare(name: ViewName): void {
+    if (this.land === null || name === "map" || !this.behind(name)) return;
+    this.build(name);
+  }
+
+  /**
    * Paint and keep the ground `view` will show over `cells`, behind what is on the screen
    * (R5, the showcase: where the camera goes next). Only a view built for the latest land.
    */
@@ -558,6 +575,7 @@ export class Landscape {
             this.fadeS,
             MIDDLE_PIECES,
             this.cache,
+            MIDDLE_PREPAINT_REST_S,
           ),
           plants: new PlantFade(this.fadeS),
         };
