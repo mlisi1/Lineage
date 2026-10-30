@@ -19,6 +19,8 @@ let landVersion = 0;
 const cache = makeGroundCache();
 /** The colour pass on this worker's own GPU context (`gpuground.ts`), made when first needed; null where there is none. */
 let gpu: GpuGround | null | undefined;
+/** Whether the page has asked for paintings on the CPU (`?painter=cpu`): no GPU made then. */
+let cpuAsked = false;
 /** Colour passes the GPU has done (a painting's reply says whether it did its). */
 let gpuPasses = 0;
 /** This painting's time on the GPU, summed over its colour passes (one, as a rule). */
@@ -43,8 +45,16 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
   if (message.kind === "land") {
     land = message.land;
     landVersion = message.version;
+    // The shader compiled now, while the page lays the land out, rather than when the
+    // first piece is asked for (R5, the optimization plan: 1.4–2 s on the board).
+    if (gpu === undefined && !cpuAsked) {
+      const making = performance.now();
+      gpu = GpuGround.create();
+      compileMs = performance.now() - making;
+    }
     return;
   }
+  if (message.request.cpu === true) cpuAsked = true;
   // The land and its version as they are now: another may come while the cache is read.
   const painting = land;
   const version = landVersion;
