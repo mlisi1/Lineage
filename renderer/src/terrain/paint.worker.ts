@@ -27,8 +27,16 @@ let gpuPasses = 0;
 const gpuTime = { uploadMs: 0, drawMs: 0, unpackMs: 0 };
 /** Making the GPU context and its shader, charged to the painting that made it. */
 let compileMs = 0;
+/** This worker's GPU painter, made the first time it is wanted (the shader compiled then). */
+function makeGpu(): void {
+  if (gpu !== undefined || cpuAsked) return;
+  const making = performance.now();
+  gpu = GpuGround.create();
+  compileMs += performance.now() - making;
+}
 const counted = {
   colourPass: (input: ColourPassInput): ColourPassOutput | null => {
+    makeGpu();
     const done = gpu?.colourPass(input) ?? null;
     if (done !== null && gpu !== null && gpu !== undefined) {
       gpuPasses += 1;
@@ -47,11 +55,6 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
     landVersion = message.version;
     // The shader compiled now, while the page lays the land out, rather than when the
     // first piece is asked for (R5, the optimization plan: 1.4–2 s on the board).
-    if (gpu === undefined && !cpuAsked) {
-      const making = performance.now();
-      gpu = GpuGround.create();
-      compileMs = performance.now() - making;
-    }
     return;
   }
   if (message.request.cpu === true) cpuAsked = true;
@@ -72,22 +75,12 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
     reply({ kind: "failed", message: "painter: no land yet", landVersion: version });
     return;
   }
-  if (gpu === undefined && message.request.cpu !== true) {
-    const making = performance.now();
-    gpu = GpuGround.create();
-    compileMs = performance.now() - making;
-  }
   const begun = performance.now();
   gpuTime.uploadMs = 0;
   gpuTime.drawMs = 0;
   gpuTime.unpackMs = 0;
   const before = gpuPasses;
-  paintKept(
-    painting,
-    message.request,
-    cache,
-    gpu === null || gpu === undefined ? null : counted,
-  ).then(
+  paintKept(painting, message.request, cache, gpu === null ? null : counted).then(
     ({ pixels, fresh }) => {
       reply({
         kind: "painted",
@@ -107,6 +100,10 @@ self.addEventListener("message", (event: MessageEvent<ToWorker>) => {
         },
       });
       compileMs = 0;
+      // The shader made while idle after an answer, before a piece needs it (R5, the
+      // optimization plan: 1.4–2 s on the board; made before the answer, it held up a
+      // start's first one, the map kept, by as much).
+      if (gpu === undefined && !cpuAsked) setTimeout(makeGpu, 0);
     },
     (error: unknown) =>
       reply({
