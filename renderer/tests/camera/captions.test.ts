@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   CaptionQueue,
   GAP_S,
+  layOut,
   MOST_WAITING,
   ROLL_UP_S,
   UNROLL_S,
   linesOf,
   longDate,
   paintScroll,
+  paperShown,
   readingTime,
   scrollSize,
   type Caption,
 } from "../../src/captions";
-import { measure } from "../../src/pixelfont";
+import { HAND_FONT } from "../../src/pixelfont";
 import type { ChronicleMessage } from "../../src/protocol";
 
 function message(...entries: [number, number, string][]): ChronicleMessage {
@@ -122,7 +124,7 @@ describe("captions", () => {
     expect(play(queue, 120).map((each) => each.text)).toEqual(["b", "d", "f", "g"]);
   });
 
-  it("writes the date in words above the entry, wrapping the entry within the scroll", () => {
+  it("writes the date in words on its ribbon, in capitals, wrapping the entry within the scroll", () => {
     expect(longDate("2027-08-04")).toBe("4 August 2027");
     expect(longDate("someday")).toBe("someday");
     const caption: Caption = {
@@ -132,17 +134,22 @@ describe("captions", () => {
       date: "2027-08-04",
     };
     const { date, lines } = linesOf(caption);
-    expect(date).toBe("4 August 2027");
+    expect(date).toBe("4 AUGUST 2027");
     expect(lines.length).toBe(2);
-    expect(lines.join(" ")).toBe(caption.text);
+    // The first letter is the illuminated initial; the lines write the rest.
+    expect(layOut(caption).initial).toBe("A");
+    expect(`A${lines.join(" ")}`).toBe(caption.text);
   });
 
   it("cuts an entry too long for the scroll with an ellipsis", () => {
     const text = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
-    const { lines } = linesOf({ number: 1, importance: 3, text, date: null });
-    expect(lines.length).toBe(4);
-    expect(lines[3]?.endsWith("...")).toBe(true);
-    for (const line of lines) expect(measure(line)).toBeLessThanOrEqual(264);
+    const { lines, lineLefts } = layOut({ number: 1, importance: 3, text, date: null });
+    // At most three lines in the hand, the last cut.
+    expect(lines.length).toBe(3);
+    expect(lines[2]?.endsWith("...")).toBe(true);
+    lines.forEach((line, index) => {
+      expect((lineLefts[index] ?? 0) + HAND_FONT.measure(line)).toBeLessThanOrEqual(420);
+    });
   });
 
   it("paints a scroll that opens from its middle, ink only on the paper shown", () => {
@@ -176,5 +183,20 @@ describe("captions", () => {
       ((columns[0] ?? 0) + (columns[columns.length - 1] ?? 0)) / 2;
     expect(Math.abs(middle(half) - middle(full))).toBeLessThanOrEqual(1);
     expect(paintScroll(caption, 1)).toEqual(paintScroll(caption, 1));
+  });
+});
+
+describe("the scroll repainted only when its paper moves (R5, review P7)", () => {
+  it("paints the same picture for every opening that shows the same paper", () => {
+    const caption = { number: 1, importance: 4, text: "A long dry summer.", date: null };
+    let last: { shown: number; rgba: Uint8ClampedArray } | null = null;
+    for (let k = 0; k <= 200; k++) {
+      const open = k / 200;
+      const shown = paperShown(caption, open);
+      const { rgba } = paintScroll(caption, open);
+      const same = last !== null && rgba.every((value, at) => value === last?.rgba[at]);
+      if (last !== null) expect(same, `open ${open}`).toBe(last.shown === shown);
+      last = { shown, rgba };
+    }
   });
 });

@@ -16,6 +16,8 @@ from lineage_sim.events import (
     ChronicleEntry,
     CraterFormed,
     CreaturesArrived,
+    CreaturesBorn,
+    CreaturesDied,
     EarthquakeStruck,
     FireEnded,
     FireStarted,
@@ -114,11 +116,48 @@ def fauna_message(world: World) -> Message:
     }
 
 
-def creatures_message(world: World, sent: set[int] | None = None) -> Message:
-    """Where every creature is; genomes of those not in ``sent``, which is then updated."""
+# How finely a young creature's growth is sent: sixteenths of the way to coming of age.
+YOUNG_STEPS = 16
+
+
+def creatures_message(
+    world: World, sent: set[int] | None = None, news: Sequence[OutputEvent] = ()
+) -> Message:
+    """Where every creature is; genomes of those not in ``sent``, which is then updated.
+    ``news`` are the world's outputs since the last creatures message: who of those sent
+    died of what (and by which hunter), who landed from the sea, and to whom each newborn
+    was born (R5)."""
     fauna = world.fauna
     ids = [int(value) for value in fauna.ids]
     known = sent if sent is not None else set()
+    died: list[dict[str, Any]] = []
+    for output in news:
+        if not isinstance(output, CreaturesDied):
+            continue
+        # Who killed each victim of a hunter (R5), when the sim says.
+        killers = output.killers or (-1,) * len(output.ids)
+        for ident, cause, killer in zip(output.ids, output.causes, killers, strict=True):
+            if ident not in known:
+                continue
+            death: dict[str, Any] = {"id": int(ident), "cause": str(cause)}
+            if cause == "killed" and killer >= 0:
+                death["by"] = int(killer)
+            died.append(death)
+    # The mother of each born on the island since the last message (R5).
+    mothers = {
+        ident: parent
+        for output in news
+        if isinstance(output, CreaturesBorn)
+        for ident, parent in zip(output.ids, output.parents, strict=True)
+    }
+    alive = set(ids)
+    landed = [
+        ident
+        for output in news
+        if isinstance(output, CreaturesArrived)
+        for ident in range(output.first_id, output.first_id + output.count)
+        if ident in alive
+    ]
     genes = fauna.genes
     # Rare genes (M7): the slots of each creature, and who is torpid, once the sim has them.
     slots = getattr(fauna, "slots", None)
@@ -133,6 +172,8 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
         }
         if slots is not None:
             entry["slots"] = int(slots[row])
+        if ident in mothers:
+            entry["parent"] = int(mothers[ident])
         born.append(entry)
     known.update(ids)
     message: Message = {
@@ -148,6 +189,23 @@ def creatures_message(world: World, sent: set[int] | None = None) -> Message:
         message["species"] = [int(label) for label in species.labels_now()]
     if torpid is not None:
         message["torpid"] = [ident for row, ident in enumerate(ids) if bool(torpid[row])]
+    # What each is eating (R5): plants or algae, or meat, as of the last tick.
+    eating = getattr(fauna, "eating", None)
+    if eating is not None:
+        food = np.asarray(eating)
+        message["grazing"] = [ident for row, ident in enumerate(ids) if int(food[row]) == 1]
+        message["feeding"] = [ident for row, ident in enumerate(ids) if int(food[row]) == 2]
+    # The young (R5): how far each has grown toward coming of age, in sixteenths.
+    maturity = getattr(fauna, "maturity", None)
+    if maturity is not None:
+        steps = np.floor(np.asarray(maturity, dtype=np.float64) * YOUNG_STEPS).astype(int)
+        message["young"] = [
+            [ident, int(steps[row])] for row, ident in enumerate(ids) if steps[row] < YOUNG_STEPS
+        ]
+    if died:
+        message["died"] = died
+    if landed:
+        message["landed"] = landed
     return message
 
 

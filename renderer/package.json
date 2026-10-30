@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:kiosk": "tsc --noEmit && vite build --mode kiosk",
     "preview": "vite preview",
     "look": "vite build && node scripts/look-report.mjs look",
     "creatures": "vite build && node scripts/look-report.mjs creatures",
@@ -17,7 +18,8 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "final": "node scripts/final-report.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.22.0"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heightAt, passableIn } from "../../src/spike/habitat";
+import { heightAt, passableIn } from "../../src/creatures/habitat";
 import { DAY_CYCLE_S, cycleTint, lightTint } from "../../src/spike/light";
 import { MAP, SEA_LEVEL } from "./worlds";
 

@@ -237,3 +237,30 @@ def test_the_committed_winter_recording_is_what_the_tool_writes(tmp_path: Path) 
     lands = [message for message in committed["messages"] if message["type"] == "land"]
     snowy = sum(1 for byte in base64.b64decode(lands[-1]["snow"]["data"]) if byte > 0)
     assert snowy > len(base64.b64decode(lands[-1]["snow"]["data"])) / 10
+
+
+def test_the_creatures_tell_who_died_and_who_was_born_since_the_last_message() -> None:
+    """R5: each creatures message names those sent before that died since the last one,
+    and the mother of each newborn; the dead are gone from it, their hunters were sent."""
+    world = _world()
+    messages = stream.record(world, days=2, land_every=2, creatures=True, creatures_every_s=3600)
+    sent: set[int] = set()
+    died: list[int] = []
+    parents = 0
+    for message in (m for m in messages if m["type"] == "creatures"):
+        ids = set(message["ids"])
+        for death in message.get("died", []):
+            assert death["id"] in sent
+            assert death["id"] not in ids
+            if "by" in death:
+                assert death["cause"] == "killed"
+                assert death["by"] in sent
+            died.append(death["id"])
+        for born in message["born"]:
+            if "parent" in born:
+                assert born["parent"] in sent | ids
+                parents += 1
+        sent |= ids
+    assert len(died) == len(set(died))
+    assert died
+    assert parents

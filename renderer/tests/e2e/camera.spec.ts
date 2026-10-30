@@ -46,29 +46,17 @@ test("the view button steps map → middle → local → map, following an anima
   expect(errors).toEqual([]);
 });
 
-test("in the local view a click goes on to another animal, a double click to the map", async ({
-  page,
-}) => {
+test("a click or tap is the view button in every view", async ({ page }) => {
   await page.goto("/?seed=5");
   await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
   const stage = page.getByTestId("stage");
-  // A click is the button elsewhere: map, middle, local.
-  for (const view of ["middle", "local"]) {
+  for (const view of ["middle", "local", "map"]) {
     await stage.click();
     await page.waitForFunction((wanted) => window.__camera?.().view === wanted, view);
     await page.waitForFunction(() => window.__camera?.().dipping === false, null, {
       timeout: 20_000,
     });
   }
-  const first = (await camera(page))?.subject;
-  await stage.click();
-  await page.waitForFunction((was) => window.__camera?.().subject !== was, first);
-  expect((await camera(page))?.view).toBe("local");
-  await page.waitForFunction(() => window.__camera?.().dipping === false, null, {
-    timeout: 20_000,
-  });
-  await stage.dblclick();
-  await page.waitForFunction(() => window.__camera?.().view === "map", null, { timeout: 20_000 });
 });
 
 test("the scroll: a notable entry unrolls at the foot of the screen", async ({ page }) => {
@@ -101,4 +89,18 @@ test("the scroll: a notable entry unrolls at the foot of the screen", async ({ p
   expect((await page.evaluate(() => window.__captions?.()))?.text).toContain("Malesha");
   expect(errors).toEqual([]);
   await expect(page).toHaveScreenshot("scroll.png", { maxDiffPixelRatio: 0.002 });
+});
+
+test("the card's portrait, read back without waiting for the GPU, is the one read at once", async ({
+  page,
+}) => {
+  await page.goto("/?seed=5");
+  await page.waitForFunction(() => window.__sceneSettled?.() === true, null, { timeout: 60_000 });
+  await press(page);
+  await press(page);
+  // Drawn in the dark of the dip, over a few frames: the card comes out with it.
+  await page.waitForFunction(() => window.__card?.().portrait === true, null, {
+    timeout: 20_000,
+  });
+  expect(await page.evaluate(() => window.__portraitCheck?.())).toBe(true);
 });

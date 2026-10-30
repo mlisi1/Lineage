@@ -249,6 +249,8 @@ def record(
     tick_ms = math.gcd(every_ms, sky_ms)
     census = _Census(world)
     messages = _connect(world, census, creatures, sky)
+    # The world's outputs since the last creatures message: who died of what, who landed.
+    news: list[OutputEvent] = []
     # The owner's schedule follows the desk: the run's seed and Unix days, whatever world.
     desk_seed, start_unix = world.seed, world.unix_ms
     # The schedule's owner, from the first moment: at the desk for "always", even when the
@@ -291,6 +293,8 @@ def record(
                 census = _Census(world)
                 messages += _connect(world, census, creatures, sky)
                 outputs = outputs[split:]
+                news = []
+            news += outputs
             step = elapsed % every_ms == 0
             if step:
                 messages.append(encode.clock_message(world))
@@ -305,7 +309,9 @@ def record(
                 messages.append(species)
                 census.species = species
             if creatures and step:
-                messages.append(encode.creatures_message(world, census.sent))
+                messages.append(encode.creatures_message(world, census.sent, news))
+            if step:
+                news = []
             if sky and elapsed % sky_ms == 0:
                 messages.append(encode.sky_message(world))
             messages += _news(world, outputs, sky)

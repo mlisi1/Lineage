@@ -201,7 +201,7 @@ def test_browser_command_for_kiosk_and_for_a_pc(tmp_path: Path) -> None:
 
 
 def test_profiles_and_page_url() -> None:
-    assert list(PROFILES) == ["default", "gpu", "gpu-gles", "software", "canvas"]
+    assert list(PROFILES) == ["default", "gpu", "gpu-gles", "software", "canvas", "cpu-ground"]
     assert PROFILES["default"].flags == ()
     url = kb.page_url(8137, "spike.html", PROFILES["canvas"], 8.0, 2.0, "floor,spec-1x")
     assert url.startswith("http://127.0.0.1:8137/spike.html?")
@@ -215,6 +215,31 @@ def test_profiles_and_page_url() -> None:
     ):
         assert part in url
     assert "backend" not in kb.page_url(1, "spike.html", PROFILES["gpu"], 1.0, 0.0, None)
+    assert "bench" not in url  # the spike always measures itself
+
+
+def test_the_scene_page_is_asked_for_its_benchmark_and_cap() -> None:
+    url = kb.page_url(8137, kb.SCENE_PAGE, PROFILES["gpu"], 8.0, 2.0, "acceptance", 30.0)
+    assert url.startswith("http://127.0.0.1:8137/index.html?bench=1&")
+    for part in ("seconds=8", "warmup=2", "post=%2Fresults", "only=acceptance", "cap=30"):
+        assert part in url
+    assert "cap" not in kb.page_url(1, kb.SCENE_PAGE, PROFILES["gpu"], 1.0, 0.0, None)
+    assert kb.is_spike("spike.html")
+    assert not kb.is_spike("index.html")
+    # The scene has no canvas backend: it is not run by default, nor taken when asked; nor
+    # is the CPU's drawing run by default (the owner), though it can be asked for.
+    assert kb.default_profiles(kb.SCENE_PAGE) == "default"
+    assert [p.name for p in kb.chosen_profiles("software", None, kb.SCENE_PAGE)] == ["software"]
+    assert kb.default_profiles(kb.SPIKE_PAGE) == "default,gpu,gpu-gles,software,canvas"
+    with pytest.raises(ValueError, match="canvas: only the R0 spike"):
+        kb.chosen_profiles("gpu,canvas", None, kb.SCENE_PAGE)
+    assert [p.name for p in kb.chosen_profiles("gpu", None, kb.SCENE_PAGE)] == ["gpu"]
+    # The ground's colour pass on the CPU, to compare with the GPU's: the scene's alone.
+    ground = kb.page_url(1, kb.SCENE_PAGE, PROFILES["cpu-ground"], 1.0, 0.0, None)
+    assert "painter=cpu" in ground
+    assert PROFILES["cpu-ground"].flags == ()
+    with pytest.raises(ValueError, match="cpu-ground: only the scene"):
+        kb.chosen_profiles("cpu-ground", None, kb.SPIKE_PAGE)
 
 
 def test_choosing_profiles() -> None:
@@ -285,6 +310,42 @@ def test_summary_table() -> None:
                             "fps_1pct_low": 30.5,
                             "js_ms_median": 6.4,
                         },
+                        {
+                            "name": "middle-crowd",
+                            "fps_median": 30.0,
+                            "fps_1pct_low": 29.4,
+                            "over_budget_pct": 2.5,
+                            "js_ms_median": 9.1,
+                            "probe": {
+                                "late_by_phase": {"outside": 2, "herd": 5},
+                                "late_notes": {"creatures": 3},
+                            },
+                            "ground_made": {"gpu": 12, "cpu": 1},
+                            "switches": [
+                                {
+                                    "round": 1,
+                                    "view": "local",
+                                    "arrived_s": 1.2,
+                                    "painted_s": 2.6,
+                                    "painted": True,
+                                }
+                            ],
+                            "boot": {"script": 900, "land": 2100, "laidOut": 3400, "painted": 4800},
+                            "ground_timing": {
+                                "pieces": 13,
+                                "median": {
+                                    "total": 120,
+                                    "gpu_upload": 2,
+                                    "gpu_draw": 60,
+                                    "gpu_unpack": 8,
+                                    "cpu": 50,
+                                    "queue": 400,
+                                    "run": 130,
+                                },
+                                "max": {},
+                                "compile_ms": [900, 950],
+                            },
+                        },
                     ],
                     "acceptance": {
                         "scenarios": ["mid-view", "local-view"],
@@ -294,6 +355,7 @@ def test_summary_table() -> None:
                     },
                 },
                 "usage": {"spec-1x": {"cpu_pct": 87.0, "pss_mb": 301.0}},
+                "gpu_timeouts": 3,
             },
             {
                 "profile": "software",
@@ -310,7 +372,32 @@ def test_summary_table() -> None:
     assert "mid-view, local-view: 41.2 fps median at the lowest, target 30: PASS" in text
     assert "87" in text
     assert "301" in text
+    # The scene's page also says how many frames came later than 30 fps allows.
+    assert any(
+        line.split()[:4] == ["middle-crowd", "30.0", "29.4", "2.5"] for line in text.splitlines()
+    )
+    # And where its late frames came from, as the page's frame probe saw them.
+    assert "late frames by phase: herd 5, outside 2; with creatures 3" in text
+    assert "ground painted on the GPU: 12 of 13" in text
+    assert "round 2, to local: there in 1.2 s, painted in 2.6 s" in text
+    assert "page: script at 0.9 s, land 2.1 s, laid out 3.4 s, painted 4.8 s" in text
+    assert "ground: 13 pieces, median 120 ms in the worker (GPU 2 + 60 + 8, CPU 50)" in text
+    assert "shader made in 900, 950 ms" in text
     assert "[software] timeout no results after 210 s" in text
+    assert "GPU jobs the kernel killed (hangs): 3" in text
+    # Where the kernel log could not be read nothing is claimed.
+    assert text.count("GPU jobs") == 1
+
+
+def test_gpu_hangs_are_counted_from_the_kernel_log() -> None:
+    log = (
+        "[  12.5] panfrost 1800000.gpu: gpu sched timeout, js=0, status=0x8, head=0x0\n"
+        "[  12.6] panfrost 1800000.gpu: js fault, js=0, status=DATA_INVALID_FAULT\n"
+        "[  13.1] panfrost 1800000.gpu: gpu sched timeout, js=0, status=0x8, head=0x0\n"
+    )
+    assert kb.count_gpu_timeouts(log) == 2
+    assert kb.count_gpu_timeouts("") == 0
+    assert kb.count_gpu_timeouts(None) is None
 
 
 def test_the_runner_needs_only_the_standard_library() -> None:

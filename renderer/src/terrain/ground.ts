@@ -23,8 +23,9 @@
  */
 import { VISIBLE_FROM } from "../plants/look";
 import { DEFAULT_LOOK, type Look } from "../looks";
-import { floorRamp, seasonRamp, type Season } from "../plants/seasons";
+import { SEASONS, floorRamp, seasonRamp, type Season } from "../plants/seasons";
 import type { CellRect, Land, Ramp } from "./land";
+import type { ColourPassInput, ColourPassOutput } from "./gpuground";
 import { cellHash, hexToRgb, type Pixels } from "./pixels";
 import { BREATH_S, shoreSizes, swellAt, swellSizes, tidePhase } from "./tide";
 
@@ -65,6 +66,12 @@ export interface GroundOptions {
   /** Whole cells to paint; the whole world when left out. */
   cells?: CellRect;
   /**
+   * The cells of `cells` whose pixels are kept (a piece's, without the margin it is painted
+   * with so that its shore meets its neighbours'): the rest are worked out only as far as
+   * the shore needs them, land or sea, and their colours are not to be shown.
+   */
+  shown?: CellRect;
+  /**
    * Grain: growth in patches that thin with biomass, blades, pebbles, waves and foam.
    * Without it (the map view) every pixel takes the flat colour of what covers it.
    */
@@ -103,6 +110,16 @@ export interface GroundOptions {
   surf?: boolean;
   /** The colours besides the land's palette (give the land the look's palette too: `dressed`). */
   look?: Look;
+  /**
+   * In a turn of the season, what `seasonAt` is worked out from (`turnOf`): for the
+   * colour pass on the GPU, which cannot call `seasonAt`.
+   */
+  turn?: { phase: number; hills: number } | null;
+}
+
+/** Where the colour pass may be done instead of on the CPU (`gpuground.ts`). */
+export interface GroundGpu {
+  colourPass(input: ColourPassInput): ColourPassOutput | null;
 }
 
 /** The forms that grow, in the order of their class numbers here (1 to 5); 0 is bare. */
@@ -145,6 +162,12 @@ const PATCH = 3.6;
 /** In a calm view growth thins in patches this many cells across, with a ragged edge. */
 const CALM_PATCH = 1.6;
 const CALM_RAGGED = 0.07;
+/** A close view's patch of growth: its lower lip this much darker, its upper lip lighter. */
+const LIP_SHADOW = 0.78;
+const LIP_LIGHT = 1.12;
+/** How far (in shares) and how finely (per cell) the border of two kinds wanders in a calm view. */
+const KIND_WANDER = 0.35;
+const KIND_WANDER_FREQUENCY = 1.4;
 /** How much narrower a calm view's dithered transitions are. */
 const CALM_MIX = 0.4;
 /** How far, in biomass, the line between dried and green growth wanders in a calm view. */
@@ -261,6 +284,16 @@ const MATTER = {
   burnt: 11,
 } as const;
 type Matter = (typeof MATTER)[keyof typeof MATTER];
+/** What a pixel of each class of growth is made of, bare first. */
+const MATTER_OF: readonly Matter[] = [
+  MATTER.soil,
+  MATTER.lichen,
+  MATTER.grass,
+  MATTER.scrub,
+  MATTER.wood,
+  MATTER.pines,
+  MATTER.burnt,
+];
 
 /**
  * Detail, as small drawings: one letter per pixel, the last row lowest. `d` and `l` are
@@ -369,6 +402,9 @@ const DETAIL: Readonly<Record<Matter, readonly (readonly [readonly Motif[], numb
   ],
 };
 
+/** Pixels round those shown (`GroundOptions.shown`) painted in full (`paintGround`). */
+const SHOWN_RIM = 8;
+
 /** Weights of a binomial kernel reaching `reach` cells either side. */
 function kernel(reach: number): number[] {
   let row = [1];
@@ -379,19 +415,43 @@ function kernel(reach: number): number[] {
   return row.map((value) => value / sum);
 }
 
-/** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
-export function paintGround(world: Land, options: GroundOptions): Pixels {
-  const { width, height, heights, seaLevel, relief } = world;
-  const { tile, style, grain } = options;
-  const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
+/** What each cell of a land is, for the painter (`paintGround`). */
+interface Cells {
+  sea: Uint8Array;
+  kind: Uint8Array;
+  biomass: Float32Array;
+  slope: Float32Array;
+  coastal: Uint8Array;
+}
+
+/**
+ * The cells of the land last painted, by its grids: a piece of the island after another
+ * of the same land reads them again rather than working them out over the whole island
+ * (R5, the optimization plan: some 38 000 cells for each piece). The grids of a land do
+ * not change; a new land has new ones.
+ */
+let cellsKept: {
+  heights: Float32Array;
+  cover: Uint8Array;
+  biomass: Uint8Array;
+  classes: readonly string[];
+  cells: Cells;
+} | null = null;
+
+function cellsOf(world: Land): Cells {
+  const kept = cellsKept;
+  if (
+    kept !== null &&
+    kept.heights === world.heights &&
+    kept.cover === world.cover &&
+    kept.biomass === world.biomass &&
+    kept.classes === world.coverClasses
+  ) {
+    return kept.cells;
+  }
+  const { width, height, heights } = world;
   const count = width * height;
   const waterClass = world.coverClasses.indexOf("WATER");
-  const interpolated = style === "smooth" || style === "blended";
-  const dithered = style === "blended";
-  const close = tile >= CLOSE_FROM_TILE;
-  const calm = interpolated ? Math.max(0, Math.round(options.calm ?? (close ? CALM_CELLS : 0))) : 0;
-
-  // What each cell is: sea or land, what grows on it, how thickly, how it slopes.
   const sea = new Uint8Array(count);
   const kind = new Uint8Array(count);
   const biomass = new Float32Array(count);
@@ -417,6 +477,73 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       else if (form >= 0 && grown >= VISIBLE_FROM) kind[cell] = form + 1;
     }
   }
+
+  const cells = { sea, kind, biomass, slope, coastal };
+  cellsKept = {
+    heights,
+    cover: world.cover,
+    biomass: world.biomass,
+    classes: world.coverClasses,
+    cells,
+  };
+  return cells;
+}
+
+/**
+ * Where the last painting's time went, step by step (ms): the land's cells and the calm
+ * field, the colour pass, the lip, the detail, shadows, burnt ground, the shore, the
+ * shore's data (R5, the optimization plan: what is left of a piece once its colour pass
+ * is on the GPU). The painter's worker reads it after each painting.
+ */
+export const paintSteps = new Map<string, number>();
+
+/**
+ * Whether any cell within reach of `rect` (its cells and two round them: a pixel's burnt
+ * edge wanders under a cell) burnt more than `from` (0–1), as `paintGround` reads them.
+ */
+function scorchedNear(
+  scorch: Uint8Array,
+  width: number,
+  height: number,
+  rect: CellRect,
+  from: number,
+): boolean {
+  const x0 = Math.max(rect.x0 - 2, 0);
+  const y0 = Math.max(rect.y0 - 2, 0);
+  const x1 = Math.min(rect.x1 + 2, width - 1);
+  const y1 = Math.min(rect.y1 + 2, height - 1);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if ((scorch[y * width + x] ?? 0) / 255 > from) return true;
+    }
+  }
+  return false;
+}
+
+/** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
+export function paintGround(
+  world: Land,
+  options: GroundOptions,
+  gpu: GroundGpu | null = null,
+): Pixels {
+  const { width, height, heights, seaLevel, relief } = world;
+  const { tile, style, grain } = options;
+  const rect = options.cells ?? { x0: 0, y0: 0, x1: width, y1: height };
+  const interpolated = style === "smooth" || style === "blended";
+  const dithered = style === "blended";
+  const close = tile >= CLOSE_FROM_TILE;
+  const calm = interpolated ? Math.max(0, Math.round(options.calm ?? (close ? CALM_CELLS : 0))) : 0;
+
+  // What each cell is: sea or land, what grows on it, how thickly, how it slopes; worked
+  // out once for each land, not for each piece painted of it (`cellsOf`).
+  paintSteps.clear();
+  let stepAt = performance.now();
+  const step = (name: string): void => {
+    const now = performance.now();
+    paintSteps.set(name, (paintSteps.get(name) ?? 0) + now - stepAt);
+    stepAt = now;
+  };
+  const { sea, kind, biomass, slope, coastal } = cellsOf(world);
 
   const bare = packRamp(world.palette["BARE"] ?? ["#8f7f68", "#b3a188", "#cdbd9f"]);
   const rock = packRamp(relief.highRock);
@@ -519,6 +646,10 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
   const calmGrowth = new Float32Array(fieldSize * kinds);
   const calmLand = new Uint8Array(fieldSize);
   const calmHeights = new Float32Array(fieldSize);
+  // The kinds each place of the field has a share of, the others none: a pixel adds only
+  // those (adding a share of nothing leaves a sum as it is, to the last bit).
+  const calmKinds = new Uint8Array(fieldSize * kinds);
+  const calmKindCount = new Uint8Array(fieldSize);
   if (calm > 0) {
     const weightsOf = kernel(calm);
     for (let fy = 0; fy < fieldTall; fy++) {
@@ -542,10 +673,16 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         calmHeights[at] = level;
         if (landed <= 0) continue;
         calmLand[at] = 1;
+        let present = 0;
         for (let voted = 0; voted < kinds; voted++) {
           calmShares[at * kinds + voted] = (calmShares[at * kinds + voted] ?? 0) / landed;
           calmGrowth[at * kinds + voted] = (calmGrowth[at * kinds + voted] ?? 0) / landed;
+          if (calmShares[at * kinds + voted] !== 0 || calmGrowth[at * kinds + voted] !== 0) {
+            calmKinds[at * kinds + present] = voted;
+            present += 1;
+          }
         }
+        calmKindCount[at] = present;
       }
     }
   }
@@ -627,7 +764,9 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       if (calm > 0) {
         const at = (y0 + dy - fieldY) * fieldWide + (x0 + dx - fieldX);
         if (calmLand[at] !== 1) continue;
-        for (let voted = 0; voted < kinds; voted++) {
+        const present = calmKindCount[at] ?? 0;
+        for (let k = 0; k < present; k++) {
+          const voted = calmKinds[at * kinds + k] ?? 0;
           weights[voted] = (weights[voted] ?? 0) + weight * (calmShares[at * kinds + voted] ?? 0);
           growth[voted] = (growth[voted] ?? 0) + weight * (calmGrowth[at * kinds + voted] ?? 0);
         }
@@ -732,17 +871,95 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     if (blade < lit) return ramp[Math.min(step + 1, 2)] ?? tone;
     return grows === 2 && blade < lit + 0.04 ? (ramp[Math.max(step - 1, 0)] ?? tone) : tone;
   };
-  const MATTER_OF: readonly Matter[] = [
-    MATTER.soil,
-    MATTER.lichen,
-    MATTER.grass,
-    MATTER.scrub,
-    MATTER.wood,
-    MATTER.pines,
-    MATTER.burnt,
-  ];
+  // The pixels painted in full: those shown, and a rim round them that the drawings of the
+  // detail (up to three pixels either side and four above where they stand) and the lip of
+  // growth may reach in from (R5, the optimization plan: a close piece's margin of a cell
+  // was painted in full, 56 % more than shown). Past that only whether a pixel is land,
+  // which the shore's distances are counted from.
+  const shown = options.shown;
+  const marginOnly = shown !== undefined && style === "blended";
+  const fullX0 = shown === undefined ? 0 : (shown.x0 - rect.x0) * tile - SHOWN_RIM;
+  const fullY0 = shown === undefined ? 0 : (shown.y0 - rect.y0) * tile - SHOWN_RIM;
+  const fullX1 = shown === undefined ? wide : (shown.x1 - rect.x0) * tile + SHOWN_RIM;
+  const fullY1 = shown === undefined ? tall : (shown.y1 - rect.y0) * tile + SHOWN_RIM;
 
-  for (let py = 0; py < tall; py++) {
+  // On the GPU where there is one (R5, the optimization plan): the same pass, in single
+  // floats rather than doubles. Only for the views' styles, and a turn it knows of.
+  step("setup");
+  const onGpu =
+    gpu !== null &&
+    (style === "blended" || style === "smooth") &&
+    (seasonAt === undefined || options.turn !== undefined)
+      ? gpu.colourPass({
+          world: {
+            width,
+            height,
+            heights,
+            seaLevel,
+            sea,
+            kind,
+            biomass: world.biomass,
+            ...(snowCells === undefined ? {} : { snow: snowCells }),
+            ...(world.algae === undefined ? {} : { algae: world.algae }),
+          },
+          wide,
+          tall,
+          originX,
+          originY,
+          tile,
+          full: marginOnly ? { x0: fullX0, y0: fullY0, x1: fullX1, y1: fullY1 } : null,
+          interpolated,
+          dithered,
+          close,
+          detailed,
+          grain,
+          calm,
+          field: {
+            x: fieldX,
+            y: fieldY,
+            wide: fieldWide,
+            tall: fieldTall,
+            shares: calmShares,
+            growth: calmGrowth,
+            land: calmLand,
+            heights: calmHeights,
+          },
+          mixClass,
+          mixSlope,
+          fine,
+          bladeRows,
+          dash,
+          relief: {
+            slope: relief.slope,
+            snowFrom: relief.snowFrom,
+            highRockFrom: relief.highRockFrom,
+          },
+          dryBelow,
+          dries,
+          seasons: SEASONS.map((season) => seasonalOf(season)),
+          season: Math.max(SEASONS.indexOf(now.season), 0),
+          turn: seasonAt === undefined ? null : (options.turn ?? null),
+          bare,
+          rock,
+          snow,
+          burnt,
+          sand,
+          foam,
+          litter: tones.litter,
+          bands,
+        })
+      : null;
+  if (onGpu !== null) {
+    colours.set(onGpu.colours);
+    isLand.set(onGpu.isLand);
+    if (detailed) {
+      matter.set(onGpu.matter);
+      toned.set(onGpu.toned);
+      thick.set(onGpu.thick);
+    }
+  }
+
+  for (let py = 0; py < (onGpu === null ? tall : 0); py++) {
     for (let px = 0; px < wide; px++) {
       const at = py * wide + px;
       // Position in cells, measured from the middle of the world's first cell.
@@ -750,6 +967,17 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const worldY = originY + py;
       const u = (worldX + 0.5) / tile - 0.5;
       const v = (worldY + 0.5) / tile - 0.5;
+      if (marginOnly && (px < fullX0 || py < fullY0 || px >= fullX1 || py >= fullY1)) {
+        // Land or sea, as `between` would find it at the same wandering place.
+        let du = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 1) - 0.5) * 2 * WOBBLE;
+        let dv = (valueNoise(u * WOBBLE_FREQUENCY, v * WOBBLE_FREQUENCY, 2) - 0.5) * 2 * WOBBLE;
+        if (close) {
+          du += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 11) - 0.5) * 2 * FINE_WOBBLE;
+          dv += (valueNoise(u * FINE_FREQUENCY, v * FINE_FREQUENCY, 12) - 0.5) * 2 * FINE_WOBBLE;
+        }
+        if (heightAt(u + du, v + dv) - seaLevel > 0) isLand[at] = 1;
+        continue;
+      }
       hereU = u;
       hereV = v;
       if (style === "squares") {
@@ -814,7 +1042,18 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       const felt = rise + mixSlope * relief.slope * dither;
       const step = felt > relief.slope ? 2 : felt < -relief.slope ? 0 : 1;
       // Two kinds side by side: nearer the border, more pixels go to the other.
-      const grows = dithered && dither + 1 < 1 - lead / mixClass ? second : first;
+      // In a calm view the border wanders, as the line between dry and green does, so
+      // that it is not the straight steps of the blend between cells (R5).
+      const wander =
+        calm > 0
+          ? KIND_WANDER *
+            (valueNoise(u * KIND_WANDER_FREQUENCY, v * KIND_WANDER_FREQUENCY, 14) -
+              0.5 +
+              0.35 * (valueNoise(worldX / PATCH, worldY / PATCH, 15) - 0.5))
+          : 0;
+      const leads = lead + wander;
+      const grows =
+        leads < 0 ? second : dithered && dither + 1 < 1 - leads / mixClass ? second : first;
       if (detailed) {
         toned[at] = step;
         thick[at] = Math.round(grown * 255);
@@ -839,7 +1078,14 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
         if (detailed) matter[at] = withered ? MATTER.dry : (MATTER_OF[grows] ?? MATTER.soil);
         continue;
       }
-      const high = above >= relief.snowFrom ? 2 : above >= relief.highRockFrom ? 1 : 0;
+      // Bare heights are rock; snow lies there only where the simulation has it (above),
+      // the relief's fixed snow line standing in only for a land without its snow.
+      const high =
+        above >= relief.snowFrom && snowCells === undefined
+          ? 2
+          : above >= relief.highRockFrom
+            ? 1
+            : 0;
       const soil = high === 2 ? snow : high === 1 ? rock : bare;
       const sandy = interpolated ? above * (1 + 0.6 * dither) < BEACH : beach;
       const base = sandy ? sand : (soil[step] ?? 0);
@@ -862,6 +1108,28 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
+  step("colour");
+  // Growth has a lip where bare ground shows beside it, lit from the upper left as
+  // everything is (R5): a pixel of shadow on its lower edge, one of light on its upper.
+  if (detailed) {
+    const bare = (matterAt: number | undefined): boolean =>
+      matterAt === MATTER.soil || matterAt === MATTER.sand || matterAt === MATTER.rock;
+    const growing = (matterAt: number | undefined): boolean =>
+      matterAt !== undefined && matterAt >= MATTER.grass && matterAt !== MATTER.burnt;
+    for (let py = 0; py < tall; py++) {
+      for (let px = 0; px < wide; px++) {
+        const at = py * wide + px;
+        if (!growing(matter[at])) continue;
+        if (py + 1 < tall && bare(matter[at + wide])) {
+          colours[at] = shade(colours[at] ?? 0, LIP_SHADOW);
+        } else if (py > 0 && bare(matter[at - wide])) {
+          colours[at] = shade(colours[at] ?? 0, LIP_LIGHT);
+        }
+      }
+    }
+  }
+
+  step("lip");
   // The detail of a close view: on a grid of places a few pixels apart, each a little
   // off its place, a small drawing of what the ground there is made of. A drawing keeps
   // to its own kind of ground, so borders stay where they were painted.
@@ -959,6 +1227,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
+  step("detail");
   // Shadows of what stands on the land: darker, with a dithered rim, and no darker where
   // two of them overlap.
   if (options.shadows !== undefined && options.shadows.length > 0) {
@@ -986,9 +1255,12 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
+  step("shadows");
   // Burnt ground (R4): every cell that burnt is charcoal, darker the more recent the fire,
   // with drifts of pale ash; its edge follows the cells, wandering by half a cell or so.
-  if (scorchCells !== undefined) {
+  // A piece no burnt cell reaches has none, and is not looked at pixel by pixel (R5, the
+  // optimization plan: two noises for every pixel of land, nearly always for nothing).
+  if (scorchCells !== undefined && scorchedNear(scorchCells, width, height, rect, CHAR_FROM)) {
     for (let py = 0; py < tall; py++) {
       for (let px = 0; px < wide; px++) {
         const at = py * wide + px;
@@ -1013,6 +1285,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     }
   }
 
+  step("burnt");
   // The shore: the map's outline on the last pixel of land, then foam on the water and
   // wet sand on the land, as far out as the view is close. `away` is how many pixels a
   // pixel is from the other side of the shore, counted up to twice that reach.
@@ -1084,6 +1357,7 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
     rgba[at * 4 + 2] = colour & 255;
     rgba[at * 4 + 3] = 255;
   }
+  step("shore");
   if (!surfing) return { width: wide, height: tall, rgba };
 
   // The shore's data for the sea's shader (`Pixels.shore`): how far each pixel is from the
@@ -1116,5 +1390,42 @@ export function paintGround(world: Land, options: GroundOptions): Pixels {
       shore[at * 4 + 3] = 255;
     }
   }
+  step("shore data");
   return { width: wide, height: tall, rgba, shore };
 }
+
+/** The constants of the colour pass, for the same pass on the GPU (`gpuground.ts`). */
+export const GROUND_CONSTANTS = {
+  WOBBLE,
+  WOBBLE_FREQUENCY,
+  FINE_WOBBLE,
+  FINE_FREQUENCY,
+  KIND_WANDER,
+  KIND_WANDER_FREQUENCY,
+  PATCH,
+  SNOW_PATCH,
+  SNOW_UNDER_TREES,
+  SNOW_OPEN,
+  SNOW_FULL_FROM,
+  DRY_DRIFT,
+  CALM_PATCH,
+  CALM_RAGGED,
+  EDGE_FROM,
+  EDGE_TO,
+  GRIT,
+  WAVES,
+  ALGAE_FULL,
+  ALGAE_CLUMP,
+  ALGAE_COVER,
+  ALGAE_MIX,
+  ALGAE,
+  MIX_DEPTH,
+  BEACH,
+  BURNT,
+  LOW,
+  COVERAGE,
+  FLOOR_LITTER,
+  BAYER,
+  MATTER,
+  MATTER_OF,
+} as const;

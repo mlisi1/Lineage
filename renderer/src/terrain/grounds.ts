@@ -14,9 +14,11 @@
  * Asked for the surf (`PaintRequest.surf`), a painting comes with its shore's data, which
  * goes in a layer of its own (`surf`) for the sea's shader to draw the waves from.
  */
-import { CanvasSource, Container, Sprite, Texture } from "pixi.js";
+import { PROBE } from "../frameprobe";
+import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import type { CellRect } from "./land";
-import { Dropped, type PaintRequest, type Painter } from "./painter";
+import { NO_CACHE, type GroundCache } from "./groundcache";
+import { BACKGROUND, Dropped, type PaintRequest, type Painter } from "./painter";
 import type { Pixels } from "./pixels";
 
 /** Seconds a new painting takes to come over the old. */
@@ -27,6 +29,44 @@ const PIECES_KEPT = 60;
 const PIECE_MARGIN = 1;
 /** Pieces this many cells beyond the view are painted too, so that the camera finds them ready. */
 const AHEAD_CELLS = 4;
+/**
+ * Added to the priority of pieces painted ahead for the view after the next one
+ * (`PieceGround.prefetch`): after the next view's own, and after the island painted ahead.
+ */
+const AFTER_NEXT = 1e6;
+
+/**
+ * Seconds `PieceGround.prepaint` rests between two pieces: the island is painted ahead
+ * over half an hour or so of a sim-day on the board, using a third of a core, not a whole
+ * one taken from the frames (R5).
+ */
+const PREPAINT_REST_S = 30;
+/** Seconds `PieceGround.prepaint` waits before asking again whether it may paint ahead. */
+const YIELD_WAIT_S = 1;
+/**
+ * Pieces put on the screen in one frame at most: kept ones come back together, and each
+ * is a texture sent to the GPU (R5: several in one frame made it late on the board).
+ */
+const PLACED_PER_FRAME = 4;
+/** Seconds a piece with nothing to show waits for today's before the latest kept is shown. */
+const PLACEHOLDER_AFTER_S = 0.3;
+
+/** How a ground is cut into pieces: their size, how far ahead of the view, how many kept. */
+export interface PieceOptions {
+  /** Cells per side of a piece. */
+  cells: number;
+  /** Cells beyond the view whose pieces are painted too (Infinity: the whole world). */
+  ahead: number;
+  /** Pieces kept; the farthest are forgotten beyond this (Infinity: every one). */
+  kept: number;
+}
+
+/** The local view's: small pieces round the camera, the far ones forgotten. */
+export const CLOSE_PIECES: PieceOptions = {
+  cells: PIECE_CELLS,
+  ahead: AHEAD_CELLS,
+  kept: PIECES_KEPT,
+};
 
 /** Where a painting goes: its corner in cells, and the part of it kept (texels; all if left out). */
 interface Placing {
@@ -40,8 +80,9 @@ interface Placing {
 
 /**
  * RGBA as a sprite of `tile` texels to the cell, its corner on cell (x, y); `offsetX` and
- * `offsetY` shift the image within a canvas of `width` × `height`, which cuts off what
- * falls outside it.
+ * `offsetY` (0 or less) shift the image within a frame of `width` × `height`, which cuts
+ * off what falls outside it. The pixels go to the GPU as they are, with no canvas between
+ * (R5, review P8: a canvas copied them twice and kept a third copy per piece).
  */
 function rgbaSprite(
   rgba: Uint8ClampedArray<ArrayBuffer>,
@@ -49,19 +90,20 @@ function rgbaSprite(
   tile: number,
   at: Placing,
 ): Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = at.width ?? size.width;
-  canvas.height = at.height ?? size.height;
-  const context = canvas.getContext("2d");
-  if (context === null) throw new Error("no 2D canvas");
-  context.putImageData(
-    new ImageData(rgba, size.width, size.height),
-    at.offsetX ?? 0,
-    at.offsetY ?? 0,
+  const source = new BufferImageSource({
+    resource: new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.length),
+    width: size.width,
+    height: size.height,
+    format: "rgba8unorm",
+    scaleMode: "nearest",
+  });
+  const frame = new Rectangle(
+    0 - (at.offsetX ?? 0),
+    0 - (at.offsetY ?? 0),
+    at.width ?? size.width,
+    at.height ?? size.height,
   );
-  const sprite = new Sprite(
-    new Texture({ source: new CanvasSource({ resource: canvas, scaleMode: "nearest" }) }),
-  );
+  const sprite = new Sprite(new Texture({ source, frame }));
   sprite.scale.set(1 / tile);
   sprite.position.set(at.x, at.y);
   return sprite;
@@ -161,6 +203,7 @@ export class WholeGround extends Layers {
     private readonly painter: Painter,
     readonly tile: number,
     private readonly fadeS = FADE_S,
+    private readonly cache: GroundCache = NO_CACHE,
   ) {
     super();
   }
@@ -170,14 +213,36 @@ export class WholeGround extends Layers {
     return this.current !== null && this.fade === null && this.waiting === 0;
   }
 
-  /** Paint `request` (at this ground's tile, the whole world) and fade it in when it comes. */
-  async repaint(request: Omit<PaintRequest, "tile" | "cells">, priority = 10): Promise<void> {
+  /**
+   * Paint `request` (at this ground's tile, the whole world) and fade it in when it comes;
+   * kept for `stamp` ("" keeps none), as the pieces are (R5, the optimization plan: the
+   * map was painted afresh at every start). With nothing on the screen yet, the latest kept
+   * of any stamp is shown if this one has not come after `PLACEHOLDER_AFTER_S`.
+   */
+  async repaint(
+    request: Omit<PaintRequest, "tile" | "cells">,
+    priority = 10,
+    stamp = "",
+  ): Promise<void> {
     const mine = ++this.asked;
     // A painting asked for before and not yet started is not wanted any more.
     this.painter.drop((queued) => queued.tile === this.tile && queued.cells === undefined);
     this.waiting += 1;
+    const key = `map/${this.tile}`;
+    if (this.current === null && stamp !== "") {
+      setTimeout(() => {
+        if (mine !== this.asked || this.current !== null) return;
+        void this.cache.latest(key).then((older) => {
+          if (older === undefined || mine !== this.asked || this.current !== null) return;
+          this.current = show(older.pixels, this.tile, this.layers, { x: 0, y: 0 });
+        });
+      }, PLACEHOLDER_AFTER_S * 1000);
+    }
     try {
-      const { pixels } = await this.painter.paint({ ...request, tile: this.tile }, priority);
+      const { pixels } = await this.painter.paint(
+        { ...request, tile: this.tile, ...(stamp === "" ? {} : { keep: { key, stamp } }) },
+        priority,
+      );
       if (mine !== this.asked) return;
       const painting = show(pixels, this.tile, this.layers, { x: 0, y: 0 });
       this.fade?.finish();
@@ -204,12 +269,40 @@ interface Piece {
   fade: Fade | null;
 }
 
+/**
+ * What throws a shadow on `padded`, as a request's part (`Painter.paint`'s `later`):
+ * worked out when a painter takes the piece up, one piece at a time, not for every piece
+ * asked for at once (R5: twenty pieces asked ahead held a frame up 0.4 s at the board's speed).
+ */
+function shadowsFor(
+  shadowsOf: (cells: CellRect) => PaintRequest["shadows"],
+  padded: CellRect,
+): Partial<PaintRequest> {
+  performance.mark("lineage:shadows");
+  const shadows = shadowsOf(padded);
+  performance.measure("lineage:shadows", "lineage:shadows");
+  return shadows === undefined ? {} : { shadows };
+}
+
 /** The ground of the local view, a piece at a time. */
 export class PieceGround extends Layers {
   private readonly pieces = new Map<number, Piece>();
   private landVersion = 0;
   private request: Omit<PaintRequest, "tile" | "cells"> | null = null;
   private shadowsOf: ((cells: CellRect) => PaintRequest["shadows"]) | null = null;
+  /** What the pieces asked for now are painted from (`GroundCache`); "" keeps none. */
+  private stamp = "";
+  /** Pieces asked for ahead of the camera (`prefetch`), for the stamp they were asked for. */
+  private readonly prefetched = new Set<number>();
+  /** Whether a piece asked for ahead (`prefetch`) is being painted. */
+  private prefetching = false;
+  private prefetchedFor = "";
+  /**
+   * Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`),
+   * the nearest the view first: by their key (a painting that comes overtakes a kept one
+   * still waiting for the same piece).
+   */
+  private readonly arriving = new Map<number, () => void>();
   private centre = { x: 0, y: 0 };
 
   constructor(
@@ -217,29 +310,167 @@ export class PieceGround extends Layers {
     readonly tile: number,
     private readonly world: { width: number; height: number },
     private readonly fadeS = FADE_S,
+    private readonly cut: PieceOptions = CLOSE_PIECES,
+    private readonly cache: GroundCache = NO_CACHE,
+    /** Seconds rested between two pieces painted ahead (`prepaint`). */
+    private readonly rest = PREPAINT_REST_S,
   ) {
     super();
   }
 
   /**
+   * Whether the island may be painted ahead now (`prepaint`): it waits while this says no,
+   * so that painting ahead yields to the frames (R5: on the board's four cores it made
+   * them late; `Landscape` says no while frames have been coming late).
+   */
+  mayPaintAhead: () => boolean = () => true;
+
+  /**
    * The land has changed (or the season, or what stands on it): paint every piece kept
    * again from `request`, each fading in over its old self. `shadows` says what throws a
-   * shadow on given cells.
+   * shadow on given cells. `stamp` says what all this is (`GroundCache`): pieces kept for
+   * it are shown as they are; without one, none are kept.
    */
   update(
     landVersion: number,
     request: Omit<PaintRequest, "tile" | "cells">,
     shadows: (cells: CellRect) => PaintRequest["shadows"],
+    stamp = "",
   ): void {
     this.landVersion = landVersion;
     this.request = request;
     this.shadowsOf = shadows;
+    this.stamp = stamp;
     // What was asked for an older land is not wanted any more.
     this.painter.drop((queued) => queued.tile === this.tile);
     for (const [key, piece] of this.pieces) {
       piece.asked = 0;
       this.ask(key, piece);
     }
+  }
+
+  /**
+   * Paint every piece of the island not yet kept for the latest stamp, one at a time and
+   * after anything the view asks for, and keep them (`GroundCache`) without showing them:
+   * so that the camera, wherever it goes next, finds its ground ready (R5). Stops when
+   * the stamp changes. Resolves with the number painted.
+   */
+  async prepaint(): Promise<number> {
+    const { stamp, request, shadowsOf } = this;
+    if (stamp === "" || request === null || shadowsOf === null) return 0;
+    const { width, height } = this.world;
+    let painted = 0;
+    for (const key of this.keys({ x0: 0, y0: 0, x1: width, y1: height }, 0)) {
+      // It waits for the frames to be on time again.
+      while (!this.mayPaintAhead() && this.stamp === stamp) {
+        await new Promise((resolve) => setTimeout(resolve, YIELD_WAIT_S * 1000));
+      }
+      if (this.stamp !== stamp) break;
+      // One the view has asked for, or shows painted, is not painted twice.
+      const shown = this.pieces.get(key);
+      if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
+      const { cells, padded } = this.extent(key);
+      try {
+        // The painter keeps it (`PaintRequest.keep`), or finds it kept already.
+        const { fresh } = await this.painter.paint(
+          {
+            ...request,
+            tile: this.tile,
+            cells: padded,
+            shown: cells,
+            keep: { key: this.keyOf(key), stamp, ahead: true },
+          },
+          BACKGROUND + this.distance(key),
+          () => shadowsFor(shadowsOf, padded),
+        );
+        if (this.stamp !== stamp) break;
+        if (fresh !== true) continue;
+        painted += 1;
+        if (this.rest > 0) await new Promise((resolve) => setTimeout(resolve, this.rest * 1000));
+      } catch (error) {
+        if (!(error instanceof Dropped)) throw error;
+        break;
+      }
+    }
+    return painted;
+  }
+
+  /**
+   * Paint the pieces `view` will need, behind everything the view on the screen asks for,
+   * and keep them without showing them: where the camera goes next (R5, the showcase),
+   * so that its ground is kept and comes at once when it gets there. `after`: for the view
+   * after the next one, behind the next one's pieces.
+   */
+  prefetch(view: CellRect, after = false): void {
+    const { stamp, request, shadowsOf } = this;
+    if (stamp === "" || request === null || shadowsOf === null) return;
+    if (this.prefetchedFor !== stamp) {
+      this.prefetchedFor = stamp;
+      this.prefetched.clear();
+    }
+    // One piece at a time, the nearest the view's middle first (R5, the board: asked all at
+    // once they kept both painters busy, and the frames late, while another view was shown).
+    if (this.prefetching) return;
+    const centre = { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 };
+    const middleOf = (key: number): { x: number; y: number } => ({
+      x: ((key % 1024) + 0.5) * this.cut.cells,
+      y: (Math.floor(key / 1024) + 0.5) * this.cut.cells,
+    });
+    const away = (key: number): number => {
+      const { x, y } = middleOf(key);
+      return Math.hypot(x - centre.x, y - centre.y);
+    };
+    const key = this.keys(view, this.cut.ahead === Infinity ? 0 : this.cut.ahead)
+      .filter((each) => {
+        if (this.prefetched.has(each)) return false;
+        const shown = this.pieces.get(each);
+        return shown === undefined || ![shown.asked, shown.painted].includes(this.landVersion);
+      })
+      .sort((a, b) => away(a) - away(b))[0];
+    if (key === undefined) return;
+    this.prefetched.add(key);
+    this.prefetching = true;
+    const { cells, padded } = this.extent(key);
+    this.painter
+      .paint(
+        {
+          ...request,
+          tile: this.tile,
+          cells: padded,
+          shown: cells,
+          keep: { key: this.keyOf(key), stamp, ahead: true },
+        },
+        BACKGROUND + (after ? AFTER_NEXT : 0) + away(key),
+        () => shadowsFor(shadowsOf, padded),
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof Dropped)) throw error;
+        this.prefetched.delete(key);
+      })
+      .finally(() => {
+        this.prefetching = false;
+      });
+  }
+
+  /**
+   * How far out from the middle of `view` its ground is painted from the latest land, in
+   * cells: to the nearest piece in it not yet painted (Infinity once all are). The iris
+   * between views opens this far (R5, `iris.ts`).
+   */
+  paintedReach(view: CellRect): number {
+    const cx = (view.x0 + view.x1) / 2;
+    const cy = (view.y0 + view.y1) / 2;
+    const size = this.cut.cells;
+    let reach = Infinity;
+    for (const key of this.keys(view, 0)) {
+      if ((this.pieces.get(key)?.painted ?? -1) === this.landVersion) continue;
+      const x0 = (key % 1024) * size;
+      const y0 = Math.floor(key / 1024) * size;
+      const dx = Math.max(x0 - cx, 0, cx - (x0 + size));
+      const dy = Math.max(y0 - cy, 0, cy - (y0 + size));
+      reach = Math.min(reach, Math.hypot(dx, dy));
+    }
+    return reach;
   }
 
   /** Pieces painted from the latest land, of those the view needs. */
@@ -253,7 +484,7 @@ export class PieceGround extends Layers {
   cover(view: CellRect): void {
     if (this.request === null) return;
     this.centre = { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 };
-    for (const key of this.keys(view, AHEAD_CELLS)) {
+    for (const key of this.keys(view, this.cut.ahead)) {
       let piece = this.pieces.get(key);
       if (piece === undefined) {
         piece = { painting: null, painted: -1, asked: 0, fade: null };
@@ -262,9 +493,9 @@ export class PieceGround extends Layers {
       if (piece.asked !== this.landVersion && piece.painted !== this.landVersion)
         this.ask(key, piece);
     }
-    if (this.pieces.size <= PIECES_KEPT) return;
+    if (this.pieces.size <= this.cut.kept) return;
     const byDistance = [...this.pieces.keys()].sort((a, b) => this.distance(b) - this.distance(a));
-    for (const key of byDistance.slice(0, this.pieces.size - PIECES_KEPT)) {
+    for (const key of byDistance.slice(0, this.pieces.size - this.cut.kept)) {
       const piece = this.pieces.get(key);
       piece?.fade?.finish();
       destroy(piece?.painting ?? null);
@@ -273,6 +504,16 @@ export class PieceGround extends Layers {
   }
 
   tick(dtS: number): void {
+    if (this.arriving.size > 0) {
+      const nearest = [...this.arriving.keys()]
+        .sort((a, b) => this.distance(a) - this.distance(b))
+        .slice(0, PLACED_PER_FRAME);
+      for (const key of nearest) {
+        const put = this.arriving.get(key);
+        this.arriving.delete(key);
+        put?.();
+      }
+    }
     for (const piece of this.pieces.values()) {
       if (piece.fade?.step(dtS) === true) piece.fade = null;
     }
@@ -280,15 +521,10 @@ export class PieceGround extends Layers {
 
   private keys(view: CellRect, ahead: number): number[] {
     const { width, height } = this.world;
-    const first = (value: number): number => Math.max(Math.floor(value / PIECE_CELLS), 0);
-    const lastX = Math.min(
-      Math.floor((view.x1 + ahead) / PIECE_CELLS),
-      Math.ceil(width / PIECE_CELLS) - 1,
-    );
-    const lastY = Math.min(
-      Math.floor((view.y1 + ahead) / PIECE_CELLS),
-      Math.ceil(height / PIECE_CELLS) - 1,
-    );
+    const size = this.cut.cells;
+    const first = (value: number): number => Math.max(Math.floor(value / size), 0);
+    const lastX = Math.min(Math.floor((view.x1 + ahead) / size), Math.ceil(width / size) - 1);
+    const lastY = Math.min(Math.floor((view.y1 + ahead) / size), Math.ceil(height / size) - 1);
     const keys: number[] = [];
     for (let py = first(view.y0 - ahead); py <= lastY; py++) {
       for (let px = first(view.x0 - ahead); px <= lastX; px++) keys.push(py * 1024 + px);
@@ -297,22 +533,79 @@ export class PieceGround extends Layers {
   }
 
   private distance(key: number): number {
-    const x = ((key % 1024) + 0.5) * PIECE_CELLS;
-    const y = (Math.floor(key / 1024) + 0.5) * PIECE_CELLS;
+    const x = ((key % 1024) + 0.5) * this.cut.cells;
+    const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
     return Math.hypot(x - this.centre.x, y - this.centre.y);
   }
 
   private ask(key: number, piece: Piece): void {
-    const { request, shadowsOf } = this;
+    const { request, shadowsOf, stamp } = this;
     if (request === null || shadowsOf === null) return;
+    const { cells, padded } = this.extent(key);
+    const version = this.landVersion;
+    piece.asked = version;
+    const wanted = (): boolean => this.pieces.get(key) === piece && piece.asked === version;
+    const paint = (): void => {
+      this.painter
+        .paint(
+          {
+            ...request,
+            tile: this.tile,
+            cells: padded,
+            shown: cells,
+            ...(stamp === "" ? {} : { keep: { key: this.keyOf(key), stamp } }),
+          },
+          this.distance(key),
+          () => shadowsFor(shadowsOf, padded),
+        )
+        .then(({ pixels }) => {
+          if (!wanted()) return;
+          this.arriving.set(key, () => {
+            if (wanted()) this.place(piece, pixels, cells, padded, version);
+          });
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof Dropped)) throw error;
+          if (piece.asked === version) piece.asked = 0;
+        });
+    };
+    if (stamp === "") {
+      paint();
+      return;
+    }
+    // The painter looks in the cache itself, off the page's thread, and hands back what it
+    // kept for this stamp without copying it, or paints it (R5: the page decoding every
+    // kept piece itself held up the frames at each cut). Only a piece with nothing to show
+    // that has not come after `PLACEHOLDER_AFTER_S` is read here, the latest kept of any
+    // stamp, to show at once while today's comes over it: no bare ground.
+    paint();
+    if (piece.painting !== null) return;
+    const name = this.keyOf(key);
+    setTimeout(() => {
+      if (!wanted() || piece.painting !== null) return;
+      void this.cache.latest(name).then((older) => {
+        if (older === undefined || !wanted() || piece.painting !== null) return;
+        if (this.arriving.has(key)) return;
+        this.arriving.set(key, () => {
+          if (wanted() && piece.painting === null) {
+            this.place(piece, older.pixels, cells, padded, piece.painted, 0);
+          }
+        });
+      });
+    }, PLACEHOLDER_AFTER_S * 1000);
+  }
+
+  /** The cells of piece `key`, and those painted for it with its margin round them. */
+  private extent(key: number): { cells: CellRect; padded: CellRect } {
     const { width, height } = this.world;
     const px = key % 1024;
     const py = Math.floor(key / 1024);
+    const size = this.cut.cells;
     const cells = {
-      x0: px * PIECE_CELLS,
-      y0: py * PIECE_CELLS,
-      x1: Math.min((px + 1) * PIECE_CELLS, width),
-      y1: Math.min((py + 1) * PIECE_CELLS, height),
+      x0: px * size,
+      y0: py * size,
+      x1: Math.min((px + 1) * size, width),
+      y1: Math.min((py + 1) * size, height),
     };
     const padded = {
       x0: Math.max(cells.x0 - PIECE_MARGIN, 0),
@@ -320,41 +613,40 @@ export class PieceGround extends Layers {
       x1: Math.min(cells.x1 + PIECE_MARGIN, width),
       y1: Math.min(cells.y1 + PIECE_MARGIN, height),
     };
-    const version = this.landVersion;
-    piece.asked = version;
-    performance.mark("lineage:shadows");
-    const shadows = shadowsOf(padded);
-    performance.measure("lineage:shadows", "lineage:shadows");
-    this.painter
-      .paint(
-        {
-          ...request,
-          tile: this.tile,
-          cells: padded,
-          ...(shadows === undefined ? {} : { shadows }),
-        },
-        this.distance(key),
-      )
-      .then(({ pixels }) => {
-        if (this.pieces.get(key) !== piece || piece.asked !== version) return;
-        // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
-        const painting = show(pixels, this.tile, this.layers, {
-          x: cells.x0,
-          y: cells.y0,
-          width: (cells.x1 - cells.x0) * this.tile,
-          height: (cells.y1 - cells.y0) * this.tile,
-          offsetX: (padded.x0 - cells.x0) * this.tile,
-          offsetY: (padded.y0 - cells.y0) * this.tile,
-        });
-        piece.fade?.finish();
-        piece.fade = new Fade(painting, piece.painting, piece.painting === null ? 0 : this.fadeS);
-        if (piece.fade.done) piece.fade = null;
-        piece.painting = painting;
-        piece.painted = version;
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof Dropped)) throw error;
-        if (piece.asked === version) piece.asked = 0;
-      });
+    return { cells, padded };
+  }
+
+  /** Where piece `key` is kept: by this ground's tile and piece size. */
+  private keyOf(key: number): string {
+    return `${this.tile}/${this.cut.cells}/${key}`;
+  }
+
+  /**
+   * Show `pixels` (painted with a margin round `cells`, `padded`) as `piece`, fading in
+   * over what it showed, and mark it painted for land `version`.
+   */
+  private place(
+    piece: Piece,
+    pixels: Pixels,
+    cells: CellRect,
+    padded: CellRect,
+    version: number,
+    fadeS = this.fadeS,
+  ): void {
+    PROBE.note("ground-piece");
+    // Cut the margin off: it is there so that a piece's shore meets its neighbours'.
+    const painting = show(pixels, this.tile, this.layers, {
+      x: cells.x0,
+      y: cells.y0,
+      width: (cells.x1 - cells.x0) * this.tile,
+      height: (cells.y1 - cells.y0) * this.tile,
+      offsetX: (padded.x0 - cells.x0) * this.tile,
+      offsetY: (padded.y0 - cells.y0) * this.tile,
+    });
+    piece.fade?.finish();
+    piece.fade = new Fade(painting, piece.painting, piece.painting === null ? 0 : fadeS);
+    if (piece.fade.done) piece.fade = null;
+    piece.painting = painting;
+    piece.painted = version;
   }
 }

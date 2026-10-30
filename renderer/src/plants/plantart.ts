@@ -71,6 +71,12 @@ export interface PlantArt {
    * width and height in pixels. Left out by what is too small for one.
    */
   shadow?: { rx: number; ry: number };
+  /**
+   * The puffs a bush's dome is piled from (R5, the bushes in pieces), in the order they
+   * were painted: each one's middle and radius in pixels of the drawing. Left out by
+   * every other drawing.
+   */
+  puffs?: { x: number; y: number; r: number }[];
 }
 
 /** Width and height of a drawing's plant, in art pixels. */
@@ -111,6 +117,10 @@ const SPROUT = { tree: 0.42, bush: 0.46 };
 const OLD: Readonly<Record<"tree" | "bush", Size>> = { tree: [1.12, 1], bush: [1.1, 1.06] };
 /** Drawings of each kind and age, so that neighbours differ. */
 export const STANDING_VARIANTS = 3;
+/** Grass has more drawings than other plants, many of it standing close together (R5). */
+export const GRASS_VARIANTS = 9;
+/** Each grass drawing larger or smaller than the scale, by variant (R5, the owner: several sizes). */
+const TUFT_SIZES = [1, 0.7, 1.3, 0.85, 1.15, 0.6, 1.45, 0.9, 1.2] as const;
 const TRUNK = "#5a4632";
 /** What the darkest and the lightest tone of foliage are mixed with. */
 /** The middle of a flower, and pale wood or a mushroom's stem. */
@@ -477,17 +487,21 @@ export function trim(art: PlantArt, height: number): void {
     art.ink.fill(INK.none, y * art.width, (y + 1) * art.width);
 }
 
-/** Move a drawing down until its lowest pixel is on the line it stands on. */
-export function settle(art: PlantArt, height: number): void {
+/**
+ * Move a drawing down until its lowest pixel is on the line it stands on. Returns how
+ * many pixels it moved.
+ */
+export function settle(art: PlantArt, height: number): number {
   const foot = height + MARGIN - 1;
   let lowest = -1;
   for (let at = art.ink.length - 1; at >= 0 && lowest < 0; at--) {
     if (art.ink[at] !== INK.none) lowest = Math.floor(at / art.width);
   }
   const down = foot - lowest;
-  if (lowest < 0 || down <= 0) return;
+  if (lowest < 0 || down <= 0) return 0;
   art.ink.copyWithin(down * art.width, 0, (art.height - down) * art.width);
   art.ink.fill(INK.none, 0, down * art.width);
+  return down;
 }
 
 /** Where the plant's shadow falls: an ellipse under its foot. */
@@ -1436,14 +1450,18 @@ export function drawStanding(
   if (form === "SHRUB")
     return (cosy ? cosyBush : bush)(sized(PLANT_SCALE.bush), random, salt, look);
   // Grass: short while young and in spring, in seed in autumn, pressed flat in winter.
-  const [width, height] = [PLANT_SCALE.tuft[0] * detail, PLANT_SCALE.tuft[1] * detail];
+  const sizedBy = cosy ? (TUFT_SIZES[variant % TUFT_SIZES.length] ?? 1) : 1;
+  const [width, height] = [
+    PLANT_SCALE.tuft[0] * detail * sizedBy,
+    PLANT_SCALE.tuft[1] * detail * sizedBy,
+  ];
   const short = young === 1 || season === "spring" ? (growth === "sprout" ? 0.45 : 0.65) : 1;
-  return (cosy ? cosyTuft : drawTuft)(
-    [Math.round(width), Math.max(2, Math.round(height * short))],
-    random,
-    season === "autumn" && young === 0,
-    look.season === "winter",
-  );
+  const sizes: Size = [Math.round(width), Math.max(2, Math.round(height * short))];
+  const seeding = season === "autumn" && young === 0;
+  const flat = look.season === "winter";
+  return cosy
+    ? cosyTuft(sizes, random, seeding, flat, variant)
+    : drawTuft(sizes, random, seeding, flat);
 }
 /** A young plant against a full-grown one, as the scale's two sizes have it. */
 const YOUNG_SHARE = PLANT_SCALE.broadleaf[1][1] / PLANT_SCALE.broadleaf[0][1];

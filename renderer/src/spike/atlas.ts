@@ -1,5 +1,6 @@
 /** Every texture of the spike in one small atlas, drawn at start-up from the pixel art. */
 import { CanvasSource, Rectangle, Texture } from "pixi.js";
+import { DISC_SIZE, WHITE_SIZE, put, shapes, type Atlas } from "../creatures/atlas";
 import type { WorldFixture } from "./fixture";
 import {
   ART,
@@ -10,7 +11,6 @@ import {
   lookKey,
   rasterise,
   wedge,
-  type Pixels,
   type PlantLook,
 } from "./pixelart";
 
@@ -18,24 +18,6 @@ import {
 const SLOT_WIDTH = 10;
 const SLOT_HEIGHT = 14;
 const COLUMNS = 8;
-/** Big enough to stay round on the largest animal of the closest view. */
-export const DISC_SIZE = 64;
-const WHITE_SIZE = 4;
-
-export interface Atlas {
-  /** Plant textures by `lookKey`. */
-  plants: ReadonlyMap<string, Texture>;
-  /** A white disc: body segments, tinted. */
-  disc: Texture;
-  /** A white square: legs and the full-screen tint, stretched and tinted. */
-  white: Texture;
-  /** A white wedge pointing right: snouts, fins, claws, tinted. */
-  wedge: Texture;
-}
-
-function put(context: CanvasRenderingContext2D, pixels: Pixels, x: number, y: number): void {
-  context.putImageData(new ImageData(pixels.rgba, pixels.width, pixels.height), x, y);
-}
 
 /** Draw the atlas and cut it into textures. All share one source, so they batch. */
 export function buildAtlas(fixture: WorldFixture): Atlas {
@@ -84,31 +66,4 @@ export function buildAtlas(fixture: WorldFixture): Atlas {
   return { plants, ...shapes(source, below, wedgeLeft) };
 }
 
-/** The disc, the white square and the wedge, which start `below` in `source`. */
-function shapes(source: CanvasSource, below: number, wedgeLeft: number): Omit<Atlas, "plants"> {
-  return {
-    disc: new Texture({ source, frame: new Rectangle(1, below, DISC_SIZE, DISC_SIZE) }),
-    // The inner pixels only, so stretching never samples the transparent surround.
-    white: new Texture({
-      source,
-      frame: new Rectangle(DISC_SIZE + 4, below + 1, WHITE_SIZE - 2, WHITE_SIZE - 2),
-    }),
-    wedge: new Texture({ source, frame: new Rectangle(wedgeLeft, below, DISC_SIZE, DISC_SIZE) }),
-  };
-}
-
-/** The atlas of the creatures alone (the scene draws its plants otherwise, R1). */
-export function creatureAtlas(): Atlas {
-  const canvas = document.createElement("canvas");
-  canvas.width = 2 * DISC_SIZE + WHITE_SIZE + 8;
-  canvas.height = DISC_SIZE + 2;
-  const context = canvas.getContext("2d");
-  if (context === null) throw new Error("no 2D canvas for the atlas");
-  put(context, disc(DISC_SIZE), 1, 1);
-  context.fillStyle = "#ffffff";
-  context.fillRect(DISC_SIZE + 3, 1, WHITE_SIZE, WHITE_SIZE);
-  const wedgeLeft = DISC_SIZE + WHITE_SIZE + 5;
-  put(context, wedge(DISC_SIZE), wedgeLeft, 1);
-  const source = new CanvasSource({ resource: canvas, scaleMode: "nearest" });
-  return { plants: new Map(), ...shapes(source, 1, wedgeLeft) };
-}
+export { DISC_SIZE, creatureAtlas, type Atlas } from "../creatures/atlas";

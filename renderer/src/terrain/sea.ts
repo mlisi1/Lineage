@@ -32,13 +32,10 @@ import {
 } from "pixi.js";
 import type { CellRect, Land } from "./land";
 import { cellHash } from "./pixels";
-import { BREATH_S, shoreSizes, swellSizes } from "./tide";
+import { BREATH_S, shoreSizes, swellSizes, tideLevel } from "./tide";
 
 export { BREATH_S, tidePhase } from "./tide";
 
-/** Seconds of a tide, which sets how far the swash runs (its least and most). */
-const TIDE_S = 60;
-const TIDE_LOW = 0.55;
 /** The swash's colours: foam, and how dark the sand it leaves is (share of black). */
 const FOAM = 0xf2fbff;
 const WET_SAND = 0.18;
@@ -91,7 +88,7 @@ export function seaAt(land: Land): SeaAt {
     const below = land.seaLevel - heightAt(land, x, y);
     if (below <= 0) return null;
     const band = bands.find((candidate) => below <= candidate.limit) ?? bands[bands.length - 1];
-    return { colour: band?.colour ?? 0, depth: Math.min(below / deepest, 1) };
+    return { colour: band?.colour ?? 0, depth: Math.min(below / deepest, 1), below };
   };
 }
 
@@ -268,7 +265,11 @@ void main(void) {
 /** The moving sea of one view. */
 export class Sea {
   /** Add this to the world over the ground and its surf. */
-  readonly glints = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly glints = new Container({ isRenderGroup: true });
+  /** The shallows' colour the shore's uniforms were last set from. */
+  private shallowOf = "";
   private readonly sprites: Sprite[] = [];
   /** Each slot's showing, and the view it was placed in when that showing began. */
   private readonly placed: { showing: number; view: CellRect }[] = [];
@@ -328,16 +329,19 @@ export class Sea {
         antialias: "off",
       });
       if (!(filters?.includes(this.shore) ?? false)) layer.filters = [this.shore];
-      const tide =
-        TIDE_LOW + (1 - TIDE_LOW) * (0.5 + 0.5 * Math.sin((2 * Math.PI * timeS) / TIDE_S));
+      const tide = tideLevel(timeS);
       const shallow = land.relief.seaBands[0]?.colour ?? "#8ecbe6";
       const uniforms = this.shoreUniforms.uniforms as unknown as ShoreUniforms;
       uniforms.uTime = timeS / BREATH_S;
       uniforms.uCrest = (timeS / SWELL_S) % 1;
       uniforms.uDash = (timeS / SWELL_DASH_S) % 1;
       uniforms.uTide = tide;
-      uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
-      uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
+      // The shallows' colours, worked out again only when the land's palette changes.
+      if (shallow !== this.shallowOf) {
+        this.shallowOf = shallow;
+        uniforms.uShallow = rgbOf(Number.parseInt(shallow.replace("#", ""), 16));
+        uniforms.uSwell = mixRgb(uniforms.uShallow, rgbOf(FOAM), SWELL_MIX);
+      }
     }
     const { tile } = this;
     // Texture.WHITE is 16 texels: sized in cells, a stroke `length` art pixels long and one tall.

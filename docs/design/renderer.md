@@ -99,12 +99,15 @@ thinner under trees, where the simulation's snow is (R1, ADR 0014: by season and
 height, so the hills in autumn and the lowland only in a hard winter); the spike's `snow`
 option, winter under snow everywhere, is what the look sheet still shows.
 
-The map and the middle view are each one picture of the whole world (512×300 and
-2048×1200), repainted when the plants change, once a sim-day. The local view would be
+The map is one picture of the whole world (512×300), repainted when the plants change,
+once a sim-day. The middle view (2048×1200 for the whole world) is painted in pieces of
+32 × 32 cells, what is on the screen and a piece round it first, every piece kept (R5:
+one picture took the board some 25 s before anything showed). The local view would be
 8192×4800, so its ground is painted in pieces of 8 × 8 cells as the camera comes over
-them (`GroundPieces`) and forgotten when far behind. A piece is painted with a cell of
+them (`PieceGround`) and forgotten when far behind. A piece is painted with a cell of
 margin, which is cut off: calm, detail and shadows come out the same in a piece as in
-the whole (a test holds this).
+the whole (a test holds this; the middle view's stills are the same pixels as its one
+picture was).
 
 ### Plants
 
@@ -206,7 +209,7 @@ the middle view, 93 for the local one).
 
 A creature is seen from above: a head that moves and a chain of joints that follows it
 at fixed distances, which bends the body by itself. Legs are placed by two-bone inverse
-kinematics: a foot stays planted until the body has left it behind. A body is a list of
+kinematics: feet step in turn on a gait cycle (R5). A body is a list of
 parts riding the joints (`src/creatures/body.ts`): discs, wedges and bars, each with a size, a place
 and a colour, all tinted sprites of one atlas, so a body costs no geometry, only
 transforms. The derived values (mass, leg pairs, speeds) come from
@@ -603,7 +606,7 @@ server builds the messages with `lineage_server.protocol.encode`. Messages:
 | `clock` | on connect, then every server tick | date, season and how far into it, day of the year |
 | `land` | on connect, once a sim-day and after terrain events | every cell: height, cover class, biomass, lying snow, the plant's `HEIGHT` and `EVERGREEN` genes and rare genes, as base64 grids |
 | `fauna` | on connect | creature gene names, the phenotype's config keys, and the config drawing rare genes needs (`rare_config`: GIANT's mass factor) (R2, M7) |
-| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7) |
+| `creatures` | every fauna tick | ids, positions, species; genomes and rare-gene slots once per id; who is torpid (R2, M6, M7); the young and how grown, in sixteenths (`young`); who died since the last one and of what (`died`: `starved`, `old_age`, `killed`, `drowned`, `burnt`, `blast`, from the sim's `CreaturesDied`); who landed from the sea (`landed`, from `CreaturesArrived`); who ate plants or algae and who ate meat in the last tick (`grazing`, `feeding`, from `Population.eating`); who killed each of the dead (`died[].by`, the hunter's id, from `CreaturesDied.killers`) and the mother of each newborn (`born[].parent`, from `CreaturesBorn`) (R5) |
 | `species` | on connect, when one is born or dies out | id, name, parent (M6) |
 | `rare` | on connect | the rare genes of both kingdoms: bit, name, visual signature, look in words (M7) |
 | `chronicle` | when the chronicle writes | the entries since the last message (number, time, kind, importance, text, species, place) and the notable and major thresholds; not on connect (R3) |
@@ -621,17 +624,48 @@ committed in `renderer/public/stream/`, two from the v4 fixture (land only):
 and `life.json` from the v9 fixture, with the creatures every two sim-hours and the
 chronicle (R3, see "The camera and captions"), the page's default.
 
-**Painting off the frame.** Grounds are painted in a Web Worker (`terrain/painter.ts`,
-`paint.worker.ts`) so that the page keeps drawing frames: the map's and the middle view's
-whole world once a sim-day, the local view's pieces as the camera comes near them. The
-page keeps its own queue and hands the worker one request at a time, nearest piece
-first; a whole-world painting asked for again before it started is dropped, and so are
-the pieces of an older land. A ring of pieces four cells beyond the view is painted ahead
-of the camera. Where there is no worker the same code runs on the page's thread.
+**Painting off the frame.** Grounds are painted in Web Workers (`terrain/painter.ts`,
+`paint.worker.ts`) so that the page keeps drawing frames: the map's whole world once a
+sim-day, the middle and local views' pieces as the camera comes near them. The page keeps
+its own queue and hands each worker one request at a time, nearest piece first; a
+whole-world painting asked for again before it started is dropped, and so are the pieces
+of an older land. There are as many workers as the cores less two, at most three (R5: two
+on the board's four; three left the page's thread too little in the local view). A ring
+of pieces beyond the view is painted ahead of the camera (four cells up close, a piece in
+the middle view). Pieces come on the screen nearest first, four a frame, each a texture
+sent to the GPU. Where there is no worker the same code runs on the page's thread.
 
-**A day at a time.** On a new land, or a new day of the year, `landscape.ts` lays the
-plants out again for the day and repaints the grounds of the views that have been
-shown; the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
+**The ground kept between visits** (R5, the owner: "save the world once generated and
+pre-compute all we can"; `terrain/groundcache.ts`). Every piece painted is kept in the
+browser's storage (IndexedDB) under a stamp of what it was painted from: the build's
+commit, the world's seed, the land message, the day of the year, the look and how the
+bushes are drawn. Several stamps are kept for each piece (some days, or the land before
+and after an event); beyond twelve the one used longest ago is let go with its pieces.
+The painting workers read and write the storage themselves: asked for a piece, a worker
+hands back the one kept for today's stamp without painting it, or paints and keeps it, and
+the page's thread only puts it on the screen. A piece with nothing to show that has not
+come within a third of a second is shown from the latest kept of any stamp while today's
+is painted over it, so bare ground shows only the first time a place is seen. After each
+new day, each pieced ground paints the rest of the island ahead (`PieceGround.prepaint`),
+one piece at a time behind everything the view asks for, resting 30 s between pieces and
+only while frames have come on time for 3 s, and keeps it without showing it.
+`PieceGround.prefetch` paints ahead the pieces of a place the camera will go to (the
+showcase's next shot). Requests painted ahead are not counted as the painter being busy.
+Nothing is kept under the development server or from a build with changes not committed
+(the commit would not say what painted it), nor with `?ground=fresh`.
+
+**A new land, for the view on the screen.** When a land or a new day comes, only the view
+on the screen is laid out again (its plants placed, its ground repainted); the others are,
+when they come on the screen (R5: laying out every view built held the board's page for
+seconds).
+
+**A day at a time.** On a new land, or a new day of the year that looks different,
+`landscape.ts` lays the plants out again for the day and repaints the grounds of the views
+that have been shown. Away from a turn of the season every place shows the clock's season,
+so a day that brings no land looks as the day before and is not laid out at all; in a turn
+every day is, as the turn moves across the land; the kept paintings are stamped with the
+season (or the day, in a turn) rather than the day (R5, the optimization plan: the
+day's turn had a fifth of its frames late on the board, every day); the new day fades in over the old for two seconds (`terrain/grounds.ts`), so that
 growth, a fire's scar or the turn of the season comes over the land gently. The
 drawings a plant layer is made of depend only on the view, the look, the seasons in play
 and the snow, not on the land: they are drawn once and shared by the layers that want
@@ -708,7 +742,8 @@ season of its own turn.
 **Snow** lies where the simulation says (`flora.snow_cover`: the temperature index by
 season and height under `snow_below_temperature`), in any season: in patches on the
 ground, thinner under trees and where it lies thin, and on the plants of cells under
-enough of it.
+enough of it. Nowhere else: bare heights are rock (R5; the report maps' fixed snow line
+only stands in for a land without the simulation's snow, as the R0 fixture).
 
 **The plant genes** where the stream carries them: `HEIGHT` picks a tree's or bush's
 build (broad and low, as the scale has it, or slender and tall); `EVERGREEN` how late it
@@ -755,9 +790,8 @@ The camera is the owner's to steer ([ADR 0020](../decisions/0020-the-camera-view
 a **view button**, beside the god-power button, steps the screen map → middle → local →
 map. The map is where it rests, and it goes back there fifteen minutes after the last
 press. On the page the button is V, space or Enter, a tap on a phone, or
-`window.__press()`. For the demo (the owner, 2026-10-20) a click or tap in the local view
-goes on to another animal instead, and a double click back to the map; the button itself
-keeps the cycle. `src/director.ts` decides what is shown; it is pure and seeded.
+`window.__press()`; a click or tap on the screen is the button too (R5 took out the R3
+demo's clicks for another animal and back to the map). `src/director.ts` decides what is shown; it is pure and seeded.
 
 | View | The camera |
 |---|---|
@@ -776,7 +810,18 @@ keeps the cycle. `src/director.ts` decides what is shown; it is pure and seeded.
 - **Glints stay on the water**: each is placed in the view as it was when that glint began
   to show, and kept there in the world while the camera pans (they had moved with it).
 - **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
-  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
+  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views. The
+  dark (a deep purple, `#10081c`) is drawn last on the canvas itself (R5, the owner on the
+  board: an element laid over the canvas let what was drawn before show through), held
+  two frames fully dark before the cut. The desk's build hides the pointer (a see-through
+  cursor theme for the compositor, `deploy/blank-cursor.py`). Live, the dip is an **iris**
+  (R5, `src/iris.ts`, the owner: "we just have to mask the load times"): a circle in the
+  same purple, in steps of two art pixels, closes on the middle of the screen; while it is
+  shut a ring of eight dots in the scrolls' paper colour turns once a second, its head
+  brightest; it opens from the middle of the new view only as far as that view's ground
+  is painted out from its middle (`Landscape.openTo`), which is the order the pieces are
+  painted in, at the dip's pace or catching up behind it. Films and stills keep the plain
+  dip.
 - **Following** (`src/camera.ts`): a spring a little under critical damping (period
   3 s, damping 0.9), so that the camera eases after an animal that turns and settles with
   hardly a swing; it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within
@@ -928,7 +973,469 @@ the particles and the shows (and the land they change), lightning, flames and ma
 every light and event, a glowing animal at night and by day, and a real world's end
 holding the camera and the button. Its cost on the board is R5's to measure.
 
+## The final rendering pass (R5)
+
+The owner's checklist is in `docs/milestones.md` ("R5 checklist"); the report,
+`reports/R5-final/` (`npm run final`), films each change against the scene as R5 found it.
+Round 1, items 1–7:
+
+- **The animal followed shows through grass.** What stands in front of it goes
+  see-through, grass and the small things too (40 % opacity, trees 30 %); pebbles do not
+  hide it and stay. "In front" is a row after the one the animal stands in (its lowest
+  point, as `hostIn` has it), and plants ease there and back over 0.25 s: judged by its
+  box instead, a tuft between the two covered it whole and snapped as it walked by.
+- **Colours from the genes** (`src/creatures/colours.ts`). The body's hue is `HUE`, its
+  saturation `AQUATIC`, its lightness `SIZE`; the markings' hue is the body's turned by
+  `SOCIAL`, their saturation `DIET`, their lightness `EXPLORATION`, kept at least 0.2 from
+  the body's. No animal is olive (the owner): hues keep off the ground's yellow-greens
+  (0.11–0.42), and saturation starts at 0.5. Each gene is read by its species' rank among the species alive, spread over
+  its range (sister species differ by hundredths), and each animal moves a little from its
+  species by its own genes. The ranks are read again when a species appears or dies out,
+  and every animal is redrawn in place (`CreatureLayer.rebuild`). `PATTERN` picks the
+  markings' shape; warning colours override.
+- **Map dots** (`src/creatures/markers.ts`): round, of whole pixels, a dark edge, three
+  sizes by mass; a swimmer's is a ring round a dark middle; the young's the smallest.
+- **The ground.** The middle view reads cover over a cell's neighbours (`calm` 1). In a
+  calm view the border between two kinds wanders with noise, and growth beside bare
+  ground has a lip lit from the upper left (a pixel darker below, lighter above).
+- **Grass** is a texture of small tufts, not things standing on it (round 3, after
+  The Minish Cap's fields and the grass tutorials that follow it; ADR 0022): about a third
+  of a cell, unoutlined, three to five spikes fanning in a V from a narrow foot, `deep` at
+  the foot to `bright` at the tips. Three shapes (a W, a clump of two, bent by the wind),
+  nine drawings from 0.6 to 1.45 times the size (wider, with more spikes, rather than
+  taller), every other three mirrored; each tuft takes one of five tints at random
+  (none, warmer, cooler, darker, warmer and darker: the owner); three to six to a cell by biomass, in clumps round a point
+  of their cell that cross into the next; thin grass leaves a cell bare now and then.
+- **Snow** lies only where the simulation has it (above); bare heights are rock.
+- **Land animals in the water** (`creatures/wading.ts`). The simulation lets a walker
+  into the sea: it pays for every hour there and drowns (M11 makes the shallow shelf free).
+  The renderer draws what it says, never moving an animal out: in the shallows (no deeper
+  than `WADE_DEPTH`, 0.03, M11's `wading_depth`) its legs are under the water, it slows by
+  up to 45 % and ripples spread from it; out of its depth its legs are gone from sight, its
+  body is sunk but for its head, it slows by up to 70 %, bobs, and the ripples spread
+  faster and wider. All of it scales with its effort, `1 − AQUATIC / 0.6` (the owner:
+  they struggle more than on land unless they are partly aquatic).
+- **Deaths and landings** (`creatures/remains.ts`). A death shows its cause. The body
+  stops where it fell, its colours turn toward the cause's in three steps, and its parts
+  go in steps, legs first, then from the tail to the head; whole sprites are hidden, with
+  no alpha filter, so no part shows through another. The starved lie still and pale, then
+  go; the old the same, slower and gentler; a kill is gone at once under a scuffle of
+  dust; the drowned sink blue, legs first, with bubbles and rings; the burnt char and go
+  under R4's ash; a blast takes them at once. Under the body lie its remains, pixel bones
+  drawn by the renderer (skull, vertebrae, ribs, pelvis, a faint stain) along the body in
+  the view's own scale: charred for the burnt, none for the drowned or the blasted, as
+  the sim leaves carrion. They stay whole for half a sim-day and fade in four steps over
+  the second half (at most 48 kept). An animal that landed from the sea is there at once,
+  under a splash of drops, with rings spreading in a wet patch round its feet that dries
+  in a few seconds; the ark's newcomers keep its light too. On the map the dot of the dead
+  only fades.
+- **The scrolls by lantern light** (`lantern` in `src/captions.ts`, the owner's choice,
+  2026-10-23). The chronicle's scroll and the name card are page elements over the canvas,
+  out of the tint's reach, so they are lit like a lantern from the atmosphere's light of
+  the moment (the eased light and the tint) and change as smoothly as the scene. By day
+  they are as painted. As the light falls the paper dims and warms toward candlelight
+  (×0.8, 0.62, 0.42 on the darkest night), with a touch of the sky's own hue (12 %: rose
+  at dusk, moonlit blue at night). In the end of a world the fires light it at least 0.7
+  of the way to candlelight and it takes 30 % of the sky's red. Every solid pixel of the
+  painting is multiplied by the same lamp, so the ink keeps its contrast with the paper;
+  the see-through shadow is left as it is. The lamp is kept in 64 steps a channel and a
+  scroll is repainted only when a step is crossed. `__captions()` and `__card()` give the
+  lamp. The dip between views is unchanged: it goes to dark anyway.
+- **The illuminated scroll** (`src/illumination.ts`, the owner's choice, 2026-10-23). The
+  chronicle's scroll stays parchment, unlike the name card, but is illuminated. Each entry
+  opens with a 15-art-pixel icon of its kind of event, from the chronicle's `kind`
+  (`ICON_OF_KIND`): a seedling for a new species, an egg for the first life, a medal for a
+  first, a skull for an extinction, a gravestone for the last creature, a red sun setting
+  over a dark sea for a world's end, an island rising for a new one, a boat for newcomers
+  landing, a crown for a record, a heart for a boom, an arrow down for a crash, footprints
+  for a migration, two islands for a split, a land bridge for a rejoin, a flame, a volcano,
+  broken ground for a quake, a meteor, the sun for any god power, a cake for an
+  anniversary, the moon for a dark age, a sunrise for the dawn after it, a quill for
+  anything else; hand-made bitmaps in the cosy palette, lit from the upper left, outlined in
+  the scroll's ink. The entry's first letter (or a number of up to three digits it opens
+  with) is an initial two lines tall: the scroll's hand doubled, knocked out in paper from
+  a square of the species' body colour as the herd draws it, or vermilion when the entry
+  names no species, with an ink frame, a lit and a shaded edge and gold corners. The date
+  is lettered in capitals on a red ribbon with notched tails pinned across the paper's top
+  edge. The text is in the scroll's hand (`HAND_FONT`: capitals 9 art pixels, lower case 6),
+  in balanced lines, two or three (an ellipsis beyond), the first two beside the initial;
+  the scroll is as wide as its longest line. Painted once per entry and per lantern step.
+  `__captions()` gives the kind, the icon and the initial's colour. (This replaces R3's
+  date in words above the entry and its four lines.)
+- **The place of an entry** (the owner, 2026-10-23). A chronicle entry carries a place
+  (cells; -1 for none) and a species. While a notable entry with a place is on the scroll,
+  from unrolling to rolled up, a small marker stands there (`src/marker.ts`): a rose
+  diamond ringed in the scroll's paper and ink, with a paper ring between ink bands
+  swelling from it every 1.6 s and fading by steps at the end, in whole art pixels over
+  the light and weather, a little larger closer in. It shows on the map, and in the middle
+  and local views when the place is in sight. In the local view the camera visits the
+  place (`Scene.place` in `src/director.ts`): it leaves the animal it follows, glides there
+  on a spring (period 2.4 s, critically damped, at most 16 cells a second; it dips and cuts
+  if the place is more than three views away) and holds; when the scroll rolls up it
+  glides, or cuts, back to the same animal and follows it again, the time on the animal
+  paused meanwhile. Entries are visited in turn; one that comes during a visit takes the
+  camera straight on. No visit during a dip, while a world ends, for an entry without a
+  place, or for an entry already out when the view arrives. The view button ends a visit
+  and steps the view as usual. `window.__camera()` reads motion `visit` or `return` and the
+  place visited.
+- **The name card** (`src/card.ts`, the owner's choices, 2026-10-22). While the local
+  view follows an animal, a small parchment scroll in the top-left corner (clear of the
+  chronicle's scroll at the foot) gives its species' name beside a swatch of its own body
+  and marking colours, a line of at most three words for its size, build and diet, and
+  pixel icons for what words do badly. Size goes by mass as drawn (a giant's doubled):
+  small below 0.7, large from 3, mid-sized between. Diet goes by the sim's own classes:
+  grazer up to 0.35, hunter from 0.65, omnivore between. Build is one word, the first
+  that applies: armoured (ARMOUR ≥ 0.55); finned, swift, sluggish or legless with no
+  legs; two-, six- or eight-legged; long-legged or short-legged on four legs by SPEED
+  (≥ 0.7, ≤ 0.2), the legs being drawn longer with speed. The icons, seven art pixels
+  square in the cosy palette: a drop for water-loving (AQUATIC ≥ 0.4), then one per rare
+  gene by its signature: fangs (venom), a warning sign, an up arrow (giant), an hourglass
+  (elder), a frog (gills), a snowflake (coat), a leaf (leaves) and a sparkle on night blue
+  (glow). The genome has no gene for night habits, so glow is the only night trait shown.
+  The card is a naturalist's field-guide card, not parchment (the owner, 2026-10-23: the
+  card and the chronicle's scroll different, both better): cream in a thin wooden frame lit
+  from the upper left, the species' name in cream on a sage heading band, and below it a
+  plate with a portrait of the animal itself. The portrait is the scene's own drawing
+  (`src/creatures/portrait.ts`): a creature layer of its own holds the one animal, with the
+  local view's body options and species plans, posed straight and facing right (curled up
+  if torpid, as small as it is if young), and draws it into a texture whose pixels the card
+  paints, at the zoom that fits it into 40 of the plate's 44 art pixels (never more than
+  three times its local size, the outline one art pixel). Each portrait is drawn once and
+  kept (eight at most) by a key that changes when the drawing would (`Herd.portraitOf`).
+  Beside the plate the trait words stand one to a ruled line, the icons under them. The
+  card slides in from the screen's left edge in 0.7 s once a dip is half clear, and back
+  out in 0.45 s when the view leaves the animal, turns to another, or visits the place of a
+  chronicle entry. `window.__card()` reads it out; the phone's follow-a-creature (S3)
+  shows the same card.
+- **Animals under the leaves** (2026-10-23, after the owner: "it still seems like they
+  walk over the bushes"). Plants and animals are drawn in rows by where they touch the
+  ground, as top-down games sort by the feet. That is right for Stardew's characters,
+  drawn from the side, but our animals are drawn from above: one overlapping a bush from
+  in front, or lying across one, looked as if it lay on top of the leaves. So every tree
+  and bush whose drawing overlaps an animal is drawn over it, whichever side of the plant
+  its feet are: the animal goes in the row before the first such plant
+  (`PlantLayer.over`, the drawing's own edges, young bushes too; grass, flowers and small
+  things keep to the rows of its feet). A bush's footprint is its whole drawing (an
+  ellipse 0.45 of its width and 0.4 of its height either side of its middle): a bush is a
+  low mound seen from above, so anywhere it covers an animal would be inside it, and an
+  animal goes round it instead; the leaves cover what it brushes in passing. Walking to
+  where the sim has it, an animal follows a way planned round trees and bushes (`route`
+  in `creatures/motion.ts`: an A* search over a grid of quarter cells about the start and
+  the goal, out to 8 cells, a step open where its body fits, pulled straight where places
+  see each other; a goal in a bush is moved to the nearest place beside it). A tree keeps
+  its trunk's footprint. There is no fade in front of the animal followed (the owner,
+  2026-10-24; `FADED` 1 leaves the code in place). Staged by hand to look at it: `window.__pin(id, x, y,
+  heading)` holds an animal at a place, `window.__send(id, x, y)` sends it somewhere (an
+  animal staged so ignores the sim's places for it from then on),
+  `window.__standing(x0, y0, x1, y1)` lists the trees and bushes in a box.
+- **Animals keep clear of trees and bushes.** Each tree and bush the plant layer builds
+  leaves a footprint: a tree's trunk with its roots (an ellipse 0.13 of the drawing's
+  width, half as deep as wide), a bush's whole drawing (above). The layer keeps
+  them by cell and answers whether a body of a given radius at a place overlaps one
+  (`PlantLayer.blocked`). Only plants already built count (in and near the view): an animal
+  far off walks as on open ground. Grass, flowers, stones, logs and sprouts are walked
+  through, and swimmers pass under mangroves. A walker's strolls pick goals whose way is
+  clear and stop before a plant. Its walk to where the sim has it steers round plants
+  (looking 0.6 of its length ahead, turning aside in eighths of a half-turn on the side it
+  last chose) and goes straight on only when there is no way round. Where the sim's place
+  lies in a wood or a bush, it is drawn at the nearest clear spot, a little further out so
+  that the tail fits; the sim's data is never changed. A paused animal whose tail lies in
+  a bush steps on, and one standing in a plant (one grew there) walks out.
+- **Legs step in turn** (`walk` in `src/spike/creatures.ts`). A legged body goes once
+  through a gait cycle for every 1.5 lengths of its shortest stepping leg it walks. Each
+  foot is in the air for 40 % of the cycle and stands still for the rest. The two feet of
+  a pair are half a cycle apart, and so are the same side's feet of neighbouring pairs:
+  diagonal feet swing together (alternating with one pair, a trot with two, tripods with
+  three), each pair 0.06 of a cycle after its partner in front. A swinging foot eases from
+  where it lifted to a point ahead of its rest by half of what the body walks while it
+  stands, drawn a little lifted toward the light; once down it does not slide. A body
+  creeping, turning or stopping still steps at least once in 0.8 s while a foot is in the
+  air or out of place, so it comes to rest with every foot under it. A foot far from its
+  place (a body moved, or back in view) is put there. Flippers still row on their own
+  stroke.
+- **No body folds through itself.** The chain (`followChain`) keeps each joint within a
+  bend set by the kind of body: a total from head to tail (`BODY_BEND`: worm, snake and eel
+  about 3 rad, curving into a U; newt and lizard 2; fish 1.4; beast 1; the shelled, short
+  and many-legged 0.3–0.8), shared evenly among the joints. The head turns at most 0.6 rad
+  from the body behind it (`NECK_TURN`). A long body walks a turn as an arc, never tighter
+  than `spacing / sin(NECK_TURN)`; a goal inside that circle stops a stroll short, and a
+  walk back to the anchor goes on ahead until it can turn. The short and stiff (hopper,
+  insect, tortoise, beetle, spider, crab) turn on the spot about their middle joint.
+  Looking about during a pause turns the head, not the body. A torpid animal still lies
+  curled; waking, its body straightens over about a tenth of a second.
+- **Eating** (`creatures/eating.ts`, the owner's first animation, 2026-10-23). The stream
+  says who ate plants or algae and who ate meat in the sim's last tick (`grazing`,
+  `feeding`; about half the animals graze at any moment, a kill or carrion now and then).
+  One that eats stands where it is, no stroll and no looking about, and its head works: a
+  grazer reaches to the ground in nibbles, three and a pause to chew, a flake of green at
+  its mouth every second one; one feeding on meat tugs from side to side and back, a
+  fleck of red now and then. The head is moved for the drawing only, the neck half as
+  far so that it stays on; the chain the body follows is left as it was. The flecks are
+  three art pixels, pooled (48), rising and fading in 0.45 s. `window.__feed(id, food)`
+  sets an animal eating by hand for staging.
+- **Hunting** (`creatures/hunting.ts`, the owner's second animation, 2026-10-24). A death
+  `by` a hunter that still lives is shown as the end of a hunt in the view on screen. The
+  sim's hunter stalked its prey over the hours between two messages, which the scene
+  cannot replay, so the hunter runs to where its prey was last drawn: at least 2.5 times
+  its walking pace, for 0.4 to 1.2 s, round trees and bushes as any walk is. It stops half
+  its length short (crouching facing the prey if early), then springs, its head going at
+  the prey's nearest joint quicker and quicker for 0.32 s, thrust a spacing ahead, puffs
+  of dust from its hind feet. At the strike the prey dies as a kill does; until then it
+  stands, and its remains wait with it. A hunter more than 12 cells off, torpid, arriving,
+  staged by hand, or on the map does not hunt: the prey dies at once. Afterwards the
+  hunter goes to where the sim has it. `window.__hunt(hunter, prey)` stages a hunt.
+- **Births** (`creatures/nursery.ts`). A newborn whose mother the stream names (`parent`)
+  comes into being beside her head, facing her, where its whole body is clear of trees
+  and bushes (ahead of her first, then more and more to either side); the rest of a brood
+  lie beside it. She stands over them 2.6 s and lowers her head to them twice while three
+  pixel hearts rise. A mother of large broods (`BROOD` of 3 or more young) lays: each
+  young is first an egg on dry land that rocks, cracks and after 1.6 s comes apart, bits
+  of shell thrown off. Anything that does not fit (the map, the mother torpid or busy, no
+  room) fades in where the sim put it, as before. `window.__birth(mother, child, egg?)`.
+- **Sleep at night** (`creatures/sleep.ts`). Drawn only: the sim does not sleep. As the
+  light goes (depth = 1 − daylight) each animal lies down at its own moment, from a hash
+  of its genome, between depths 0.45 and 0.9; it wakes 0.12 below its moment, and none
+  lies down while the light rises. Animals with glow, with SENSE ≥ 0.8, and swimmers stay
+  up. A sleeper eases over 1.6 s into a curl as far as its body bends (1.8 times its
+  walking bend, at most 0.6 turns), feet tucked to 0.3 of their reach, eyes shut to a
+  one-pixel slit, breathing 1.8 times slower and 1.6 times deeper. It lies down only
+  paused and dry, and does not eat lying. Moved two leashes off by the sim, or reached by
+  the water, it is up in 0.3 s and walks, and stays up 3–7 s. A small "z" rises over the
+  animal followed every 2.4 s. A hunter, or a mother tending her young, does not lie
+  down. `window.__sleep(id)`.
+- **Small life about the island** (`atmosphere/ambient.ts`). Decoration only, on its own
+  random stream (seed + 3), pooled sprites, never in rain, on the map or in a world's
+  end: fireflies (12 in the middle view, 8 in the local) over grass and shrub at night,
+  stepped warm-green glows added over the tint, blinking half of a 2.2–4.6 s cycle; pale
+  puffs of dust from the hind feet of an animal hurrying on dry land; by day a V of one to
+  four pale gulls crossing the middle view every 25–70 s, with a faint shadow; in spring
+  and summer three butterflies over the local view's meadows (grass with biomass ≥ 128).
+  `window.__ambient()`.
+- **Plants in the wind** (`plants/wind.ts`). Grass, flowers, ferns, reeds, bushes and the
+  crowns of trees lean with the wind by whole art pixels. A drawing that bends is drawn
+  again leaning one pixel against the wind and one to three with it: its rows slide
+  sideways, none below a hinge (the trunk, the foot of a tuft), more toward the top, and
+  above its stiff height (a crown, a bush's top) all as one piece, so nothing smears and
+  trunks stay put. These drawings are made the first time a plant built in view needs
+  them, into pages of their own (one 2048×1024 page holds the local view's), and
+  `PlantLayer.blow` swaps each visible plant's drawing when its lean changes (≤ 0.2 ms a
+  frame on the PC). The wind is a steady breeze, gusts rolling east-south-east at 2.2
+  cells a second (value noise 7 cells long, 5 wide) and a ripple rolling with them, so
+  neighbours move together. It blows harder in rain (+0.9) and in a thunderstorm (+1.5),
+  eased with the rain, and up to 30 % softer at night (`Atmosphere.wind`). A tall tree
+  leans at most three pixels, a tuft at most a fifth of its height; the middle view's
+  plants move little. With `?still` everything stands straight. Stones, logs, mushrooms,
+  stumps, snags and mangrove roots do not move. A bush drawn in pieces leans as its whole
+  drawing would: each piece slides by the lean at the height of its middle, every piece of
+  a bush in step.
+- **Bushes in pieces** (`plants/pieces.ts`, the owner's choice, 2026-10-24: the default;
+  `?bushes=whole` draws them whole, to compare; no fade in front of the animal followed). Each puff of a local-view bush is a sprite of its own, cut from the
+  same drawing (each pixel to the puff painted last over it, else the nearest), so a bush
+  with no animal near looks as before. A piece is sorted by its puff's foot and keeps a
+  footprint of its own (0.85 of its radius across, 0.5 deep): together they block the
+  lower two-thirds of the bush, so animals pass behind its top puffs and between bushes.
+  A piece is over an animal only where a joint of the animal is behind its foot and under
+  its drawing. Trees, sprouts and fire pines stay whole.
+- **Autumn leaves** (`atmosphere/leaves.ts`, drawn only). In autumn the plant layer marks
+  the crown of each broadleaf (none with `EVERGREEN` enough to keep its leaves, no conifer)
+  with the colours it has turned (`crownAt`); leaves come loose where the plants' gust
+  lets one go, so a wood drops more than a lone tree, late autumn more than early, storms
+  more than calm. They fall on the wind, sorted among the plants by where they land, a
+  pixel in the middle view, the plants' two-pixel texels up close; none on the map.
+- **Animals in the rain** (`creatures/weather.ts`, drawn only). When a rain spell ends each
+  animal out in it shakes once, at its own moment (its breathing offset), with a spray of
+  drops; in a thunderstorm animals hunch (parts lower, feet in, head back, shorter and
+  slower steps). No dust is raised in rain or while a world ends.
+- **Rare genes in action** (drawn only, from the signatures already on the wire). A
+  photosynthesiser standing in daylight on dry land under a clear sky spreads out flat to
+  the sun, a glint of light on its back now and then (`creatures/basking.ts`, the
+  atmosphere's `overcastNow`); a venomous hunter's strike adds a lime flash, drips and
+  green wisps (`venom.ts`, `remains.ts`); a swimmer, or an animal with gills in the water,
+  leaves a V of foam while it moves (`wake.ts`). All are pooled marks of whole art pixels
+  (`sparks.ts`), timed from the scene's clock and each animal's offset, with no random
+  draws. `window.__grant(id, look)` stages one.
+- **Family life** (`creatures/family.ts`, drawn only). The scene remembers the mother of
+  each young animal it sees born (`born[].parent`) until it comes of age or either dies.
+  While the sim has them within 3 cells, the young one's strolls make for a spot behind
+  her tail and to one side, trotting to catch up, kept within its leash of where the sim
+  has it (`motion.trail`); a brood trails in a line. At a birth the nearest grown one of
+  her kind comes to the side of her head and their heads touch for 1.4 s under two
+  hearts, then the young are born. Young pass through each other and their mother's legs.
+- **Wet feet at high tide.** The swash runs up the beach in the shore's shader, so
+  `Landscape.swashCovers(x, y)` replays it: the tide's level (`tideLevel`, shared with the
+  shader), the place's own wave (`tidePhase`), up for 0.3 of a wave and back by 0.8
+  (`swashUp`), and the water no further off than that. A walker it covers is "feet" in
+  `wading.ts`: its legs tinted by the shallowest sea's blue for the moment, a ring round
+  them, no slower; it does not move away (the owner, 2026-10-23). `window.__swash(x, y)`
+  reads it out.
+- **Nothing stands on the water.** A plant's foot must be on the land as painted (heights
+  between cells, `heightAt`, as animals read them) and as far from the waterline as the
+  swash runs up the beach at high tide in that view; otherwise it, and its shadow, is left
+  out.
+- **The young.** `creatures` carries `young` ([id, sixteenths grown]); a newborn is half
+  its grown length with its head 35 % larger for its body, redrawn at each sixteenth.
+
+### Measuring the scene on the device (R5)
+
+The R0 spike's role passes to the real page. `index.html?bench` (`src/bench.ts`,
+scenarios in `src/benchplan.ts`) plays the committed creatures' recording
+(`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), there being no server yet,
+and measures eleven scenarios, each on a fresh page load (the first load plans where the
+pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
+never `?film`'s. A scenario is measured only once the view it measures is painted, for
+20 s, with the sim-day held as on the desk (`Landscape.holdDay`; the recording is played
+1800 times as fast); the tenth, `day-turn`, has a new land come in its window (the latest
+sent again a day later: a day without one is no longer laid out) and is reported, not
+judged (the owner, 2026-10-27). A frame probe (`src/frameprobe.ts`) times each frame's
+phases (messages, director, landscape, herd, atmosphere, overlays, render) and notes what
+happened in it (a message's type, a portrait drawn, a ground piece placed, a lay-out,
+plants built, shadows); each scenario's `probe` gives the phases' median and p99, the
+late frames by the phase that took most of them (or "outside": garbage collection, the
+GPU), what they held, and the five worst; `kiosk_bench.py` prints the late frames' causes.
+
+**What the frames cost on the board** (R5, ADR 0022 "The board"). The page's own work
+decides the frame rate, not the GPU. So: PixiJS's draw list is rebuilt only where
+something changed (effects that show and hide sprites each frame in render groups of
+their own; the plant rows in bands of four cells, each a render group; what stands among
+the plants moved in its row only when its order changes; the grey under cloud given the
+canvas as its filter area); an animal is posed again only when what it is posed from
+changed, but for its breathing chest; out of sight it lives one frame in three; in the
+middle view an animal in sight is posed two frames in three (the owner); objects are not
+made per animal per frame where they can be reused. After the review of the pipeline
+(`docs/renderer-performance-review.md`, every change pixel for pixel the same): what
+stands over an animal is asked of the plants again only when the animal moved or the
+plants changed (built, a bush's piece slid in the wind); the plants are culled and blown
+only in the view shown, and only plants whose lean can reach a whole pixel are blown;
+transforms, the grade and the sea's shore uniforms are written only when they change; a
+rolling scroll is repainted only when its paper moves a pixel; the ground's pieces go to
+the GPU from the painter's pixels, with no canvas between; a fire's sprites keep their
+places in their pools when one is passed over, its tints are written only when they
+change, and it makes no objects per cell per frame. Then (the optimization plan,
+`docs/renderer-optimization-plan.md`): the card's portrait is drawn in the dark of the
+dip, read back from the GPU without waiting for it (a pixel-pack buffer and a fence,
+WebGL2; at once for films and stills), and drawn once rather than measured first when only
+its colours changed; the painters work out a pixel's season only in a turn, and in a calm
+view add only the kinds of cover around a pixel (8–13 % faster, every painting the same);
+a piece's margin of a cell, painted so that its shore meets its neighbours' and then cut
+off, is painted only as land or sea past a rim of 8 pixels the detail's drawings may
+reach in from (`GroundOptions.shown`; a local piece some 35–40 % faster again, every
+pixel shown the same over the whole island); a land's cells are worked out once, not for
+each piece. And the colour pass, three quarters of a painting, is done on the GPU
+(`terrain/gpuground.ts`, the owner's choice: the same to the eye, not to the byte): each
+painter worker has a WebGL2 context of its own (an `OffscreenCanvas`), draws the pass with
+one fragment shader written from the same constants as the CPU's loop, reads it back in
+the worker, and does the passes after it on the CPU as before; 2 or 3 pixels of 65 536
+come out otherwise, on the edge of a threshold. The CPU paints it all where a worker has
+no WebGL2, in tests and with `?painter=cpu`; kept paintings are stamped `gpu` or `cpu`;
+the benchmark counts the paintings made each way (`ground_made`).
+
+| Scenario | View | What it measures |
+|---|---|---|
+| `map` | map (director) | the whole island, every animal a dot |
+| `middle` | middle (button once) | the drifting middle view |
+| `middle-crowd` | middle, pinned | the window with the most animals in sight |
+| `local` | local (button twice) | following an animal |
+| `night` | middle, crowd | the moonlit tint and the glow pass, every animal made a glow carrier |
+| `rain` | middle, crowd | rain at full strength under grey cloud |
+| `fire` | middle, most fuel | 300 burning cells under the thunderstorm that lit them |
+| `apocalypse` | map | the world's end moved into the flood, repainted 10 times a second |
+| `shore` | local, pinned | the most coast a local view shows: the tide's shader |
+| `day-turn` | middle, crowd | a new land coming while it is measured (reported, not judged) |
+| `switches` | map, then the button | two rounds of the views, each press timed until its ground is in (reported) |
+
+The first four are judged (ADR 0010): 30 fps median with 0.5 fps of slack. On the board
+the kiosk is capped at 30 fps (ADR 0022) and Chromium has no flag for that, so the page
+caps itself (`?cap=30`, `src/framecap.ts`): it drives Pixi's ticker from its own
+animation-frame loop and draws every other refresh of a 60 Hz screen. Besides the median
+and the 1 % low, each scenario reports the share of frames over budget (more than 33.3 + 2
+ms after the one before), the headroom the page's script leaves of the 33.3 ms (median and
+p99; GPU time is not in it), draw calls and sprites a frame, textures, JS heap, animals
+alive and in sight, and the atmosphere's counts. `tools/kiosk_bench.py` runs it by default
+(`--fps-cap 30`); the R0 spike stays at `--page spike.html`. The desk's build
+(`npm run build:kiosk`) compiles the demo paths out, takes `ws://<host>/stream` by
+default, and keeps `?bench` as its one way off the server, so the board is measured on the
+build it runs. On this PC (SwiftShader, loaded) the four judged views hold the cap: 30.0
+fps median, 29.9 at the 1 % low, no frame over budget, 0.8–2 ms of script a frame.
+
+**Loading the views** (R5, 2026-10-30; the owner: the map "really fast", each view in
+about 3 s, a goal rather than a requirement, then "we just have to mask the load times").
+What a change of view waited for, and what now happens ahead of it, live only (films and
+stills draw their choices when they always did):
+
+- *The ground kept.* Each painting tells where its time went (`paintSteps`, the cache's
+  read and write; the benchmark's `ground_timing.steps_median`). A piece not kept is known
+  at once from a list of the names kept, shared by the painters (`BroadcastChannel`), and
+  the store is written without a flush per piece; a piece no burnt cell reaches skips the
+  burnt ground's pass. The map's painting is kept as the pieces are, and at a start the
+  latest kept shows while today's comes. A painter makes its shader when it first needs it
+  or when idle, not before answering from the cache.
+- *The plants' sheets.* Drawn once per build and palette and kept between page loads
+  (`plants/artcache.ts`). The views not shown are laid out in the background: their sheet
+  drawn, coloured and packed into pages in a worker (`plants/standing.ts`,
+  `standing.worker.ts`; the pure drawing code is there, `plants.ts` keeps Pixi's side),
+  handed back as bitmaps, then the view laid out (`Landscape.prepareAhead`).
+- *Where the next view opens.* The middle view's place and the local view's animal are
+  chosen ahead (`Director.upcomingMiddle`, `upcoming`), and the ground there is painted
+  and kept for the view the button leads to next and, behind it, the one after. A piece's
+  shadows are worked out when a painter takes it up (`Painter.paint`'s `later`), not for
+  every piece asked at once.
+- *The animals.* The first creatures message (about 200 animals in two layers) is placed
+  a little each frame (`Herd.spreadPlacing`), the rest of a layer when its view comes on.
+
+The benchmark's `switches` scenario presses round the views twice from the moment the
+map is painted, timing each press until its ground is in, and each page notes when it got
+going (`boot`). On the board, with what earlier runs kept: the map painted 2.0–3.3 s after
+the page starts; every switch after the first round 1.1–1.5 s, a second of it the iris;
+the first round, pressed straight after a start, 3–5 s, spent behind the iris's ring.
+
+The file the board writes becomes `reports/R5-device/` through `tools.report R5`
+(`tools/milestones/r5.py`), the evidence file kept in the report as R0's is. The report
+judges the best profile, the one the kiosk would run (among those holding the cap, the
+fewest frames over budget, then the least CPU). R5.1: the four views hold the cap (the
+lowest median ≥ 29.5 fps). R5.2: frames over budget in them ≤ 5 %. R5.3: Chromium's peak
+PSS over the run ≤ 800 MB, which leaves the simulation and server their 300 MB of the
+board's 2 GB (§4.8) with room for the system (R0's spike took about 540 MB). R5.4:
+measured as specified: the ARM board, kiosk on the 7" screen at exactly 1024×600 (ADR
+0022: no stand-in display), the desk's build, capped at 30. The atmosphere's five
+scenarios, the 1 % low, headroom, script time, CPU, temperature and GPU hangs (the
+kernel's `gpu sched timeout` lines counted by the runner before and after each profile,
+where the log can be read) are reported without a band. A file from a PC builds a report
+marked as not the measurement. The bands were confirmed by the owner on 2026-10-23.
+
+### The showcase (R6; begun in R5)
+
+The owner asked for "a demo/showcase of the whole thing ... almost like a trailer, with text
+that describes what is being shown", run on the board itself. `index.html?showcase`
+(`src/showcase/`, kept in the desk's build like the benchmark) plays the creatures'
+recording and tours the scene in thirteen acts, about three minutes a loop, looping
+without reloading: the island's title over the map; the middle view drifting over coasts
+and woods; an animal followed among bushes, its card in the corner; grazing and a hunt; a
+pair touching heads, an egg, the young trailing their mother; the rare genes (basking, a
+venom strike, a swimmer's wake); autumn up close, then snow falling and settling on the
+high ground and lower; rain, the sun back and the animals shaking it off, a thunderstorm;
+night falling over the herd over nine seconds; the meteor, the seed and the ark, each in a
+place of its own; a chronicle entry; the world's end played twelve times as fast; an end
+card ("LINEAGE", "Orange Pi Zero 2W – 7-inch screen – 30 fps"). `script.ts` is the
+timeline (acts, seconds, captions), `showcase.ts` the director: it stages each act with
+the films' hooks (animals put, sent, fed, set hunting, born; rare genes granted), the
+atmosphere's demo light, weather and powers and its own sky, seasons and snow (the clock
+and the land rewritten), and points the camera (shots kept inside the world, as the
+director's). Each cut fades out over 0.6 s and in over 0.8 s, eased, the caption in after
+the picture and out before it, on the showcase's own clock (so a film of it is the same);
+at a cut it waits in the dark until the ground of the next shot is painted, and paints the
+next shot's ground ahead while an act plays. `overlay.ts` writes the caption on a ribbon
+in the scroll's hand and the title in large letters; `meter.ts` counts frames for the
+counter in the top-right corner (`?fps`) and reports every frame's interval, by act, to
+`tools/showcase.py` (`?post=`), which runs it on the board and sums it up on Ctrl+C
+(`deploy/README.md`). Filmed on the PC (`?showcase&film`) it is the README's trailer.
+
 ## What the spike stands in for
+
+(R5: the real scene no longer imports from `src/spike/`. The creature layer is
+`creatures/layer.ts`, its atlas `creatures/atlas.ts`, land and water for walkers and
+swimmers `creatures/habitat.ts`, the animal to draw `creatures/seed.ts`, and the views'
+sizes `creatures/views.ts`. The spike's pages, look sheets and benchmark import them from
+there.)
 
 - **The state stream.** The spike loads a fixture written by `tools/replay.py`
   (`lineage-spike-fixture/5`): the heights, cover and biomass of a save's world, the

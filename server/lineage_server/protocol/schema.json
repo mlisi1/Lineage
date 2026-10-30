@@ -351,12 +351,86 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 65535
+              },
+              "parent": {
+                "description": "The mother it was born to on the island since the last creatures message (R5: drawn beside her; a clone's only parent). Absent for those not born since (on connect, landed, older streams).",
+                "type": "integer",
+                "minimum": 0
               }
             }
           }
         },
         "torpid": {
           "description": "Ids of the creatures that are torpid now (hibernating, lying still: M7). Absent before rare genes exist.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "young": {
+          "description": "The creatures not yet of age (R5): id and how far grown toward coming of age, in sixteenths (0 newborn, 15 nearly grown). Those absent are grown. Absent from streams recorded before R5.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "died": {
+          "description": "The creatures sent before that died since the last creatures message, and of what (R5): starved, old_age, killed (by a hunter), drowned, burnt (in a fire) or blast (a meteor, a cone or crater rising under it). Absent when none died, and from streams recorded before R5's deaths.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "cause"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cause": {
+                "type": "string",
+                "enum": [
+                  "starved",
+                  "old_age",
+                  "killed",
+                  "drowned",
+                  "burnt",
+                  "blast"
+                ]
+              },
+              "by": {
+                "description": "The hunter that killed it (R5: drawn running to it and striking), when the cause is killed. Absent for other causes, a blast, and from streams recorded before.",
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "landed": {
+          "description": "The creatures among `ids` that landed from the sea since the last creatures message (R5): founders, strangers, the ark's. Absent when none did, and from streams recorded before R5's arrivals.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "grazing": {
+          "description": "Ids of the creatures that ate plants or algae in the last tick (R5: drawn grazing). Absent from streams recorded before.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "feeding": {
+          "description": "Ids of the creatures that ate meat, a kill or carrion, in the last tick (R5: drawn feeding). Absent from streams recorded before.",
           "type": "array",
           "items": {
             "type": "integer"

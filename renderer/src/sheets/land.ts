@@ -17,7 +17,7 @@ import { groundSeasons, later, type YearTime } from "../plants/turning";
 import { MAP_TILE, MID_TILE, paintGround, type GroundOptions } from "../terrain/ground";
 import type { CellRect, Land } from "../terrain/land";
 import { parseFixture, type WorldFixture } from "../spike/fixture";
-import { heightAt } from "../spike/habitat";
+import { heightAt } from "../creatures/habitat";
 import { GROUND, LOCAL_PIXELS, MAP_GROUND } from "../spike/proposal";
 import { findSite, forest, meadow, shore } from "../spike/sites";
 import { Stage, type Picture } from "../spike/stage";

@@ -4,8 +4,8 @@
  * A stand-in until the state stream and its protocol exist (R1).
  */
 
-import { lookOf, type Look } from "../creatures/body";
-import { GENE_NAMES, type Genome } from "../creatures/genome";
+import { lookOf } from "../creatures/body";
+import { GENE_NAMES } from "../creatures/genome";
 import { parsePhenotypeConfig, phenotype, type PhenotypeConfig } from "../creatures/phenotype";
 import {
   parseRareConfig,
@@ -24,19 +24,8 @@ export type Ramp = readonly [string, string, string];
  * A creature as the sim describes it: where it is and its genome; and its look, which the
  * renderer derives from the genome with the sim's config.
  */
-export interface CreatureSeed extends Look {
-  x: number;
-  y: number;
-  genome: Genome;
-  /** Its species as the sim has it, 0 for none yet (specimens, newcomers). */
-  species: number;
-  /** Its rare-gene slots (bits), as the sim has them. */
-  slots: number;
-  /** Lying torpid (a hibernator in winter or long darkness): curled up, still. */
-  torpid: boolean;
-  /** Cells it is kept within, when a picture wants it to stay in frame; the sim sets none. */
-  pen?: { x0: number; y0: number; x1: number; y1: number };
-}
+export type { CreatureSeed } from "../creatures/seed";
+import type { CreatureSeed } from "../creatures/seed";
 
 /** Creatures chosen to show the range of bodies; the look sheet places them itself. */
 export interface Cast {

@@ -146,6 +146,30 @@ class CreaturesArrived(OutputEvent):
 
 
 @dataclass(frozen=True)
+class CreaturesDied(OutputEvent):
+    """Creatures died in one tick (R5: the scene shows each death by its cause). Each id in
+    ``ids`` died of the cause at the same place in ``causes``: ``starved``, ``old_age``,
+    ``killed`` (by a hunter), ``drowned``, ``burnt`` or ``blast`` (a meteor, or a cone or
+    crater rising under it)."""
+
+    ids: tuple[int, ...]
+    causes: tuple[str, ...]
+    #: For each id, the hunter that killed it (R5: the scene shows the hunt), -1 for a death
+    #: of another cause or a blast's; empty from callers that do not say.
+    killers: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class CreaturesBorn(OutputEvent):
+    """Creatures were born on the island in one tick (R5: the scene shows each beside its
+    parent). Each id in ``ids`` was born to the mother (the parent whose place and learned
+    preferences it takes; a clone's only parent) at the same place in ``parents``."""
+
+    ids: tuple[int, ...]
+    parents: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class PopulationExtinct(OutputEvent):
     """The last creature died."""
 

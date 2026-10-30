@@ -57,11 +57,11 @@ const isWood = (ink: number): boolean =>
  * Outline everything drawn, on its outside: every clear pixel next to a drawn one takes
  * the outline of what it is next to (wood's if any wood, else the leaves').
  */
-export function rimAll(art: PlantArt): void {
+export function rimAll(art: PlantArt, fromRow = 0): void {
   const rim: [number, Ink][] = [];
   const at = (x: number, y: number): number =>
     x >= 0 && y >= 0 && x < art.width && y < art.height ? (art.ink[y * art.width + x] ?? 0) : 0;
-  for (let y = 0; y < art.height; y++) {
+  for (let y = fromRow; y < art.height; y++) {
     for (let x = 0; x < art.width; x++) {
       if (at(x, y) !== INK.none) continue;
       const near = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)].filter(
@@ -76,7 +76,7 @@ export function rimAll(art: PlantArt): void {
 
 /** A puff's rim has this many scallops for each pixel of its radius, and bulges this much. */
 const SCALLOPS_PER_PIXEL = 0.9;
-const SCALLOP = 0.1;
+export const SCALLOP = 0.1;
 /** From this radius a puff carries flecks of leaves. */
 const FLECKS_FROM = 4;
 /** Where a puff's highlight is: this share of its radius toward the light. */
@@ -379,7 +379,10 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
         puffs.push({ x: width * (0.64 + 0.06 * random()), y: up + r * 0.2, r: r * 0.85 });
     }
     pile(art, puffs, width / 2, height / 2, salt);
-    settle(art, height);
+    const down = settle(art, height);
+    // Where each puff ended up, in the drawing's pixels, for drawing the bush in pieces.
+    const margin = (art.width - width) / 2;
+    art.puffs = puffs.map((p) => ({ x: p.x + margin, y: p.y + margin + down, r: p.r }));
     if (sprout) {
       // Too young to flower or fruit.
     } else if (look.season === "spring") {
@@ -395,16 +398,34 @@ export function cosyBush(size: Size, random: Random, salt: number, look: Standin
   return art;
 }
 
+/** Kinds of tuft, by variant: a W of short spikes, a fuller clump, spikes bent by the wind. */
+const TUFT_SHAPES = ["sprig", "clump", "bent"] as const;
+/** A tuft is this share of the scale's size (R5: a third of a cell up close, as in the references). */
+const TUFT_SHRINK = [0.5, 0.62] as const;
+/** A tuft is never taller than this share of its width. */
+const TUFT_TALL = 0.7;
+
 /**
- * A tuft of grass: broad blades that fan out from the foot, dark at the root and light
- * at the tip, outlined. In seed its tallest blades carry a head of the accent; flat, it
- * has been pressed down by winter. Too small for blades of two pixels (the middle view),
- * it is a few strokes, unoutlined.
+ * A tuft of grass after pixel-art grass (R5, the owner: "grass blades are still not
+ * there"; references: The Minish Cap's fields and the grass tutorials that follow it).
+ * Grass is a texture of small tufts, not things standing on it: a few short spikes from
+ * a shared foot, dark at the foot and light at the tips, with no outline, scattered
+ * thickly. By `variant`: a W of three to five spikes, a fuller clump (two Ws, one behind
+ * the other), or spikes bent one way by the wind; every other three variants mirrored. In seed the tallest tips carry the accent; flat, it has been pressed
+ * down by winter. Too small for spikes of two pixels (the middle view), it is a few
+ * strokes.
  */
-export function cosyTuft(size: Size, random: Random, seeding = false, flat = false): PlantArt {
-  const [width, height] = size;
-  const art = blank(width, height);
-  if (width < 12) {
+export function cosyTuft(
+  size: Size,
+  random: Random,
+  seeding = false,
+  flat = false,
+  variant = 0,
+): PlantArt {
+  const mirrored = Math.floor(variant / TUFT_SHAPES.length) % 2 === 1;
+  if (size[0] < 12) {
+    const [width, height] = size;
+    const art = blank(width, height);
     // A small fan: a stroke up the middle, one leaning out to each side.
     const middle = Math.floor(width / 2);
     for (const [dx, tall, ink] of [
@@ -423,40 +444,80 @@ export function cosyTuft(size: Size, random: Random, seeding = false, flat = fal
         );
       }
     }
+    if (mirrored) mirror(art);
     return art;
   }
-  const blades = Math.max(4, Math.round(width / (flat ? 4 : 3.5)));
-  for (let k = 0; k < blades; k++) {
-    const spread = (k + 0.5) / blades - 0.5;
-    // Pressed by winter, a tuft is short stubble, a little bent, not a fan laid flat.
-    const lean = spread * width * (flat ? 0.35 : 0.9) + (random() - 0.5) * 2;
-    const tall =
-      height *
-      (flat
-        ? 0.38 + 0.18 * random()
-        : 0.6 + 0.4 * (1 - 2 * Math.abs(spread)) * (0.75 + 0.25 * random()));
-    const root = width / 2 + spread * width * 0.3;
-    for (let t = 0; t < tall; t++) {
-      const along = t / tall;
-      const x = root + lean * along * along;
-      const y = height - 1 - t;
-      const head = seeding && along > 0.78 && tall > height * 0.7;
-      const ink: Ink = head
-        ? along > 0.9
-          ? INK.accent
-          : INK.accentDark
-        : along > 0.78
-          ? INK.light
-          : along < 0.3
-            ? INK.dark
-            : INK.mid;
-      put(art, x, y, ink);
-      // Broad below, a pixel wide toward the tip; the side away from the light darker.
-      if (along < 0.55) put(art, x + (spread < 0 ? 1 : -1), y, along < 0.25 ? INK.deep : INK.dark);
+  const width = Math.max(5, Math.round(size[0] * TUFT_SHRINK[0]));
+  // A large tuft grows wider more than taller, so that its spikes do not turn to long lines.
+  const height = Math.max(
+    4,
+    Math.round(Math.min(size[1] * TUFT_SHRINK[1], width * TUFT_TALL) * (flat ? 0.6 : 1)),
+  );
+  /** Spikes in a W as wide as `wide`: one for about every three pixels. */
+  const spikesFor = (wide: number): number =>
+    Math.min(Math.max(Math.round(wide / 3.2 + random()), 3), 7);
+  const art = blank(width, height);
+  const shape = TUFT_SHAPES[variant % TUFT_SHAPES.length] ?? "sprig";
+  /** A W of `spikes` from a foot at `foot` (row from the bottom), `wide` pixels across, rising `tall`. */
+  const sprig = (spikes: number, wide: number, tall: number, foot: number, bend: number): void => {
+    const middle = (width - 1) / 2;
+    for (let k = 0; k < spikes; k++) {
+      const share = spikes === 1 ? 0 : k / (spikes - 1) - 0.5;
+      // From a narrow foot the spikes fan out in a V, the middle ones the tallest.
+      const root = middle + share * wide * 0.3;
+      const spread = share * wide * (flat ? 0.5 : 0.75) + bend;
+      const rise = Math.max(
+        2,
+        Math.round(tall * (0.55 + 0.45 * (1 - Math.abs(share) * 2)) * (0.8 + 0.2 * random())),
+      );
+      for (let t = 0; t < rise; t++) {
+        const along = t / Math.max(rise - 1, 1);
+        const x = Math.round(root + spread * along);
+        const y = height - 1 - foot - t;
+        const tip = t === rise - 1;
+        const ink: Ink = tip
+          ? seeding && rise >= tall * 0.8
+            ? INK.accent
+            : INK.bright
+          : along >= 0.6
+            ? INK.light
+            : t === 0
+              ? INK.deep
+              : INK.dark;
+        put(art, x, y, ink);
+      }
+    }
+  };
+  const tall = height - 1;
+  if (shape === "clump") {
+    // Two sprigs, the one behind higher and lighter at the tips, the one in front lower.
+    sprig(spikesFor(width * 0.8) + 1, Math.round(width * 0.8), tall, 1, 0);
+    sprig(
+      spikesFor(width * 0.6),
+      Math.round(width * 0.6),
+      Math.max(2, Math.round(tall * 0.6)),
+      0,
+      0,
+    );
+  } else if (shape === "bent") {
+    sprig(spikesFor(width * 0.7), Math.round(width * 0.7), tall, 0, 1.5);
+  } else {
+    sprig(spikesFor(width * 0.85), Math.round(width * 0.85), tall, 0, 0);
+  }
+  if (mirrored) mirror(art);
+  return art;
+}
+
+/** Flip a drawing left to right. */
+function mirror(art: PlantArt): void {
+  for (let y = 0; y < art.height; y++) {
+    const row = y * art.width;
+    for (let x = 0; x < art.width / 2; x++) {
+      const left = art.ink[row + x] ?? 0;
+      art.ink[row + x] = art.ink[row + art.width - 1 - x] ?? 0;
+      art.ink[row + art.width - 1 - x] = left;
     }
   }
-  rimAll(art);
-  return art;
 }
 
 /** The small things of the local view, as before, each outlined. */

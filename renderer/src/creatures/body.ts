@@ -22,6 +22,7 @@
 import * as cosy from "../palette";
 import { geneOf, type Genome } from "./genome";
 import type { RareLook } from "./rare";
+import type { Colours } from "./colours";
 import type { Phenotype } from "./phenotype";
 
 /** What a body is drawn from: derived values of its phenotype, then the genes that show. */
@@ -42,6 +43,13 @@ export interface Look {
   pattern: number;
   /** Rare genes it carries, by signature (`rare.ts`); none if left out. */
   rare?: readonly RareLook[];
+  /**
+   * Its colours from its genes ranked among its species' (R5, `colours.ts`); left out,
+   * the body is its HUE at the style's saturation and the markings follow PATTERN.
+   */
+  colours?: Colours;
+  /** How far grown toward coming of age, 0–1 (R5); left out, grown. */
+  growth?: number;
 }
 
 /** The look of a creature with this genome and the body the phenotype derives from it. */
@@ -374,6 +382,10 @@ export const GLOW_SPOT = 0xdcffb4;
 const GROUND_SHADOW_LONG = 1.0;
 const GROUND_SHADOW_WIDE = 2.0;
 
+/** A newborn is this share of its grown length, its head this much larger for it. */
+const YOUNG_SIZE = 0.5;
+const YOUNG_HEAD = 0.35;
+
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 const clamp01 = (value: number): number => Math.min(Math.max(value, 0), 1);
 /** 0 at `from`, 1 at full gene value. */
@@ -561,11 +573,29 @@ export function bodyPlan(
   kind: Kind = kindOf(input),
 ): BodyPlan {
   const rare = new Set<RareLook>(input.rare ?? []);
+  // With colours from its genes, every part drawn in its hue (fins, outline) takes the body's.
+  const own: Look = input.colours === undefined ? input : { ...input, hue: input.colours.body.hue };
   // Leaves turn its colours toward leaf green, whatever its hue.
+  const leafy = (hue: number): number => towardHue(hue, LEAF_HUE, LEAF_HUE_SHIFT);
   const seed: Look = rare.has("leaves")
-    ? { ...input, hue: towardHue(input.hue, LEAF_HUE, LEAF_HUE_SHIFT) }
-    : input;
-  const base = options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass);
+    ? {
+        ...own,
+        hue: leafy(own.hue),
+        ...(input.colours === undefined
+          ? {}
+          : {
+              colours: {
+                body: { ...input.colours.body, hue: leafy(input.colours.body.hue) },
+                mark: { ...input.colours.mark, hue: leafy(input.colours.mark.hue) },
+              },
+            }),
+      }
+    : own;
+  const genes = seed.colours;
+  // A young one is smaller, its head larger for its body (R5).
+  const young = 1 - clamp01(seed.growth ?? 1);
+  const base =
+    options.scale * LENGTH_PER_UNIT_MASS * Math.cbrt(seed.mass) * (1 - (1 - YOUNG_SIZE) * young);
   const swims = seed.aquatic >= SWIMS_FROM;
   const pace =
     options.pace * (PACE_BASE + PACE_PER_SPEED * (swims ? seed.swimSpeed : seed.landSpeed));
@@ -573,8 +603,17 @@ export function bodyPlan(
   /** The animal's colours, as saturated as the style has them. */
   const saturation = palette.saturation * (rare.has("elder") ? ELDER_SATURATION : 1);
   const tone = (hue: number, light: number): number => colour(hue, light, saturation);
-  const body = tone(seed.hue, 0.55);
-  const dark = tone(seed.hue, 0.3);
+  /** The body's colour this much lighter (+) or darker (-) than its own. */
+  const bodyTone = (by: number): number =>
+    genes === undefined
+      ? tone(seed.hue, 0.55 + by)
+      : colour(
+          genes.body.hue,
+          Math.min(Math.max(genes.body.light + by, 0.08), 0.92),
+          genes.body.saturation * (rare.has("elder") ? ELDER_SATURATION : 1),
+        );
+  const body = bodyTone(0);
+  const dark = bodyTone(-0.25);
   const parts: Part[] = [];
   const part = (
     shape: Shape,
@@ -743,12 +782,14 @@ export function bodyPlan(
   const shares = widths(kind, base);
   const joints = shares.length;
   const spacing = length / (joints - 1);
-  const radii = shares.map((share) => share * reference);
+  const radii = shares.map(
+    (share, i) => share * reference * (i === 0 ? 1 + YOUNG_HEAD * young : 1),
+  );
   const last = joints - 1;
-  const light = tone(seed.hue, 0.7);
+  const light = bodyTone(0.15);
   const mark = tone(seed.hue + 0.08, 0.38);
   const pale = tone(seed.hue + 0.08, 0.8);
-  const shellColour = tone(seed.hue, 0.24);
+  const shellColour = bodyTone(-0.31);
   const head = radii[0] ?? reference;
 
   // Warning colours are bold bands, whatever the pattern gene says.
@@ -761,9 +802,11 @@ export function bodyPlan(
     ? lightnessOf(body) > WARNING_LIGHT_BODY
       ? WARNING_DARK
       : WARNING_BRIGHT
-    : ([mark, pale, tone(seed.hue + 0.5, 0.6), tone(seed.hue + 0.33, 0.45)][
-        Math.floor(shade * 4)
-      ] ?? mark);
+    : genes !== undefined
+      ? colour(genes.mark.hue, genes.mark.light, genes.mark.saturation)
+      : ([mark, pale, tone(seed.hue + 0.5, 0.6), tone(seed.hue + 0.33, 0.45)][
+          Math.floor(shade * 4)
+        ] ?? mark);
   // Under a shell or a carapace the trunk is not what catches the light.
   const covered = kind === "tortoise" || kind === "beetle" || kind === "crab";
   /**

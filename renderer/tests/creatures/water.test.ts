@@ -7,7 +7,7 @@ import {
   underWater,
   type Sea,
 } from "../../src/creatures/water";
-import { seaIn } from "../../src/spike/habitat";
+import { seaIn } from "../../src/creatures/habitat";
 import { SEA_LEVEL, world } from "../spike/worlds";
 
 const SHALLOW: Sea = { colour: 0x8ecbe6, depth: 0.1 };

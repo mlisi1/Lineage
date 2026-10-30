@@ -56,8 +56,10 @@ import {
   dropAt,
   placeCentred,
   puffAt,
+  tint,
   type Fall,
   type Plume,
+  type Puff,
   type Rows,
 } from "./particles";
 import {
@@ -71,6 +73,7 @@ import {
   type Sprites,
 } from "./sprites";
 import { VISIBLE_FROM } from "../plants/look";
+import { windStrength, type Wind } from "../plants/wind";
 import { FADE_S } from "../terrain/grounds";
 
 /** The colours of things that glow (0xRRGGBB): lava and fire, sparks, the seed's gold, the ark's light. */
@@ -356,6 +359,8 @@ export class Atmosphere {
    * The colour grade of the world under cloud: put on the world's container while the sky
    * is overcast (`graded`), and nothing otherwise, so a clear day costs no filter pass.
    */
+  /** The cloud the grade's matrix was last built for (`setGrade`). */
+  private gradedFor = Number.NaN;
   readonly grade = new ColorMatrixFilter();
   readonly lights = new Container();
   readonly flash: Sprite;
@@ -371,6 +376,10 @@ export class Atmosphere {
   private readonly standPool: RowPool;
   private readonly weatherPool = new SpritePool("normal");
   private readonly lightPool = new SpritePool("add");
+  /** The fire's cells in sight, its plumes and a puff, kept from frame to frame (no garbage). */
+  private readonly inSight: number[] = [];
+  private readonly plumes = { flames: newPlume(), sparks: newPlume(), smoke: newPlume() };
+  private readonly puff: Puff = { x: 0, y: 0, size: 0, alpha: 0 };
   /** Flames and a volcano's mouth: drawn as they are, over the tint (they make their own light). */
   private readonly ripplePool = new SpritePool("normal");
   private readonly boltPool = new SpritePool("add");
@@ -386,6 +395,8 @@ export class Atmosphere {
   private rain = 0;
   private storm = 0;
   private overcast = 0;
+  /** How dark it was at the last update (0–1): the wind drops a little at night. */
+  private dark = 0;
   /** How much of the fall is snow, 0–1, eased; and the view's snowy share, kept per land and view. */
   private snowfall = 0;
   private snowShare: { land: Land; key: string; share: number } | null = null;
@@ -612,6 +623,7 @@ export class Atmosphere {
     this.boltPool.begin();
     let shake = 0;
     const dark = this.darkness(moment);
+    this.dark = dark;
     this.watchSowing(view.land);
     this.drawSprouts(view);
     this.drawGlow(view, dark);
@@ -636,6 +648,19 @@ export class Atmosphere {
     if (shake <= 0 || dtS <= 0) return { x: 0, y: 0 };
     const jolt = (): number => Math.round((this.options.random() * 2 - 1) * shake);
     return { x: jolt(), y: jolt() };
+  }
+
+  /**
+   * The wind the plants lean in (R5, `plants/wind.ts`): on the atmosphere's clock, as hard
+   * as the rain and a thunderstorm make it, a little calmer at night.
+   */
+  get wind(): Wind {
+    return { timeS: this.timeS, strength: windStrength(this.rain, this.storm, this.dark) };
+  }
+
+  /** How overcast the sky is now (0–1, eased): R5's photosynthesisers bask only under a clear one. */
+  get overcastNow(): number {
+    return this.overcast;
   }
 
   /** How dark it is (0–1): the night's, or the end of a world's. */
@@ -672,6 +697,9 @@ export class Atmosphere {
 
   /** Grey the world's colours by `overcast` (0–1): toward their luminance, cooled a little. */
   private setGrade(overcast: number): void {
+    // Built again only when the cloud has changed (R5: it was rebuilt every frame).
+    if (overcast === this.gradedFor) return;
+    this.gradedFor = overcast;
     const k = GREY_OUT * overcast;
     const cast = mixRgb([1, 1, 1], CLOUD_CAST, overcast);
     const luma = [0.299, 0.587, 0.114];
@@ -705,11 +733,14 @@ export class Atmosphere {
     alpha: number,
     tile: number,
   ): void {
-    if (alpha <= 0.01) return;
+    if (alpha <= 0.01) {
+      this.lightPool.skip();
+      return;
+    }
     const sprite = this.lightPool.next(this.sprites.halo);
     // No bigger than the texture thrice, so that its steps stay a few art pixels wide.
     placeCentred(sprite, x, y, tile, Math.min(size, 3 * HALO_SIZE));
-    sprite.tint = colour;
+    tint(sprite, colour);
     sprite.alpha = Math.min(alpha, 1);
   }
 
@@ -775,7 +806,8 @@ export class Atmosphere {
     this.syncFlames();
     if (land === null || this.flameLife.size === 0) return;
     const { cells, tile } = view;
-    const inSight: number[] = [];
+    const inSight = this.inSight;
+    inSight.length = 0;
     for (const index of this.flameLife.keys()) {
       const x = (index % land.width) + 0.5;
       const y = Math.floor(index / land.width) + 0.5;
@@ -793,17 +825,18 @@ export class Atmosphere {
     }
     if (inSight.length > 0) {
       const spread = Math.sqrt(inSight.length) * tile * 2.5 + 12;
-      const shown =
-        inSight.reduce((sum, index) => sum + this.flameShare(index), 0) / inSight.length;
+      let shares = 0;
+      for (const index of inSight) shares += this.flameShare(index);
+      const shown = shares / inSight.length;
       const glow = (0.15 + 0.3 * dark) * shown;
       this.halo(sumX / inSight.length, sumY / inSight.length, spread, FIRE[0], glow, tile);
     }
     // Each burning cell: a small flickering glow, and flames licking up from it.
-    inSight.forEach((index, n) => {
-      if (n % every !== 0) return;
+    for (let n = 0; n < inSight.length; n += every) {
+      const index = inSight[n] ?? 0;
       // Coming up as the cell catches, dying down as it goes out.
       const share = this.flameShare(index);
-      if (share <= 0.01) return;
+      if (share <= 0.01) continue;
       const strength = fullStrength * share;
       const x = (index % land.width) + 0.5;
       const y = Math.floor(index / land.width) + 0.5;
@@ -814,22 +847,15 @@ export class Atmosphere {
       const fy = y + (cellHash(index, 2, 345) - 0.5) * 0.6;
       const size = Math.max(tile * 0.9, 4);
       this.halo(fx, fy, size, colour, 0.6 * strength * this.flicker(index), tile);
-      const flames: Plume = {
-        x: fx,
-        y: fy,
-        spread: 0.4,
-        rise: 6 + tile * 0.5,
-        drift: 1,
-        life: 0.8,
-        from: tile >= 32 ? 3 : 2,
-        to: 1,
-        alpha: strength,
-        salt: index,
-      };
+      const flames = plume(this.plumes.flames, fx, fy, 0.4, 6 + tile * 0.5, 1, 0.8);
+      flames.from = tile >= 32 ? 3 : 2;
+      flames.to = 1;
+      flames.alpha = strength;
+      flames.salt = index;
       if (tile < 8) {
         // On the map a burning cell is a flicker of light and a spark or two.
         this.puffs(flames, 1, FIRE[(flame + 1) % FIRE.length] ?? SPARK, tile, true);
-        return;
+        continue;
       }
       // Closer: a bed of glowing embers on the ground (under the plants), and flames
       // standing among the plants, sorted with them: one to a cell in the middle view, two
@@ -849,7 +875,7 @@ export class Atmosphere {
           close ? ember.width * 2 : ember.width / 2,
           close ? ember.height * 2 : ember.height / 2,
         );
-        bed.tint = 0xffffff;
+        tint(bed, 0xffffff);
         bed.alpha = 0.95 * Math.min(share * 2, 1);
       }
       const count = close ? 2 : 1;
@@ -879,7 +905,7 @@ export class Atmosphere {
         const h = sprite.texture.height * size;
         // Its foot on the place (or in the crown), rising from it.
         placeCentred(sprite, fx + ox, footY - (inCrown ? crown : 0) - h / 2 / tile, tile, w, h);
-        sprite.tint = 0xffffff;
+        tint(sprite, 0xffffff);
         // Up close a flame is see-through, so what stands behind it shows.
         sprite.alpha = (close ? FLAME_ALPHA_CLOSE : 1) * share;
         // Fire makes its own light: in the dark (and under cloud's grey) the tinted flame
@@ -889,7 +915,7 @@ export class Atmosphere {
           const lit = this.lightPool.next(sprite.texture);
           lit.position.copyFrom(sprite.position);
           lit.scale.copyFrom(sprite.scale);
-          lit.tint = 0xffffff;
+          tint(lit, 0xffffff);
           lit.alpha = Math.min(unlit, 1) * (close ? 0.5 : 0.85) * share;
         }
         if (close) {
@@ -902,24 +928,20 @@ export class Atmosphere {
             (close ? 0.3 : 0.45) * strength * this.flicker(index + k),
             tile,
           );
-          this.puffs(
-            {
-              x: fx + ox,
-              y: footY - (inCrown ? crown : 0) - (h * 0.6) / tile,
-              spread: 0.08,
-              rise: 22,
-              drift: 4,
-              life: 1.1,
-              from: 2,
-              to: 1,
-              alpha: strength,
-              salt: index * 7 + k,
-            },
-            3,
-            SPARK,
-            tile,
-            true,
+          const sparks = plume(
+            this.plumes.sparks,
+            fx + ox,
+            footY - (inCrown ? crown : 0) - (h * 0.6) / tile,
+            0.08,
+            22,
+            4,
+            1.1,
           );
+          sparks.from = 2;
+          sparks.to = 1;
+          sparks.alpha = strength;
+          sparks.salt = index * 7 + k;
+          this.puffs(sparks, 3, SPARK, tile, true);
         }
       }
       if (!close) this.puffs(flames, 2, SPARK, tile, true);
@@ -940,35 +962,39 @@ export class Atmosphere {
           const w = flame.texture.width * 2;
           const h = flame.texture.height * 2;
           placeCentred(flame, sx, sy - h / 2 / tile, tile, w, h);
-          flame.tint = 0xffffff;
+          tint(flame, 0xffffff);
           flame.alpha = FLAME_ALPHA_CLOSE * share;
         }
       }
-    });
+    }
     // Smoke from some of them, grey and drifting with the wind.
     const smokes = Math.min(MOST_SMOKES, inSight.length);
     for (let s = 0; s < smokes; s++) {
       const index = inSight[Math.floor((s * inSight.length) / smokes)] ?? 0;
-      const plume: Plume = {
-        x: (index % land.width) + 0.5,
-        y: Math.floor(index / land.width) + 0.5,
-        spread: 0.4,
-        rise: 6,
-        drift: 3,
-        life: 4,
-        from: 3,
-        to: 10,
-        alpha: 0.7 * this.flameShare(index),
-        salt: index,
-      };
-      this.puffs(plume, 3, SMOKE, tile);
+      const smoke = plume(
+        this.plumes.smoke,
+        (index % land.width) + 0.5,
+        Math.floor(index / land.width) + 0.5,
+        0.4,
+        6,
+        3,
+        4,
+      );
+      smoke.from = 3;
+      smoke.to = 10;
+      smoke.alpha = 0.7 * this.flameShare(index);
+      smoke.salt = index;
+      this.puffs(smoke, 3, SMOKE, tile);
     }
   }
 
   private puffs(plume: Plume, count: number, colour: number, tile: number, glow = false): void {
     for (let slot = 0; slot < count; slot++) {
-      const puff = puffAt(plume, slot, this.timeS, tile);
-      if (puff.alpha <= 0.01) continue;
+      const puff = puffAt(plume, slot, this.timeS, tile, this.puff);
+      if (puff.alpha <= 0.01) {
+        (glow ? this.lightPool : this.groundPool).skip();
+        continue;
+      }
       const sprite = glow
         ? this.lightPool.next(this.sprites.fleck)
         : this.groundPool.next(this.sprites.puff);
@@ -980,7 +1006,7 @@ export class Atmosphere {
         tile,
         glow ? Math.max(Math.round(puff.size), 1) : puff.size,
       );
-      sprite.tint = colour;
+      tint(sprite, colour);
       sprite.alpha = puff.alpha;
     }
   }
@@ -1874,4 +1900,28 @@ export class Atmosphere {
       bolts: this.boltPool.shown,
     };
   }
+}
+
+/** A plume to be set afresh each time it is used (`plume`). */
+function newPlume(): Plume {
+  return { x: 0, y: 0, spread: 0, rise: 0, drift: 0, life: 1, from: 0, to: 0, alpha: 0, salt: 0 };
+}
+
+/** Set `into` rising from (x, y) cells: where, how it moves and how long a puff lasts; the caller sets the rest. */
+function plume(
+  into: Plume,
+  x: number,
+  y: number,
+  spread: number,
+  rise: number,
+  drift: number,
+  life: number,
+): Plume {
+  into.x = x;
+  into.y = y;
+  into.spread = spread;
+  into.rise = rise;
+  into.drift = drift;
+  into.life = life;
+  return into;
 }

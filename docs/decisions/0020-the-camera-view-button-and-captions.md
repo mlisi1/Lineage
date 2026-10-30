@@ -1,6 +1,7 @@
 # 0020 — The camera: a view button, following, and captions on a scroll
 
-- **Status**: accepted
+- **Status**: accepted; on the desk the dip between views became an iris in R5 (ADR 0022,
+  "Loading the views")
 - **Date**: 2026-10-20
 
 ## Context
@@ -96,7 +97,8 @@ wooden rolls are in the cosy palette, lit from the upper left, with a see-throug
 `window.__press()`, which S2's hardware button reaches. For the demo (the owner,
 2026-10-20) a click or tap in the local view goes on to another animal instead, and a
 double click back to the map (`Director.nextSubject`, `toMap`); the button keeps the
-cycle. This is for the demo only: the final build does not have it (R5 removes it).
+cycle. This is for the demo only: the final build does not have it (R5 removed it on
+2026-10-21: a click or tap is the button in every view; `toMap` stays for R4's apocalypse).
 
 ## Results
 

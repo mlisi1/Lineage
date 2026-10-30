@@ -13,6 +13,7 @@ build/
 # Node
 node_modules/
 renderer/dist/
+renderer/dist-kiosk/
 renderer/test-results/
 renderer/playwright-report/
 
@@ -25,3 +26,4 @@ runs/
 .DS_Store
 renderer/public/stream/report/
 reports/R4-atmosphere/films/
+reports/R5-final/films/

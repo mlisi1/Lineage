@@ -1,15 +1,16 @@
 /**
  * The scene (R1–R3): the land, its plants and its animals from the state stream, filmed
  * by the documentary camera (`director.ts`), with the chronicle's notable entries on a
- * scroll (`captions.ts`); drawn at 512×300 art pixels and stretched to the screen
+ * scroll (`captions.ts`) and, in the local view, a card naming the animal followed
+ * (`card.ts`, R5); drawn at 512×300 art pixels and stretched to the screen
  * without smoothing. The picture is drawn a pixel larger all round and slid by the
  * camera's fraction of a pixel, so that slow pans glide instead of stepping a whole art
  * pixel at a time.
  *
  * The camera starts on the map. The view button (V, space or Enter on a keyboard, a tap
  * on a phone; on the desk the hardware button, S2) steps map → middle → local → map;
- * fifteen minutes after the last press it goes back to the map. In the local view a click
- * or tap goes on to another animal instead, and a double click back to the map.
+ * fifteen minutes after the last press it goes back to the map. A click or tap on the
+ * screen is the button too.
  *
  *   /                          the creatures' recording (`public/stream/life.json`, 28
  *                              days from the v9 fixture) played at `speed`
@@ -42,26 +43,76 @@
  *                              not taken): day, dusk, dawn, night, moon, rain, fire,
  *                              volcano, quake, meteor, seed, ark, end. With `?still` the
  *                              atmosphere stands still too, moved on only by `__advance`
+ *   ?cap=30                    R5: at most this many frames a second (`framecap.ts`): the
+ *                              kiosk's cap on the board, which has no fan
+ *   ?season=autumn:0.8         R5: the stream's clock says this season, this far into it
+ *                              (0–1, 0.5 if left out): the land, the plants and the
+ *                              leaves blown off the trees as in that season
+ *   ?bushes=whole              R5: the local view's bushes drawn whole, as before the owner
+ *                              chose them in pieces (`plants/pieces.ts`), to compare
+ *   ?ground=fresh              R5: paint all the ground anew, nothing taken from what is
+ *                              kept between visits (`terrain/groundcache.ts`)
+ *   ?bench                     R5: the benchmark (`bench.ts`): the scenarios of
+ *                              `benchplan.ts` on the recordings, the results POSTed to
+ *                              `?post=` (`tools/kiosk_bench.py`)
+ *
+ * The desk's build (`npm run build:kiosk`, into `dist-kiosk/`) leaves the demo paths out:
+ * with no `?source=` it takes the server's stream from the host that served the page,
+ * `ws://<host>/stream` (S1), and `?film`, `?file=`, `?show=` and `?recording=` do
+ * nothing, but for `?bench`, whose scenarios play the committed recordings and make up
+ * what they lack as `?show=` does: the one way off the server the desk keeps, so that the
+ * board can be measured from the build it runs.
  *
  * Over the scene the atmosphere (R4, `atmosphere/`): the light of the moment, what glows,
  * the weather of events, and the end of a world, during which the camera stays on the map
  * and the button does nothing.
  */
-import { Application, Container, WebGLRenderer } from "pixi.js";
+import { Application, Container, Sprite, Texture, WebGLRenderer } from "pixi.js";
+import { Ambient } from "./atmosphere/ambient";
+import { Leaves } from "./atmosphere/leaves";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
-import { Captions } from "./captions";
-import { Director, TIMINGS, type Scene, type Shot } from "./director";
+import { Captions, PAPER, lantern } from "./captions";
+import { NameCard, type CardPhase } from "./card";
+import {
+  Director,
+  NEXT,
+  TIMINGS,
+  type Motion,
+  type Scene,
+  type Shot,
+  type Visit,
+} from "./director";
 import { Herd } from "./herd";
-import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
-import type { CreaturesMessage, Message } from "./protocol";
+import { IRIS_FROM, Iris } from "./iris";
+import { useArtCache, type PlantLayer } from "./plants/plants";
+import { Landscape, PAINTER_CODE, TILES, VIEWS, type ViewName } from "./landscape";
+import { makeArtCache } from "./plants/artcache";
+import { PlaceMarker } from "./marker";
+import type { ClockMessage, CreaturesMessage, Message, SkyMessage } from "./protocol";
+import { FrameMeter } from "./showcase/meter";
+import { Overlay } from "./showcase/overlay";
+import { Showcase } from "./showcase/showcase";
 import { mulberry32 } from "./rng";
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitToViewport } from "./scene";
-import { creatureAtlas } from "./spike/atlas";
-import { heightAt } from "./spike/habitat";
+import { creatureAtlas } from "./creatures/atlas";
+import { PROBE } from "./frameprobe";
+import { Portraits } from "./creatures/portrait";
+import { heightAt } from "./creatures/habitat";
+import type { RareLook } from "./creatures/rare";
 import { Recording, SocketSource, type Source } from "./stream";
-import { InlinePainter, makePainter } from "./terrain/painter";
+import { makeGroundCache } from "./terrain/groundcache";
+import { GpuGround } from "./terrain/gpuground";
+import {
+  InlinePainter,
+  WorkerPainter,
+  makePainter,
+  paintRequest,
+  type PaintRequest,
+} from "./terrain/painter";
+import { Bench, type BootMarks } from "./bench";
+import { capFrames } from "./framecap";
 
 /** Screen pixels per art pixel (ADR 0007). */
 const ART = 2;
@@ -70,11 +121,18 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
-const DARK = "#10081c";
-/** A second click within this many milliseconds makes a double click. */
-const DOUBLE_CLICK_MS = 300;
+/** Seconds between two asks for the ground round the next animal the local view will follow. */
+const AHEAD_EVERY_S = 0.5;
+/** The dip between views: the night's deep purple. */
+const DIP_COLOUR = 0x10081c;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
+/** The name card waits until a dip between views is this clear before it unrolls (0–1). */
+const CARD_DIM = 0.5;
+/** The camera's moves away from the animal followed, during which the card is put away. */
+const AWAY: ReadonlySet<Motion> = new Set<Motion>(["visit", "return"]);
+/** The places of this many of the latest notable entries are kept, for the scroll to mark. */
+const PLACES_KEPT = 16;
 /** The committed recordings (`tools/stream.py`). */
 const RECORDINGS: Readonly<Record<string, string>> = {
   life: "stream/life.json",
@@ -87,6 +145,25 @@ const RECORDINGS: Readonly<Record<string, string>> = {
 const LIVING = ["life", "office", "end"];
 /** Sim-seconds a wall second, playing the creatures' recording: two sim-hours in 4 s. */
 const LIFE_SPEED = 1800;
+/**
+ * The desk's build (`vite build --mode kiosk`): the demo paths are compiled out (the
+ * bundler drops every branch behind `!KIOSK`) and the page takes the server's stream.
+ */
+/** Milliseconds in a sim-day (the benchmark's new land comes a day after the last). */
+const MS_PER_DAY = 86_400_000;
+const KIOSK = import.meta.env.MODE === "kiosk";
+/** Each view's size in cells. */
+const VIEW_CELLS: Readonly<Record<ViewName, { width: number; height: number }>> = {
+  map: { width: WIDTH / TILES.map, height: HEIGHT / TILES.map },
+  middle: { width: WIDTH / TILES.middle, height: HEIGHT / TILES.middle },
+  local: { width: WIDTH / TILES.local, height: HEIGHT / TILES.local },
+};
+
+/** The server's stream (S1), from the host that served the page. */
+function serverStream(): string {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${window.location.host}/stream`;
+}
 
 declare global {
   interface Window {
@@ -99,11 +176,65 @@ declare global {
     /** Press the view button (tests; S2's hardware button reaches the page this way too). */
     __press?: () => void;
     /** What the camera shows and does (tests). */
-    __camera?: () => Shot & { motion: string; dipping: boolean };
+    __camera?: () => Shot & { motion: string; dipping: boolean; visit: Visit | null };
     /** What the scroll shows (tests). */
-    __captions?: () => { phase: string; text: string | null; waiting: number };
+    __captions?: () => {
+      phase: string;
+      text: string | null;
+      waiting: number;
+      lamp: number;
+      kind: string | null;
+      icon: string | null;
+      initial: number | null;
+    };
+    /** What the name card of the animal followed shows (tests; S3 shows the same card). */
+    /** Paint `request` on the land shown with the colour pass on the CPU and on the GPU: how many pixels differ (tests). */
+    __paintBoth?: (request: PaintRequest) => { differ: number; pixels: number } | null;
+    /** Paintings of the ground made with the colour pass on the GPU and on the CPU (`WorkerPainter.made`). */
+    __groundMade?: () => { gpu: number; cpu: number } | null;
+    /** Whether the followed animal's portrait, read back without waiting, is the one read at once (tests). */
+    __portraitCheck?: () => boolean | null;
+    __card?: () => {
+      phase: CardPhase;
+      open: number;
+      /** The lamp it is lit by (0xRRGGBB): 0xffffff by day, dim and warm at night. */
+      lamp: number;
+      /** Whether the animal's portrait is on the card's plate. */
+      portrait: boolean;
+      id?: number;
+      name?: string;
+      traits?: string;
+      icons?: string[];
+    };
     /** What the atmosphere shows (tests). */
     __atmosphere?: () => Atmosphere["state"] & Atmosphere["counts"];
+    __colours?: () => ReturnType<Herd["colourTable"]>;
+    __swash?: (x: number, y: number) => boolean;
+    __pin?: (id: number, x: number, y: number, heading: number) => boolean;
+    __send?: (id: number, x: number, y: number) => boolean;
+    __feed?: (id: number, food: "none" | "plants" | "meat") => boolean;
+    __hunt?: (hunterId: number, preyId: number) => boolean;
+    __birth?: (motherId: number, childId: number, egg?: boolean) => boolean;
+    /** Draw animal `id` with a rare gene by its look too (R5: rare genes in action, staged). */
+    __grant?: (id: number, look: RareLook) => boolean;
+    /** Animal `id`'s sleep (R5): night-active, asleep, how far lying down. */
+    __sleep?: (id: number) => ReturnType<Herd["sleepOf"]>;
+    /** What the small life about the island shows (R5): fireflies lit, dust, birds, butterflies. */
+    __ambient?: () => Ambient["state"];
+    /** Autumn leaves in the air and on the ground (R5). */
+    __leaves?: () => Leaves["state"];
+    /** What falls from the sky from now on (R5, staging the animals in rain): a sky message as the last, with `rain`. */
+    __rain?: (rain: SkyMessage["rain"]) => boolean;
+    __standing?: (
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+    ) => ReturnType<PlantLayer["standing"]>;
+    /** Where cell point (x, y) is on the screen, in CSS pixels (staging the look by hand). */
+    __screenOf?: (x: number, y: number) => { x: number; y: number };
+    /** Whether a body of radius `margin` at cell point (x, y) is in a plant's footprint. */
+    __blocked?: (x: number, y: number, margin: number) => boolean;
     /** The land drawn at cell (x, y): height, cover class, biomass and scorch (tests). */
     __landAt?: (
       x: number,
@@ -123,8 +254,16 @@ function pinnedView(name: string | null): ViewName | null {
 }
 
 async function start(): Promise<void> {
-  const params = new URLSearchParams(window.location.search);
+  // The benchmark (R5): with `?bench` it gives the scene its options for the scenario at
+  // hand, and once the scene is built it is handed the hooks it measures with (below).
+  const bench = await Bench.start(window.location.search, VIEW_CELLS);
+  const params = bench?.params ?? new URLSearchParams(window.location.search);
+  // When the page got going (R5, the optimization plan; the benchmark reads them).
+  const boot: BootMarks = { script: performance.now(), land: null, laidOut: null, painted: null };
   const pinned = pinnedView(params.get("view"));
+  // The showcase (R5): a scripted tour of the scene on a recording, kept in the desk's
+  // build so that it runs on the board as the desk would (`showcase/`).
+  const showcasing = params.get("showcase") !== null;
 
   const app = new Application();
   await app.init({
@@ -143,6 +282,8 @@ async function start(): Promise<void> {
   frame.style.position = "absolute";
   frame.style.overflow = "hidden";
   document.body.appendChild(frame);
+  // No pointer on the desk (the owner, on the board: the kiosk showed it).
+  if (KIOSK) document.documentElement.style.cursor = "none";
   const canvas = app.canvas;
   canvas.style.imageRendering = "pixelated";
   canvas.style.position = "absolute";
@@ -166,42 +307,103 @@ async function start(): Promise<void> {
   layout();
 
   const world = new Container({ isRenderGroup: true });
+  // The grey under cloud is a full-screen pass: it is told the canvas as its area, or Pixi
+  // measures the bounds of the whole world for it every frame (R5: a seventh of a frame on
+  // the board in rain).
+  world.filterArea = app.screen;
   let graded = false;
   app.stage.addChild(world);
-  const landscape = new Landscape(
-    params.get("painter") === "inline" ? new InlinePainter() : makePainter(),
-    undefined,
-    undefined,
-    params.get("still") !== null,
-  );
+  const painter = params.get("painter") === "inline" ? new InlinePainter() : makePainter();
+  // How many of the ground's paintings had their colour pass on the painters' GPU (tests, the benchmark).
+  window.__groundMade = () => (painter instanceof WorkerPainter ? { ...painter.made } : null);
+  const landscape = new Landscape(painter, undefined, undefined, params.get("still") !== null);
+  landscape.bushPieces = params.get("bushes") !== "whole";
+  landscape.groundOnGpu = params.get("painter") !== "cpu";
+  // The ground painted is kept between visits (R5); `?ground=fresh` paints it all anew.
+  if (params.get("ground") !== "fresh") {
+    landscape.cache = makeGroundCache();
+    // The plants' drawings kept too, read in now, long before the first lay-out (R5).
+    useArtCache(makeArtCache(PAINTER_CODE));
+  }
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
-  const herd = new Herd(creatureAtlas(), mulberry32(seed + 1), () => landscape.current);
+  const atlas = creatureAtlas();
+  const herd = new Herd(atlas, mulberry32(seed + 1), () => landscape.current);
+  // Live, a page's first animals are drawn over its first frames (the start's longest
+  // wait on the board); films and stills draw them at once, the same frames every time.
+  herd.spreadPlacing = params.get("film") === null && params.get("still") === null;
+  // The name card's portraits, drawn by the scene's own renderer (R5).
+  // Read back without waiting for the GPU while the scene runs live; at once for films and
+  // stills, so that a frame is the same however fast the machine is.
+  const portraits = new Portraits(
+    app.renderer,
+    atlas,
+    params.get("film") === null && params.get("still") === null,
+  );
+  herd.swash = (x, y) => landscape.swashCovers(x, y);
   world.addChild(...herd.containers);
+  // Small life about the island (R5): fireflies, dust from running feet, birds, butterflies.
+  const ambient = new Ambient(seed + 3);
+  herd.footfall = (x, y) => ambient.dust(x, y);
+  world.addChild(ambient.over);
+  // Autumn leaves blown off the trees (R5), among the plants of the view.
+  const leaves = new Leaves(seed + 4, ambient.over);
   const still = params.get("still") !== null;
 
-  // Over the scene: the dip between views, then the captions above it.
-  const dim = document.createElement("div");
-  dim.style.position = "absolute";
-  dim.style.inset = "0";
-  dim.style.background = DARK;
-  dim.style.opacity = "0";
-  dim.style.pointerEvents = "none";
-  const captions = new Captions(WIDTH, HEIGHT);
-  frame.append(dim, captions.element);
+  // Over the scene: the captions (the dip between views is drawn on the canvas, `dip`).
+  // The initial of an entry about a species is in the species' colour, as the herd draws it.
+  const captions = new Captions(
+    WIDTH,
+    HEIGHT,
+    (species) => herd.colourTable().find((row) => row.id === species)?.body ?? null,
+  );
+  // The name card of the animal followed, in the top-left corner (R5).
+  const card = new NameCard(WIDTH, HEIGHT);
+  frame.append(captions.element, card.element);
+  // The showcase's lines and titles, and its frame counter with `?fps`.
+  const overlay = showcasing ? new Overlay(WIDTH, HEIGHT) : null;
+  if (overlay !== null) frame.append(overlay.title, overlay.line, overlay.counter);
+
+  // Where each notable entry happened, by its number, for the marker and the local view's
+  // visit while its scroll is out (R5); entries with no one place are not kept.
+  const places = new Map<number, Visit>();
+  const placeOf = (message: Message): void => {
+    if (message.type !== "chronicle") return;
+    for (const entry of message.entries) {
+      if (entry.importance < message.notable_importance || entry.x < 0 || entry.y < 0) continue;
+      places.set(entry.number, { entry: entry.number, x: entry.x, y: entry.y });
+    }
+    // The oldest go first: a Map keeps the order they came in.
+    for (const number of places.keys()) {
+      if (places.size <= PLACES_KEPT) break;
+      places.delete(number);
+    }
+  };
+  const marker = new PlaceMarker();
 
   const quiet = params.get("quiet") !== null;
   let date: string | null = null;
   let lastMs = 0;
   let lastCreatures: CreaturesMessage | null = null;
+  let lastSky: SkyMessage | null = null;
+  let lastClock: ClockMessage | null = null;
   const deliver = (message: Message): void => {
-    if (message.type === "clock") date = message.date;
+    if (message.type === "clock") {
+      date = message.date;
+      lastClock = message;
+    }
+    if (message.type === "sky") lastSky = message;
     if (message.type === "creatures") lastCreatures = message;
     if ("t_ms" in message) lastMs = message.t_ms;
-    if (message.type === "chronicle") captions.take(message, date);
+    if (message.type === "chronicle") {
+      captions.take(message, date);
+      placeOf(message);
+    }
     landscape.receive(message);
     herd.receive(message);
     atmosphere.receive(message);
+    ambient.receive(message);
+    leaves.receive(message);
   };
   // The director comes later; a world's end sends the camera to the map through this.
   let toMap = (): void => undefined;
@@ -221,7 +423,8 @@ async function start(): Promise<void> {
     },
   });
   world.addChild(atmosphere.ground);
-  landscape.floor.addChild(atmosphere.floor);
+  atmosphere.lights.addChild(ambient.lights);
+  landscape.floor.addChild(atmosphere.floor, herd.remains.floor, ...herd.floors);
   // Nothing stands on a cone or in a crater the scene draws.
   landscape.covered = (x, y) => atmosphere.covers(x, y);
   app.stage.addChild(
@@ -229,24 +432,53 @@ async function start(): Promise<void> {
     atmosphere.tint,
     atmosphere.weather,
     atmosphere.lights,
+    marker.container,
     atmosphere.sky,
   );
-  // An animal that dies in a burning cell leaves a puff of ash.
-  herd.onGone = (x, y) => {
+  // The dip between views, drawn last on the canvas itself (R5, the owner on the board: an
+  // element laid over the canvas left what was drawn before showing through), over the
+  // whole canvas with its margin.
+  const dip = new Sprite(Texture.WHITE);
+  dip.tint = DIP_COLOUR;
+  dip.width = app.screen.width;
+  dip.height = app.screen.height;
+  dip.alpha = 0;
+  dip.visible = false;
+  app.stage.addChild(dip);
+  // Live, the iris in its place (R5, `iris.ts`): it closes on the middle, a ring turns while
+  // the next view's ground comes, and it opens as far as that ground is painted.
+  const iris = new Iris(app.screen.width, app.screen.height, DIP_COLOUR, PAPER);
+  app.stage.addChild(iris.sprite);
+  // An animal burnt to death (or, in streams without causes, that dies in a burning
+  // cell) leaves a puff of ash.
+  herd.onGone = (x, y, cause) => {
     const land = landscape.current;
     if (land === null) return;
-    if (atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x))) atmosphere.burnt(x, y);
+    const burning = atmosphere.isBurning(Math.floor(y) * land.width + Math.floor(x));
+    if (cause === "burnt" || (cause === undefined && burning)) atmosphere.burnt(x, y);
   };
   // The ark's newcomers come into being where its light is.
   herd.arrival = (x, y) => atmosphere.arrival(x, y);
   const receive = (message: Message): void => {
+    const begun = PROBE.enabled ? performance.now() : 0;
+    if (message.type === "land" && boot.land === null) boot.land = performance.now();
+    PROBE.note(message.type);
+    // Until the first ground is painted, each message's handling is marked for a trace or
+    // a look from the board (R5: where a start goes); none after, so that none pile up.
+    const starting = boot.painted === null;
+    const from = starting ? performance.now() : 0;
     if (!atmosphere.hold(message)) deliver(message);
+    if (starting) performance.measure(`lineage:start:${message.type}`, { start: from });
+    if (PROBE.enabled) PROBE.charge("messages", performance.now() - begun);
   };
-  const shows = showsOf(params.get("show"));
+  // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
+  const shows = KIOSK && bench === null ? [] : showsOf(params.get("show"));
 
-  const socket = params.get("source");
+  // The desk's build takes the server's stream unless benchmarked.
+  const socket =
+    params.get("source") ?? (KIOSK && bench === null && !showcasing ? serverStream() : null);
   // `?file=` plays any recording under `stream/` (the report's, R4), as a creatures' one.
-  const file = params.get("file");
+  const file = KIOSK ? null : params.get("file");
   const name = file === null ? (params.get("recording") ?? "life") : "life";
   const recording =
     file !== null && /^[\w/-]+\.json$/.test(file)
@@ -256,14 +488,25 @@ async function start(): Promise<void> {
   const speed = Number(
     params.get("speed") ?? (every === null && LIVING.includes(name) ? LIFE_SPEED : 0),
   );
-  const film = params.get("film") !== null;
+  const film = !KIOSK && params.get("film") !== null;
   const source: Source =
     socket !== null
       ? new SocketSource(socket)
       : await Recording.load(recording, Number(every ?? 1000), speed);
   if (film && source instanceof Recording) source.playManually();
+  // `?season=autumn:0.8` (staging, R5): the clock says that season, so far into it.
+  const [seasonAsked, seasonShare] = (KIOSK ? "" : (params.get("season") ?? "")).split(":");
+  const seasonNamed = ["spring", "summer", "autumn", "winter"].find((one) => one === seasonAsked);
   source.listen((message) => {
     if (quiet && message.type === "chronicle") return;
+    if (seasonNamed !== undefined && message.type === "clock") {
+      const progress = Number(seasonShare ?? 0.5);
+      message = {
+        ...message,
+        season: seasonNamed as typeof message.season,
+        season_progress: Number.isFinite(progress) ? Math.min(Math.max(progress, 0), 1) : 0.5,
+      };
+    }
     // Shown on demand, the light is the one asked for, not the recording's.
     if (shows.length > 0 && message.type === "sky") return;
     receive(message);
@@ -274,19 +517,14 @@ async function start(): Promise<void> {
     return Number.isFinite(value) && value > 0 ? value : otherwise;
   };
   const follow = params.get("follow");
-  const director = new Director(
-    {
-      map: { width: WIDTH / TILES.map, height: HEIGHT / TILES.map },
-      middle: { width: WIDTH / TILES.middle, height: HEIGHT / TILES.middle },
-      local: { width: WIDTH / TILES.local, height: HEIGHT / TILES.local },
-    },
-    mulberry32(seed),
-    {
-      idleS: number("idle", TIMINGS.idleS),
-      followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
-      followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
-    },
-  );
+  const director = new Director(VIEW_CELLS, mulberry32(seed), {
+    idleS: number("idle", TIMINGS.idleS),
+    followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
+    followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
+  });
+  // Live, the next animal to follow is chosen ahead and its ground painted (the director's
+  // choices drawn earlier); films and stills draw them when they always did.
+  director.looksAhead = params.get("film") === null && params.get("still") === null;
 
   toMap = () => {
     if (pinned === null) director.toMap();
@@ -300,26 +538,8 @@ async function start(): Promise<void> {
     if (event.repeat) return;
     if (event.key === "v" || event.key === " " || event.key === "Enter") press();
   });
-  // A click or tap is the button too; in the local view (for the demo, the owner
-  // 2026-10-20) a click goes on to another animal and a double click back to the map.
-  let pendingClick: ReturnType<typeof setTimeout> | null = null;
-  frame.addEventListener("pointerdown", () => {
-    if (pinned !== null || atmosphere.ending) return;
-    if (pendingClick !== null) {
-      clearTimeout(pendingClick);
-      pendingClick = null;
-      director.toMap();
-      return;
-    }
-    if (director.state.view !== "local" || director.state.dipping) {
-      press();
-      return;
-    }
-    pendingClick = setTimeout(() => {
-      pendingClick = null;
-      director.nextSubject();
-    }, DOUBLE_CLICK_MS);
-  });
+  // A click or tap is the button too.
+  frame.addEventListener("pointerdown", press);
 
   let shot: Shot = { view: pinned ?? "map", centre: { x: 0, y: 0 }, dim: 0, subject: null };
   window.__sceneSettled = () => landscape.settled;
@@ -328,6 +548,26 @@ async function start(): Promise<void> {
   window.__camera = () => ({ ...shot, ...director.state, view: shot.view });
   let advance = 0;
   window.__atmosphere = () => ({ ...atmosphere.state, ...atmosphere.counts });
+  window.__colours = () => herd.colourTable();
+  window.__swash = (x, y) => landscape.swashCovers(x, y);
+  // Debugging the look: an animal placed by hand, and where the trees and bushes stand.
+  window.__pin = (id, x, y, heading) => herd.pin(id, x, y, heading);
+  window.__send = (id, x, y) => herd.send(id, x, y);
+  window.__feed = (id, food) => herd.feed(id, food);
+  window.__hunt = (hunterId, preyId) => herd.hunt(hunterId, preyId);
+  window.__birth = (motherId, childId, egg) => herd.birth(motherId, childId, egg);
+  window.__grant = (id, look) => herd.grant(id, look);
+  window.__sleep = (id) => herd.sleepOf(id);
+  window.__ambient = () => ambient.state;
+  window.__leaves = () => leaves.state;
+  window.__rain = (rain) => {
+    if (lastSky === null) return false;
+    receive({ ...lastSky, rain });
+    return true;
+  };
+  window.__standing = (x0, y0, x1, y1) => landscape.hosts?.standing({ x0, y0, x1, y1 }) ?? [];
+  window.__screenOf = (x, y) => world.toGlobal({ x, y });
+  window.__blocked = (x, y, margin) => landscape.hosts?.blocked(x, y, margin) ?? false;
   window.__landAt = (x, y) => {
     const land = landscape.current;
     if (land === null) return null;
@@ -342,15 +582,57 @@ async function start(): Promise<void> {
   window.__advance = (seconds) => {
     advance += seconds;
   };
+  window.__card = () => card.state;
+  if (!KIOSK) {
+    let gpu: GpuGround | null | undefined;
+    window.__paintBoth = (request) => {
+      const land = landscape.current;
+      gpu ??= GpuGround.create();
+      if (land === null || gpu === null) return null;
+      const cpu = paintRequest(land, request);
+      const onGpu = paintRequest(land, request, gpu);
+      let differ = 0;
+      for (let at = 0; at < cpu.rgba.length; at += 4) {
+        if (
+          cpu.rgba[at] !== onGpu.rgba[at] ||
+          cpu.rgba[at + 1] !== onGpu.rgba[at + 1] ||
+          cpu.rgba[at + 2] !== onGpu.rgba[at + 2]
+        )
+          differ += 1;
+      }
+      return { differ, pixels: cpu.rgba.length / 4 };
+    };
+    window.__portraitCheck = () => {
+      const subject = shot.subject;
+      const look = subject === null ? null : herd.portraitOf(subject);
+      const kept = look === null ? null : portraits.of(look);
+      if (look === null || kept === null) return null;
+      const atOnce = new Portraits(app.renderer, atlas, false).of(look);
+      return (
+        atOnce !== null &&
+        atOnce.rgba.length === kept.rgba.length &&
+        atOnce.rgba.every((value, at) => value === kept.rgba[at])
+      );
+    };
+  }
   window.__captions = () => {
-    const { phase, caption, waiting } = captions.state;
-    return { phase, text: caption?.text ?? null, waiting };
+    const { phase, caption, waiting, lamp, icon, initial } = captions.state;
+    return {
+      phase,
+      text: caption?.text ?? null,
+      waiting,
+      lamp,
+      kind: caption?.kind ?? null,
+      icon,
+      initial,
+    };
   };
   // PixiJS leaves a freed texture's place empty (null) rather than taking it out: count the rest.
-  window.__textures = () =>
+  const textures = (): number =>
     app.renderer instanceof WebGLRenderer
       ? app.renderer.texture.managedTextures.filter((source) => source !== null).length
       : -1;
+  window.__textures = textures;
 
   const scene: Scene = {
     width: 0,
@@ -369,8 +651,43 @@ async function start(): Promise<void> {
   let shown = shows.length === 0;
   // The demo's later messages, on the atmosphere's clock (so `__advance` moves them too).
   let later: Timed[] = [];
+  // The showcase visits a few places: the rest of the island is not painted ahead for it.
+  if (showcasing) landscape.paintAhead = false;
+  const showcase = showcasing
+    ? new Showcase({
+        size: () => landscape.size,
+        landMessage: () => landscape.lastMessage,
+        clock: () => lastClock,
+        receive: (message) => receive(message),
+        demo: (asked, x, y) => {
+          const land = landscape.current;
+          if (land === null) return;
+          const world = { land, landMessage: landscape.lastMessage, creatures: lastCreatures };
+          later.push(...demoMessages(asked, world, x, y, lastMs));
+        },
+        advance: (seconds) => {
+          advance += seconds;
+        },
+        groundShown: () => landscape.groundShown,
+        sky: (light, present, rain) => {
+          receive({ type: "sky", protocol: 1, t_ms: lastMs, light, present, rain, burning: [] });
+        },
+        prefetch: (view, centre) => {
+          const tile = TILES[view];
+          landscape.prefetch(view, sight(centre, WIDTH / tile, HEIGHT / tile));
+        },
+        herd,
+      })
+    : null;
+  /** The light of the moment as last drawn (the animals sleep by it, R5). */
+  let sceneLight = 1;
+  /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
+  let sceneRain: SkyMessage["rain"] = "none";
+  /** Seconds since the ground round the next animal to follow was last asked for. */
+  let aheadS = 0;
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
+    PROBE.enter("director");
     const size = landscape.size;
     if (size === null) {
       // Nothing drawn until the first land: let it be laid out.
@@ -378,10 +695,30 @@ async function start(): Promise<void> {
       return;
     }
     const dtS = deltaMS / 1000;
-    if (pinned === null) {
+    // The entry on the scroll, and where it happened: marked while the scroll is out,
+    // visited by the local view while it is open (as the scroll was last frame).
+    const scroll = captions.state;
+    const entry =
+      scroll.caption === null || scroll.phase === "gap"
+        ? null
+        : (places.get(scroll.caption.number) ?? null);
+    const scripted = showcase?.update(dtS) ?? null;
+    if (scripted !== null) {
+      // Kept inside the world, as the director keeps its own views (past its edge there is
+      // nothing to draw); the map shows the whole of it.
+      const tile = TILES[scripted.view];
+      const centre =
+        scripted.view === "map"
+          ? { x: size.width / 2, y: size.height / 2 }
+          : within(scripted.centre, WIDTH / tile, HEIGHT / tile, size.width, size.height);
+      shot = { ...scripted, centre };
+    } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
-      scene.ready = landscape.settled;
+      // Live, the iris opens once the middle of the view is painted (`openTo`, and as far
+      // as it is); films and stills keep waiting for all of it, as they were made.
+      scene.ready = director.looksAhead ? landscape.openTo >= IRIS_FROM : landscape.settled;
+      scene.place = scroll.phase === "roll-up" || atmosphere.ending ? null : entry;
       shot = director.update(dtS, scene);
     } else {
       // The map shows the whole world whatever is asked.
@@ -404,8 +741,38 @@ async function start(): Promise<void> {
     }
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
+    // Ahead of the view button (R5, the optimization plan): the views not shown are laid
+    // out in the background (their plants drawn in a worker), and every so often the
+    // ground the next views will open on (where the middle view will come down, round the
+    // animal the local view will follow) is painted and kept, so that they come painted.
+    if (director.looksAhead) {
+      landscape.prepareAhead();
+      aheadS += deltaMS / 1000;
+      // The view the button leads to next, and the one after it behind it (on the map,
+      // the middle view's place, then the local view's animal).
+      if (aheadS >= AHEAD_EVERY_S) {
+        aheadS = 0;
+        const coming = NEXT[shot.view];
+        for (const view of [coming, NEXT[coming]]) {
+          const at = view === "local" ? director.upcoming : director.upcomingMiddle;
+          if (view === "map" || at === null) continue;
+          const tile = TILES[view];
+          landscape.prefetch(view, sight(at, WIDTH / tile, HEIGHT / tile), view !== coming);
+        }
+      }
+    }
+    PROBE.enter("landscape");
+    const laying = boot.painted === null ? performance.now() : 0;
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    if (laying > 0) performance.measure("lineage:start:landscape", { start: laying });
+    if (boot.laidOut === null && landscape.current !== null) boot.laidOut = performance.now();
+    if (boot.painted === null && landscape.settled) boot.painted = performance.now();
+    PROBE.enter("herd");
+    // The animals sleep by the light of the moment (R5), as last drawn.
+    herd.nightfall(sceneLight, atmosphere.overcastNow);
+    // Out in the rain they shake it off when it ends, and hunch in a thunderstorm (R5).
+    herd.weather(sceneRain);
     herd.update(dtS, shot.view, cells, landscape.hosts, shot.subject);
     const land = landscape.current;
     if (!shown && land !== null) {
@@ -423,6 +790,7 @@ async function start(): Promise<void> {
       if (due.some(({ message }) => message.type === "sky")) atmosphere.settleLight();
     }
     if (still) atmosphere.settleLight();
+    PROBE.enter("atmosphere");
     const shake = atmosphere.update(stepS, {
       view: shot.view,
       cells,
@@ -434,7 +802,27 @@ async function start(): Promise<void> {
       margin: MARGIN,
       rows: landscape.hosts,
     });
+    ambient.update(stepS, {
+      view: shot.view,
+      cells,
+      tile,
+      land,
+      light: sceneLight,
+      raining: sceneRain !== "none",
+      ending: atmosphere.ending,
+    });
+    leaves.update(stepS, {
+      view: shot.view,
+      cells,
+      tile,
+      plants: landscape.hosts,
+      wind: still ? null : atmosphere.wind,
+      ending: atmosphere.ending,
+    });
     advance = 0;
+    // The plants lean in the atmosphere's wind from the next frame on; a picture that must
+    // not change keeps them straight.
+    landscape.wind = still ? null : atmosphere.wind;
     world.scale.set(tile);
     // Under cloud the world is greyed (one filter pass); none on a clear day.
     if (atmosphere.graded !== graded) {
@@ -447,13 +835,51 @@ async function start(): Promise<void> {
     world.position.set(Math.floor(x) + MARGIN + shake.x, Math.floor(y) + MARGIN + shake.y);
     atmosphere.lights.scale.set(tile);
     atmosphere.lights.position.copyFrom(world.position);
+    marker.update(stepS, entry, shot.view, cells, tile, world.position);
     // In whole device pixels: a browser smooths a picture placed between them.
     const device = window.devicePixelRatio || 1;
     const slide = (value: number): number =>
       Math.round((value - Math.floor(value)) * artPixel * device) / device;
-    canvas.style.transform = `translate(${slide(x)}px, ${slide(y)}px)`;
-    dim.style.opacity = String(shot.dim);
-    captions.update(dtS);
+    // Written only when they change: each write makes the browser restyle the page.
+    const transform = `translate(${slide(x)}px, ${slide(y)}px)`;
+    if (canvas.style.transform !== transform) canvas.style.transform = transform;
+    // How dark the screen is between views: the dip's, or live the iris's (shut, 1).
+    let dark = shot.dim;
+    if (director.looksAhead) {
+      iris.update(dtS, shot.dim, landscape.openTo);
+      dark = Math.max(shot.dim, 1 - iris.open);
+    } else {
+      if (dip.alpha !== shot.dim) dip.alpha = shot.dim;
+      if (dip.visible !== shot.dim > 0) dip.visible = shot.dim > 0;
+    }
+    // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
+    // light of the moment instead (the same light the tint was made from this frame).
+    const { light, tint, rain } = atmosphere.state;
+    sceneLight = light;
+    sceneRain = rain;
+    const lamp = lantern(light, tint, atmosphere.ending);
+    PROBE.enter("overlays");
+    captions.update(dtS, lamp);
+    // The card is out while the local view follows an animal and is not dipped to dark,
+    // nor away visiting the place of an entry (or on its way back): it would name an
+    // animal off screen.
+    const away = AWAY.has(director.state.motion);
+    // Its portrait is drawn as soon as the animal is chosen, in the dark of the dip (R5,
+    // the optimization plan's Phase 1), over a few frames; the card waits for it, or shows
+    // the animal's last one while it grows into the next.
+    const chosen = shot.view === "local" && shot.subject !== null ? shot.subject : null;
+    const look = chosen === null ? null : herd.portraitOf(chosen);
+    const portrait = look === null ? null : (portraits.of(look) ?? portraits.latestOf(look.id));
+    const following = shot.view === "local" && dark < CARD_DIM && !away ? shot.subject : null;
+    const facts =
+      following === null || (look !== null && portrait === null) ? null : herd.cardOf(following);
+    card.update(dtS, facts === null ? null : { ...facts, portrait }, lamp);
+    if (showcase !== null && overlay !== null) {
+      const { act } = showcase.now;
+      overlay.show(act.line, act.title ?? "", showcase.caption, act.top === true);
+    }
+    // Pixi draws next (the benchmark ends the phase after the draw).
+    PROBE.enter("render");
   };
   if (film) {
     // Still until a film moves it, on its own clock: the recording plays on the same one.
@@ -466,9 +892,66 @@ async function start(): Promise<void> {
       app.render();
     };
   } else {
-    app.ticker.add((ticker) => step(ticker.deltaMS));
+    // The showcase's frame counter (`?fps`) and its reports to who runs it (`?post=`).
+    const post = showcasing ? params.get("post") : null;
+    const meter =
+      showcase === null
+        ? null
+        : new FrameMeter(
+            (fps) => {
+              if (params.get("fps") !== null) overlay?.count(`${Math.round(fps)} FPS`);
+            },
+            post === null
+              ? null
+              : (report) => {
+                  void fetch(post, { method: "POST", body: JSON.stringify(report) }).catch(
+                    () => undefined,
+                  );
+                },
+          );
+    app.ticker.add((ticker) => {
+      step(ticker.deltaMS);
+      if (meter !== null && showcase !== null) {
+        const { index, loop } = showcase.now;
+        meter.frame(performance.now(), index, loop, showcase.time);
+      }
+    });
+    // The kiosk's cap on the board (R5, ADR 0022): none unless asked.
+    capFrames(app.ticker, Number(params.get("cap") ?? 0));
   }
   window.__painting = () => landscape.painting;
+
+  // The benchmark's hooks (R5, `bench.ts`): what it may do to the scene and read of it.
+  bench?.attach({
+    app,
+    artScale: ART,
+    press,
+    receive,
+    advance: (seconds) => {
+      advance += seconds;
+    },
+    settled: () => landscape.settled,
+    holdDay: (held) => {
+      landscape.holdDay = held;
+    },
+    dayDue: () => landscape.dayDue,
+    groundMade: () => (painter instanceof WorkerPainter ? { ...painter.made } : null),
+    groundTimings: () => (painter instanceof WorkerPainter ? [...painter.timings] : []),
+    boot: () => ({ ...boot }),
+    newLand: () => {
+      const message = landscape.lastMessage;
+      if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });
+    },
+    camera: () => ({ view: shot.view, dipping: director.state.dipping }),
+    sight: () => sight(shot.centre, WIDTH / TILES[shot.view], HEIGHT / TILES[shot.view]),
+    land: () => landscape.current,
+    animals: () => herd.subjects(),
+    simMs: () => lastMs,
+    creatures: () => lastCreatures,
+    atmosphere: () => ({ ...atmosphere.state, ...atmosphere.counts }),
+    textures,
+    layers: { land: landscape.container, creatures: herd.containers },
+  });
 }
 
 void start();

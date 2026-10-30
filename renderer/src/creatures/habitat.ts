@@ -1,12 +1,25 @@
 /** Where a body can be: land for walkers, water for swimmers. */
-import { DEPTH_STEPS, type SeaAt } from "../creatures/water";
-import type { WorldFixture } from "./fixture";
+import { DEPTH_STEPS, type SeaAt } from "./water";
 
 /** Can a creature be at this place (in cells)? `swims` asks for water instead of land. */
 export type Passable = (x: number, y: number, swims: boolean) => boolean;
 
+/**
+ * What stands in an animal's way among the plants (R5): the feet of trees and the bodies
+ * of bushes. `blocked` says whether a body of radius `margin` (cells) whose middle is at
+ * (x, y) would overlap one. Grass and the small things are walked through.
+ */
+export interface Footprints {
+  blocked(x: number, y: number, margin: number): boolean;
+}
+
 /** What `heightAt` and `passableIn` read of a world: the spike's fixture or the stream's land. */
-export type Relief = Pick<WorldFixture, "width" | "height" | "heights" | "seaLevel">;
+export interface Relief {
+  width: number;
+  height: number;
+  heights: ArrayLike<number>;
+  seaLevel: number;
+}
 
 /** How far above the sea a walker stays, to keep off the waterline. */
 const SHORE_CLEARANCE = 0.004;
@@ -54,7 +67,9 @@ export function passableIn(fixture: Relief): Passable {
  * a share of the deepest band's middle (where the colour is the deepest band's). Depth goes in `DEPTH_STEPS` steps, and the colour
  * is that of the step, so a swimmer's colours change only now and then as it moves.
  */
-export function seaIn(fixture: WorldFixture): SeaAt {
+export function seaIn(
+  fixture: Relief & { relief: { seaBands: readonly { limit: number; colour: string }[] } },
+): SeaAt {
   const bands = fixture.relief.seaBands;
   const middles = bands.map((band, i) => {
     const from = i === 0 ? 0 : (bands[i - 1]?.limit ?? 0);

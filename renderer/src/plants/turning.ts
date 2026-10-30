@@ -36,7 +36,7 @@ const EVERGREEN = 0.5;
 /** Height above the sea at which the hills are as early (or late) as they get. */
 const HILLS = 0.35;
 /** How far a dithered pixel may stray from its place's turn, in earliness. */
-const DITHER = 0.08;
+export const DITHER = 0.08;
 
 /** Where the world is in its year: a season and how far into it, 0–1. */
 export interface YearTime {
@@ -106,8 +106,34 @@ export function groundSeasons(
   heightAt: (u: number, v: number) => number,
   seaLevel: number,
 ): (u: number, v: number, dither: number) => Season {
-  return (u, v, dither) =>
-    seasonShown(time, groundEarliness(time, u, v, heightAt(u, v) - seaLevel) + DITHER * dither);
+  // Away from a turn every place shows the same season (the season shown only grows with
+  // earliness, and the earliest and the latest show the same): no need to work it out
+  // pixel by pixel (R5, the optimization plan: it was an eighth of a painting's time).
+  const [only, other] = seasonsInPlay(time);
+  if (only !== undefined && other === undefined) return () => only;
+  // In a turn, what is the same for every place is worked out once: the same numbers
+  // `seasonShown` and `groundEarliness` work out each time.
+  const phase = phaseOf(time);
+  const hills = hillsFirst(time);
+  return (u, v, dither) => {
+    const front = 2 * valueNoise(u / FRONT_CELLS, v / FRONT_CELLS, 91) - 1;
+    const high = 2 * Math.min(Math.max((heightAt(u, v) - seaLevel) / HILLS, 0), 1) - 1;
+    const earliness = FRONT * front + HEIGHT * high * hills + DITHER * dither;
+    const shown = phase + (TURN_SEASONS / 2) * Math.min(Math.max(earliness, -1), 1);
+    return SEASONS[((Math.floor(shown) % 4) + 4) % 4] ?? "summer";
+  };
+}
+
+/** What the ground's seasons are worked out from, for the painter on the GPU (`gpuground.ts`). */
+export const GROUND_TURN = { FRONT_CELLS, FRONT, HEIGHT, HILLS, DITHER, TURN_SEASONS } as const;
+
+/**
+ * In a turn, what is the same for every place (`groundSeasons`): the year's phase, and
+ * whether being high makes a place early (1) or late (−1); null away from a turn.
+ */
+export function turnOf(time: YearTime): { phase: number; hills: number } | null {
+  const [, other] = seasonsInPlay(time);
+  return other === undefined ? null : { phase: phaseOf(time), hills: hillsFirst(time) };
 }
 
 /** Whether, at `time`, some places show one season and some another. */

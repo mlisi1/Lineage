@@ -10,6 +10,8 @@ import { SPRITE_WIDTH, type Form, type PlantLook, type Stage } from "../plants/l
 import type { Ramp } from "../terrain/land";
 import { hexToRgb, type Pixels } from "../terrain/pixels";
 
+export { disc, wedge } from "../creatures/atlas";
+
 export { cellHash, hexToRgb, type Pixels } from "../terrain/pixels";
 export {
   FORMS,
@@ -298,31 +300,6 @@ export function rasterise(bitmap: Bitmap, ramp: Ramp): Pixels {
     }
   });
   return { width: SPRITE_WIDTH, height, rgba };
-}
-
-/** A filled white disc with hard edges, `size` pixels across: one body segment. */
-export function disc(size: number): Pixels {
-  const rgba = new Uint8ClampedArray(size * size * 4);
-  const centre = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const inside = (x + 0.5 - centre) ** 2 + (y + 0.5 - centre) ** 2 <= centre * centre;
-      if (inside) rgba.set([255, 255, 255, 255], (y * size + x) * 4);
-    }
-  }
-  return { width: size, height: size, rgba };
-}
-
-/** A hard-edged white wedge: its base down the left edge, its point at the middle right. */
-export function wedge(size: number): Pixels {
-  const rgba = new Uint8ClampedArray(size * size * 4);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const half = (size / 2) * (1 - (x + 0.5) / size);
-      if (Math.abs(y + 0.5 - size / 2) <= half) rgba.set([255, 255, 255, 255], (y * size + x) * 4);
-    }
-  }
-  return { width: size, height: size, rgba };
 }
 
 /** Name of a look in the atlas. */

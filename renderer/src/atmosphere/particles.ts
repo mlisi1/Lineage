@@ -34,7 +34,8 @@ export function puffAt(
   slot: number,
   timeS: number,
   tile: number,
-): { x: number; y: number; size: number; alpha: number } {
+  out: Puff = { x: 0, y: 0, size: 0, alpha: 0 },
+): Puff {
   const phase = cellHash(slot, plume.salt, 301);
   const shifted = timeS + phase * plume.life;
   const cycle = Math.floor(shifted / plume.life);
@@ -44,12 +45,24 @@ export function puffAt(
   const travelled = age * plume.life;
   // Each puff leans a little its own way as it rises.
   const lean = 0.5 + cellHash(slot, cycle + plume.salt, 304);
-  return {
-    x: plume.x + reach * Math.cos(angle) + (plume.drift * lean * travelled) / tile,
-    y: plume.y + reach * Math.sin(angle) - (plume.rise * travelled) / tile,
-    size: plume.from + (plume.to - plume.from) * age,
-    alpha: plume.alpha * (1 - age) * Math.min(age * 6, 1),
-  };
+  out.x = plume.x + reach * Math.cos(angle) + (plume.drift * lean * travelled) / tile;
+  out.y = plume.y + reach * Math.sin(angle) - (plume.rise * travelled) / tile;
+  out.size = plume.from + (plume.to - plume.from) * age;
+  out.alpha = plume.alpha * (1 - age) * Math.min(age * 6, 1);
+  return out;
+}
+
+/** A puff where `puffAt` puts it: x, y in cells, its size in art pixels, its opacity. */
+export interface Puff {
+  x: number;
+  y: number;
+  size: number;
+  alpha: number;
+}
+
+/** Tint `sprite` `colour`, written only when it changes (Pixi parses a colour on every write). */
+export function tint(sprite: Sprite, colour: number): void {
+  if (sprite.tint !== colour) sprite.tint = colour;
 }
 
 /** Something falling across the screen: rain, falling ash. In art pixels of the screen. */
@@ -80,16 +93,62 @@ export function dropAt(
   return { x: (((startX + fall.slant * age) % width) + width) % width, y: -4 + fall.speed * age };
 }
 
-/** Sprites to be placed afresh each frame: as many as are asked for, the rest hidden. */
+/**
+ * Frames a sprite a pool has no use for is kept, see-through, before it is hidden. Hiding
+ * a sprite changes its group's structure, and Pixi then rebuilds the group's whole draw
+ * list: a fire's pools, their counts changing from frame to frame, rebuilt theirs every
+ * frame (R5, the optimization plan). A see-through sprite draws nothing, so the picture is
+ * the same; one unused for a second is hidden at last, once.
+ */
+export const PARK_FRAMES = 30;
+
+/** Sprites a pool is not using this frame: see-through at once, hidden once long unused. */
+class Parking {
+  /** Frames each sprite has been parked, or -1 while it is in use. */
+  private readonly idle: number[] = [];
+  /** Its opacity when it was parked, given back when it is used again. */
+  private readonly alpha: number[] = [];
+
+  /** Sprite `index` is not used this frame. */
+  park(sprite: Sprite, index: number): void {
+    const idle = this.idle[index] ?? -1;
+    if (idle < 0) {
+      if (!sprite.visible) return;
+      this.alpha[index] = sprite.alpha;
+      sprite.alpha = 0;
+      this.idle[index] = 0;
+      return;
+    }
+    this.idle[index] = idle + 1;
+    if (idle + 1 >= PARK_FRAMES && sprite.visible) sprite.visible = false;
+  }
+
+  /** Sprite `index` is used again: as it was when parked, and shown. */
+  use(sprite: Sprite, index: number): void {
+    if ((this.idle[index] ?? -1) >= 0) {
+      sprite.alpha = this.alpha[index] ?? 1;
+      this.idle[index] = -1;
+    }
+    // Read first: the setter's work is not free, and it is asked of every sprite every frame.
+    if (!sprite.visible) sprite.visible = true;
+  }
+}
+
+/** Sprites to be placed afresh each frame: as many as are asked for, the rest parked. */
 export class SpritePool {
-  readonly container = new Container();
+  // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
+  // group's draw list, not the scene's with its thousands of plants.
+  readonly container = new Container({ isRenderGroup: true });
   private readonly sprites: Sprite[] = [];
   private used = 0;
+  private skipped = 0;
+  private readonly parking = new Parking();
 
   constructor(private readonly blendMode: "normal" | "add" = "normal") {}
 
   begin(): void {
     this.used = 0;
+    this.skipped = 0;
   }
 
   /** The next sprite, shown, with `texture`. */
@@ -102,21 +161,34 @@ export class SpritePool {
       this.container.addChild(sprite);
     }
     if (sprite.texture !== texture) sprite.texture = texture;
-    sprite.visible = true;
+    this.parking.use(sprite, this.used);
     this.used += 1;
     return sprite;
+  }
+
+  /**
+   * Pass over a sprite not drawn this frame, keeping its place: those asked for after it
+   * keep theirs, rather than each taking its neighbour's texture and place and being
+   * written afresh (R5, review P1). What is drawn, and in what order, is the same.
+   */
+  skip(): void {
+    const sprite = this.sprites[this.used];
+    if (sprite === undefined) return;
+    this.parking.park(sprite, this.used);
+    this.used += 1;
+    this.skipped += 1;
   }
 
   end(): void {
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
-      if (sprite !== undefined) sprite.visible = false;
+      if (sprite !== undefined) this.parking.park(sprite, i);
     }
   }
 
   /** Sprites shown after the last `end` (tests). */
   get shown(): number {
-    return this.used;
+    return this.used - this.skipped;
   }
 }
 
@@ -135,6 +207,9 @@ export interface Rows {
 export class RowPool {
   private readonly sprites: Sprite[] = [];
   private used = 0;
+  /** This frame's sprites by the row they were asked into, in the order asked. */
+  private readonly placed = new Map<Container, Sprite[]>();
+  private readonly parking = new Parking();
 
   constructor(
     private readonly fallback: Container,
@@ -143,6 +218,7 @@ export class RowPool {
 
   begin(): void {
     this.used = 0;
+    this.placed.clear();
   }
 
   /** The next sprite, shown, with `texture`, in the row of a foot at `footY` cells. */
@@ -159,19 +235,34 @@ export class RowPool {
         : (rows.guests[
             Math.min(Math.max(Math.floor(footY * rows.rowsPerCell), 0), rows.guests.length - 1)
           ] ?? this.fallback);
-    // Last in its row, every frame: what is asked for later is drawn over what came before
-    // (a cone, then its lava; a tree's foot fire, then the flames in its crown).
-    host.addChild(sprite);
+    if (sprite.parent !== host) host.addChild(sprite);
+    let row = this.placed.get(host);
+    if (row === undefined) {
+      row = [];
+      this.placed.set(host, row);
+    }
+    row.push(sprite);
     if (sprite.texture !== texture) sprite.texture = texture;
-    sprite.visible = true;
+    this.parking.use(sprite, this.used);
     this.used += 1;
     return sprite;
   }
 
   end(): void {
+    // Last in its row, in the order asked: what is asked for later is drawn over what came
+    // before (a cone, then its lava; a tree's foot fire, then the flames in its crown).
+    // Put there only where they are not already (R5: taken out and put back every frame,
+    // every flame rebuilt its band's draw list every frame).
+    for (const [host, row] of this.placed) {
+      const children = host.children;
+      const from = children.length - row.length;
+      let inPlace = from >= 0;
+      for (let k = 0; inPlace && k < row.length; k++) inPlace = children[from + k] === row[k];
+      if (!inPlace) for (const sprite of row) host.addChild(sprite);
+    }
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
-      if (sprite !== undefined) sprite.visible = false;
+      if (sprite !== undefined) this.parking.park(sprite, i);
     }
   }
 

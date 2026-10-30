@@ -363,6 +363,63 @@ def grouped_bars(
     return fig
 
 
+def lines_over_time(
+    series: Mapping[str, tuple[Sequence[float], Sequence[float | None]]],
+    colours: Mapping[str, str],
+    *,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    marks: Sequence[tuple[float, str]] = (),
+    reference: tuple[float, str] | None = None,
+) -> Figure:
+    """One line with markers per series, each on its own x values (such as minutes).
+
+    A value of None (not measured) is left out of its line. ``marks`` names moments on
+    the x axis (a dotted rule and a slanted label at the top), and ``reference`` draws a
+    labelled horizontal line, such as a limit.
+    """
+    fig, ax = plt.subplots(figsize=(7.0, 3.6))
+    for name, (xs, ys) in series.items():
+        points = [(x, y) for x, y in zip(xs, ys, strict=True) if y is not None]
+        if not points:
+            continue
+        ax.plot(
+            [x for x, _ in points],
+            [y for _, y in points],
+            color=colours[name],
+            marker="o",
+            markersize=3.5,
+            label=name,
+        )
+    for x, label in marks:
+        ax.axvline(x, color=style.GRID, linewidth=0.8, linestyle=":")
+        ax.annotate(
+            label,
+            (x, 1.0),
+            xycoords=("data", "axes fraction"),
+            xytext=(2, 2),
+            textcoords="offset points",
+            rotation=35,
+            fontsize=7,
+            color=style.TEXT_SECONDARY,
+        )
+    if reference is not None:
+        ax.axhline(
+            reference[0],
+            color=style.TEXT_PRIMARY,
+            linewidth=1.0,
+            linestyle="--",
+            label=reference[1],
+        )
+    ax.set_title(title, pad=34 if marks else 6)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncols=6, fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
 def heatmap(
     rows: Sequence[str],
     columns: Sequence[str],
