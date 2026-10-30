@@ -478,15 +478,17 @@ export class Landscape {
   }
 
   /**
-   * Whether the view's ground in sight is painted from the latest land and its plants are
-   * not fading, whatever else is being painted (R5: a view the button brings on is shown
-   * then, not held while the ring of pieces round it, out of sight, is painted).
+   * How far the iris between views may open (R5, `iris.ts`), 0–1 of the way from the middle
+   * to the corners: as far as the view's ground is painted out from its middle; the map's
+   * all at once, when it is painted.
    */
-  get inSight(): boolean {
-    if (!this.groundShown) return false;
-    if (this.view === "map") return true;
-    const shown = this.view === "middle" ? this.built.middle : this.built.local;
-    return !(shown?.plants.fading ?? true);
+  get openTo(): number {
+    if (this.stale || this.land === null) return 0;
+    if (this.view === "map") return this.built.map?.settled === true ? 1 : 0;
+    const ground = this.view === "middle" ? this.built.middle?.ground : this.built.local?.ground;
+    if (ground === undefined) return 0;
+    const { x0, y0, x1, y1 } = this.cells;
+    return Math.min(ground.paintedReach(this.cells) / Math.hypot(x1 - x0, y1 - y0) / 0.5, 1);
   }
 
   /** Whether everything the view shows is painted from the latest land, and nothing is fading. */

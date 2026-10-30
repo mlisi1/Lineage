@@ -73,7 +73,7 @@ import { Leaves } from "./atmosphere/leaves";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
-import { Captions, lantern } from "./captions";
+import { Captions, PAPER, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
 import {
   Director,
@@ -85,6 +85,7 @@ import {
   type Visit,
 } from "./director";
 import { Herd } from "./herd";
+import { IRIS_FROM, Iris } from "./iris";
 import { useArtCache, type PlantLayer } from "./plants/plants";
 import { Landscape, PAINTER_CODE, TILES, VIEWS, type ViewName } from "./landscape";
 import { makeArtCache } from "./plants/artcache";
@@ -444,6 +445,10 @@ async function start(): Promise<void> {
   dip.alpha = 0;
   dip.visible = false;
   app.stage.addChild(dip);
+  // Live, the iris in its place (R5, `iris.ts`): it closes on the middle, a ring turns while
+  // the next view's ground comes, and it opens as far as that ground is painted.
+  const iris = new Iris(app.screen.width, app.screen.height, DIP_COLOUR, PAPER);
+  app.stage.addChild(iris.sprite);
   // An animal burnt to death (or, in streams without causes, that dies in a burning
   // cell) leaves a puff of ash.
   herd.onGone = (x, y, cause) => {
@@ -710,9 +715,9 @@ async function start(): Promise<void> {
     } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
-      // Live, a view is shown once its ground in sight is in (`inSight`); films and stills
-      // keep waiting for all of it, as they were made.
-      scene.ready = director.looksAhead ? landscape.inSight : landscape.settled;
+      // Live, the iris opens once the middle of the view is painted (`openTo`, and as far
+      // as it is); films and stills keep waiting for all of it, as they were made.
+      scene.ready = director.looksAhead ? landscape.openTo >= IRIS_FROM : landscape.settled;
       scene.place = scroll.phase === "roll-up" || atmosphere.ending ? null : entry;
       shot = director.update(dtS, scene);
     } else {
@@ -838,8 +843,15 @@ async function start(): Promise<void> {
     // Written only when they change: each write makes the browser restyle the page.
     const transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     if (canvas.style.transform !== transform) canvas.style.transform = transform;
-    if (dip.alpha !== shot.dim) dip.alpha = shot.dim;
-    if (dip.visible !== shot.dim > 0) dip.visible = shot.dim > 0;
+    // How dark the screen is between views: the dip's, or live the iris's (shut, 1).
+    let dark = shot.dim;
+    if (director.looksAhead) {
+      iris.update(dtS, shot.dim, landscape.openTo);
+      dark = Math.max(shot.dim, 1 - iris.open);
+    } else {
+      if (dip.alpha !== shot.dim) dip.alpha = shot.dim;
+      if (dip.visible !== shot.dim > 0) dip.visible = shot.dim > 0;
+    }
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
     const { light, tint, rain } = atmosphere.state;
@@ -858,7 +870,7 @@ async function start(): Promise<void> {
     const chosen = shot.view === "local" && shot.subject !== null ? shot.subject : null;
     const look = chosen === null ? null : herd.portraitOf(chosen);
     const portrait = look === null ? null : (portraits.of(look) ?? portraits.latestOf(look.id));
-    const following = shot.view === "local" && shot.dim < CARD_DIM && !away ? shot.subject : null;
+    const following = shot.view === "local" && dark < CARD_DIM && !away ? shot.subject : null;
     const facts =
       following === null || (look !== null && portrait === null) ? null : herd.cardOf(following);
     card.update(dtS, facts === null ? null : { ...facts, portrait }, lamp);

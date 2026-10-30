@@ -434,6 +434,27 @@ export class PieceGround extends Layers {
     }
   }
 
+  /**
+   * How far out from the middle of `view` its ground is painted from the latest land, in
+   * cells: to the nearest piece in it not yet painted (Infinity once all are). The iris
+   * between views opens this far (R5, `iris.ts`).
+   */
+  paintedReach(view: CellRect): number {
+    const cx = (view.x0 + view.x1) / 2;
+    const cy = (view.y0 + view.y1) / 2;
+    const size = this.cut.cells;
+    let reach = Infinity;
+    for (const key of this.keys(view, 0)) {
+      if ((this.pieces.get(key)?.painted ?? -1) === this.landVersion) continue;
+      const x0 = (key % 1024) * size;
+      const y0 = Math.floor(key / 1024) * size;
+      const dx = Math.max(x0 - cx, 0, cx - (x0 + size));
+      const dy = Math.max(y0 - cy, 0, cy - (y0 + size));
+      reach = Math.min(reach, Math.hypot(dx, dy));
+    }
+    return reach;
+  }
+
   /** Pieces painted from the latest land, of those the view needs. */
   ready(view: CellRect): boolean {
     return this.keys(view, 0).every(
