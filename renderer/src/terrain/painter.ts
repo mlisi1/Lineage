@@ -118,10 +118,16 @@ export interface Painter {
   /** The land the requests from now on are painted on. Returns its version. */
   setLand(land: Land): number;
   /**
-   * Paint `request` on the latest land. The lower `priority`, the sooner. Rejects with
-   * `Dropped` if `drop` takes it off the queue first.
+   * Paint `request` on the latest land. The lower `priority`, the sooner. `later` adds to
+   * the request what is worked out only once a painter takes it up (R5: a piece's
+   * shadows, not for every piece asked at once). Rejects with `Dropped` if `drop` takes
+   * it off the queue first.
    */
-  paint(request: PaintRequest, priority?: number): Promise<Painted>;
+  paint(
+    request: PaintRequest,
+    priority?: number,
+    later?: () => Partial<PaintRequest>,
+  ): Promise<Painted>;
   /** Take off the queue every request not yet started for which `which` says so. */
   drop(which: (request: PaintRequest) => boolean): void;
   /** Requests waiting or being painted, but those in the background (`BACKGROUND`). */
@@ -143,6 +149,7 @@ export class Dropped extends Error {
 
 interface Queued {
   request: PaintRequest;
+  later?: () => Partial<PaintRequest>;
   priority: number;
   order: number;
   /** When it was asked for, and when a painter took it up (`performance.now`). */
@@ -172,11 +179,16 @@ abstract class QueuedPainter implements Painter {
     return this.version;
   }
 
-  paint(request: PaintRequest, priority = 0): Promise<Painted> {
+  paint(
+    request: PaintRequest,
+    priority = 0,
+    later?: () => Partial<PaintRequest>,
+  ): Promise<Painted> {
     return new Promise((resolve, reject) => {
       const askedAt = performance.now();
       this.queue.push({
         request,
+        ...(later === undefined ? {} : { later }),
         priority,
         order: this.order++,
         askedAt,
@@ -235,6 +247,10 @@ abstract class QueuedPainter implements Painter {
       this.queue.sort((a, b) => a.priority - b.priority || a.order - b.order);
       const first = this.queue.shift();
       if (first === undefined) return;
+      if (first.later !== undefined) {
+        first.request = { ...first.request, ...first.later() };
+        delete first.later;
+      }
       first.startedAt = performance.now();
       this.running[slot] = first;
       this.start(first.request, slot);

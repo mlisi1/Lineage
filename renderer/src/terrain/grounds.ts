@@ -264,6 +264,21 @@ interface Piece {
   fade: Fade | null;
 }
 
+/**
+ * What throws a shadow on `padded`, as a request's part (`Painter.paint`'s `later`):
+ * worked out when a painter takes the piece up, one piece at a time, not for every piece
+ * asked for at once (R5: twenty pieces asked ahead held a frame up 0.4 s at the board's speed).
+ */
+function shadowsFor(
+  shadowsOf: (cells: CellRect) => PaintRequest["shadows"],
+  padded: CellRect,
+): Partial<PaintRequest> {
+  performance.mark("lineage:shadows");
+  const shadows = shadowsOf(padded);
+  performance.measure("lineage:shadows", "lineage:shadows");
+  return shadows === undefined ? {} : { shadows };
+}
+
 /** The ground of the local view, a piece at a time. */
 export class PieceGround extends Layers {
   private readonly pieces = new Map<number, Piece>();
@@ -348,7 +363,6 @@ export class PieceGround extends Layers {
       const shown = this.pieces.get(key);
       if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
       const { cells, padded } = this.extent(key);
-      const shadows = shadowsOf(padded);
       try {
         // The painter keeps it (`PaintRequest.keep`), or finds it kept already.
         const { fresh } = await this.painter.paint(
@@ -357,10 +371,10 @@ export class PieceGround extends Layers {
             tile: this.tile,
             cells: padded,
             shown: cells,
-            ...(shadows === undefined ? {} : { shadows }),
             keep: { key: this.keyOf(key), stamp, ahead: true },
           },
           BACKGROUND + this.distance(key),
+          () => shadowsFor(shadowsOf, padded),
         );
         if (this.stamp !== stamp) break;
         if (fresh !== true) continue;
@@ -393,7 +407,6 @@ export class PieceGround extends Layers {
       if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
       this.prefetched.add(key);
       const { cells, padded } = this.extent(key);
-      const shadows = shadowsOf(padded);
       const x = ((key % 1024) + 0.5) * this.cut.cells;
       const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
       this.painter
@@ -403,10 +416,10 @@ export class PieceGround extends Layers {
             tile: this.tile,
             cells: padded,
             shown: cells,
-            ...(shadows === undefined ? {} : { shadows }),
             keep: { key: this.keyOf(key), stamp, ahead: true },
           },
           BACKGROUND + Math.hypot(x - centre.x, y - centre.y),
+          () => shadowsFor(shadowsOf, padded),
         )
         .catch((error: unknown) => {
           if (!(error instanceof Dropped)) throw error;
@@ -488,9 +501,6 @@ export class PieceGround extends Layers {
     piece.asked = version;
     const wanted = (): boolean => this.pieces.get(key) === piece && piece.asked === version;
     const paint = (): void => {
-      performance.mark("lineage:shadows");
-      const shadows = shadowsOf(padded);
-      performance.measure("lineage:shadows", "lineage:shadows");
       this.painter
         .paint(
           {
@@ -498,10 +508,10 @@ export class PieceGround extends Layers {
             tile: this.tile,
             cells: padded,
             shown: cells,
-            ...(shadows === undefined ? {} : { shadows }),
             ...(stamp === "" ? {} : { keep: { key: this.keyOf(key), stamp } }),
           },
           this.distance(key),
+          () => shadowsFor(shadowsOf, padded),
         )
         .then(({ pixels }) => {
           if (!wanted()) return;
