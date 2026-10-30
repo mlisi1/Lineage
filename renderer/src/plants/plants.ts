@@ -14,6 +14,7 @@
  * logs, and stumps and snags where it burnt. No plant carries a shadow: the layer lists
  * them, for the ground to paint.
  */
+import { NO_ART_CACHE, contentKey, type ArtCache } from "./artcache";
 import { PROBE } from "../frameprobe";
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_LOOK, type Look, type PlantInks } from "../looks";
@@ -1371,6 +1372,14 @@ interface SharedSheet {
   tall: number;
   users: number;
 }
+/** Where drawn sheets are kept between page loads (`useArtCache`); none by default. */
+let artCache: ArtCache = NO_ART_CACHE;
+
+/** Keep the plants' drawings in `cache` from now on (the page, where it may keep things). */
+export function useArtCache(cache: ArtCache): void {
+  artCache = cache;
+}
+
 /** Sheets by the palette they are coloured from, then by what they hold. */
 const SHEETS = new WeakMap<object, Map<string, SharedSheet>>();
 
@@ -1407,9 +1416,21 @@ function sheetOf(
   ].join("|");
   let shared = byKey.get(key);
   if (shared === undefined) {
-    const drawn = arts();
+    const drawing = performance.now();
+    // Kept from an earlier page load where there is one (`artcache.ts`): what the drawings
+    // are made of is the palette, the relief, whether the land has snow, and `key`.
+    const keptKey = `${contentKey([land.palette, land.relief, land.snow !== undefined])}|${key}`;
+    let drawn = artCache.get(keptKey) as StandingArt[] | undefined;
+    if (drawn === undefined) {
+      drawn = arts();
+      artCache.put(keptKey, drawn);
+    }
+    performance.measure(`lineage:sheet:arts:${tile}`, { start: drawing });
+    const stripping = performance.now();
+    const stripped = strip(drawn, look.plants);
+    performance.measure(`lineage:sheet:strip:${tile}`, { start: stripping });
     shared = {
-      ...strip(drawn, look.plants),
+      ...stripped,
       lean: new LeanSheet(),
       tall: Math.max(...drawn.map(({ art }) => art.height)) / tile,
       users: 0,

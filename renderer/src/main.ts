@@ -77,8 +77,9 @@ import { Captions, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
 import { Director, TIMINGS, type Motion, type Scene, type Shot, type Visit } from "./director";
 import { Herd } from "./herd";
-import type { PlantLayer } from "./plants/plants";
-import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
+import { useArtCache, type PlantLayer } from "./plants/plants";
+import { Landscape, PAINTER_CODE, TILES, VIEWS, type ViewName } from "./landscape";
+import { makeArtCache } from "./plants/artcache";
 import { PlaceMarker } from "./marker";
 import type { ClockMessage, CreaturesMessage, Message, SkyMessage } from "./protocol";
 import { FrameMeter } from "./showcase/meter";
@@ -310,7 +311,11 @@ async function start(): Promise<void> {
   landscape.bushPieces = params.get("bushes") !== "whole";
   landscape.groundOnGpu = params.get("painter") !== "cpu";
   // The ground painted is kept between visits (R5); `?ground=fresh` paints it all anew.
-  if (params.get("ground") !== "fresh") landscape.cache = makeGroundCache();
+  if (params.get("ground") !== "fresh") {
+    landscape.cache = makeGroundCache();
+    // The plants' drawings kept too, read in now, long before the first lay-out (R5).
+    useArtCache(makeArtCache(PAINTER_CODE));
+  }
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();

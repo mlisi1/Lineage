@@ -38,7 +38,7 @@ declare const __BUILD_COMMIT__: string;
  * page was built from; none kept for a build with changes not committed, or under the
  * development server, whose painter may change from one page load to the next.
  */
-const PAINTER_CODE =
+export const PAINTER_CODE =
   typeof __BUILD_COMMIT__ === "string" &&
   __BUILD_COMMIT__ !== "unknown" &&
   !__BUILD_COMMIT__.endsWith("-dirty") &&
