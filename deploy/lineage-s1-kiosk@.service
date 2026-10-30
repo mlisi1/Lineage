@@ -29,10 +29,10 @@ StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
 Environment=XDG_SESSION_TYPE=wayland
-# No pointer on the screen (R5, f9a11f7): cage cannot hide it, so its cursor theme is a
+# No pointer on the screen (R5, fa4f7ec): cage cannot hide it, so its cursor theme is a
 # see-through one, written by deploy/blank-cursor.py (run once as the user).
 Environment=XCURSOR_THEME=lineage-blank
-Environment=XCURSOR_PATH=/home/%i/.local/share/icons
+Environment=XCURSOR_PATH=/home/%i/.local/share/lineage-cursors
 UtmpIdentifier=tty1
 UtmpMode=user
 ExecStart=/usr/bin/cage -s -- /usr/bin/chromium --no-first-run --no-default-browser-check --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-component-update --disable-background-networking --disable-features=Translate,MediaRouter --password-store=basic --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --ozone-platform-hint=auto --user-data-dir=/home/%i/.lineage-s1-kiosk --kiosk --window-position=0,0 --window-size=1024,600 http://localhost:8080/?cap=30
