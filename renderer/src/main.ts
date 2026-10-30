@@ -440,7 +440,12 @@ async function start(): Promise<void> {
     const begun = PROBE.enabled ? performance.now() : 0;
     if (message.type === "land" && boot.land === null) boot.land = performance.now();
     PROBE.note(message.type);
+    // Until the first ground is painted, each message's handling is marked for a trace or
+    // a look from the board (R5: where a start goes); none after, so that none pile up.
+    const starting = boot.painted === null;
+    const from = starting ? performance.now() : 0;
     if (!atmosphere.hold(message)) deliver(message);
+    if (starting) performance.measure(`lineage:start:${message.type}`, { start: from });
     if (PROBE.enabled) PROBE.charge("messages", performance.now() - begun);
   };
   // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
@@ -707,8 +712,10 @@ async function start(): Promise<void> {
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
     PROBE.enter("landscape");
+    const laying = boot.painted === null ? performance.now() : 0;
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    if (laying > 0) performance.measure("lineage:start:landscape", { start: laying });
     if (boot.laidOut === null && landscape.current !== null) boot.laidOut = performance.now();
     if (boot.painted === null && landscape.settled) boot.painted = performance.now();
     PROBE.enter("herd");
