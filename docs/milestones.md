@@ -47,7 +47,7 @@ conflicts only in the docs.
   - `deploy/lineage-server@.service`.
 - **Tests:** store (retention, recovery, 20 `kill -9`s), island (resume bit-identical,
   catch-up = owner away, cadence, device events, power loss, a world's end, a clock
-  jump), end to end with real clients, a save benchmark (197 ms on the PC), renderer
+  jump), end to end with real clients, a save benchmark (197 ms on the PC; 53 ms at xz preset 0), renderer
   `SocketSource`.
 - **Left:**
   1. ~~The board's numbers~~ done 2026-10-29 (ADR 0023, Results): sim share 0.0011 with the

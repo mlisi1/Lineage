@@ -69,7 +69,8 @@ No sim change, no schema bump.
 
 On the PC, 2026-10-28:
 - A full world (v9, about 200 animals) is saved through the store in 197 ms. 189 ms of
-  that is xz at preset 6; preset 1 gives the same 0.68 MB in about 68 ms.
+  that is xz at preset 6; preset 1 gives the same 0.68 MB in about 68 ms. (Before the
+  change to preset 0 in Consequences: 53 ms since.)
 - A new island starts in 0.1 s.
 - The kiosk build draws the live stream: map view of a new world, no errors.
 - The board's session rehearsed from the wheels in a fresh environment, with the unit's

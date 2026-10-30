@@ -54,7 +54,8 @@ subsystem. Draws in one stream never shift another; stream states are saved.
 ### Saves
 
 A save is the world state encoded canonically (sorted JSON header plus NumPy arrays in
-`.npy` form) inside an xz stream whose CRC detects truncation. The same state always gives
+`.npy` form) inside an xz stream (xz's lightest preset, as small as the default and
+faster) whose CRC detects truncation. The same state always gives
 the same bytes, so the SHA-256 of the encoding is the state hash used by determinism
 tests. Saves carry `schema_version` and are migrated forward on load
 (`state/migrations/`); the sim returns bytes and the caller writes them atomically. On

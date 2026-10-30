@@ -99,10 +99,18 @@ standard input (`p` presence, `g` god power, `v` view, `l`/`r` power lost/restor
 `deploy/lineage-server@.service` runs the server as a user, in an environment of the
 project's Python 3.11 that `deploy/s1-board.sh setup` makes with `uv` (the board's own
 Python is Debian's 3.13); `deploy/lineage-s1-kiosk@.service` shows the kiosk on the
-screen, and `tools/server_watch.py` samples `/status` from the PC (`deploy/README.md`). The numbers to hold (§4.8):
+screen, and `tools/server_watch.py` samples `/status` from the PC (`deploy/README.md`).
+The numbers to hold (§4.8):
 - sim at most 25 % of one core on average (`/status` `sim_core_share`);
 - the daily save at most 2 s (`longest_save_s`);
 - sim and server together at most 300 MB (`rss_mb`).
 
-On the PC a full world's save takes about 50 ms, at xz's lightest preset (`io.XZ_PRESET`,
-0: as small as the default and a third of its memory; the owner, 2026-10-30).
+Measured on the board, 2026-10-29, with the kiosk drawing (ADR 0023, Results):
+- the sim 0.1 % of one core;
+- 6.1 s of CPU a sim-day;
+- saves 1.2–1.6 s, at xz's default preset then;
+- 89 MB, flat.
+
+Since then saves use xz's lightest preset (`io.XZ_PRESET`, 0; the owner, 2026-10-30): as
+small, about 50 ms on the PC instead of 120, 3 MB of extra memory instead of 35. The
+board's new save time is for S7's soak to confirm.
