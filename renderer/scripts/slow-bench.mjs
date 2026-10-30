@@ -8,8 +8,9 @@
  *   node scripts/slow-bench.mjs <scenarios> [throttle=20] [port=5391] [more query]
  *
  * Prints, per scenario: frame rate, frames late, the script's median and 99th percentile,
- * the longest frame, how long the view took to be ready, the frame probe's phases, and the
- * ground's paintings (their median times and each painting step's).
+ * the longest frame, how long the view took to be ready, the frame probe's phases, the
+ * ground's paintings (their median times and each painting step's), and each press of the
+ * `switches` scenario.
  */
 import process from "node:process";
 import { chromium } from "@playwright/test";
@@ -46,6 +47,12 @@ for (const s of results.scenarios) {
       ` js ${s.js_ms_median.toFixed(1)}/${s.js_ms_p99.toFixed(1)} max ${s.frame_ms_max.toFixed(0)}` +
       ` ready ${s.ready_s.toFixed(1)}s | ${phases}`,
   );
+  for (const turn of s.switches ?? []) {
+    console.log(
+      `   round ${turn.round + 1}, to ${turn.view}: there in ${turn.arrived_s.toFixed(1)} s,` +
+        ` painted in ${turn.painted_s.toFixed(1)} s${turn.painted ? "" : " (not all painted)"}`,
+    );
+  }
   const ground = s.ground_timing;
   if (ground) {
     console.log(`   ground ${ground.pieces} pieces, median ${JSON.stringify(ground.median)}`);

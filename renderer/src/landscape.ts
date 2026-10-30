@@ -16,7 +16,12 @@
 import { PROBE } from "./frameprobe";
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
-import { standingPlants, type PlantLayer } from "./plants/plants";
+import {
+  prepareStanding,
+  standingPlants,
+  type PlantLayer,
+  type StandingOptions,
+} from "./plants/plants";
 import { isTurning, type YearTime } from "./plants/turning";
 import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
@@ -194,6 +199,8 @@ export class Landscape {
    */
   private layoutVersion = 0;
   private readonly builtFor = new Map<ViewName, number>();
+  /** The lay-out each view not shown was last prepared ahead for (`prepareAhead`). */
+  private readonly aheadFor = { middle: -1, local: -1 };
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly built: Built = { map: null, middle: null, local: null };
@@ -353,13 +360,25 @@ export class Landscape {
   }
 
   /**
-   * Lay view `name` out for the latest land without showing it, if it is not already (R5,
-   * the optimization plan: so that its ground can be painted ahead, `prefetch`). Its plants
-   * are laid out on the page's thread: asked for while the screen is dark.
+   * Lay the views not shown out for the latest land, ahead of the view button (R5, the
+   * optimization plan): their plants' sheets drawn in a worker first (`prepareStanding`),
+   * so that nothing on the screen waits, then each view laid out and its ground painted
+   * ahead (`prefetch`). Called every frame; asks once per lay-out.
    */
-  prepare(name: ViewName): void {
-    if (this.land === null || name === "map" || !this.behind(name)) return;
-    this.build(name);
+  prepareAhead(): void {
+    const { land } = this;
+    if (land === null) return;
+    for (const name of ["middle", "local"] as const) {
+      if (name === this.view || !this.behind(name) || this.aheadFor[name] === this.layoutVersion)
+        continue;
+      const version = this.layoutVersion;
+      this.aheadFor[name] = version;
+      void prepareStanding(land, TILES[name], this.plantOptions(name)).then(() => {
+        if (version === this.layoutVersion && name !== this.view && this.behind(name)) {
+          this.build(name);
+        }
+      });
+    }
   }
 
   /**
@@ -529,6 +548,18 @@ export class Landscape {
     ].join("|");
   }
 
+  /** How view `name`'s plants are laid out for the current land and day. */
+  private plantOptions(name: "middle" | "local", time = this.time()): StandingOptions {
+    return {
+      covered: this.covered ?? undefined,
+      look: this.look,
+      time,
+      close: name === "local",
+      lazy: name === "middle",
+      pieces: this.bushPieces,
+    };
+  }
+
   /** Make view `name` (again) for the current land and day. */
   private build(name: ViewName): void {
     const { land, look } = this;
@@ -556,14 +587,7 @@ export class Landscape {
       return;
     }
     performance.mark(`lineage:plants:${name}`);
-    const plants = standingPlants(land, TILES[name], {
-      covered: this.covered ?? undefined,
-      look,
-      time,
-      close: name === "local",
-      lazy: name === "middle",
-      pieces: this.bushPieces,
-    });
+    const plants = standingPlants(land, TILES[name], this.plantOptions(name, time));
     performance.measure(`lineage:plants:${name}`, `lineage:plants:${name}`);
     if (name === "middle") {
       if (this.built.middle === null) {

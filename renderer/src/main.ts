@@ -726,14 +726,12 @@ async function start(): Promise<void> {
     }
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
-    // Ahead of the view button (R5, the optimization plan): in the dark of a dip the views
-    // not shown are laid out, and every so often the ground round the animal the local
-    // view will follow next is painted and kept, so that a view comes already painted.
+    // Ahead of the view button (R5, the optimization plan): the views not shown are laid
+    // out in the background (their plants drawn in a worker), and every so often the
+    // ground round the animal the local view will follow next is painted and kept, so
+    // that a view comes already painted.
     if (director.looksAhead) {
-      if (shot.dim >= 1) {
-        landscape.prepare("middle");
-        landscape.prepare("local");
-      }
+      landscape.prepareAhead();
       aheadS += deltaMS / 1000;
       const upcoming = director.upcoming;
       if (aheadS >= AHEAD_EVERY_S && upcoming !== null) {
