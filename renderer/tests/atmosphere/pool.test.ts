@@ -1,6 +1,6 @@
 import { Texture } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { SpritePool, puffAt, tint } from "../../src/atmosphere/particles";
+import { PARK_FRAMES, SpritePool, puffAt, tint } from "../../src/atmosphere/particles";
 
 describe("a pool passing over what is not drawn (R5, review P1)", () => {
   it("keeps every later sprite in its place, hidden where one was passed over", () => {
@@ -17,7 +17,8 @@ describe("a pool passing over what is not drawn (R5, review P1)", () => {
     const after = frame(true);
     expect(after).toBe(before);
     expect(pool.shown).toBe(1);
-    expect(pool.container.children.map((sprite) => sprite.visible)).toEqual([false, true]);
+    // The one passed over draws nothing (see-through), and keeps its place.
+    expect(pool.container.children.map((sprite) => sprite.alpha > 0)).toEqual([false, true]);
   });
 
   it("writes a tint only when it changes, and a puff into the one it is handed", () => {
@@ -41,5 +42,27 @@ describe("a pool passing over what is not drawn (R5, review P1)", () => {
     };
     expect(puffAt(plume, 1, 2.5, 16, out)).toBe(out);
     expect(out).toEqual(puffAt(plume, 1, 2.5, 16));
+  });
+});
+
+describe("a pool's sprites it has no use for (R5, the optimization plan)", () => {
+  it("are see-through at once and hidden only when long unused, and come back as they were", () => {
+    const pool = new SpritePool();
+    pool.begin();
+    const sprite = pool.next(Texture.WHITE);
+    sprite.alpha = 0.6;
+    pool.end();
+    pool.begin();
+    pool.end();
+    // Not drawn: see-through, still in the draw list (no rebuild of the group's).
+    expect([sprite.visible, sprite.alpha]).toEqual([true, 0]);
+    for (let k = 0; k < PARK_FRAMES; k++) {
+      pool.begin();
+      pool.end();
+    }
+    expect(sprite.visible).toBe(false);
+    pool.begin();
+    expect(pool.next(Texture.WHITE)).toBe(sprite);
+    expect([sprite.visible, sprite.alpha]).toEqual([true, 0.6]);
   });
 });

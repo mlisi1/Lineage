@@ -22,7 +22,7 @@ import type { Land } from "../../src/terrain/land";
 import { world } from "../spike/worlds";
 
 describe("the benchmark's scenarios (benchplan)", () => {
-  it("are the four judged views, the atmosphere's five costs, then a day's turn", () => {
+  it("are the four judged views, the atmosphere's five costs, a day's turn and the switches", () => {
     expect(SCENARIOS.map((scenario) => scenario.name)).toEqual([
       "map",
       "middle",
@@ -34,6 +34,7 @@ describe("the benchmark's scenarios (benchplan)", () => {
       "apocalypse",
       "shore",
       "day-turn",
+      "switches",
     ]);
     expect(ACCEPTANCE).toEqual(["map", "middle", "middle-crowd", "local"]);
     expect([...ACCEPTANCE, ...ATMOSPHERE, ...EVENTS]).toEqual(
@@ -57,7 +58,11 @@ describe("the benchmark's scenarios (benchplan)", () => {
   });
 
   it("selects scenarios by name or by set, in table order", () => {
-    expect(selectScenarios(null)).toHaveLength(10);
+    expect(selectScenarios(null)).toHaveLength(11);
+    // Only the switches press round the views (the owner: "max 3 s on every view").
+    expect(SCENARIOS.filter((scenario) => (scenario.switches ?? 0) > 0).map((s) => s.name)).toEqual(
+      ["switches"],
+    );
     expect(selectScenarios(["events"]).map((scenario) => scenario.name)).toEqual(EVENTS);
     expect(selectScenarios(["acceptance"]).map((scenario) => scenario.name)).toEqual(ACCEPTANCE);
     expect(selectScenarios(["atmosphere"]).map((scenario) => scenario.name)).toEqual(ATMOSPHERE);

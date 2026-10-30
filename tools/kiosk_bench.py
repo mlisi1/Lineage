@@ -141,12 +141,20 @@ PROFILES: dict[str, Profile] = {
             ("--use-angle=swiftshader", "--enable-unsafe-swiftshader"),
         ),
         Profile("canvas", "PixiJS on the 2D canvas, no WebGL", (), (("backend", "canvas"),)),
+        Profile(
+            "cpu-ground",
+            "as default, the ground's colour pass on the CPU (?painter=cpu), to compare",
+            (),
+            (("painter", "cpu"),),
+        ),
     )
 }
 
 
 # Profiles that ask the page for a backend only the spike has.
 SPIKE_ONLY_PROFILES = ("canvas",)
+# Profiles that ask the scene for something the spike does not have.
+SCENE_ONLY_PROFILES = ("cpu-ground",)
 
 
 def is_spike(page: str) -> bool:
@@ -161,7 +169,7 @@ def default_profiles(page: str) -> str:
     through the same path, ANGLE on OpenGL ES with Panfrost, so the others are run only
     when asked for, as after a Chromium or Mesa update)."""
     if is_spike(page):
-        return ",".join(PROFILES)
+        return ",".join(name for name in PROFILES if name not in SCENE_ONLY_PROFILES)
     names = ["default"]
     return ",".join(names)
 
@@ -174,6 +182,9 @@ def chosen_profiles(names: str, extra_flags: str | None, page: str = SPIKE_PAGE)
     spike_only = [n for n in names.split(",") if n in SPIKE_ONLY_PROFILES and not is_spike(page)]
     if spike_only:
         raise ValueError(f"{', '.join(spike_only)}: only the R0 spike ({SPIKE_PAGE}) has it")
+    scene_only = [n for n in names.split(",") if n in SCENE_ONLY_PROFILES and is_spike(page)]
+    if scene_only:
+        raise ValueError(f"{', '.join(scene_only)}: only the scene ({SCENE_PAGE}) has it")
     profiles = [PROFILES[name] for name in names.split(",")]
     if extra_flags:
         profiles.append(
@@ -571,8 +582,17 @@ def run_profile(
     sandbox: bool,
     timeout_s: float,
     log_dir: Path,
+    keep_profile: Path | None = None,
 ) -> Run:
-    user_data = Path(tempfile.mkdtemp(prefix="lineage-kiosk-"))
+    # A browser profile of its own each run, as at a first start; or one kept between runs
+    # (`--keep-profile`), its storage as a desk's browser has it after a restart.
+    if keep_profile is not None:
+        keep_profile.mkdir(parents=True, exist_ok=True)
+    user_data = (
+        keep_profile
+        if keep_profile is not None
+        else Path(tempfile.mkdtemp(prefix="lineage-kiosk-"))
+    )
     command = browser_command(
         browser, profile, url, user_data, headless=headless, window=window, sandbox=sandbox
     )
@@ -589,7 +609,8 @@ def run_profile(
             )
     except OSError as error:
         run.status, run.detail = "launch-failed", str(error)
-        shutil.rmtree(user_data, ignore_errors=True)
+        if keep_profile is None:
+            shutil.rmtree(user_data, ignore_errors=True)
         return run
 
     sampler = Sampler(process.pid)
@@ -612,7 +633,8 @@ def run_profile(
                 break
     finally:
         stop(process)
-        shutil.rmtree(user_data, ignore_errors=True)
+        if keep_profile is None:
+            shutil.rmtree(user_data, ignore_errors=True)
     run.duration_s = round(time.monotonic() - started, 1)
     timeouts_after = count_gpu_timeouts(kernel_log())
     if timeouts_before is not None and timeouts_after is not None:
@@ -747,6 +769,35 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                     f"    ground painted on the GPU: {made.get('gpu', 0)}"
                     f" of {made.get('gpu', 0) + made.get('cpu', 0)}"
                 )
+            for switch in scenario.get("switches") or []:
+                lines.append(
+                    f"    round {switch.get('round', 0) + 1}, to {switch.get('view', '?')}:"
+                    f" there in {switch.get('arrived_s', 0):.1f} s,"
+                    f" painted in {switch.get('painted_s', 0):.1f} s"
+                    f"{'' if switch.get('painted', True) else ' (not all painted)'}"
+                )
+            boot = scenario.get("boot")
+            if boot and boot.get("painted") is not None:
+                lines.append(
+                    f"    page: script at {boot.get('script', 0) / 1000:.1f} s,"
+                    f" land {(boot.get('land') or 0) / 1000:.1f} s,"
+                    f" laid out {(boot.get('laidOut') or 0) / 1000:.1f} s,"
+                    f" painted {(boot.get('painted') or 0) / 1000:.1f} s"
+                )
+            timing = scenario.get("ground_timing")
+            if timing:
+                m = timing.get("median", {})
+                gpu = (
+                    f"{m.get('gpu_upload', 0):.0f} + {m.get('gpu_draw', 0):.0f}"
+                    f" + {m.get('gpu_unpack', 0):.0f}"
+                )
+                made_in = ", ".join(f"{c:.0f}" for c in timing.get("compile_ms", [])) or "—"
+                lines.append(
+                    f"    ground: {timing.get('pieces', 0)} pieces,"
+                    f" median {m.get('total', 0):.0f} ms in the worker"
+                    f" (GPU {gpu}, CPU {m.get('cpu', 0):.0f}),"
+                    f" {m.get('queue', 0):.0f} queued; shader made in {made_in} ms"
+                )
         acceptance = results.get("acceptance") or {}
         if acceptance.get("pass") is not None:
             verdict = "PASS" if acceptance["pass"] else "FAIL"
@@ -830,6 +881,12 @@ def main(argv: list[str] | None = None) -> int:
         "'No usable sandbox')",
     )
     parser.add_argument("--timeout", type=float, help="seconds to wait per profile")
+    parser.add_argument(
+        "--keep-profile",
+        type=Path,
+        help="the browser's profile kept in this folder between runs (what it stores, as a "
+        "desk's browser keeps it across restarts); a fresh one each run when left out",
+    )
     args = parser.parse_args(argv)
 
     if not (args.dist / args.page).is_file():
@@ -902,6 +959,7 @@ def main(argv: list[str] | None = None) -> int:
                 sandbox=sandbox,
                 timeout_s=timeout_s,
                 log_dir=args.out.parent,
+                keep_profile=args.keep_profile,
             )
             document["runs"].append(
                 {**vars(run), "drawn_by": drawn_by(run.results) if run.results else ""}

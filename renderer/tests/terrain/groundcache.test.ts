@@ -217,10 +217,17 @@ describe("the ground kept between visits", () => {
     const painter = new Counting(cache);
     const ground = groundOf(painter, cache);
     ground.update(1, request, noShadows, "day 1");
-    ground.prefetch({ x0: 0, y0: 0, x1: 4, y1: 4 });
-    // Asked once for the place, however often: two pieces with the ring round it.
-    ground.prefetch({ x0: 0, y0: 0, x1: 4, y1: 4 });
+    // One piece at a time, each asked once however often the place is asked for: two
+    // pieces with the ring round it.
+    const place = { x0: 0, y0: 0, x1: 4, y1: 4 };
+    ground.prefetch(place);
+    ground.prefetch(place);
     await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(cache.kept.size).toBe(1);
+    for (let ask = 0; ask < 3; ask++) {
+      ground.prefetch(place);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     expect(cache.kept.size).toBe(2);
     expect(ground.container.children.length).toBe(0);
     expect(painter.painted).toBe(2);

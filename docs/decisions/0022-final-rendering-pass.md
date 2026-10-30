@@ -537,6 +537,63 @@ eating and the water do to a body's sprites, for some 7–10 % of the crowd's sc
 PC's profile), left to the owner and the board's probe; one texture for the ground's
 pieces (few binds are the ground's).
 
+### The board again (2026-10-29)
+
+The board measured the ground on the GPU against the CPU (build 33e218c): a piece 0.7–0.9
+s in its worker against 1.3–2.1 s, the views ready 6–9 s sooner, the day's turn 24 → 14 %
+late. Its traces put the crowd's late frames on the page's script and its garbage
+collection, the big fire's on the page's script. Kept: a pool's unused sprites made
+see-through before they are hidden (no draw list rebuilt every frame), an animal drawn
+again only when its drawing changed, and in the view not shown only when that view comes
+on. Dropped, measured: each burning cell's fixed parts worked out once, each animal drawn
+as one view. The owner kept every flame: no limit on the burning cells drawn.
+
+### Loading the views (2026-10-30)
+
+The owner: "I want the map to be really fast on the board. I want the loading time to be
+max 3s on every view", later "the 3 seconds was not a hard requirement, it was more of a
+goal", and "we just have to mask the load times". Also: the kiosk showed the pointer, and
+the dip let the scene before it show through.
+
+- **The pointer**: cage loads the cursor theme named `default` from `XCURSOR_PATH`, and a
+  page's `cursor: none` acts only once the pointer moves. `deploy/blank-cursor.py` writes a
+  see-through theme under that name in a folder of the kiosk's own, which its units put on
+  `XCURSOR_PATH`. The owner confirmed it on the board.
+- **The dip** is drawn on the canvas, last, and held two frames fully dark before the cut
+  (the cut's frame is long; the last frame shown before it, not quite dark, stayed on the
+  screen). The owner kept the purple.
+- **What a switch waited for**, measured step by step (the benchmark's `switches` and
+  `boot`, each painting's steps): the cache's lookups behind other pieces' writes, the
+  shader compiled before the cache answered, the plants' sheet (4.3 s on the board for the
+  local view, drawn on the page's thread), the first creatures message (2.5 s), the next
+  view's ground not yet asked for, and twenty pieces' shadows worked out in one frame. Each
+  was moved off the page's thread, done ahead, or done once (`renderer.md`, "Loading the
+  views"); every screenshot is the same, and the bitmaps the plants' worker hands back
+  give the same pixels as the canvases did (drawings are clear or solid).
+- **The iris** (the owner's idea): a circle closes on the middle of the screen, a small
+  ring of dots turns while it is shut, and it opens from the middle of the new view as far
+  as that view's ground is painted out from its middle, the order the pieces come in.
+  Stepped in blocks of two art pixels in the dip's purple, the ring in the scrolls' paper.
+  Live only; films and stills keep the dip. The owner: "I think it's all good."
+- **Measured on the board**, with what earlier runs kept: the map painted 2.0–3.3 s after
+  the page starts; switches after the first round 1.1–1.5 s; the first round, pressed
+  straight after a start, 3–5 s behind the iris; the worst frame during switches 100 ms.
+  Left as it is (the owner, satisfied with the performance): a few long frames (0.45–0.7
+  s) on the map while the hidden views are made in the background; what could be done
+  later is in `docs/renderer-optimization-plan.md`, "For later".
+- **The pieces painted ahead held back.** The first full run of this build had 10–11 % of
+  the map's and the middle view's frames late: the next views' ground was asked for all at
+  once. It is now painted one piece at a time, while frames come on time and the view
+  shown has nothing of its own waiting (map 3.4 %, middle 3.0–4.8 % after).
+- **The last run** (`reports/R5-device/`, build 7d9c34c, a fresh browser profile): the four
+  judged views hold the cap (29.9 fps); R5.2 5.1 % in the local view against its 5 %
+  band (FAIL by a tenth); Chromium's peak 735 MB (R5.3, ≤ 800). The local scenario follows
+  whichever animal the camera chose, now chosen ahead: with 4 animals in sight it had
+  2.2–5.1 % of frames late over the day's runs, with 13–18 in sight 6.2–6.6 %. The owner
+  (2026-10-30): "the performances are fine as it is now, so you can close R5". R5.2 is
+  accepted as measured; pinning the local scenario to fixed animals, as `middle-crowd`
+  is, is the step for a later device milestone (S7).
+
 ## Consequences
 
 - The wire gains `young`, `died`, `landed`, `grazing`, `feeding`, `died[].by` and

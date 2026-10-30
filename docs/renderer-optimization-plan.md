@@ -100,3 +100,77 @@ kept: each claimed win is measured there against the board's own noise.
   board's probe says where the late frames come from.
 - Phase 3 (fire): working out each burning cell's fixed parts once would save some 3 % of
   the fire scenario; its frame is mostly the animals and Pixi's draw. Not done.
+- 2026-10-29, the board's numbers (build 33e218c) and what followed. Ground on the GPU
+  against the CPU: a piece 0.7–0.9 s in the worker against 1.3–2.1 s (its GPU pass
+  0.13–0.26 s; the rest, 0.5–0.7 s, is the CPU's passes and the cache, to be split next),
+  the views ready 6–9 s sooner (middle 23.5 → 17.5 s, local 29.3 → 22.1 s, shore 25.3 →
+  16.7 s), the day's turn 24 → 14 % late. Pieces wait 3–5 s in the queue of two workers.
+  The board's traces: in the crowd's late frames the page's script and its garbage
+  collection (a quarter), the GPU process busy alongside; the big fire held by the page's
+  script, Pixi's updates of changed sprites a third of it.
+  Kept, same pixels: a pool's unused sprites see-through before hidden (draw lists not
+  rebuilt every frame; the fire's draw −27 % at the board's speed on the PC) and the
+  visible flag written only when it changes. Kept, a timing change only: an animal is
+  drawn again only when its drawing changed, and in the view not in use only when that
+  view comes on (it was drawn again in both at once, every body straightened behind its
+  head); two stills taken again (`follow`, `eating`: the same animals a moment further
+  on). Tried and dropped, measured: each burning cell's fixed parts worked out once (no
+  gain); each animal drawn as one view (the same pixels, but slower: the parts' maths is
+  the cost, whoever does it). The owner kept every flame (no limit on the cells drawn).
+  At the board's speed on the PC (`--throttle` 20, which matches the board's crowd), every
+  scenario but the big fire holds the cap with ≤ 2.5 % late; the big fire ~30 %, held by
+  its ~2 400 sprites and the animals' posing.
+- 2026-10-30, the ground's loading (the owner: "the loading time max 3 s on every view",
+  the map "really fast"). Each painting now tells where its time went (`paintSteps`, the
+  cache's read and write); `renderer/scripts/slow-bench.mjs` runs the benchmark on a PC
+  with the page's CPU slowed to the board's (it does not slow the painters' workers). The
+  cache's lookup was the largest part of a piece's worker time after the GPU's (30–50 ms
+  on the PC, waiting behind other pieces' writes): a piece not kept is now known at once
+  from a list of the names kept, shared by the painters (`BroadcastChannel`), and the
+  store is written without a flush per piece. A piece no burnt cell reaches skips the burnt
+  ground's pass (608 pieces, with and without burns, byte for byte the same). The map's
+  painting is kept as the pieces are, and at a start the latest kept shows while today's
+  comes. The painters make their shader when first needed or when idle (made as the land
+  came, it held the cache's answers up). The benchmark's `switches`
+  scenario presses round the views twice, timing each press until its ground is painted,
+  and every page says when it got going (`boot`). On the PC: a middle piece 74 → 47 ms, a
+  local one 122 → 62 ms in the worker; the map from the cache at 0.3 s; each switch 1.1–2.1
+  s, a second of it the dip. The board's numbers are next.
+  On the board (build c2ead0f, with what earlier runs kept): the map painted 2.6–3.0 s
+  after the page starts; the first switch to the middle view 5.4 s, to the local 3.9 s;
+  later ones 1.1–1.8 s.
+- 2026-10-30, later (the owner: the 3 s "was more of a goal"; "we just have to mask the
+  load times"). The views not shown are laid out in the background, their plants' sheets
+  drawn and packed in a worker and handed back as bitmaps (the same pixels); the middle
+  view's place is chosen ahead as the local view's animal is, and the ground is painted
+  ahead for the view the button leads to next and, behind it, the one after; a piece's
+  shadows are worked out when a painter takes it up. Live, an iris masks the rest
+  (`src/iris.ts`, ADR 0022 "Loading the views"). On the board, warm: switches after the
+  first round 1.1–1.5 s, the first round 3–5 s behind the iris, the worst frame during
+  switches 100 ms. The owner is satisfied with the performance for now.
+
+## For later
+
+What could still be done, should the board need it (none of it started; each to be
+measured on the board first, as everything here was):
+
+- **The map's long frames while the hidden views are made** (0.45–0.7 s, "outside" the
+  frame's phases, a few in the first seconds after a start). Profile them on the board
+  (the probe service and `scripts/board-trace.mjs`, or a CPU profile through its DevTools
+  port). Suspects: the plants' drawings cloned between the page and the worker (thousands
+  of small arrays each way: the drawings kept are sent to the worker, the ones drawn come
+  back), which keeping the art cache in the worker and sending the page only what it uses
+  would avoid; and laying a hidden view out in one task, which could be spread over frames.
+- **The first switches straight after a start.** Paint ahead round a few animals the
+  local view might follow, not one; or let the board warm its caches once after a new
+  build is installed (one quiet pass round the views), so that the first start of a build
+  is not the cold one.
+- **The big fire** (about 30 % of frames late at the board's speed): its ~2 400 sprites and
+  the animals' posing. Each animal as one batch (§2 of the review: some 7–10 % of the
+  crowd's script, a large rewrite) and the fire's particles on one texture.
+- **Garbage collection** in the crowd's late frames (a quarter of them on the board): find
+  what is still made per frame (the frame probe and a heap profile).
+- **The ground's last quarter on the CPU** (shore distances, the detail's drawings): only
+  if pieces are again what a view waits for.
+- **How many painters**: two on the board now; once the simulation and the server run
+  beside the kiosk (S1, S7), check whether two still fit the CPU budget (§4.8).

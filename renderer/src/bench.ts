@@ -20,6 +20,7 @@
  * (never `?film`'s stepped ones). After the last the page shows the results and POSTs
  * them, in the shape `tools/kiosk_bench.py` reads from the R0 spike, with more numbers.
  */
+import type { PieceTiming } from "./terrain/painter";
 import { PROBE, summariseProbe, type ProbeSummary, type ProbedFrame } from "./frameprobe";
 import {
   UPDATE_PRIORITY,
@@ -112,8 +113,12 @@ export interface BenchHooks {
   dayDue(): boolean;
   /** Send the latest land again as the next day's, as the stream would bring a new one. */
   newLand(): void;
+  /** When the page got going (ms from its start): its script, the first land, laid out, painted. */
+  boot(): BootMarks;
   /** Paintings of the ground made so far with the colour pass on the GPU and on the CPU. */
   groundMade(): { gpu: number; cpu: number } | null;
+  /** The ground's paintings made so far, timed (`WorkerPainter.timings`). */
+  groundTimings(): readonly PieceTiming[];
   /** What the camera shows. */
   camera(): { view: ViewName; dipping: boolean };
   /** The cells in sight. */
@@ -133,7 +138,7 @@ export interface BenchHooks {
 }
 
 /** The benchmark's settings, from the page's address. */
-interface Settings {
+export interface Settings {
   measureS: number;
   warmupS: number;
   only: string[] | null;
@@ -142,6 +147,8 @@ interface Settings {
   /** Frames a second the page is capped at; 0 for none. */
   capFps: number;
   label: string;
+  /** Who paints the ground (`?painter=cpu`: the colour pass on the CPU, to compare); null as the desk does. */
+  painter: string | null;
 }
 
 export interface BenchScenarioResult extends FrameStats {
@@ -185,6 +192,12 @@ export interface BenchScenarioResult extends FrameStats {
   probe: ProbeSummary;
   /** The ground's paintings made in this page, their colour pass on the GPU or the CPU (`gpuground.ts`). */
   ground_made: { gpu: number; cpu: number } | null;
+  /** How long the ground's paintings took, piece by piece (`groundTiming`). */
+  ground_timing: GroundTiming | null;
+  /** When this scenario's page got going (`BootMarks`). */
+  boot: BootMarks;
+  /** Each press of the view button timed (the `switches` scenario; none for the others). */
+  switches: SwitchTiming[];
   /** JavaScript heap in use after the scenario, in MB (0 where the browser hides it). */
   js_heap_mb: number;
   /** The atmosphere's state and sprite counts at the end. */
@@ -259,7 +272,7 @@ function numberIn(text: string | null, fallback: number, low: number, high: numb
   return Number.isFinite(value) ? Math.min(Math.max(value, low), high) : fallback;
 }
 
-function settingsOf(query: URLSearchParams): Settings {
+export function settingsOf(query: URLSearchParams): Settings {
   const names = (query.get("only") ?? "")
     .split(",")
     .map((name) => name.trim())
@@ -272,6 +285,7 @@ function settingsOf(query: URLSearchParams): Settings {
     seed: Math.round(numberIn(query.get("seed"), DEFAULT_SEED, 0, 2 ** 31)),
     capFps: numberIn(query.get("cap"), 0, 0, 240),
     label: query.get("label") ?? "",
+    painter: query.get("painter"),
   };
 }
 
@@ -321,6 +335,31 @@ function describe(settings: Settings): BenchResults {
 }
 
 /** Fill in the verdict from the scenarios judged: all of them, or none. */
+/** The scene's options for `scenario`: the recording, the seed, the cap, its view and show. */
+export function scenarioParams(
+  scenario: BenchScenario,
+  plan: Plan,
+  settings: Settings,
+): URLSearchParams {
+  const params = new URLSearchParams({
+    recording: scenario.recording,
+    speed: String(BENCH_SPEED),
+    seed: String(settings.seed),
+  });
+  if (settings.capFps > 0) params.set("cap", String(settings.capFps));
+  // Passed on from the benchmark's own address (R5: the cpu-ground profile asked for it
+  // and the scene never heard).
+  if (settings.painter !== null) params.set("painter", settings.painter);
+  if (scenario.show !== undefined) params.set("show", scenario.show);
+  if (scenario.pin !== undefined) {
+    const place = plan[scenario.pin.at];
+    params.set("view", scenario.pin.view);
+    params.set("x", place.x.toFixed(2));
+    params.set("y", place.y.toFixed(2));
+  }
+  return params;
+}
+
 export function judge(results: BenchResults): void {
   const measured = ACCEPTANCE.map((name) => results.scenarios.find((s) => s.name === name));
   if (measured.some((scenario) => scenario === undefined || scenario.frames === 0)) return;
@@ -425,6 +464,78 @@ function countDraws(app: Application): { draws: number } {
   return counter;
 }
 
+/** The ground's paintings in a scenario's page: their median times, and the slowest (ms). */
+export interface GroundTiming {
+  pieces: number;
+  /** Median and slowest of each: the worker's whole painting; its colour pass on the GPU
+   * (uploading, drawing and reading back, unpacking); the rest on the worker's CPU; the
+   * wait in the queue; from being taken up to being handed back to the page. */
+  median: Record<GroundTimingKey, number>;
+  max: Record<GroundTimingKey, number>;
+  /** Making a worker's GPU context and shader, each time it was made. */
+  compile_ms: number[];
+  /** Median of each of the painting's own steps and of the cache's reading and writing (ms). */
+  steps_median: Record<string, number>;
+}
+type GroundTimingKey = "total" | "gpu_upload" | "gpu_draw" | "gpu_unpack" | "cpu" | "queue" | "run";
+
+/** `timings` summed up (`GroundTiming`); null when nothing was painted. */
+export function groundTiming(timings: readonly PieceTiming[]): GroundTiming | null {
+  if (timings.length === 0) return null;
+  const of: Record<GroundTimingKey, (t: PieceTiming) => number> = {
+    total: (t) => t.totalMs,
+    gpu_upload: (t) => t.gpuUploadMs,
+    gpu_draw: (t) => t.gpuDrawMs,
+    gpu_unpack: (t) => t.gpuUnpackMs,
+    cpu: (t) => t.totalMs - t.gpuUploadMs - t.gpuDrawMs - t.gpuUnpackMs,
+    queue: (t) => t.queueMs,
+    run: (t) => t.runMs,
+  };
+  const round = (value: number): number => Math.round(value * 10) / 10;
+  const median = {} as Record<GroundTimingKey, number>;
+  const max = {} as Record<GroundTimingKey, number>;
+  for (const key of Object.keys(of) as GroundTimingKey[]) {
+    const values = timings.map(of[key]).sort((a, b) => a - b);
+    median[key] = round(values[Math.floor(values.length / 2)] ?? 0);
+    max[key] = round(values[values.length - 1] ?? 0);
+  }
+  const compile_ms = timings.filter((t) => t.compileMs > 0).map((t) => round(t.compileMs));
+  const medianOf = (values: number[]): number =>
+    round([...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0);
+  const steps_median: Record<string, number> = {};
+  const names = new Set(timings.flatMap((t) => Object.keys(t.steps)));
+  for (const name of [...names].sort()) {
+    steps_median[name] = medianOf(timings.map((t) => t.steps[name] ?? 0));
+  }
+  steps_median["cache read"] = medianOf(timings.map((t) => t.cacheGetMs));
+  steps_median["cache write"] = medianOf(timings.map((t) => t.cachePutMs));
+  return { pieces: timings.length, median, max, compile_ms, steps_median };
+}
+
+/** Views in a round of the view button: map, middle, local, and the map again. */
+const VIEWS_ROUND = 3;
+
+/** One press of the view button, timed: until its view had come, and its ground was painted. */
+export interface SwitchTiming {
+  round: number;
+  view: ViewName;
+  arrived_s: number;
+  painted_s: number;
+  /** False if its ground was not all painted within `READY_TIMEOUT_S`. */
+  painted: boolean;
+}
+
+/** When a page got going, in milliseconds from its start (`window.__boot`); null if not yet. */
+export interface BootMarks {
+  script: number;
+  land: number | null;
+  laidOut: number | null;
+  painted: number | null;
+}
+
+/** The mark each frame drawn leaves in the browser's trace. */
+const FRAME_MARK = "lineage:frame";
+
 interface Timings {
   frameMs: number[];
   /** What the frame probe saw of each frame measured (`frameprobe.ts`). */
@@ -474,6 +585,10 @@ function measure(app: Application, warmupS: number, measureS: number): Promise<T
       window.clearTimeout(watchdog);
       watchdog = window.setTimeout(() => finish(true), STALL_MS);
       scriptStart = performance.now();
+      // Each frame drawn, for a trace of the browser to find (`scripts/board-trace.mjs`):
+      // under the cap the animation frames fire twice as often as frames are drawn.
+      performance.mark(FRAME_MARK);
+      performance.clearMarks(FRAME_MARK);
       counter.draws = 0;
       if (measuring) timings.frameMs.push(ticker.elapsedMS);
     };
@@ -606,7 +721,7 @@ export class Bench {
       return leaving();
     }
     return new Bench(
-      Bench.paramsFor(scenario, stored.plan, settings),
+      scenarioParams(scenario, stored.plan, settings),
       run,
       step,
       stored,
@@ -650,28 +765,6 @@ export class Bench {
     return leaving();
   }
 
-  /** The scene's options for `scenario`: the recording, the seed, the cap, its view and show. */
-  private static paramsFor(
-    scenario: BenchScenario,
-    plan: Plan,
-    settings: Settings,
-  ): URLSearchParams {
-    const params = new URLSearchParams({
-      recording: scenario.recording,
-      speed: String(BENCH_SPEED),
-      seed: String(settings.seed),
-    });
-    if (settings.capFps > 0) params.set("cap", String(settings.capFps));
-    if (scenario.show !== undefined) params.set("show", scenario.show);
-    if (scenario.pin !== undefined) {
-      const place = plan[scenario.pin.at];
-      params.set("view", scenario.pin.view);
-      params.set("x", place.x.toFixed(2));
-      params.set("y", place.y.toFixed(2));
-    }
-    return params;
-  }
-
   /** The run is over: show the results, POST them, and forget the run. */
   private static async finish(
     run: string,
@@ -706,6 +799,7 @@ export class Bench {
       READY_TIMEOUT_S,
     );
     this.stage(hooks);
+    const switches = await this.switchRounds(hooks, scenario.switches ?? 0);
     for (let press = 0; press < (scenario.presses ?? 0); press++) {
       await until(() => !hooks.camera().dipping, VIEW_TIMEOUT_S);
       hooks.press();
@@ -743,7 +837,7 @@ export class Bench {
     const timings = await measure(hooks.app, settings.warmupS, settings.measureS);
     const day = scenario.dayTurn !== true ? "held" : turned ? "turned" : "not due";
     stored.results.scenarios.push(
-      this.resultOf(hooks, timings, readyS, settled && viewSettled, day),
+      this.resultOf(hooks, timings, readyS, settled && viewSettled, day, switches),
     );
     const next = this.step + 1;
     if (next < stored.names.length && save(this.run, stored)) {
@@ -757,6 +851,35 @@ export class Bench {
   }
 
   /** What the scenario does itself, once the scene is ready. */
+  /**
+   * Press the view button round the views `rounds` times from where the camera is, each
+   * press timed until its view has come (the dip over) and its ground is painted.
+   */
+  private async switchRounds(hooks: BenchHooks, rounds: number): Promise<SwitchTiming[]> {
+    const timed: SwitchTiming[] = [];
+    for (let round = 0; round < rounds; round++) {
+      for (let press = 0; press < VIEWS_ROUND; press++) {
+        await until(() => !hooks.camera().dipping, VIEW_TIMEOUT_S);
+        const from = hooks.camera().view;
+        const begun = performance.now();
+        hooks.press();
+        await until(() => hooks.camera().view !== from, VIEW_TIMEOUT_S);
+        const view = hooks.camera().view;
+        await until(() => !hooks.camera().dipping, VIEW_TIMEOUT_S);
+        const arrived = performance.now();
+        const painted = await until(() => hooks.settled(), READY_TIMEOUT_S);
+        timed.push({
+          round,
+          view,
+          arrived_s: Math.round(arrived - begun) / 1000,
+          painted_s: Math.round(performance.now() - begun) / 1000,
+          painted,
+        });
+      }
+    }
+    return timed;
+  }
+
   private stage(hooks: BenchHooks): void {
     const land = hooks.land();
     if (this.scenario.stage === "fire" && land !== null) {
@@ -809,6 +932,7 @@ export class Bench {
     readyS: number,
     settled: boolean,
     day: BenchScenarioResult["day"],
+    switches: SwitchTiming[] = [],
   ): BenchScenarioResult {
     const { scenario } = this;
     const scripts = [...timings.jsMs].sort((a, b) => a - b);
@@ -858,6 +982,9 @@ export class Bench {
       js_ms_p99: jsP99,
       js_heap_mb: heapMb(),
       ground_made: hooks.groundMade(),
+      ground_timing: groundTiming(hooks.groundTimings()),
+      boot: hooks.boot(),
+      switches,
       probe: summariseProbe(
         timings.frameMs.map((frameMs, k) => ({
           frameMs,

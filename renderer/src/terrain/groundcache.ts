@@ -46,6 +46,13 @@ const STAMPS = "stamps";
 const JOIN = "\u0000";
 
 const pieceName = (stamp: string, key: string): string => `${stamp}${JOIN}${key}`;
+/** Where the painters tell each other of pieces kept and stamps let go (`StoredCache`). */
+const KEPT_CHANNEL = "lineage-ground-kept";
+/** A piece kept (its name), or every piece of a stamp let go (the names' start). */
+interface KeptNews {
+  kept?: string;
+  dropped?: string;
+}
 
 /** A cache that keeps nothing. */
 export const NO_CACHE: GroundCache = {
@@ -96,6 +103,15 @@ export class MemoryCache implements GroundCache {
 /** The pieces in IndexedDB. */
 class StoredCache implements GroundCache {
   private readonly database: Promise<IDBDatabase | null>;
+  /**
+   * The pieces kept, by name, read from the store once (R5, the optimization plan: a
+   * lookup that would find nothing waited behind the other pieces' writes, tens of
+   * milliseconds on the PC and far more on the board's SD card). Kept in step with the
+   * other painters' through `KEPT_CHANNEL`.
+   */
+  private readonly names: Promise<Set<string>>;
+  private readonly channel: BroadcastChannel | null =
+    typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(KEPT_CHANNEL);
 
   constructor(factory: IDBFactory) {
     this.database = new Promise((resolve) => {
@@ -116,10 +132,46 @@ class StoredCache implements GroundCache {
         resolve(null);
       }
     });
+    this.names = this.database.then(
+      (database) =>
+        new Promise((resolve) => {
+          const names = new Set<string>();
+          if (database === null) {
+            resolve(names);
+            return;
+          }
+          try {
+            const listing = database
+              .transaction(PIECES, "readonly")
+              .objectStore(PIECES)
+              .getAllKeys();
+            listing.onsuccess = () => {
+              for (const key of listing.result) names.add(String(key));
+              resolve(names);
+            };
+            listing.onerror = () => resolve(names);
+          } catch {
+            resolve(names);
+          }
+        }),
+    );
+    if (this.channel !== null) {
+      this.channel.onmessage = (event: MessageEvent<KeptNews>) => {
+        void this.names.then((names) => {
+          const news = event.data;
+          if (news.kept !== undefined) names.add(news.kept);
+          if (news.dropped !== undefined) {
+            for (const name of [...names]) if (name.startsWith(news.dropped)) names.delete(name);
+          }
+        });
+      };
+    }
   }
 
   async get(key: string, stamp: string): Promise<Pixels | undefined> {
-    const pixels = await this.read<Pixels>(PIECES, pieceName(stamp, key));
+    const name = pieceName(stamp, key);
+    if (!(await this.names).has(name)) return undefined;
+    const pixels = await this.read<Pixels>(PIECES, name);
     if (isPixels(pixels)) {
       this.touch(stamp);
       return pixels;
@@ -137,14 +189,23 @@ class StoredCache implements GroundCache {
   put(key: string, stamp: string, pixels: Pixels): void {
     // The pixels are copied now (structured clone), before a texture or a transfer takes them.
     const copy = copyOf(pixels);
+    const name = pieceName(stamp, key);
     void this.database.then((database) => {
       if (database === null) return;
       try {
-        const writing = database.transaction([PIECES, LATEST, STAMPS], "readwrite");
-        writing.objectStore(PIECES).put(copy, pieceName(stamp, key));
+        // Relaxed: not flushed to the card piece by piece (a piece lost to a power cut is
+        // painted again).
+        const writing = database.transaction([PIECES, LATEST, STAMPS], "readwrite", {
+          durability: "relaxed",
+        });
+        writing.objectStore(PIECES).put(copy, name);
         writing.objectStore(LATEST).put(stamp, key);
         writing.objectStore(STAMPS).put(Date.now(), stamp);
-        writing.oncomplete = () => this.evict(database);
+        writing.oncomplete = () => {
+          void this.names.then((names) => names.add(name));
+          this.channel?.postMessage({ kept: name } satisfies KeptNews);
+          this.evict(database);
+        };
       } catch {
         // Full, or gone: the piece is painted again next time.
       }
@@ -169,7 +230,10 @@ class StoredCache implements GroundCache {
   private touch(stamp: string): void {
     void this.database.then((database) => {
       try {
-        database?.transaction(STAMPS, "readwrite").objectStore(STAMPS).put(Date.now(), stamp);
+        database
+          ?.transaction(STAMPS, "readwrite", { durability: "relaxed" })
+          .objectStore(STAMPS)
+          .put(Date.now(), stamp);
       } catch {
         // Not marked: it may be let go a little sooner.
       }
@@ -179,7 +243,9 @@ class StoredCache implements GroundCache {
   /** Let go of the stamps used longest ago beyond `MOST_STAMPS`, with their pieces. */
   private evict(database: IDBDatabase): void {
     try {
-      const transaction = database.transaction([PIECES, STAMPS], "readwrite");
+      const transaction = database.transaction([PIECES, STAMPS], "readwrite", {
+        durability: "relaxed",
+      });
       const stamps = transaction.objectStore(STAMPS);
       const listing = stamps.openCursor();
       const all: [string, number][] = [];
@@ -194,6 +260,11 @@ class StoredCache implements GroundCache {
         all.sort((a, b) => a[1] - b[1]);
         for (const [stamp] of all.slice(0, all.length - MOST_STAMPS)) {
           stamps.delete(stamp);
+          const dropped = stamp + JOIN;
+          void this.names.then((names) => {
+            for (const name of [...names]) if (name.startsWith(dropped)) names.delete(name);
+          });
+          this.channel?.postMessage({ dropped } satisfies KeptNews);
           transaction
             .objectStore(PIECES)
             .delete(IDBKeyRange.bound(stamp + JOIN, stamp + JOIN + "￿"));

@@ -29,6 +29,9 @@ StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
 Environment=XDG_SESSION_TYPE=wayland
+# No pointer on the desk: a theme of see-through cursors (`blank-cursor.py`, run once).
+Environment=XCURSOR_THEME=lineage-blank
+Environment=XCURSOR_PATH=/home/%i/.local/share/lineage-cursors
 # So that each table reaches the journal as it is printed, not when the run is over.
 Environment=PYTHONUNBUFFERED=1
 UtmpIdentifier=tty1

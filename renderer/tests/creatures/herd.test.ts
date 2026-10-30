@@ -266,3 +266,46 @@ describe("the herd over a recorded fortnight", () => {
     expect(herd.portraitOf(b)?.seed.growth).toBeUndefined();
   });
 });
+
+describe("the herd redrawing what changed (R5, the optimization plan)", () => {
+  const [a] = first.ids as [number];
+
+  it("draws a young one that grew a step again in the view in use, and in the other when shown", () => {
+    const { herd, inside } = herdOfOffice();
+    herd.receive(creatures({ ids: [a], born: [born(a)], young: [[a, 2]] }));
+    herd.update(STEP_S, "middle", EVERYWHERE, null, null);
+    const slot = inside.roster.slotOf(a) ?? -1;
+    const bodyIn = (layer: "middle" | "local"): unknown => inside.layers[layer].creatures[slot];
+    const middle = bodyIn("middle");
+    const local = bodyIn("local");
+    herd.receive(creatures({ ids: [a], young: [[a, 3]] }));
+    // Grown a step: drawn again in the middle view at once; the local view waits.
+    expect(bodyIn("middle")).not.toBe(middle);
+    expect(bodyIn("local")).toBe(local);
+    herd.update(STEP_S, "local", EVERYWHERE, null, null);
+    expect(bodyIn("local")).not.toBe(local);
+    // The same again: nothing drawn anew.
+    const now = bodyIn("local");
+    herd.receive(creatures({ ids: [a], young: [[a, 3]] }));
+    expect(bodyIn("local")).toBe(now);
+  });
+});
+
+describe("the herd's first many animals drawn over a few frames (R5, the optimization plan)", () => {
+  it("draws them in the view in use first, all of them in a few updates, the other view's after", () => {
+    const { herd, inside } = herdOfOffice();
+    herd.spreadPlacing = true;
+    const many = first.ids.slice(0, 40);
+    expect(many.length).toBeGreaterThan(16);
+    herd.receive(creatures({ ids: many, born: many.map((id) => born(id)) }));
+    const drawn = (layer: "middle" | "local"): number =>
+      inside.layers[layer].creatures.filter((creature) => creature !== undefined).length;
+    // Nothing yet: they come with the frames.
+    expect(drawn("middle") + drawn("local")).toBe(0);
+    for (let k = 0; k < 200 && drawn("local") < many.length; k++) {
+      herd.update(STEP_S, "middle", EVERYWHERE, null, null);
+    }
+    expect(drawn("middle")).toBe(many.length);
+    expect(drawn("local")).toBe(many.length);
+  });
+});

@@ -16,7 +16,12 @@
 import { PROBE } from "./frameprobe";
 import { Container } from "pixi.js";
 import { DEFAULT_LOOK, type Look } from "./looks";
-import { standingPlants, type PlantLayer } from "./plants/plants";
+import {
+  prepareStanding,
+  standingPlants,
+  type PlantLayer,
+  type StandingOptions,
+} from "./plants/plants";
 import { isTurning, type YearTime } from "./plants/turning";
 import type { Wind } from "./plants/wind";
 import type { ClockMessage, LandMessage, Message } from "./protocol";
@@ -38,7 +43,7 @@ declare const __BUILD_COMMIT__: string;
  * page was built from; none kept for a build with changes not committed, or under the
  * development server, whose painter may change from one page load to the next.
  */
-const PAINTER_CODE =
+export const PAINTER_CODE =
   typeof __BUILD_COMMIT__ === "string" &&
   __BUILD_COMMIT__ !== "unknown" &&
   !__BUILD_COMMIT__.endsWith("-dirty") &&
@@ -71,6 +76,13 @@ const MIDDLE_CALM = 1;
  * whole island took the board's painter some 25 s before anything showed.
  */
 const MIDDLE_PIECES: PieceOptions = { cells: 32, ahead: 32, kept: Infinity };
+/**
+ * Seconds the middle view's ground rests between two pieces painted ahead: none to speak
+ * of (R5, the optimization plan: some forty pieces make the whole island, painted in under
+ * a minute, so that the middle view always comes painted; still only while frames are on
+ * time). The local view's six hundred keep their half minute's rest.
+ */
+const MIDDLE_PREPAINT_REST_S = 0.5;
 /**
  * A frame later than this (seconds; the cap's is a thirtieth) came late; the island is
  * painted ahead only once frames have come on time for `ON_TIME_S` (R5, the board).
@@ -187,6 +199,8 @@ export class Landscape {
    */
   private layoutVersion = 0;
   private readonly builtFor = new Map<ViewName, number>();
+  /** The lay-out each view not shown was last prepared ahead for (`prepareAhead`). */
+  private readonly aheadFor = { middle: -1, local: -1 };
   private view: ViewName = "middle";
   private cells: CellRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly built: Built = { map: null, middle: null, local: null };
@@ -346,13 +360,39 @@ export class Landscape {
   }
 
   /**
+   * Lay the views not shown out for the latest land, ahead of the view button (R5, the
+   * optimization plan): their plants' sheets drawn in a worker first (`prepareStanding`),
+   * so that nothing on the screen waits, then each view laid out and its ground painted
+   * ahead (`prefetch`). Called every frame; asks once per lay-out.
+   */
+  prepareAhead(): void {
+    const { land } = this;
+    if (land === null) return;
+    for (const name of ["middle", "local"] as const) {
+      if (name === this.view || !this.behind(name) || this.aheadFor[name] === this.layoutVersion)
+        continue;
+      const version = this.layoutVersion;
+      this.aheadFor[name] = version;
+      void prepareStanding(land, TILES[name], this.plantOptions(name)).then(() => {
+        if (version === this.layoutVersion && name !== this.view && this.behind(name)) {
+          this.build(name);
+        }
+      });
+    }
+  }
+
+  /**
    * Paint and keep the ground `view` will show over `cells`, behind what is on the screen
    * (R5, the showcase: where the camera goes next). Only a view built for the latest land.
+   * `after`: the view after the next one, behind the next one's ground.
    */
-  prefetch(view: ViewName, cells: CellRect): void {
+  prefetch(view: ViewName, cells: CellRect, after = false): void {
+    // As the island's painting ahead does: only while the frames come on time, and only
+    // once the view shown has nothing of its own waiting to be painted.
     if (this.land === null || view === "map" || this.behind(view)) return;
+    if (!this.framesOnTime || this.painter.busy > 0) return;
     const ground = view === "middle" ? this.built.middle?.ground : this.built.local?.ground;
-    ground?.prefetch(cells);
+    ground?.prefetch(cells, after);
   }
 
   /** Whether a new day or land is waiting to be laid out. */
@@ -440,6 +480,20 @@ export class Landscape {
     return ground?.ready(this.cells) ?? false;
   }
 
+  /**
+   * How far the iris between views may open (R5, `iris.ts`), 0–1 of the way from the middle
+   * to the corners: as far as the view's ground is painted out from its middle; the map's
+   * all at once, when it is painted.
+   */
+  get openTo(): number {
+    if (this.stale || this.land === null) return 0;
+    if (this.view === "map") return this.built.map?.settled === true ? 1 : 0;
+    const ground = this.view === "middle" ? this.built.middle?.ground : this.built.local?.ground;
+    if (ground === undefined) return 0;
+    const { x0, y0, x1, y1 } = this.cells;
+    return Math.min(ground.paintedReach(this.cells) / Math.hypot(x1 - x0, y1 - y0) / 0.5, 1);
+  }
+
   /** Whether everything the view shows is painted from the latest land, and nothing is fading. */
   get settled(): boolean {
     if (this.stale || this.land === null || this.painter.busy > 0) return false;
@@ -512,6 +566,18 @@ export class Landscape {
     ].join("|");
   }
 
+  /** How view `name`'s plants are laid out for the current land and day. */
+  private plantOptions(name: "middle" | "local", time = this.time()): StandingOptions {
+    return {
+      covered: this.covered ?? undefined,
+      look: this.look,
+      time,
+      close: name === "local",
+      lazy: name === "middle",
+      pieces: this.bushPieces,
+    };
+  }
+
   /** Make view `name` (again) for the current land and day. */
   private build(name: ViewName): void {
     const { land, look } = this;
@@ -531,22 +597,15 @@ export class Landscape {
     const stamp = this.stampOf();
     if (name === "map") {
       if (this.built.map === null) {
-        this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
+        this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS, this.cache);
         const { container, surf } = this.built.map;
         this.layers.map.addChild(container, ...[...surf].reverse(), this.seas.map.glints);
       }
-      void this.built.map.repaint(request, 5);
+      void this.built.map.repaint(request, 5, stamp);
       return;
     }
     performance.mark(`lineage:plants:${name}`);
-    const plants = standingPlants(land, TILES[name], {
-      covered: this.covered ?? undefined,
-      look,
-      time,
-      close: name === "local",
-      lazy: name === "middle",
-      pieces: this.bushPieces,
-    });
+    const plants = standingPlants(land, TILES[name], this.plantOptions(name, time));
     performance.measure(`lineage:plants:${name}`, `lineage:plants:${name}`);
     if (name === "middle") {
       if (this.built.middle === null) {
@@ -558,6 +617,7 @@ export class Landscape {
             this.fadeS,
             MIDDLE_PIECES,
             this.cache,
+            MIDDLE_PREPAINT_REST_S,
           ),
           plants: new PlantFade(this.fadeS),
         };

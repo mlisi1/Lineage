@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Container, Texture } from "pixi.js";
-import { RowPool, dropAt, puffAt, type Plume } from "../../src/atmosphere/particles";
+import { PARK_FRAMES, RowPool, dropAt, puffAt, type Plume } from "../../src/atmosphere/particles";
 import { HALO_SIZE, HALO_STEPS, haloAlpha } from "../../src/atmosphere/sprites";
 
 const plume: Plume = {
@@ -89,6 +89,13 @@ describe("what stands among the plants", () => {
     const d = pool.next(Texture.WHITE, null, 1.2);
     pool.end();
     expect(d.parent).toBe(fallback);
+    // Not drawn: see-through at once, hidden once long unused (`PARK_FRAMES`).
+    expect(b.alpha).toBe(0);
+    for (let k = 0; k < PARK_FRAMES; k++) {
+      pool.begin();
+      pool.next(Texture.WHITE, null, 1.2);
+      pool.end();
+    }
     expect(b.visible).toBe(false);
   });
 

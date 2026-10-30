@@ -93,7 +93,48 @@ export function dropAt(
   return { x: (((startX + fall.slant * age) % width) + width) % width, y: -4 + fall.speed * age };
 }
 
-/** Sprites to be placed afresh each frame: as many as are asked for, the rest hidden. */
+/**
+ * Frames a sprite a pool has no use for is kept, see-through, before it is hidden. Hiding
+ * a sprite changes its group's structure, and Pixi then rebuilds the group's whole draw
+ * list: a fire's pools, their counts changing from frame to frame, rebuilt theirs every
+ * frame (R5, the optimization plan). A see-through sprite draws nothing, so the picture is
+ * the same; one unused for a second is hidden at last, once.
+ */
+export const PARK_FRAMES = 30;
+
+/** Sprites a pool is not using this frame: see-through at once, hidden once long unused. */
+class Parking {
+  /** Frames each sprite has been parked, or -1 while it is in use. */
+  private readonly idle: number[] = [];
+  /** Its opacity when it was parked, given back when it is used again. */
+  private readonly alpha: number[] = [];
+
+  /** Sprite `index` is not used this frame. */
+  park(sprite: Sprite, index: number): void {
+    const idle = this.idle[index] ?? -1;
+    if (idle < 0) {
+      if (!sprite.visible) return;
+      this.alpha[index] = sprite.alpha;
+      sprite.alpha = 0;
+      this.idle[index] = 0;
+      return;
+    }
+    this.idle[index] = idle + 1;
+    if (idle + 1 >= PARK_FRAMES && sprite.visible) sprite.visible = false;
+  }
+
+  /** Sprite `index` is used again: as it was when parked, and shown. */
+  use(sprite: Sprite, index: number): void {
+    if ((this.idle[index] ?? -1) >= 0) {
+      sprite.alpha = this.alpha[index] ?? 1;
+      this.idle[index] = -1;
+    }
+    // Read first: the setter's work is not free, and it is asked of every sprite every frame.
+    if (!sprite.visible) sprite.visible = true;
+  }
+}
+
+/** Sprites to be placed afresh each frame: as many as are asked for, the rest parked. */
 export class SpritePool {
   // Its own render group (R5): sprites shown and hidden here every frame rebuild only this
   // group's draw list, not the scene's with its thousands of plants.
@@ -101,6 +142,7 @@ export class SpritePool {
   private readonly sprites: Sprite[] = [];
   private used = 0;
   private skipped = 0;
+  private readonly parking = new Parking();
 
   constructor(private readonly blendMode: "normal" | "add" = "normal") {}
 
@@ -119,7 +161,7 @@ export class SpritePool {
       this.container.addChild(sprite);
     }
     if (sprite.texture !== texture) sprite.texture = texture;
-    sprite.visible = true;
+    this.parking.use(sprite, this.used);
     this.used += 1;
     return sprite;
   }
@@ -132,7 +174,7 @@ export class SpritePool {
   skip(): void {
     const sprite = this.sprites[this.used];
     if (sprite === undefined) return;
-    sprite.visible = false;
+    this.parking.park(sprite, this.used);
     this.used += 1;
     this.skipped += 1;
   }
@@ -140,7 +182,7 @@ export class SpritePool {
   end(): void {
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
-      if (sprite !== undefined) sprite.visible = false;
+      if (sprite !== undefined) this.parking.park(sprite, i);
     }
   }
 
@@ -167,6 +209,7 @@ export class RowPool {
   private used = 0;
   /** This frame's sprites by the row they were asked into, in the order asked. */
   private readonly placed = new Map<Container, Sprite[]>();
+  private readonly parking = new Parking();
 
   constructor(
     private readonly fallback: Container,
@@ -200,7 +243,7 @@ export class RowPool {
     }
     row.push(sprite);
     if (sprite.texture !== texture) sprite.texture = texture;
-    sprite.visible = true;
+    this.parking.use(sprite, this.used);
     this.used += 1;
     return sprite;
   }
@@ -219,7 +262,7 @@ export class RowPool {
     }
     for (let i = this.used; i < this.sprites.length; i++) {
       const sprite = this.sprites[i];
-      if (sprite !== undefined) sprite.visible = false;
+      if (sprite !== undefined) this.parking.park(sprite, i);
     }
   }
 

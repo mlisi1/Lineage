@@ -68,4 +68,26 @@ describe("painting off the frame", () => {
     expect(order).toEqual(["behind", "near", "after"]);
     expect(painter.busy).toBe(0);
   });
+
+  it("works out a request's later part only when a painter takes it up, in turn", async () => {
+    const painter = new InlinePainter();
+    painter.setLand(land);
+    const worked: string[] = [];
+    const later = (name: string) => () => {
+      worked.push(name);
+      return { grain: false };
+    };
+    const first = painter.paint(request, 1, later("first"));
+    const second = painter.paint(request, 2, later("second"));
+    // The first has started; the second's part waits until its turn.
+    expect(worked).toEqual(["first"]);
+    await Promise.all([first, second]);
+    expect(worked).toEqual(["first", "second"]);
+    // One dropped before its turn never has it worked out.
+    const blocker = painter.paint(request, 0);
+    const dropped = painter.paint({ ...request, tile: 4 }, 3, later("dropped"));
+    painter.drop((queued) => queued.tile === 4);
+    await Promise.all([blocker, dropped.catch(() => undefined)]);
+    expect(worked).toEqual(["first", "second"]);
+  });
 });

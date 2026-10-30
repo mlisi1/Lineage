@@ -30,6 +30,8 @@ export const FOLLOW_MAX_S = 6 * 60;
 export const DIP_OUT_S = 0.4;
 export const WAIT_MAX_S = 3;
 export const DIP_IN_S = 0.6;
+/** Frames drawn fully dark before the view changes under the dark. */
+export const DARK_FRAMES = 2;
 /** The middle view drifts this fast (cells a second) to places this far apart (cells). */
 const DRIFT_SPEED = 1.2;
 const DRIFT_MIN_CELLS = 20;
@@ -130,13 +132,24 @@ export interface Shot {
 /** How the camera is moving in its view. */
 export type Motion = "still" | "drift" | "linger" | "follow" | "glide" | "visit" | "return";
 
-type Dip = { phase: "out" | "wait" | "in"; t: number; then: (scene: Scene) => void };
+type Dip = { phase: "out" | "dark" | "wait" | "in"; t: number; then: (scene: Scene) => void };
 
 export class Director {
   private view: ViewName = "map";
   private readonly spring: Spring;
   private readonly walking = new Velocity(VELOCITY_SMOOTH_S);
   private dip: Dip | null = null;
+  /**
+   * Whether the next animal to follow is chosen ahead (`lookAhead`): live, as on the desk;
+   * not for films and stills, whose camera draws its choices when it always did.
+   */
+  looksAhead = false;
+  private upcomingId: number | null = null;
+  private upcomingAt: Point | null = null;
+  /** Where the middle view will come down next, chosen ahead as the animal is (`lookAhead`). */
+  private upcomingPlace: Point | null = null;
+  /** Frames drawn fully dark so far before the cut (`DARK_FRAMES`). */
+  private darkFrames = 0;
   /** The view a press during a dip leads on from: the one the dip is going to. */
   private going: ViewName | null = null;
   private idle = 0;
@@ -200,6 +213,7 @@ export class Director {
       this.go("map");
     this.moveDip(dtS, scene);
     this.film(dtS, scene);
+    if (this.looksAhead) this.lookAhead(scene);
     const size = this.sizes[this.view];
     const centre =
       this.view === "map"
@@ -217,7 +231,7 @@ export class Director {
     const dip = this.dip;
     if (dip === null) return 0;
     if (dip.phase === "out") return Math.min(dip.t / DIP_OUT_S, 1);
-    if (dip.phase === "wait") return 1;
+    if (dip.phase === "wait" || dip.phase === "dark") return 1;
     return Math.max(1 - dip.t / DIP_IN_S, 0);
   }
 
@@ -243,12 +257,13 @@ export class Director {
       } else if (view === "middle") {
         this.subject = null;
         this.spring.options = DRIFTING;
-        this.spring.snap(this.landPlace(scene, null));
+        this.spring.snap(this.upcomingPlace ?? this.landPlace(scene, null));
+        this.upcomingPlace = null;
         this.startDrift(scene);
       } else {
         this.spring.options = FOLLOWING;
         this.motion = "follow";
-        const next = this.choose(scene, null);
+        const next = this.takeUpcoming(scene, null) ?? this.choose(scene, null);
         this.subject = next?.id ?? null;
         this.follow = this.followTime();
         this.spring.snap(next ?? { x: scene.width / 2, y: scene.height / 2 });
@@ -261,6 +276,14 @@ export class Director {
     if (dip === null) return;
     dip.t += dtS;
     if (dip.phase === "out" && dip.t >= DIP_OUT_S) {
+      // Fully dark on the screen before the cut (R5, the owner on the board: the new view's
+      // lay-out held up the frame of the cut, and the last frame shown, not quite dark,
+      // stayed with what was drawn before showing through it).
+      this.dip = { phase: "dark", t: 0, then: dip.then };
+    } else if (dip.phase === "dark") {
+      this.darkFrames += 1;
+      if (this.darkFrames < DARK_FRAMES) return;
+      this.darkFrames = 0;
       dip.then(scene);
       this.dip = { phase: "wait", t: 0, then: dip.then };
     } else if (dip.phase === "wait" && (scene.ready || dip.t >= WAIT_MAX_S)) {
@@ -346,6 +369,50 @@ export class Director {
    * awake (all of them if every one sleeps), then one of its animals, awake if it can
    * be, and not `current` while there is anyone else.
    */
+  /**
+   * Choose the animal the local view will follow next, and the place the middle view will
+   * come down on, ahead of time (R5, the optimization plan: their ground is painted while
+   * the camera is elsewhere, `upcoming` and `upcomingMiddle`, so that a view finds it
+   * painted).
+   */
+  private lookAhead(scene: Scene): void {
+    // The middle view's place too, once the land is there to choose it on.
+    if (this.upcomingPlace === null && this.view !== "middle" && this.going !== "middle") {
+      const place = this.landPlace(scene, null);
+      if (scene.isLand(place.x, place.y)) this.upcomingPlace = place;
+    }
+    const current = this.view === "local" ? this.subject : null;
+    const known =
+      this.upcomingId === null ? undefined : scene.subjects.find((s) => s.id === this.upcomingId);
+    if (known !== undefined && known.id !== current && !known.torpid) {
+      this.upcomingAt = { x: known.x, y: known.y };
+      return;
+    }
+    const next = this.choose(scene, current);
+    this.upcomingId = next?.id ?? null;
+    this.upcomingAt = next === null ? null : { x: next.x, y: next.y };
+  }
+
+  /** The animal chosen ahead (`lookAhead`), if it is still about and awake; it is chosen anew after. */
+  private takeUpcoming(scene: Scene, current: number | null): Subject | null {
+    const id = this.upcomingId;
+    this.upcomingId = null;
+    this.upcomingAt = null;
+    if (id === null || id === current) return null;
+    const subject = scene.subjects.find((s) => s.id === id);
+    return subject === undefined || subject.torpid ? null : subject;
+  }
+
+  /** Where the animal the local view will follow next is now (`lookAhead`); null if none chosen. */
+  get upcoming(): Point | null {
+    return this.upcomingAt;
+  }
+
+  /** Where the middle view will come down next (`lookAhead`); null if not chosen yet. */
+  get upcomingMiddle(): Point | null {
+    return this.upcomingPlace;
+  }
+
   private choose(scene: Scene, current: number | null): Subject | null {
     const others = scene.subjects.filter((subject) => subject.id !== current);
     const pool = others.length > 0 ? others : scene.subjects;
@@ -369,7 +436,7 @@ export class Director {
     let subject = scene.subjects.find((candidate) => candidate.id === this.subject) ?? null;
     if (subject === null || (this.follow <= 0 && this.dip === null)) {
       // Its time is up, or it died: on to the next.
-      const next = this.choose(scene, this.subject);
+      const next = this.takeUpcoming(scene, this.subject) ?? this.choose(scene, this.subject);
       this.follow = this.followTime();
       if (next === null) {
         this.subject = null;

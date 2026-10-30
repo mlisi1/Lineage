@@ -37,7 +37,7 @@ ATMOSPHERE_SCENARIOS = ("night", "rain", "fire", "apocalypse", "shore")
 # What else is measured beside them (`EVENTS` in benchplan.ts), with no band: a sim-day's
 # turn. Every other scenario is measured with the day held, as on the desk, where it turns
 # once a day (the owner, 2026-10-27); the benchmark plays its recording 1800 times as fast.
-EVENT_SCENARIOS = ("day-turn",)
+EVENT_SCENARIOS = ("day-turn", "switches")
 # The costliest judged scenario, whose CPU the report breaks down by process.
 HEAVIEST_SCENARIO = "middle-crowd"
 # The kiosk's cap on the board (ADR 0022), which is also the target of ADR 0010.
@@ -472,7 +472,8 @@ def _judged_note() -> str:
     return (
         f"judged: {', '.join(ACCEPTANCE_SCENARIOS)}; "
         f"the atmosphere's, recorded without a band: {', '.join(ATMOSPHERE_SCENARIOS)}; "
-        f"a day's turn, recorded without a band: {', '.join(EVENT_SCENARIOS)} "
+        f"a day's turn and the views' switches, recorded without a band: "
+        f"{', '.join(EVENT_SCENARIOS)} "
         "(the others measured with the sim-day held, as on the desk)"
     )
 

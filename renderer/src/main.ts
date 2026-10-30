@@ -67,18 +67,28 @@
  * the weather of events, and the end of a world, during which the camera stays on the map
  * and the button does nothing.
  */
-import { Application, Container, WebGLRenderer } from "pixi.js";
+import { Application, Container, Sprite, Texture, WebGLRenderer } from "pixi.js";
 import { Ambient } from "./atmosphere/ambient";
 import { Leaves } from "./atmosphere/leaves";
 import { Atmosphere } from "./atmosphere/atmosphere";
 import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
-import { Captions, lantern } from "./captions";
+import { Captions, PAPER, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
-import { Director, TIMINGS, type Motion, type Scene, type Shot, type Visit } from "./director";
+import {
+  Director,
+  NEXT,
+  TIMINGS,
+  type Motion,
+  type Scene,
+  type Shot,
+  type Visit,
+} from "./director";
 import { Herd } from "./herd";
-import type { PlantLayer } from "./plants/plants";
-import { Landscape, TILES, VIEWS, type ViewName } from "./landscape";
+import { IRIS_FROM, Iris } from "./iris";
+import { useArtCache, type PlantLayer } from "./plants/plants";
+import { Landscape, PAINTER_CODE, TILES, VIEWS, type ViewName } from "./landscape";
+import { makeArtCache } from "./plants/artcache";
 import { PlaceMarker } from "./marker";
 import type { ClockMessage, CreaturesMessage, Message, SkyMessage } from "./protocol";
 import { FrameMeter } from "./showcase/meter";
@@ -101,7 +111,7 @@ import {
   paintRequest,
   type PaintRequest,
 } from "./terrain/painter";
-import { Bench } from "./bench";
+import { Bench, type BootMarks } from "./bench";
 import { capFrames } from "./framecap";
 
 /** Screen pixels per art pixel (ADR 0007). */
@@ -111,7 +121,10 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
-const DARK = "#10081c";
+/** Seconds between two asks for the ground round the next animal the local view will follow. */
+const AHEAD_EVERY_S = 0.5;
+/** The dip between views: the night's deep purple. */
+const DIP_COLOUR = 0x10081c;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
 /** The name card waits until a dip between views is this clear before it unrolls (0–1). */
@@ -245,6 +258,8 @@ async function start(): Promise<void> {
   // hand, and once the scene is built it is handed the hooks it measures with (below).
   const bench = await Bench.start(window.location.search, VIEW_CELLS);
   const params = bench?.params ?? new URLSearchParams(window.location.search);
+  // When the page got going (R5, the optimization plan; the benchmark reads them).
+  const boot: BootMarks = { script: performance.now(), land: null, laidOut: null, painted: null };
   const pinned = pinnedView(params.get("view"));
   // The showcase (R5): a scripted tour of the scene on a recording, kept in the desk's
   // build so that it runs on the board as the desk would (`showcase/`).
@@ -267,6 +282,8 @@ async function start(): Promise<void> {
   frame.style.position = "absolute";
   frame.style.overflow = "hidden";
   document.body.appendChild(frame);
+  // No pointer on the desk (the owner, on the board: the kiosk showed it).
+  if (KIOSK) document.documentElement.style.cursor = "none";
   const canvas = app.canvas;
   canvas.style.imageRendering = "pixelated";
   canvas.style.position = "absolute";
@@ -303,11 +320,18 @@ async function start(): Promise<void> {
   landscape.bushPieces = params.get("bushes") !== "whole";
   landscape.groundOnGpu = params.get("painter") !== "cpu";
   // The ground painted is kept between visits (R5); `?ground=fresh` paints it all anew.
-  if (params.get("ground") !== "fresh") landscape.cache = makeGroundCache();
+  if (params.get("ground") !== "fresh") {
+    landscape.cache = makeGroundCache();
+    // The plants' drawings kept too, read in now, long before the first lay-out (R5).
+    useArtCache(makeArtCache(PAINTER_CODE));
+  }
   world.addChild(landscape.container);
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();
   const herd = new Herd(atlas, mulberry32(seed + 1), () => landscape.current);
+  // Live, a page's first animals are drawn over its first frames (the start's longest
+  // wait on the board); films and stills draw them at once, the same frames every time.
+  herd.spreadPlacing = params.get("film") === null && params.get("still") === null;
   // The name card's portraits, drawn by the scene's own renderer (R5).
   // Read back without waiting for the GPU while the scene runs live; at once for films and
   // stills, so that a frame is the same however fast the machine is.
@@ -326,13 +350,7 @@ async function start(): Promise<void> {
   const leaves = new Leaves(seed + 4, ambient.over);
   const still = params.get("still") !== null;
 
-  // Over the scene: the dip between views, then the captions above it.
-  const dim = document.createElement("div");
-  dim.style.position = "absolute";
-  dim.style.inset = "0";
-  dim.style.background = DARK;
-  dim.style.opacity = "0";
-  dim.style.pointerEvents = "none";
+  // Over the scene: the captions (the dip between views is drawn on the canvas, `dip`).
   // The initial of an entry about a species is in the species' colour, as the herd draws it.
   const captions = new Captions(
     WIDTH,
@@ -341,7 +359,7 @@ async function start(): Promise<void> {
   );
   // The name card of the animal followed, in the top-left corner (R5).
   const card = new NameCard(WIDTH, HEIGHT);
-  frame.append(dim, captions.element, card.element);
+  frame.append(captions.element, card.element);
   // The showcase's lines and titles, and its frame counter with `?fps`.
   const overlay = showcasing ? new Overlay(WIDTH, HEIGHT) : null;
   if (overlay !== null) frame.append(overlay.title, overlay.line, overlay.counter);
@@ -417,6 +435,20 @@ async function start(): Promise<void> {
     marker.container,
     atmosphere.sky,
   );
+  // The dip between views, drawn last on the canvas itself (R5, the owner on the board: an
+  // element laid over the canvas left what was drawn before showing through), over the
+  // whole canvas with its margin.
+  const dip = new Sprite(Texture.WHITE);
+  dip.tint = DIP_COLOUR;
+  dip.width = app.screen.width;
+  dip.height = app.screen.height;
+  dip.alpha = 0;
+  dip.visible = false;
+  app.stage.addChild(dip);
+  // Live, the iris in its place (R5, `iris.ts`): it closes on the middle, a ring turns while
+  // the next view's ground comes, and it opens as far as that ground is painted.
+  const iris = new Iris(app.screen.width, app.screen.height, DIP_COLOUR, PAPER);
+  app.stage.addChild(iris.sprite);
   // An animal burnt to death (or, in streams without causes, that dies in a burning
   // cell) leaves a puff of ash.
   herd.onGone = (x, y, cause) => {
@@ -429,8 +461,14 @@ async function start(): Promise<void> {
   herd.arrival = (x, y) => atmosphere.arrival(x, y);
   const receive = (message: Message): void => {
     const begun = PROBE.enabled ? performance.now() : 0;
+    if (message.type === "land" && boot.land === null) boot.land = performance.now();
     PROBE.note(message.type);
+    // Until the first ground is painted, each message's handling is marked for a trace or
+    // a look from the board (R5: where a start goes); none after, so that none pile up.
+    const starting = boot.painted === null;
+    const from = starting ? performance.now() : 0;
     if (!atmosphere.hold(message)) deliver(message);
+    if (starting) performance.measure(`lineage:start:${message.type}`, { start: from });
     if (PROBE.enabled) PROBE.charge("messages", performance.now() - begun);
   };
   // Made-up light and events: a demo path, kept in the desk's build only for the benchmark.
@@ -490,6 +528,9 @@ async function start(): Promise<void> {
     followMinS: follow === null ? TIMINGS.followMinS : number("follow", 1) * 0.8,
     followMaxS: follow === null ? TIMINGS.followMaxS : number("follow", 1) * 1.2,
   });
+  // Live, the next animal to follow is chosen ahead and its ground painted (the director's
+  // choices drawn earlier); films and stills draw them when they always did.
+  director.looksAhead = params.get("film") === null && params.get("still") === null;
 
   toMap = () => {
     if (pinned === null) director.toMap();
@@ -649,6 +690,8 @@ async function start(): Promise<void> {
   let sceneLight = 1;
   /** What fell from the sky as last drawn (no birds or fireflies in it, R5). */
   let sceneRain: SkyMessage["rain"] = "none";
+  /** Seconds since the ground round the next animal to follow was last asked for. */
+  let aheadS = 0;
   /** Move the scene on by `deltaMS` and lay it out for drawing. */
   const step = (deltaMS: number): void => {
     PROBE.enter("director");
@@ -679,7 +722,9 @@ async function start(): Promise<void> {
     } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
-      scene.ready = landscape.settled;
+      // Live, the iris opens once the middle of the view is painted (`openTo`, and as far
+      // as it is); films and stills keep waiting for all of it, as they were made.
+      scene.ready = director.looksAhead ? landscape.openTo >= IRIS_FROM : landscape.settled;
       scene.place = scroll.phase === "roll-up" || atmosphere.ending ? null : entry;
       shot = director.update(dtS, scene);
     } else {
@@ -703,9 +748,33 @@ async function start(): Promise<void> {
     }
     const tile = TILES[shot.view];
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
+    // Ahead of the view button (R5, the optimization plan): the views not shown are laid
+    // out in the background (their plants drawn in a worker), and every so often the
+    // ground the next views will open on (where the middle view will come down, round the
+    // animal the local view will follow) is painted and kept, so that they come painted.
+    if (director.looksAhead) {
+      landscape.prepareAhead();
+      aheadS += deltaMS / 1000;
+      // The view the button leads to next, and the one after it behind it (on the map,
+      // the middle view's place, then the local view's animal).
+      if (aheadS >= AHEAD_EVERY_S) {
+        aheadS = 0;
+        const coming = NEXT[shot.view];
+        for (const view of [coming, NEXT[coming]]) {
+          const at = view === "local" ? director.upcoming : director.upcomingMiddle;
+          if (view === "map" || at === null) continue;
+          const tile = TILES[view];
+          landscape.prefetch(view, sight(at, WIDTH / tile, HEIGHT / tile), view !== coming);
+        }
+      }
+    }
     PROBE.enter("landscape");
+    const laying = boot.painted === null ? performance.now() : 0;
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    if (laying > 0) performance.measure("lineage:start:landscape", { start: laying });
+    if (boot.laidOut === null && landscape.current !== null) boot.laidOut = performance.now();
+    if (boot.painted === null && landscape.settled) boot.painted = performance.now();
     PROBE.enter("herd");
     // The animals sleep by the light of the moment (R5), as last drawn.
     herd.nightfall(sceneLight, atmosphere.overcastNow);
@@ -781,8 +850,15 @@ async function start(): Promise<void> {
     // Written only when they change: each write makes the browser restyle the page.
     const transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     if (canvas.style.transform !== transform) canvas.style.transform = transform;
-    const opacity = String(shot.dim);
-    if (dim.style.opacity !== opacity) dim.style.opacity = opacity;
+    // How dark the screen is between views: the dip's, or live the iris's (shut, 1).
+    let dark = shot.dim;
+    if (director.looksAhead) {
+      iris.update(dtS, shot.dim, landscape.openTo);
+      dark = Math.max(shot.dim, 1 - iris.open);
+    } else {
+      if (dip.alpha !== shot.dim) dip.alpha = shot.dim;
+      if (dip.visible !== shot.dim > 0) dip.visible = shot.dim > 0;
+    }
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
     const { light, tint, rain } = atmosphere.state;
@@ -801,7 +877,7 @@ async function start(): Promise<void> {
     const chosen = shot.view === "local" && shot.subject !== null ? shot.subject : null;
     const look = chosen === null ? null : herd.portraitOf(chosen);
     const portrait = look === null ? null : (portraits.of(look) ?? portraits.latestOf(look.id));
-    const following = shot.view === "local" && shot.dim < CARD_DIM && !away ? shot.subject : null;
+    const following = shot.view === "local" && dark < CARD_DIM && !away ? shot.subject : null;
     const facts =
       following === null || (look !== null && portrait === null) ? null : herd.cardOf(following);
     card.update(dtS, facts === null ? null : { ...facts, portrait }, lamp);
@@ -867,6 +943,8 @@ async function start(): Promise<void> {
     },
     dayDue: () => landscape.dayDue,
     groundMade: () => (painter instanceof WorkerPainter ? { ...painter.made } : null),
+    groundTimings: () => (painter instanceof WorkerPainter ? [...painter.timings] : []),
+    boot: () => ({ ...boot }),
     newLand: () => {
       const message = landscape.lastMessage;
       if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });

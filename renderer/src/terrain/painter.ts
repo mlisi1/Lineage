@@ -90,6 +90,9 @@ const none = (): Pixels => ({ width: 0, height: 0, rgba: new Uint8ClampedArray(0
  * Paint `request` on `land`, keeping it in `cache` as `request.keep` asks: what the worker
  * and `InlinePainter` both do.
  */
+/** How long the last `paintKept` spent reading the cache, and handing it the painting (ms). */
+export const cacheTimes = { getMs: 0, putMs: 0 };
+
 export async function paintKept(
   land: Land,
   request: PaintRequest,
@@ -97,11 +100,17 @@ export async function paintKept(
   gpu: GroundGpu | null = null,
 ): Promise<{ pixels: Pixels; fresh: boolean }> {
   const { keep } = request;
+  cacheTimes.getMs = 0;
+  cacheTimes.putMs = 0;
   if (keep === undefined) return { pixels: paintRequest(land, request, gpu), fresh: true };
+  const looked = performance.now();
   const kept = await cache.get(keep.key, keep.stamp);
+  cacheTimes.getMs = performance.now() - looked;
   if (kept !== undefined) return { pixels: keep.ahead === true ? none() : kept, fresh: false };
   const pixels = paintRequest(land, request, gpu);
+  const putting = performance.now();
   cache.put(keep.key, keep.stamp, pixels);
+  cacheTimes.putMs = performance.now() - putting;
   return { pixels: keep.ahead === true ? none() : pixels, fresh: true };
 }
 
@@ -109,10 +118,16 @@ export interface Painter {
   /** The land the requests from now on are painted on. Returns its version. */
   setLand(land: Land): number;
   /**
-   * Paint `request` on the latest land. The lower `priority`, the sooner. Rejects with
-   * `Dropped` if `drop` takes it off the queue first.
+   * Paint `request` on the latest land. The lower `priority`, the sooner. `later` adds to
+   * the request what is worked out only once a painter takes it up (R5: a piece's
+   * shadows, not for every piece asked at once). Rejects with `Dropped` if `drop` takes
+   * it off the queue first.
    */
-  paint(request: PaintRequest, priority?: number): Promise<Painted>;
+  paint(
+    request: PaintRequest,
+    priority?: number,
+    later?: () => Partial<PaintRequest>,
+  ): Promise<Painted>;
   /** Take off the queue every request not yet started for which `which` says so. */
   drop(which: (request: PaintRequest) => boolean): void;
   /** Requests waiting or being painted, but those in the background (`BACKGROUND`). */
@@ -134,8 +149,12 @@ export class Dropped extends Error {
 
 interface Queued {
   request: PaintRequest;
+  later?: () => Partial<PaintRequest>;
   priority: number;
   order: number;
+  /** When it was asked for, and when a painter took it up (`performance.now`). */
+  askedAt: number;
+  startedAt: number;
   resolve: (painted: Painted) => void;
   reject: (error: Error) => void;
 }
@@ -160,9 +179,23 @@ abstract class QueuedPainter implements Painter {
     return this.version;
   }
 
-  paint(request: PaintRequest, priority = 0): Promise<Painted> {
+  paint(
+    request: PaintRequest,
+    priority = 0,
+    later?: () => Partial<PaintRequest>,
+  ): Promise<Painted> {
     return new Promise((resolve, reject) => {
-      this.queue.push({ request, priority, order: this.order++, resolve, reject });
+      const askedAt = performance.now();
+      this.queue.push({
+        request,
+        ...(later === undefined ? {} : { later }),
+        priority,
+        order: this.order++,
+        askedAt,
+        startedAt: askedAt,
+        resolve,
+        reject,
+      });
       this.next();
     });
   }
@@ -188,6 +221,14 @@ abstract class QueuedPainter implements Painter {
   protected abstract sendLand(land: Land, version: number): void;
   protected abstract start(request: PaintRequest, slot: number): void;
 
+  /** How long the request running in `slot` waited to be taken up, and has run (ms). */
+  protected timesOf(slot: number): { queueMs: number; runMs: number } | null {
+    const running = this.running[slot] ?? null;
+    if (running === null) return null;
+    const now = performance.now();
+    return { queueMs: running.startedAt - running.askedAt, runMs: now - running.startedAt };
+  }
+
   /** The request running in `slot` is done: hand it its pixels and start the next. */
   protected finished(pixels: Pixels | Error, landVersion: number, slot = 0, fresh = true): void {
     const done = this.running[slot] ?? null;
@@ -206,6 +247,11 @@ abstract class QueuedPainter implements Painter {
       this.queue.sort((a, b) => a.priority - b.priority || a.order - b.order);
       const first = this.queue.shift();
       if (first === undefined) return;
+      if (first.later !== undefined) {
+        first.request = { ...first.request, ...first.later() };
+        delete first.later;
+      }
+      first.startedAt = performance.now();
       this.running[slot] = first;
       this.start(first.request, slot);
     }
@@ -255,6 +301,8 @@ export type FromWorker =
       fresh: boolean;
       /** Whether its colour pass was done on the worker's GPU (`gpuground.ts`). */
       gpu?: boolean;
+      /** Where the worker's time went (`PieceTiming`). */
+      timing?: WorkerTiming;
     }
   | { kind: "failed"; message: string; landVersion: number };
 
@@ -267,6 +315,8 @@ export class WorkerPainter extends QueuedPainter {
   private readonly workers: Worker[];
   /** Paintings made (not taken from the cache) with the colour pass on the GPU and on the CPU. */
   readonly made = { gpu: 0, cpu: 0 };
+  /** The latest paintings made, timed (`PieceTiming`; the benchmark reads them). */
+  readonly timings: PieceTiming[] = [];
 
   constructor(count = 1) {
     super(count);
@@ -274,8 +324,18 @@ export class WorkerPainter extends QueuedPainter {
       const worker = new Worker(new URL("./paint.worker.ts", import.meta.url), { type: "module" });
       worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
         const reply = event.data;
-        if (reply.kind === "painted" && reply.fresh)
+        if (reply.kind === "painted" && reply.fresh) {
           this.made[reply.gpu === true ? "gpu" : "cpu"] += 1;
+          const times = this.timesOf(slot);
+          if (times !== null && reply.timing !== undefined) {
+            this.timings.push({
+              ...times,
+              ...reply.timing,
+              pixels: reply.pixels.width * reply.pixels.height,
+            });
+            if (this.timings.length > MOST_TIMINGS) this.timings.shift();
+          }
+        }
         this.finished(
           reply.kind === "painted" ? reply.pixels : new Error(reply.message),
           reply.landVersion,
@@ -302,6 +362,35 @@ export class WorkerPainter extends QueuedPainter {
     for (const worker of this.workers) worker.terminate();
   }
 }
+
+/** Where a worker's time on one painting went, in milliseconds. */
+export interface WorkerTiming {
+  /** The whole painting in the worker, cache included. */
+  totalMs: number;
+  /** The colour pass on the GPU: uploading its grids, drawing and reading back, unpacking. */
+  gpuUploadMs: number;
+  gpuDrawMs: number;
+  gpuUnpackMs: number;
+  /** Making the worker's GPU context and compiling its shader, the first time only. */
+  compileMs: number;
+  /** Reading the cache before painting, and handing it the painting after. */
+  cacheGetMs: number;
+  cachePutMs: number;
+  /** The painting's own steps (`paintSteps`). */
+  steps: Record<string, number>;
+}
+
+/** A painting timed from the page's side too (R5, the optimization plan). */
+export interface PieceTiming extends WorkerTiming {
+  /** Waiting in the queue, and from being taken up to being handed back. */
+  queueMs: number;
+  runMs: number;
+  /** Pixels painted. */
+  pixels: number;
+}
+
+/** Timed paintings kept (`WorkerPainter.timings`). */
+const MOST_TIMINGS = 400;
 
 /** Painting workers at most. */
 const MOST_PAINTERS = 3;

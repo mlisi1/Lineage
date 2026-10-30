@@ -51,6 +51,12 @@ benchmark and nothing of the project needs to be on the board.
    from SSH: `sudo systemctl start lineage-r5@<user>` (see the unit's own comments);
    `lineage-r0@.service` the same for the spike, from `~/lineage-r0/`.
 
+   `cage` draws the pointer itself until a page hides it, and the page can only once the
+   pointer moves. So, once, as the kiosk's user: `python3 blank-cursor.py` (copied from
+   `deploy/`), which writes a see-through cursor theme into
+   `~/.local/share/lineage-cursors`; the units put that folder on `XCURSOR_PATH`, and
+   the pointer is never seen.
+
    With no display attached at all, `WLR_BACKENDS=headless cage -- python3 kiosk_bench.py
    …` runs it on a virtual one, the GPU drawing and nothing shown: a first answer, which
    the report marks as not the R0 measurement.
