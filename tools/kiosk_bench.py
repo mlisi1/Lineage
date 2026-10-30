@@ -582,8 +582,17 @@ def run_profile(
     sandbox: bool,
     timeout_s: float,
     log_dir: Path,
+    keep_profile: Path | None = None,
 ) -> Run:
-    user_data = Path(tempfile.mkdtemp(prefix="lineage-kiosk-"))
+    # A browser profile of its own each run, as at a first start; or one kept between runs
+    # (`--keep-profile`), its storage as a desk's browser has it after a restart.
+    if keep_profile is not None:
+        keep_profile.mkdir(parents=True, exist_ok=True)
+    user_data = (
+        keep_profile
+        if keep_profile is not None
+        else Path(tempfile.mkdtemp(prefix="lineage-kiosk-"))
+    )
     command = browser_command(
         browser, profile, url, user_data, headless=headless, window=window, sandbox=sandbox
     )
@@ -600,7 +609,8 @@ def run_profile(
             )
     except OSError as error:
         run.status, run.detail = "launch-failed", str(error)
-        shutil.rmtree(user_data, ignore_errors=True)
+        if keep_profile is None:
+            shutil.rmtree(user_data, ignore_errors=True)
         return run
 
     sampler = Sampler(process.pid)
@@ -623,7 +633,8 @@ def run_profile(
                 break
     finally:
         stop(process)
-        shutil.rmtree(user_data, ignore_errors=True)
+        if keep_profile is None:
+            shutil.rmtree(user_data, ignore_errors=True)
     run.duration_s = round(time.monotonic() - started, 1)
     timeouts_after = count_gpu_timeouts(kernel_log())
     if timeouts_before is not None and timeouts_after is not None:
@@ -870,6 +881,12 @@ def main(argv: list[str] | None = None) -> int:
         "'No usable sandbox')",
     )
     parser.add_argument("--timeout", type=float, help="seconds to wait per profile")
+    parser.add_argument(
+        "--keep-profile",
+        type=Path,
+        help="the browser's profile kept in this folder between runs (what it stores, as a "
+        "desk's browser keeps it across restarts); a fresh one each run when left out",
+    )
     args = parser.parse_args(argv)
 
     if not (args.dist / args.page).is_file():
@@ -942,6 +959,7 @@ def main(argv: list[str] | None = None) -> int:
                 sandbox=sandbox,
                 timeout_s=timeout_s,
                 log_dir=args.out.parent,
+                keep_profile=args.keep_profile,
             )
             document["runs"].append(
                 {**vars(run), "drawn_by": drawn_by(run.results) if run.results else ""}
