@@ -497,6 +497,29 @@ function cellsOf(world: Land): Cells {
  */
 export const paintSteps = new Map<string, number>();
 
+/**
+ * Whether any cell within reach of `rect` (its cells and two round them: a pixel's burnt
+ * edge wanders under a cell) burnt more than `from` (0–1), as `paintGround` reads them.
+ */
+function scorchedNear(
+  scorch: Uint8Array,
+  width: number,
+  height: number,
+  rect: CellRect,
+  from: number,
+): boolean {
+  const x0 = Math.max(rect.x0 - 2, 0);
+  const y0 = Math.max(rect.y0 - 2, 0);
+  const x1 = Math.min(rect.x1 + 2, width - 1);
+  const y1 = Math.min(rect.y1 + 2, height - 1);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if ((scorch[y * width + x] ?? 0) / 255 > from) return true;
+    }
+  }
+  return false;
+}
+
 /** Paint the ground of `world`: `tile` pixels per cell over the cells asked for. */
 export function paintGround(
   world: Land,
@@ -1235,7 +1258,9 @@ export function paintGround(
   step("shadows");
   // Burnt ground (R4): every cell that burnt is charcoal, darker the more recent the fire,
   // with drifts of pale ash; its edge follows the cells, wandering by half a cell or so.
-  if (scorchCells !== undefined) {
+  // A piece no burnt cell reaches has none, and is not looked at pixel by pixel (R5, the
+  // optimization plan: two noises for every pixel of land, nearly always for nothing).
+  if (scorchCells !== undefined && scorchedNear(scorchCells, width, height, rect, CHAR_FROM)) {
     for (let py = 0; py < tall; py++) {
       for (let px = 0; px < wide; px++) {
         const at = py * wide + px;
