@@ -313,6 +313,9 @@ async function start(): Promise<void> {
   const seed = Number(params.get("seed") ?? Date.now() % 2 ** 31);
   const atlas = creatureAtlas();
   const herd = new Herd(atlas, mulberry32(seed + 1), () => landscape.current);
+  // Live, a page's first animals are drawn over its first frames (the start's longest
+  // wait on the board); films and stills draw them at once, the same frames every time.
+  herd.spreadPlacing = params.get("film") === null && params.get("still") === null;
   // The name card's portraits, drawn by the scene's own renderer (R5).
   // Read back without waiting for the GPU while the scene runs live; at once for films and
   // stills, so that a frame is the same however fast the machine is.

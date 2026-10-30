@@ -131,6 +131,11 @@ const BODIES = {
 /** Growth comes in sixteenths of the way to coming of age (`young` on the wire). */
 const YOUNG_STEPS = 16;
 
+/** More animals than this come in one message: drawn over the next frames (`placeWaiting`). */
+const MANY_PLACED = 16;
+/** Milliseconds a frame for drawing them. */
+const PLACE_BUDGET_MS = 10;
+
 export class Herd {
   private readonly roster = new Roster();
   private readonly layers: Record<"middle" | "local", CreatureLayer>;
@@ -460,6 +465,16 @@ export class Herd {
    * layers at once; the other is not seen until the view changes, in the dark of a dip).
    */
   private readonly redrawLater = { middle: new Set<number>(), local: new Set<number>() };
+  /**
+   * Whether many animals that come at once are drawn over the next frames (live, as on the
+   * desk) rather than all at once (films, stills and tests: the same frames however fast).
+   */
+  spreadPlacing = false;
+  /** Animals to be drawn in a view's layer over the next frames (`placeWaiting`), by "layer:slot". */
+  private readonly placeLater = new Map<
+    string,
+    { name: "middle" | "local"; slot: number; id: number; arriving: number }
+  >();
   /** Each living species' colours, ranked against the others (`colours.ts`). */
   private colours = new Map<number, SpeciesColour>();
 
@@ -496,9 +511,47 @@ export class Herd {
     for (const id of waiting) {
       const slot = this.roster.slotOf(id);
       const seed = slot === undefined ? null : this.seedOf(id);
-      if (slot !== undefined && seed !== null) this.layers[name].rebuild(slot, seed);
+      if (slot !== undefined && seed !== null && !this.placeLater.has(`${name}:${slot}`)) {
+        this.layers[name].rebuild(slot, seed);
+      }
     }
     waiting.clear();
+  }
+
+  /**
+   * Draw the animals waiting to be drawn (`placeLater`) for up to `budgetMs`, those of the
+   * view in use first; every one of layer `only`'s when it is given (a view coming on).
+   */
+  private placeWaiting(budgetMs: number, only?: "middle" | "local"): void {
+    if (this.placeLater.size === 0) return;
+    const begun = performance.now();
+    const using = this.view === "local" ? "local" : "middle";
+    for (const first of [true, false]) {
+      for (const [key, waiting] of this.placeLater) {
+        if (only !== undefined ? waiting.name !== only : (waiting.name === using) !== first) {
+          continue;
+        }
+        if (only === undefined && performance.now() - begun > budgetMs) return;
+        this.placeLater.delete(key);
+        const { name, slot, id, arriving } = waiting;
+        const seed = this.roster.slotOf(id) === slot ? this.seedOf(id) : null;
+        if (seed === null) continue;
+        const layer = this.layers[name];
+        layer.place(slot, seed);
+        if (arriving > 0) layer.arrive(slot, arriving);
+        const where = this.roster.where.get(id);
+        if (where !== undefined) layer.anchor(slot, where.x, where.y);
+        layer.setTorpid(slot, this.roster.torpid.has(id));
+        layer.setFood(slot, this.roster.food.get(id) ?? "none");
+      }
+      if (only !== undefined) return;
+    }
+  }
+
+  /** Slot `slot` is empty now: nothing waits to be drawn there. */
+  private forgetPlacing(slot: number): void {
+    this.placeLater.delete(`middle:${slot}`);
+    this.placeLater.delete(`local:${slot}`);
   }
 
   /** What `seed`'s drawing is made of in every view: all of it but where it stands. */
@@ -563,6 +616,7 @@ export class Herd {
       for (const layer of layers) {
         layer.remove(slot, true, DYING[cause ?? "unknown"], layer === shown ? wait : 0);
       }
+      this.forgetPlacing(slot);
     }
     // The mother of each newborn (R5): it is born beside her, in the view shown.
     const mothers = new Map(message.born.map(({ id, parent }) => [id, parent]));
@@ -570,6 +624,7 @@ export class Herd {
     const { placed, removed } = this.roster.take(message);
     // Any left (it should not happen) are taken off.
     for (const slot of removed) for (const layer of layers) layer.remove(slot, true);
+    for (const slot of removed) this.forgetPlacing(slot);
     // A new species, or one gone: newcomers take the kinds of the census as it is now.
     const changed =
       census.size !== new Set(this.roster.species.values()).size ||
@@ -597,7 +652,8 @@ export class Herd {
       if (key === this.drawnKeys.get(id)) continue;
       this.drawnKeys.set(id, key);
       const using = this.view === "local" ? "local" : "middle";
-      this.layers[using].rebuild(slot, seed);
+      // One still to be drawn is drawn from its seed as it is then.
+      if (!this.placeLater.has(`${using}:${slot}`)) this.layers[using].rebuild(slot, seed);
       this.redrawLater[using === "local" ? "middle" : "local"].add(id);
     }
     for (const id of this.drawnGrowth.keys())
@@ -605,10 +661,22 @@ export class Herd {
     for (const id of this.drawnKeys.keys())
       if (!this.roster.where.has(id)) this.drawnKeys.delete(id);
     const landed = new Set(message.landed ?? []);
+    // Many at once (a page's first message, a new world's): drawn over the next frames,
+    // a few milliseconds' worth a frame, the view in use first (R5, the optimization plan:
+    // two hundred animals in both views took 2.5 s of one frame on the board, the start's
+    // longest wait).
+    const spread = this.spreadPlacing && placed.length > MANY_PLACED;
     for (const { slot, id } of placed) {
       const seed = this.seedOf(id);
       if (seed === null) continue;
       this.drawnKeys.set(id, this.drawnKey(seed));
+      if (spread) {
+        const arriving = landed.has(id) ? 0 : NEWBORN_S;
+        for (const name of ["middle", "local"] as const) {
+          this.placeLater.set(`${name}:${slot}`, { name, slot, id, arriving });
+        }
+        continue;
+      }
       // An ark's newcomer comes into being under its light; one born, quickly; one landed
       // from the sea is there at once, under a splash (R5).
       const ark = this.arrival?.(seed.x, seed.y) ?? 0;
@@ -809,9 +877,11 @@ export class Herd {
     subject: number | null,
   ): void {
     this.subjectsKept = null;
+    this.placeWaiting(PLACE_BUDGET_MS);
     if (view !== this.view) {
       this.view = view;
       this.snores.clear();
+      this.placeWaiting(0, view === "local" ? "local" : "middle");
       this.redrawWaiting(view === "local" ? "local" : "middle");
       this.layers.middle.show(view === "middle" ? "bodies" : view === "map" ? "markers" : "hidden");
       this.layers.local.show(view === "local" ? "bodies" : "hidden");

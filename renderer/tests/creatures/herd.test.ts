@@ -290,3 +290,22 @@ describe("the herd redrawing what changed (R5, the optimization plan)", () => {
     expect(bodyIn("local")).toBe(now);
   });
 });
+
+describe("the herd's first many animals drawn over a few frames (R5, the optimization plan)", () => {
+  it("draws them in the view in use first, all of them in a few updates, the other view's after", () => {
+    const { herd, inside } = herdOfOffice();
+    herd.spreadPlacing = true;
+    const many = first.ids.slice(0, 40);
+    expect(many.length).toBeGreaterThan(16);
+    herd.receive(creatures({ ids: many, born: many.map((id) => born(id)) }));
+    const drawn = (layer: "middle" | "local"): number =>
+      inside.layers[layer].creatures.filter((creature) => creature !== undefined).length;
+    // Nothing yet: they come with the frames.
+    expect(drawn("middle") + drawn("local")).toBe(0);
+    for (let k = 0; k < 200 && drawn("local") < many.length; k++) {
+      herd.update(STEP_S, "middle", EVERYWHERE, null, null);
+    }
+    expect(drawn("middle")).toBe(many.length);
+    expect(drawn("local")).toBe(many.length);
+  });
+});
