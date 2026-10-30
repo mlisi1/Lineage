@@ -758,6 +758,21 @@ def summary_lines(document: dict[str, Any]) -> list[str]:
                     f"    ground painted on the GPU: {made.get('gpu', 0)}"
                     f" of {made.get('gpu', 0) + made.get('cpu', 0)}"
                 )
+            for switch in scenario.get("switches") or []:
+                lines.append(
+                    f"    round {switch.get('round', 0) + 1}, to {switch.get('view', '?')}:"
+                    f" there in {switch.get('arrived_s', 0):.1f} s,"
+                    f" painted in {switch.get('painted_s', 0):.1f} s"
+                    f"{'' if switch.get('painted', True) else ' (not all painted)'}"
+                )
+            boot = scenario.get("boot")
+            if boot and boot.get("painted") is not None:
+                lines.append(
+                    f"    page: script at {boot.get('script', 0) / 1000:.1f} s,"
+                    f" land {(boot.get('land') or 0) / 1000:.1f} s,"
+                    f" laid out {(boot.get('laidOut') or 0) / 1000:.1f} s,"
+                    f" painted {(boot.get('painted') or 0) / 1000:.1f} s"
+                )
             timing = scenario.get("ground_timing")
             if timing:
                 m = timing.get("median", {})

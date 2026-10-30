@@ -40,6 +40,12 @@ export interface BenchScenario {
    * its recording 1800 times as fast).
    */
   dayTurn?: boolean;
+  /**
+   * The view button pressed round the views this many times before the measuring, each
+   * press timed until the view has come and its ground is painted (R5, the owner: "the
+   * loading time max 3 s on every view"); the later rounds find their ground kept.
+   */
+  switches?: number;
 }
 
 export const SCENARIOS: readonly BenchScenario[] = [
@@ -126,6 +132,17 @@ export const SCENARIOS: readonly BenchScenario[] = [
     view: "middle",
     dayTurn: true,
   },
+  {
+    name: "switches",
+    about:
+      "The view button pressed round the views twice from the map, each press timed until " +
+      "its view has come and its ground is painted: the first round may paint, the second " +
+      "finds the ground kept, as on the desk (reported, not judged).",
+    recording: "life",
+    presses: 0,
+    view: "map",
+    switches: 2,
+  },
 ];
 
 /**
@@ -136,7 +153,7 @@ export const ACCEPTANCE: readonly string[] = ["map", "middle", "middle-crowd", "
 /** The atmosphere's costs, measured beside them. */
 export const ATMOSPHERE: readonly string[] = ["night", "rain", "fire", "apocalypse", "shore"];
 /** What else is measured beside them: a day's turn. */
-export const EVENTS: readonly string[] = ["day-turn"];
+export const EVENTS: readonly string[] = ["day-turn", "switches"];
 /** Names `?only=` takes for each set. */
 const SETS: Readonly<Record<string, readonly string[]>> = {
   acceptance: ACCEPTANCE,

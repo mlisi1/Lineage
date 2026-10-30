@@ -101,7 +101,7 @@ import {
   paintRequest,
   type PaintRequest,
 } from "./terrain/painter";
-import { Bench } from "./bench";
+import { Bench, type BootMarks } from "./bench";
 import { capFrames } from "./framecap";
 
 /** Screen pixels per art pixel (ADR 0007). */
@@ -245,6 +245,8 @@ async function start(): Promise<void> {
   // hand, and once the scene is built it is handed the hooks it measures with (below).
   const bench = await Bench.start(window.location.search, VIEW_CELLS);
   const params = bench?.params ?? new URLSearchParams(window.location.search);
+  // When the page got going (R5, the optimization plan; the benchmark reads them).
+  const boot: BootMarks = { script: performance.now(), land: null, laidOut: null, painted: null };
   const pinned = pinnedView(params.get("view"));
   // The showcase (R5): a scripted tour of the scene on a recording, kept in the desk's
   // build so that it runs on the board as the desk would (`showcase/`).
@@ -429,6 +431,7 @@ async function start(): Promise<void> {
   herd.arrival = (x, y) => atmosphere.arrival(x, y);
   const receive = (message: Message): void => {
     const begun = PROBE.enabled ? performance.now() : 0;
+    if (message.type === "land" && boot.land === null) boot.land = performance.now();
     PROBE.note(message.type);
     if (!atmosphere.hold(message)) deliver(message);
     if (PROBE.enabled) PROBE.charge("messages", performance.now() - begun);
@@ -699,6 +702,8 @@ async function start(): Promise<void> {
     PROBE.enter("landscape");
     landscape.show(shot.view, cells);
     landscape.update(dtS);
+    if (boot.laidOut === null && landscape.current !== null) boot.laidOut = performance.now();
+    if (boot.painted === null && landscape.settled) boot.painted = performance.now();
     PROBE.enter("herd");
     // The animals sleep by the light of the moment (R5), as last drawn.
     herd.nightfall(sceneLight, atmosphere.overcastNow);
@@ -861,6 +866,7 @@ async function start(): Promise<void> {
     dayDue: () => landscape.dayDue,
     groundMade: () => (painter instanceof WorkerPainter ? { ...painter.made } : null),
     groundTimings: () => (painter instanceof WorkerPainter ? [...painter.timings] : []),
+    boot: () => ({ ...boot }),
     newLand: () => {
       const message = landscape.lastMessage;
       if (message !== null) receive({ ...message, t_ms: message.t_ms + MS_PER_DAY });

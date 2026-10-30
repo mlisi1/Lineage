@@ -321,6 +321,16 @@ def test_summary_table() -> None:
                                 "late_notes": {"creatures": 3},
                             },
                             "ground_made": {"gpu": 12, "cpu": 1},
+                            "switches": [
+                                {
+                                    "round": 1,
+                                    "view": "local",
+                                    "arrived_s": 1.2,
+                                    "painted_s": 2.6,
+                                    "painted": True,
+                                }
+                            ],
+                            "boot": {"script": 900, "land": 2100, "laidOut": 3400, "painted": 4800},
                             "ground_timing": {
                                 "pieces": 13,
                                 "median": {
@@ -369,6 +379,8 @@ def test_summary_table() -> None:
     # And where its late frames came from, as the page's frame probe saw them.
     assert "late frames by phase: herd 5, outside 2; with creatures 3" in text
     assert "ground painted on the GPU: 12 of 13" in text
+    assert "round 2, to local: there in 1.2 s, painted in 2.6 s" in text
+    assert "page: script at 0.9 s, land 2.1 s, laid out 3.4 s, painted 4.8 s" in text
     assert "ground: 13 pieces, median 120 ms in the worker (GPU 2 + 60 + 8, CPU 50)" in text
     assert "shader made in 900, 950 ms" in text
     assert "[software] timeout no results after 210 s" in text
