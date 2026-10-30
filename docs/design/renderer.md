@@ -810,7 +810,10 @@ demo's clicks for another animal and back to the map). `src/director.ts` decides
 - **Glints stay on the water**: each is placed in the view as it was when that glint began
   to show, and kept there in the world while the camera pans (they had moved with it).
 - **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
-  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views.
+  painted (at most 3 s) and come back (0.6 s). The camera never zooms between views. The
+  dark is black, drawn last on the canvas itself (R5, the owner on the board: an element
+  laid over the canvas let what was drawn before show through and was not black). The
+  desk's build hides the pointer.
 - **Following** (`src/camera.ts`): a spring a little under critical damping (period
   3 s, damping 0.9), so that the camera eases after an animal that turns and settles with
   hardly a swing; it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within

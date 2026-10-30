@@ -67,7 +67,7 @@
  * the weather of events, and the end of a world, during which the camera stays on the map
  * and the button does nothing.
  */
-import { Application, Container, WebGLRenderer } from "pixi.js";
+import { Application, Container, Sprite, Texture, WebGLRenderer } from "pixi.js";
 import { Ambient } from "./atmosphere/ambient";
 import { Leaves } from "./atmosphere/leaves";
 import { Atmosphere } from "./atmosphere/atmosphere";
@@ -111,7 +111,8 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
-const DARK = "#10081c";
+/** The dip between views: black. */
+const DIP_COLOUR = 0x000000;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
 /** The name card waits until a dip between views is this clear before it unrolls (0–1). */
@@ -269,6 +270,8 @@ async function start(): Promise<void> {
   frame.style.position = "absolute";
   frame.style.overflow = "hidden";
   document.body.appendChild(frame);
+  // No pointer on the desk (the owner, on the board: the kiosk showed it).
+  if (KIOSK) document.documentElement.style.cursor = "none";
   const canvas = app.canvas;
   canvas.style.imageRendering = "pixelated";
   canvas.style.position = "absolute";
@@ -328,13 +331,7 @@ async function start(): Promise<void> {
   const leaves = new Leaves(seed + 4, ambient.over);
   const still = params.get("still") !== null;
 
-  // Over the scene: the dip between views, then the captions above it.
-  const dim = document.createElement("div");
-  dim.style.position = "absolute";
-  dim.style.inset = "0";
-  dim.style.background = DARK;
-  dim.style.opacity = "0";
-  dim.style.pointerEvents = "none";
+  // Over the scene: the captions (the dip between views is drawn on the canvas, `dip`).
   // The initial of an entry about a species is in the species' colour, as the herd draws it.
   const captions = new Captions(
     WIDTH,
@@ -343,7 +340,7 @@ async function start(): Promise<void> {
   );
   // The name card of the animal followed, in the top-left corner (R5).
   const card = new NameCard(WIDTH, HEIGHT);
-  frame.append(dim, captions.element, card.element);
+  frame.append(captions.element, card.element);
   // The showcase's lines and titles, and its frame counter with `?fps`.
   const overlay = showcasing ? new Overlay(WIDTH, HEIGHT) : null;
   if (overlay !== null) frame.append(overlay.title, overlay.line, overlay.counter);
@@ -419,6 +416,16 @@ async function start(): Promise<void> {
     marker.container,
     atmosphere.sky,
   );
+  // The dip between views: black, drawn last on the canvas itself (R5, the owner on the
+  // board: an element over the canvas left what was drawn before showing through, and was
+  // not black), over the whole canvas with its margin.
+  const dip = new Sprite(Texture.WHITE);
+  dip.tint = DIP_COLOUR;
+  dip.width = app.screen.width;
+  dip.height = app.screen.height;
+  dip.alpha = 0;
+  dip.visible = false;
+  app.stage.addChild(dip);
   // An animal burnt to death (or, in streams without causes, that dies in a burning
   // cell) leaves a puff of ash.
   herd.onGone = (x, y, cause) => {
@@ -779,8 +786,8 @@ async function start(): Promise<void> {
     // Written only when they change: each write makes the browser restyle the page.
     const transform = `translate(${slide(x)}px, ${slide(y)}px)`;
     if (canvas.style.transform !== transform) canvas.style.transform = transform;
-    const opacity = String(shot.dim);
-    if (dim.style.opacity !== opacity) dim.style.opacity = opacity;
+    if (dip.alpha !== shot.dim) dip.alpha = shot.dim;
+    if (dip.visible !== shot.dim > 0) dip.visible = shot.dim > 0;
     // The scrolls lie over the canvas, out of the tint's reach: lit like a lantern by the
     // light of the moment instead (the same light the tint was made from this frame).
     const { light, tint, rain } = atmosphere.state;
