@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DIP_IN_S,
+  DARK_FRAMES,
   DIP_OUT_S,
   Director,
   FOLLOW_MAX_S,
@@ -73,16 +74,22 @@ describe("the documentary camera", () => {
     expect(seen).toEqual(["middle", "local", "map"]);
   });
 
-  it("changes view only once the picture is dark", () => {
+  it("changes view only once the picture is dark, and dark for a frame or two first", () => {
     const director = new Director(SIZES, mulberry32(3));
     const scene = sceneWith(herd());
     director.press();
     let shot = run(director, scene, DIP_OUT_S * 0.9);
     expect(shot.view).toBe("map");
     expect(shot.dim).toBeGreaterThan(0.8);
-    shot = run(director, scene, DIP_OUT_S * 0.2);
+    // Frame by frame to the cut: fully dark for at least `DARK_FRAMES` frames before it.
+    let darkBefore = 0;
+    for (let frame = 0; frame < 30 && shot.view === "map"; frame++) {
+      shot = director.update(FRAME_S, scene);
+      if (shot.view === "map" && shot.dim === 1) darkBefore += 1;
+    }
     expect(shot.view).toBe("middle");
     expect(shot.dim).toBe(1);
+    expect(darkBefore).toBeGreaterThanOrEqual(DARK_FRAMES);
   });
 
   it("waits in the dark for the view to be painted, but not for ever", () => {

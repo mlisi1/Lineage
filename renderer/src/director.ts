@@ -30,6 +30,8 @@ export const FOLLOW_MAX_S = 6 * 60;
 export const DIP_OUT_S = 0.4;
 export const WAIT_MAX_S = 3;
 export const DIP_IN_S = 0.6;
+/** Frames drawn fully dark before the view changes under the dark. */
+export const DARK_FRAMES = 2;
 /** The middle view drifts this fast (cells a second) to places this far apart (cells). */
 const DRIFT_SPEED = 1.2;
 const DRIFT_MIN_CELLS = 20;
@@ -130,13 +132,15 @@ export interface Shot {
 /** How the camera is moving in its view. */
 export type Motion = "still" | "drift" | "linger" | "follow" | "glide" | "visit" | "return";
 
-type Dip = { phase: "out" | "wait" | "in"; t: number; then: (scene: Scene) => void };
+type Dip = { phase: "out" | "dark" | "wait" | "in"; t: number; then: (scene: Scene) => void };
 
 export class Director {
   private view: ViewName = "map";
   private readonly spring: Spring;
   private readonly walking = new Velocity(VELOCITY_SMOOTH_S);
   private dip: Dip | null = null;
+  /** Frames drawn fully dark so far before the cut (`DARK_FRAMES`). */
+  private darkFrames = 0;
   /** The view a press during a dip leads on from: the one the dip is going to. */
   private going: ViewName | null = null;
   private idle = 0;
@@ -217,7 +221,7 @@ export class Director {
     const dip = this.dip;
     if (dip === null) return 0;
     if (dip.phase === "out") return Math.min(dip.t / DIP_OUT_S, 1);
-    if (dip.phase === "wait") return 1;
+    if (dip.phase === "wait" || dip.phase === "dark") return 1;
     return Math.max(1 - dip.t / DIP_IN_S, 0);
   }
 
@@ -261,6 +265,14 @@ export class Director {
     if (dip === null) return;
     dip.t += dtS;
     if (dip.phase === "out" && dip.t >= DIP_OUT_S) {
+      // Fully dark on the screen before the cut (R5, the owner on the board: the new view's
+      // lay-out held up the frame of the cut, and the last frame shown, not quite dark,
+      // stayed with what was drawn before showing through it).
+      this.dip = { phase: "dark", t: 0, then: dip.then };
+    } else if (dip.phase === "dark") {
+      this.darkFrames += 1;
+      if (this.darkFrames < DARK_FRAMES) return;
+      this.darkFrames = 0;
       dip.then(scene);
       this.dip = { phase: "wait", t: 0, then: dip.then };
     } else if (dip.phase === "wait" && (scene.ready || dip.t >= WAIT_MAX_S)) {
