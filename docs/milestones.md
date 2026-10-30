@@ -23,7 +23,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
 | R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); measured on the board 2026-10-27, R5.1–R5.4 pass (items 17–19, `reports/R5-device/`); `main` (M11) merged in 2026-10-27, streams re-recorded; the showcase begun here moved to R6 by the owner (2026-10-27); left: a last board run (the probe, the ground on the GPU against the CPU), the owner's calls after it, the merge into `main`; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | R6 | Showcase and trailer | **in progress** (added by the owner 2026-10-27, from R5): a first version on `r5-final` (`?showcase`, `src/showcase/`, `tools/showcase.py`, `deploy/lineage-showcase@.service`); its trailer filmed on the PC awaits the owner's verdict; then tuned on the board; handoff under "R6 in progress" | — |
-| S1 | Server: real-time loop and persistence | **in progress** from 2026-10-28 on `s1-server` (worktree `../Lineage-s1`, from `r5-final`, in parallel with R5's close): the server runs the island in real time, catches up after downtime with the owner away, saves atomically (7 days + one a month, archives forever), streams to the kiosk (`/stream`, the view button to the desk only) and serves its numbers at `/status` (ADR 0023, `docs/design/server.md`); measured on the board 2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves 1.2–1.6 s, 89 MB, every §4.8 budget met; left: the owner's call on a lighter save compression (the least margin), then the merge after R5's; handoff under "S1 in progress" | — |
+| S1 | Server: real-time loop and persistence | **in progress** from 2026-10-28 on `s1-server` (worktree `../Lineage-s1`, from `r5-final`, in parallel with R5's close): the server runs the island in real time, catches up after downtime with the owner away, saves atomically (7 days + one a month, archives forever), streams to the kiosk (`/stream`, the view button to the desk only) and serves its numbers at `/status` (ADR 0023, `docs/design/server.md`); measured on the board 2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves 1.2–1.6 s, 89 MB, every §4.8 budget met; saves at xz preset 0 since (the owner, 2026-10-30); left: the merge after R5's; handoff under "S1 in progress" | — |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
 | S4 | Notifications | not started | — |
@@ -52,17 +52,17 @@ conflicts only in the docs.
 - **Left:**
   1. ~~The board's numbers~~ done 2026-10-29 (ADR 0023, Results): sim share 0.0011 with the
      kiosk drawing, 6.1 s CPU a sim-day, saves 1.34/1.22/1.61 s, 89 MB; all budgets met,
-     the save with the least margin. The owner's call: xz preset 1 in `io.dumps`. The
-     session was run by the procedure in
+     the save with the least margin, so the owner chose xz preset 0 in `io.dumps`
+     (2026-10-30): the save 2.3x faster on the PC, the same size, 3 MB of memory instead
+     of 35; the board's new save time is S7's to confirm. The session was run by the
+     procedure in
      `deploy/README.md` ("The island in real time on the board"): `deploy/s1-board.sh`
      sets up, starts and stops; `tools.server_watch` judges `/status` (`sim_core_share` ≤
      0.25, `longest_save_s` ≤ 2, `rss_mb` ≤ 300, §4.8) and gives the board's CPU per
      sim-day from the catch-up. Rehearsed on the PC from the wheels: the island (seed 3, a
      year old today, `runs/s1-board-island`) catches up at 0.37 s a sim-day, saves in
      0.19 s, 64 MB. The board's Python is 3.13: setup installs uv in `~/.lineage-uv` and
-     makes the server's environment with uv's Python 3.11 (rehearsed from a system 3.12). Record the board's numbers in ADR 0023 and here. If the save comes
-     near 2 s, weigh xz preset 1 in `io.dumps` (a sim change; same format and state
-     hashes).
+     makes the server's environment with uv's Python 3.11 (rehearsed from a system 3.12).
   2. Merge `main` in once R5 is there, re-run the suites, merge S1 (ask the owner).
 - **For S2:**
   - Implement `lineage_device.interface.Device` on GPIO: presence first, then events;

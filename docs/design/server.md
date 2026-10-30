@@ -104,4 +104,5 @@ screen, and `tools/server_watch.py` samples `/status` from the PC (`deploy/READM
 - the daily save at most 2 s (`longest_save_s`);
 - sim and server together at most 300 MB (`rss_mb`).
 
-On the PC a full world's save takes 0.2 s, nearly all of it xz at preset 6.
+On the PC a full world's save takes about 50 ms, at xz's lightest preset (`io.XZ_PRESET`,
+0: as small as the default and a third of its memory; the owner, 2026-10-30).

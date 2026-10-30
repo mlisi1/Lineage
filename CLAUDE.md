@@ -682,7 +682,9 @@ needs a note in `docs/decisions/`.
   tick; the view button sent to the desk only, as a `view` message; a minimal fake device,
   S2 completes it; `tools/stream.py` records through the server's feed. On the board,
   2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves
-  1.2–1.6 s, 89 MB: every budget of §4.8 met.)
+  1.2–1.6 s, 89 MB: every budget of §4.8 met. The save had the least margin, so saves use
+  xz preset 0 since (the owner, 2026-10-30): as small, 2.3× faster, 3 MB of memory
+  instead of 35.)
 
 ### S2 — Device layer
 - **Deliver**: PIR with configurable hold, god-power and view buttons with debounce, LED, backlight
