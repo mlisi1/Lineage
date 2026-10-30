@@ -111,8 +111,8 @@ const HEIGHT = DESIGN_HEIGHT / ART;
 /** The deepest sea: what shows beyond the world. */
 const BACKGROUND = "#24529c";
 /** What a dip between views goes to: night, toward plum (`palette.ts`). */
-/** The dip between views: black. */
-const DIP_COLOUR = 0x000000;
+/** The dip between views: the night's deep purple. */
+const DIP_COLOUR = 0x10081c;
 /** Art pixels drawn beyond the screen on every side: room to slide the picture by a fraction. */
 const MARGIN = 1;
 /** The name card waits until a dip between views is this clear before it unrolls (0–1). */
@@ -416,9 +416,9 @@ async function start(): Promise<void> {
     marker.container,
     atmosphere.sky,
   );
-  // The dip between views: black, drawn last on the canvas itself (R5, the owner on the
-  // board: an element over the canvas left what was drawn before showing through, and was
-  // not black), over the whole canvas with its margin.
+  // The dip between views, drawn last on the canvas itself (R5, the owner on the board: an
+  // element laid over the canvas left what was drawn before showing through), over the
+  // whole canvas with its margin.
   const dip = new Sprite(Texture.WHITE);
   dip.tint = DIP_COLOUR;
   dip.width = app.screen.width;
