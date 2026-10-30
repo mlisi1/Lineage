@@ -112,5 +112,6 @@ Measured on the board, 2026-10-29, with the kiosk drawing (ADR 0023, Results):
 - 89 MB, flat.
 
 Since then saves use xz's lightest preset (`io.XZ_PRESET`, 0; the owner, 2026-10-30): as
-small, about 50 ms on the PC instead of 120, 3 MB of extra memory instead of 35. The
-board's new save time is for S7's soak to confirm.
+small, about 50 ms on the PC instead of 120, 3 MB of extra memory instead of 35. On the
+board (2026-10-30): saves 0.6–0.9 s, 0.88 s with the kiosk drawing (1.61 s before), the
+server 61–68 MB.

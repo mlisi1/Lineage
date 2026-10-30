@@ -114,8 +114,10 @@ the save has the least margin (1.61 of 2 s), and grows with the island.
   kiosk drawing). The owner chose a lighter compression (2026-10-30): `io.dumps` now
   uses xz preset 0 (`io.XZ_PRESET`) instead of the default 6. On the board's island
   (PC): 118 → 51 ms, 0.681 → 0.683 MB, the save's extra memory 35 → 3 MB, loading
-  unchanged (15 ms); through the store 197 → 53 ms. The board's save is expected near
-  0.7 s, to be confirmed on the next board session (S7). Older saves and the frozen
+  unchanged (15 ms); through the store 197 → 53 ms. On the board (2026-10-30, the same
+  island, `runs/s1-board-xz0/`): saves 0.62 and 0.73 s after the catch-up, 0.88 s with the
+  kiosk drawing (1.61 s before), the server 61–68 MB (89 before), the sim 0.12 % of a core
+  over 20 minutes, 6.2 s of CPU a sim-day; S7's soak follows the save as the island grows. Older saves and the frozen
   fixtures load as before (any preset decompresses the same way); state hashes, golden
   hashes and save → load → save identity are unchanged.
 - S2 implements `Device` on GPIO and keeps the fake in step (parity test, web panel).
