@@ -108,6 +108,11 @@ def test_the_schema_checker_catches_what_it_should() -> None:
     assert errors({key: value for key, value in clock.items() if key != "date"}, SCHEMA)
 
 
+def test_the_view_button_message_is_what_the_schema_says() -> None:
+    assert errors(encode.view_message(), SCHEMA) == []
+    assert errors({**encode.view_message(), "view": "map"}, SCHEMA)
+
+
 def test_every_message_on_connect_is_what_the_schema_says(world: World) -> None:
     messages = encode.connect_messages(world)
     assert [message["type"] for message in messages][:4] == ["clock", "sky", "land", "fauna"]

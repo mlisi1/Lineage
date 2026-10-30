@@ -37,7 +37,8 @@ sync when behaviour changes.
 
 ## 2. Target hardware (for context; hardware work comes later)
 
-- Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS, Python 3.11.
+- Orange Pi Zero 2W (Allwinner H618, quad A53; the 2 GB model), Debian-based OS (Trixie,
+  whose Python is 3.13; the project runs on its own Python 3.11, brought by `uv`, S1).
 - Waveshare 70H-1024600 7" IPS, 1024×600, HDMI via adapter board + 15 cm FPC; backlight
   enable/PWM pins driven from GPIO.
 - PIR sensor, god-power push button, view push button (steps the screen's views, ADR 0020),
@@ -88,7 +89,9 @@ lineage/
 │   ├── milestones/           # per-milestone metrics, acceptance criteria, report sections
 │   ├── viz/                  # shared plotting style + figure helpers
 │   ├── replay.py             # load a save, inspect, render stills and renderer fixtures
-│   ├── stream.py             # record the state stream from a save, for the renderer (R1)
+│   ├── stream.py             # record the state stream from a save, for the renderer (R1),
+│                             #   through the server's feed (S1)
+│   ├── server_watch.py       # sample a running server's /status, judge it against §4.8 (S1)
 │   ├── kiosk_bench.py        # benchmark a renderer page in Chromium kiosk on the device (R0);
 │   │                         #   standard library only: copied to the board as one file
 │   └── showcase.py           # run the showcase on the board and sum up how it ran (R6);
@@ -127,14 +130,22 @@ lineage/
 │   │                         #   tools/stream.py
 │   └── tests/                # vitest unit tests + Playwright visual snapshots
 ├── server/                   # Python package `lineage_server` — runs on the device
-│   └── lineage_server/       # main.py (sim loop + persistence), ws.py, api.py, notify.py, journal.py,
+│   ├── config/server.toml    # the server's settings (port, polling, saves kept), S1
+│   └── lineage_server/       # main.py (the command), island.py (the world in real time, its
+│                             #   saves), server.py (WebSocket /stream, pages, /status), feed.py
+│                             #   (which messages a step makes), store.py (saves on disk),
+│                             #   settings.py (S1); later api.py, notify.py, journal.py;
 │                             #   protocol/ (schema.json: the wire format; encode.py)
 ├── device/                   # Python package `lineage_device` — the ONLY code touching GPIO
-│   └── lineage_device/       # presence.py, button.py, led.py, backlight.py, power.py, fake.py
+│   └── lineage_device/       # interface.py (what the server gets, S1), fake.py (S1's minimal
+│                             #   fake; S2 completes it), presence.py, button.py, led.py,
+│                             #   backlight.py, power.py
 ├── app/                      # phone PWA shell, reuses renderer/
 ├── journal/                  # static site templates
 ├── deploy/                   # os notes, systemd units (lineage-r0@, lineage-r5@: the board
-│                             #   benchmarks), setup.sh, kiosk, backups, tailscale
+│                             #   benchmarks; lineage-server@: the island, lineage-s1-kiosk@
+│                             #   and s1-board.sh: S1's board session), setup.sh,
+│                             #   kiosk, backups, tailscale
 ├── mockups/                  # HTML mockups and enclosure concepts (reference only)
 ├── reports/                  # committed milestone reports (HTML + metrics.json), see §7
 ├── runs/                     # gitignored raw fast-forward output
@@ -180,7 +191,7 @@ Do not create directories outside this layout without updating this file.
 
 ## 5. Tooling and conventions
 
-- **Python** 3.11 (device OS version). Managed with `uv`; one workspace with `sim`,
+- **Python** 3.11 (the project's, on the board too through `uv`). Managed with `uv`; one workspace with `sim`,
   `server`, `device`, `tools` as members.
 - **Numerics**: NumPy, vectorised over grids and populations. No per-cell Python loops in
   hot paths (flora/terrain); creatures may loop in Python only if the benchmark allows it.
@@ -227,6 +238,15 @@ Do not create directories outside this layout without updating this file.
     --famine-day 2`, R4; `--stage DAY:HOUR:WHAT[@X,Y]` stages a fire, a rain kind
     (`shower`, `thunder`, `storm`) or an overcast (`cloud`), a volcano, a quake or a god
     power by name, as the report's streams do)
+  - `uv run python -m lineage_server.main --data DIR --dist renderer/dist-kiosk --fake-device`
+    — run the island in real time (S1): the newest save under `DIR/saves` (or a new world,
+    `--seed N`), the time it was off caught up, the kiosk at `http://localhost:8080/`, the
+    stream at `/stream`, its numbers at `/status`; keys on stdin play the device (`p`
+    presence, `g` god power, `v` view, `l`/`r` power lost/restored); Ctrl+C saves and stops
+  - `deploy/s1-board.sh setup|start|status|stop lineage@<board>` — the server and the kiosk
+    on the board (procedure in `deploy/README.md`), then `uv run python -m
+    tools.server_watch http://<board>:8080 --minutes 180 --out runs/s1-board/status.jsonl`
+    — its numbers against the budgets of §4.8
   - `uv run python -m tools.viz.pixelmap` — write the renderer's copy of the palette
     (`renderer/src/terrain/palette.json`)
   - `cd renderer && npm run protocol` — regenerate `src/protocol.ts` from the wire schema
@@ -669,6 +689,17 @@ needs a note in `docs/decisions/`.
 - **Deliver**: run the sim in real time, daily atomic saves (write temp → fsync → rename),
   keep last N saves, WebSocket state stream, recovery on start.
 - **Tests**: integration with fake device; kill -9 during save leaves a loadable save.
+- (As built, ADR 0023: one process and port for the kiosk's pages, `/stream` and
+  `/status`; the time the device was off is caught up on start with the owner away, a
+  save at each midnight on the way and one at the end (the owner, 2026-10-28); saves kept:
+  the newest of each of the last 7 days and the oldest of each month, archives forever; a
+  save on shutdown, on power loss and at a world's end; creatures streamed at each fauna
+  tick; the view button sent to the desk only, as a `view` message; a minimal fake device,
+  S2 completes it; `tools/stream.py` records through the server's feed. On the board,
+  2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves
+  1.2–1.6 s, 89 MB: every budget of §4.8 met. The save had the least margin, so saves use
+  xz preset 0 since (the owner, 2026-10-30): as small, 2.3× faster, 3 MB of memory
+  instead of 35. Merged into `main` 2026-10-30, after R5.)
 
 ### S2 — Device layer
 - **Deliver**: PIR with configurable hold, god-power and view buttons with debounce, LED, backlight

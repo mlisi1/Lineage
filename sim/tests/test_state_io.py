@@ -135,3 +135,14 @@ def test_future_schema_is_rejected() -> None:
     tree = _state({}).to_tree() | {"schema_version": SCHEMA_VERSION + 1}
     with pytest.raises(StateError, match="newer than this code"):
         io.loads(lzma.compress(io.encode(tree)))
+
+
+def test_saves_are_made_at_the_light_preset_and_any_preset_loads() -> None:
+    state = _state({"toy": {"x": np.arange(10_000) % 7}})
+    data = io.dumps(state)
+    raw = lzma.decompress(data, format=lzma.FORMAT_XZ)
+    light = lzma.compress(raw, format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=0)
+    assert data == light
+    # A save written before S1 (the default preset 6) loads as before.
+    heavy = lzma.compress(raw, format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=6)
+    assert io.state_hash(io.loads(heavy)) == io.state_hash(state)

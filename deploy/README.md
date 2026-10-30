@@ -193,3 +193,47 @@ The first loop after a new build paints the ground of every place the tour visit
 stamps of what is kept carry the build's commit); the tour waits in the dark at a cut
 until its ground is painted, and paints the next place's ground while the current act
 plays. Later loops, and later runs of the same build, take it from the storage.
+
+## The island in real time on the board (S1)
+
+The server (`lineage_server`, ADR 0023) on the board, with the desk's kiosk drawing from
+it, measured against the device's budgets (CLAUDE.md §4.8). From the PC, at the
+repository's root, with the board on the network:
+
+1. An island to start from, a year old today (once; 1 minute):
+   ```sh
+   uv run python -m tools.fastforward --years 1 --seeds 1 --seed-base 3 \
+     --start <today, a year ago> --schedule office --save-days 30 --snapshot-days 0 \
+     --out runs/s1-board-island
+   ```
+2. Set the board up (environment, the desk's build, configs, the island, the units; sudo
+   asks for the board's password):
+   ```sh
+   deploy/s1-board.sh setup lineage@<board>
+   ```
+   This needs `python3-venv` on the board (`sudo apt install python3-venv`) and the
+   network: `uv` goes into `~/.lineage-uv` (from PyPI), and brings the project's Python
+   3.11 (the board's own is Debian's 3.13), numpy and websockets.
+3. Start the server, then the kiosk on the screen:
+   ```sh
+   deploy/s1-board.sh start lineage@<board>
+   ```
+   The server catches up from the island's save to now (its first status line gives the
+   board's CPU per sim-day) and saves; the screen shows the map.
+4. Watch it for a few hours, a UTC midnight in the window if possible (the daily save and
+   the plants' day):
+   ```sh
+   uv run python -m tools.server_watch http://<board>:8080 --minutes 180 \
+     --out runs/s1-board/status.jsonl
+   ```
+   It ends with each budget's verdict: the sim's share of one core (≤ 0.25), the longest
+   save (≤ 2 s), the server's memory (≤ 300 MB); `runs/s1-board/status.summary.json` holds
+   the numbers for ADR 0023.
+5. Stop (a save):
+   ```sh
+   deploy/s1-board.sh stop lineage@<board>
+   ```
+
+To try the device by hand, `ssh -t lineage@<board>`, stop the unit, and run the server in
+`~/lineage` from the shell as the unit's `ExecStart` does: keys typed there play the
+device (`p`, `g`, `v`, `l`, `r`).

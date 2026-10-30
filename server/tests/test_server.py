@@ -1,0 +1,206 @@
+"""The server end to end (S1): the island, the fake device and real WebSocket and HTTP
+clients, on a clock the test moves by hand."""
+
+from __future__ import annotations
+
+import asyncio
+import dataclasses
+import importlib.util
+import json
+import shutil
+import urllib.error
+import urllib.request
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+from typing import Any
+
+import pytest
+from lineage_device.fake import FakeDevice
+from lineage_device.interface import Presence, ViewPressed
+from lineage_server.island import Island
+from lineage_server.protocol import SCHEMA_PATH
+from lineage_server.server import Server
+from lineage_server.settings import DEFAULT_SETTINGS, load_settings
+from lineage_server.store import Store
+from lineage_sim.config import parse_config
+from lineage_sim.state import io
+from lineage_sim.world import World
+from websockets.asyncio.client import ClientConnection, connect
+
+REPO = Path(__file__).resolve().parents[2]
+SAVE = REPO / "sim" / "tests" / "fixtures" / "saves" / "v9.lzma"
+CONFIG = parse_config((REPO / "sim" / "config" / "default.toml").read_text("utf-8"))
+SETTINGS = dataclasses.replace(
+    load_settings(DEFAULT_SETTINGS), host="127.0.0.1", port=0, poll_seconds=0.01
+)
+SCHEMA = json.loads(SCHEMA_PATH.read_text("utf-8"))
+MINUTE = 60_000
+WAIT_S = 30
+
+
+def _schema_errors() -> Callable[[Any, dict[str, Any]], list[str]]:
+    """The protocol tests' schema checker."""
+    spec = importlib.util.spec_from_file_location(
+        "protocol_tests", Path(__file__).with_name("test_protocol.py")
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.errors
+
+
+errors = _schema_errors()
+
+
+class HandClock:
+    def __init__(self, now_ms: int) -> None:
+        self.now = now_ms
+
+    def now_ms(self) -> int:
+        return self.now
+
+
+async def _next(client: ClientConnection, kind: str) -> list[dict[str, Any]]:
+    """Messages received up to and including the next of type ``kind``."""
+    got: list[dict[str, Any]] = []
+    async with asyncio.timeout(WAIT_S):
+        while True:
+            message = json.loads(await client.recv())
+            assert errors(message, SCHEMA) == [], message["type"]
+            got.append(message)
+            if message["type"] == kind:
+                return got
+
+
+async def _get(url: str) -> tuple[int, bytes]:
+    def fetch() -> tuple[int, bytes]:
+        try:
+            with urllib.request.urlopen(url, timeout=WAIT_S) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.read()
+
+    return await asyncio.to_thread(fetch)
+
+
+def _serve(
+    tmp_path: Path, test: Callable[[Server, HandClock, FakeDevice], Awaitable[None]]
+) -> Server:
+    store = Store(tmp_path / "data")
+    if not store.saves():
+        shutil.copy(SAVE, store.saves_dir / "2026-01-01T00-00-00.000Z.lzma")
+    start = World.restore(CONFIG, io.loads(SAVE.read_bytes())).unix_ms
+    clock = HandClock(start)
+    device = FakeDevice(present=False)
+    dist = tmp_path / "dist"
+    dist.mkdir(exist_ok=True)
+    (dist / "index.html").write_text("<p>the desk</p>")
+    (tmp_path / "secret.txt").write_text("no")
+    island = Island(CONFIG, store, SETTINGS)
+    server = Server(
+        island,
+        device,
+        SETTINGS,
+        dist=dist,
+        clock=clock,
+        is_desk=lambda connection: "phone" not in connection.request.path,  # type: ignore[union-attr]
+    )
+
+    async def run() -> None:
+        stop = asyncio.Event()
+        ready = asyncio.Event()
+        serving = asyncio.create_task(server.run(stop, ready.set))
+        async with asyncio.timeout(WAIT_S):
+            await ready.wait()
+        try:
+            await test(server, clock, device)
+        finally:
+            stop.set()
+            await serving
+
+    asyncio.run(run())
+    return server
+
+
+def test_clients_get_the_world_then_its_life_and_the_desk_its_button(tmp_path: Path) -> None:
+    async def test(server: Server, clock: HandClock, device: FakeDevice) -> None:
+        url = f"ws://127.0.0.1:{server.port}/stream"
+        async with connect(url) as desk, connect(url + "?phone") as phone:
+            for client in (desk, phone):
+                opening = [m["type"] for m in await _next(client, "creatures")]
+                assert opening[:4] == ["clock", "sky", "land", "fauna"]
+            # Ten minutes on: the creatures move, the light is told.
+            clock.now += 10 * MINUTE
+            for client in (desk, phone):
+                types = [m["type"] for m in await _next(client, "sky")]
+                assert "creatures" in types
+            # The owner arrives; the view button is the desk's alone.
+            device.push(Presence(True))
+            device.push(ViewPressed())
+            clock.now += MINUTE
+            skies = [m for m in await _next(desk, "view") if m["type"] == "sky"]
+            assert skies[-1]["present"] is True
+            for message in await _next(phone, "sky"):
+                assert message["type"] != "view"
+            clock.now += 10 * MINUTE
+            for message in await _next(phone, "creatures"):
+                assert message["type"] != "view"
+            assert server.clients == 2
+
+    server = _serve(tmp_path, test)
+    assert isinstance(server.device, FakeDevice)
+    # The LED was set from the start and says what the island says.
+    assert server.device.led_changes
+    assert server.device.led is server.island.cooling_down
+
+
+def test_the_pages_and_the_status_are_served(tmp_path: Path) -> None:
+    async def test(server: Server, clock: HandClock, device: FakeDevice) -> None:
+        base = f"http://127.0.0.1:{server.port}"
+        assert await _get(base + "/") == (200, b"<p>the desk</p>")
+        assert (await _get(base + "/index.html"))[0] == 200
+        assert (await _get(base + "/../secret.txt"))[0] == 404
+        assert (await _get(base + "/%2e%2e/secret.txt"))[0] == 404
+        assert (await _get(base + "/nothing.js"))[0] == 404
+        code, body = await _get(base + "/status")
+        status = json.loads(body)
+        assert code == 200
+        assert status["ready"] is True
+        assert status["world"] == 1
+        assert status["sim_cpu_s"] >= 0
+
+    _serve(tmp_path, test)
+
+
+def test_stopping_saves_and_a_restart_goes_on_from_there(tmp_path: Path) -> None:
+    async def first(server: Server, clock: HandClock, device: FakeDevice) -> None:
+        async with connect(f"ws://127.0.0.1:{server.port}/stream") as client:
+            await _next(client, "creatures")
+            clock.now += 30 * MINUTE + 1234
+            await _next(client, "sky")
+
+    server = _serve(tmp_path, first)
+    saved = io.loads(Store(tmp_path / "data").saves()[-1].read_bytes())
+    assert saved.t_ms == server.island.world.t_ms
+    assert io.state_hash(saved) == server.island.world.state_hash()
+
+    async def second(server: Server, clock: HandClock, device: FakeDevice) -> None:
+        async with connect(f"ws://127.0.0.1:{server.port}/stream") as client:
+            clocks = [m for m in await _next(client, "creatures") if m["type"] == "clock"]
+            assert clocks[0]["t_ms"] >= saved.t_ms
+
+    _serve(tmp_path, second)
+
+
+@pytest.mark.parametrize("path", ["/stream", "/stream?phone"])
+def test_a_client_that_goes_is_forgotten(tmp_path: Path, path: str) -> None:
+    async def test(server: Server, clock: HandClock, device: FakeDevice) -> None:
+        async with connect(f"ws://127.0.0.1:{server.port}{path}") as client:
+            await _next(client, "creatures")
+        clock.now += 10 * MINUTE
+        async with asyncio.timeout(WAIT_S):
+            while server.clients:
+                await asyncio.sleep(0.01)
+
+    _serve(tmp_path, test)

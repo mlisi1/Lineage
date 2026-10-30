@@ -1,0 +1,35 @@
+# The server's settings (S1, ADR 0023): how it runs on the device, not how the island lives
+# (that is the sim's config, sim/config/default.toml). Every key is required; unknown keys
+# are errors, so a typo cannot fall back to a default. Read by lineage_server/settings.py.
+
+[server]
+# The address and TCP port the kiosk page, its WebSocket (/stream) and /status are served
+# on. 0.0.0.0 lets phones on the network reach it (S3); the kiosk itself uses localhost.
+host = "0.0.0.0"
+port = 8080
+# How often the sim is brought up to the wall clock, in wall seconds. Every subsystem ticks
+# on its own [schedule] whatever this is; it only bounds how late a tick can be noticed.
+# 1 s is negligible work when nothing is due.
+poll_seconds = 1.0
+# Catching up after the device was off: sim-days advanced per step, with a save after each.
+catch_up_days = 1
+# A wall clock found this far ahead of the island while it runs (the network setting the
+# board's time late: it has no clock of its own) is lived as a catch-up, in wall seconds:
+# quietly, the owner away meanwhile, then every client is sent the island anew.
+jump_seconds = 3600.0
+# A client that has this many batches of messages waiting unsent (a phone on a stalled
+# network) is let go; the renderer reconnects and is sent everything anew.
+client_backlog = 256
+
+[saves]
+# Saves kept on the SD card: the newest save of each of the last daily_kept days that have
+# one, plus the oldest save of each month, forever (the owner, 2026-10-28). World archives
+# are never deleted.
+daily_kept = 7
+# Whether to also keep the oldest save of each month.
+monthly_kept = true
+
+[status]
+# How often the server logs its own numbers (sim CPU, save durations, memory), in wall
+# seconds; the same numbers are served at /status.
+log_every_seconds = 3600

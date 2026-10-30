@@ -1,7 +1,18 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { ClockMessage, LandMessage, Message } from "../src/protocol";
-import { Recording, gridNumbers, gridValues, isMessage, landOf, yearOf } from "../src/stream";
+import {
+  RECONNECT_FIRST_MS,
+  RECONNECT_LAST_MS,
+  Recording,
+  SocketSource,
+  type SocketLike,
+  gridNumbers,
+  gridValues,
+  isMessage,
+  landOf,
+  yearOf,
+} from "../src/stream";
 import { LAND_PALETTE } from "../src/terrain/palette";
 
 const recording = JSON.parse(
@@ -104,5 +115,83 @@ describe("the stream", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/** A WebSocket stand-in: the test opens, sends on and closes it. */
+class FakeSocket implements SocketLike {
+  private readonly listeners = new Map<string, ((event: { data: unknown }) => void)[]>();
+  closed = false;
+
+  addEventListener(type: string, listener: (event: { data: unknown }) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  emit(type: string, data: unknown = undefined): void {
+    for (const listener of this.listeners.get(type) ?? []) listener({ data });
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
+describe("the server's socket", () => {
+  const view = JSON.stringify({ type: "view", protocol: 1 });
+
+  it("hands over the server's messages and tries again, longer each time, when it drops", () => {
+    vi.useFakeTimers();
+    const sockets: FakeSocket[] = [];
+    const source = new SocketSource("ws://desk/stream", () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    });
+    const got: string[] = [];
+    source.listen((message) => got.push(message.type));
+    sockets[0]?.emit("open");
+    sockets[0]?.emit("message", view);
+    sockets[0]?.emit("message", JSON.stringify({ type: "view", protocol: 2 }));
+    expect(got).toEqual(["view"]);
+    // The server is gone: a try after the first wait, the next after twice as long.
+    sockets[0]?.emit("close");
+    vi.advanceTimersByTime(RECONNECT_FIRST_MS - 1);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(2);
+    sockets[1]?.emit("close");
+    vi.advanceTimersByTime(2 * RECONNECT_FIRST_MS - 1);
+    expect(sockets).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(3);
+    // Connected again: messages flow, and the wait starts from the first again.
+    sockets[2]?.emit("open");
+    sockets[2]?.emit("message", view);
+    expect(got).toEqual(["view", "view"]);
+    sockets[2]?.emit("close");
+    vi.advanceTimersByTime(RECONNECT_FIRST_MS);
+    expect(sockets).toHaveLength(4);
+    vi.useRealTimers();
+  });
+
+  it("waits no longer than the last wait, and stops trying once closed", () => {
+    vi.useFakeTimers();
+    const sockets: FakeSocket[] = [];
+    const source = new SocketSource("ws://desk/stream", () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    });
+    for (let tries = 0; tries < 10; tries++) {
+      sockets.at(-1)?.emit("close");
+      vi.advanceTimersByTime(RECONNECT_LAST_MS);
+    }
+    expect(sockets).toHaveLength(11);
+    source.close();
+    expect(sockets.at(-1)?.closed).toBe(true);
+    sockets.at(-1)?.emit("close");
+    vi.advanceTimersByTime(10 * RECONNECT_LAST_MS);
+    expect(sockets).toHaveLength(11);
+    vi.useRealTimers();
   });
 });

@@ -65,7 +65,8 @@ and read with `io.loads`, so the same migration chain upgrades it: "migrations c
 archives" holds by construction. It carries everything an archive needs: the chronicle
 and bestiary (ADR 0017), the species records (phylogeny), and terrain and plant cover
 (the final map). A save is 0.25–0.7 MB, and worlds end rarely, so keeping them all costs
-little. S1 decides where the files go and S5 copies them off the device.
+little. S1 decides where the files go and S5 copies them off the device. (S1, ADR 0023:
+`<data>/archives/world-NNN-seed-S.lzma`, beside the saves in `<data>/saves/`.)
 
 **Schema v10**: `WorldState` gains `world` (1 for the first continent) and `worlds` (one
 record per world before this one), and the subsystem `apocalypse`. `v9_to_v10` numbers

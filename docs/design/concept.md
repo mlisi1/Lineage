@@ -22,9 +22,11 @@ its own history.
 
 Sim time is an integer number of **milliseconds** since world creation (`t_ms`), mapped
 1:1 to wall time on the device. The world's creation instant (`epoch_unix_ms`) is injected
-by the caller and stored in the save; the sim never reads the clock. The server injects
-elapsed time through `World.step(dt)` (seconds, rounded to the millisecond) and real-world
-inputs as events through `World.apply(event)`.
+by the caller and stored in the save; the sim never reads the clock. Time passes through
+`World.step(dt)` (seconds, rounded to the millisecond) or `World.advance_to_unix`, which
+the server calls about once a wall second to bring the world to now, across a world's end
+(S1, `server.md`); real-world inputs arrive as events through `World.apply(event)`. When
+the device was off, the server lives the missed time at once on start, the owner away.
 
 Subsystems tick on their own schedules from `sim/config/default.toml` `[schedule]`: a
 subsystem with period `p` ticks at sim times `p, 2p, 3p, …`. Everything due inside one
@@ -52,10 +54,14 @@ subsystem. Draws in one stream never shift another; stream states are saved.
 ### Saves
 
 A save is the world state encoded canonically (sorted JSON header plus NumPy arrays in
-`.npy` form) inside an xz stream whose CRC detects truncation. The same state always gives
+`.npy` form) inside an xz stream (xz's lightest preset, as small as the default and
+faster) whose CRC detects truncation. The same state always gives
 the same bytes, so the SHA-256 of the encoding is the state hash used by determinism
 tests. Saves carry `schema_version` and are migrated forward on load
-(`state/migrations/`); the sim returns bytes and the caller writes them atomically.
+(`state/migrations/`); the sim returns bytes and the caller writes them atomically. On
+the device the server saves at each UTC midnight, on shutdown, on power loss and at a
+world's end, and keeps the newest save of each of the last 7 days and the oldest of each
+month (`server.md`).
 
 ## World lifecycle
 
@@ -105,5 +111,7 @@ paints the ground by them. Charts in reports are ordinary plots.
 
 ## Open
 
-- Collapse criteria for ending a world (M10).
-- Archive retention policy on the device.
+- Collapse criteria for ending a world (M10). (Settled in M10, ADR 0018: the last
+  creature's death once life is established.)
+- Archive retention policy on the device. (Settled: every archive is kept, ADR 0018; the
+  living world's saves as above, ADR 0023.)

@@ -27,7 +27,8 @@ years (CLAUDE.md §4.4). Choices made here are expensive to change later.
   `MAGIC | u32 header length | sorted compact JSON header | .npy v1.0 arrays`. Arrays are
   numbered in sorted-key order so encoding is canonical; the state hash is the SHA-256 of
   the uncompressed encoding. Pickle is never used: it ties saves to class layouts and is
-  unsafe to load.
+  unsafe to load. (S1, ADR 0023: saves are compressed at xz's preset 0 since 2026-10-30,
+  as small as the default 6 and faster; any preset loads the same way.)
 - **Migrations operate on raw trees**, not dataclasses, so an old save never depends on
   current classes. The registry is explicit and a test requires one migration per past
   version and one frozen fixture per version.

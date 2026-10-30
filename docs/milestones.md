@@ -23,7 +23,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
 | R5 | Final rendering pass and device benchmark | **done** 2026-10-30, merged into `main`: the owner's look rounds and checklist (ADR 0022; the look called final 2026-10-25), its tests; the board (twelve runs 2026-10-27, then 2026-10-29), the review of the pipeline and the optimization plan (the ground's colour pass on the painters' GPU), the views' loading (work done ahead off the page's thread; live, an iris with a loading ring between views); the last run on the board: the four views hold the 30 fps cap, Chromium 735 MB, R5.2 5.1 % late in the local view against 5 %, accepted by the owner ("the performances are fine as it is now"); what could be done later in `docs/renderer-optimization-plan.md`. The showcase begun here moved to R6 | [reports/R5-final](../reports/R5-final/README.md), [reports/R5-device](../reports/R5-device/README.md) |
 | R6 | Showcase and trailer | **in progress** (added by the owner 2026-10-27, from R5): a first version, begun on `r5-final`, in `main` since R5 merged (2026-10-30) (`?showcase`, `src/showcase/`, `tools/showcase.py`, `deploy/lineage-showcase@.service`); its trailer filmed on the PC awaits the owner's verdict; then tuned on the board; handoff under "R6 in progress" | — |
-| S1 | Server: real-time loop and persistence | not started | — |
+| S1 | Server: real-time loop and persistence | **done** 2026-10-30, merged into `main` (worked from 2026-10-28 on `s1-server`, in parallel with R5's close): the server runs the island in real time, catches up after downtime with the owner away, saves atomically (7 days + one a month, archives forever), streams to the kiosk (`/stream`, the view button to the desk only) and serves its numbers at `/status` (ADR 0023, `docs/design/server.md`); measured on the board 2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves 1.2–1.6 s, 89 MB, every §4.8 budget met; saves at xz preset 0 since (the owner, 2026-10-30), the board's save time for S7 to confirm; handoff under "S1 done" | [ADR 0023](decisions/0023-the-server.md) |
 | S2 | Device layer | not started | — |
 | S3 | Phone app and API | not started | — |
 | S4 | Notifications | not started | — |
@@ -32,6 +32,49 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | S7 | Soak test | not started | — |
 
 ## Handoff notes
+
+### S1 done (merged into `main` 2026-10-30)
+
+Worked on `s1-server` (worktree `../Lineage-s1`), branched from `r5-final` at `bd70095` so
+that it had R5's wire; `main` (R5) merged in on 2026-10-30, the suites green, then S1
+merged into `main`.
+
+- **Done** (ADR 0023, `docs/design/server.md`):
+  - `lineage_server`: `settings`, `store`, `feed` (shared with `tools/stream.py`: the
+    committed recordings are byte-identical), `island`, `server`, `main`.
+  - `lineage_device`: `interface` and a minimal `fake`.
+  - The wire: a `view` message; `SocketSource` reconnects.
+  - `deploy/lineage-server@.service`.
+- **Tests:** store (retention, recovery, 20 `kill -9`s), island (resume bit-identical,
+  catch-up = owner away, cadence, device events, power loss, a world's end, a clock
+  jump), end to end with real clients, a save benchmark (197 ms on the PC; 53 ms at xz preset 0), renderer
+  `SocketSource`.
+- **Left:**
+  1. ~~The board's numbers~~ done 2026-10-29 (ADR 0023, Results): sim share 0.0011 with the
+     kiosk drawing, 6.1 s CPU a sim-day, saves 1.34/1.22/1.61 s, 89 MB; all budgets met,
+     the save with the least margin, so the owner chose xz preset 0 in `io.dumps`
+     (2026-10-30): the save 2.3x faster on the PC, the same size, 3 MB of memory instead
+     of 35; the board's new save time is S7's to confirm. The session was run by the
+     procedure in
+     `deploy/README.md` ("The island in real time on the board"): `deploy/s1-board.sh`
+     sets up, starts and stops; `tools.server_watch` judges `/status` (`sim_core_share` ≤
+     0.25, `longest_save_s` ≤ 2, `rss_mb` ≤ 300, §4.8) and gives the board's CPU per
+     sim-day from the catch-up. Rehearsed on the PC from the wheels: the island (seed 3, a
+     year old today, `runs/s1-board-island`) catches up at 0.37 s a sim-day, saves in
+     0.19 s, 64 MB. The board's Python is 3.13: setup installs uv in `~/.lineage-uv` and
+     makes the server's environment with uv's Python 3.11 (rehearsed from a system 3.12).
+  2. ~~Merge~~ done 2026-10-30: `main` merged in (conflicts only in the docs), the fast
+     suite (855), vitest (687), lint and types green; merged into `main` (the owner).
+  3. The board's copy of `lineage-s1-kiosk@.service` predates the pointer fix (R5's
+     `deploy/blank-cursor.py`, `XCURSOR_PATH` `~/.local/share/lineage-cursors`): the next
+     `deploy/s1-board.sh setup` installs the new one, or S6's unit replaces it.
+- **For S2:**
+  - Implement `lineage_device.interface.Device` on GPIO: presence first, then events;
+    `set_cooldown_led`.
+  - Keep `fake.py` in step (parity test, web panel).
+  - `PowerLost` already saves at once; the shutdown after it is S2's.
+- **For S3:** the API goes beside `/status` in `server.py`'s `_http`. Phones are never
+  loopback, so they never get `view`.
 
 ### M11 done (merged into `main` 2026-10-27)
 
@@ -589,6 +632,17 @@ under `--schedule office` (ADR 0016).
 - Scripts in the session scratchpad (`/tmp/…`) are lost on reboot; fixture recipes live
   in the fixtures README.
 - ruff rejects `# fmt: skip` inside an expression (RUF028); use it only on statements.
+- Python 3.12 syntax (`class Box[T]:`, `def f[T](…)`) slips in easily and fails on the
+  project's 3.11: use `TypeVar` and `Generic` (S1).
+- The board's own Python is Debian's (3.13 on Trixie), not the project's 3.11: anything
+  installed there goes through uv's Python 3.11 (`deploy/s1-board.sh`), and a PC
+  rehearsal from the system's 3.11 hides it (S1).
+- An installed wheel cannot find files by paths relative to the repository
+  (`Path(__file__).parents[…]`): pass config paths on the command line where it runs
+  from a wheel (the board), keep data files inside the package (`schema.json`) (S1).
+- A websockets handler that waits on something other than its socket (a queue) also
+  waits on the socket closing, or the server's shutdown waits for it forever (S1,
+  `server.py` `_client`).
 
 ### M9 closed (merged into `main` at `1a1513c`, 2026-10-19)
 
@@ -754,10 +808,12 @@ State at 2026-10-18, end of M7, for the next session (M8).
 
 ### Parallel work (other agents)
 
-No other agent is active (2026-10-19): R1, R2, M6–M9 are merged and closed. Agents
-coordinate through `/home/elechim/Lineage-coord` (README with the worktree table and
-claimed ADR numbers, a status file and an inbox per agent); a new milestone adds its row
-and claims its ADR there. ADRs so far: 0001–0017; the next free is 0018.
+R5 and S1 merged into `main` on 2026-10-30 (R5 first). R6 continues from `main`;
+the worktrees `../Lineage-r5` and `../Lineage-s1` are kept. Everything else is merged and
+closed. Agents coordinate through `/home/elechim/Lineage-coord`
+(README with the worktree table and claimed ADR and schema numbers, a status file and an
+inbox per agent); a new milestone adds its row and claims its ADR there. ADRs so far:
+0001–0023; the next free is 0024; the next free schema version is 14.
 
 ### Working notes
 

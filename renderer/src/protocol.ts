@@ -15,7 +15,8 @@ export type Message =
   | RareMessage
   | ChronicleMessage
   | SkyMessage
-  | EventsMessage;
+  | EventsMessage
+  | ViewMessage;
 /**
  * Version of this protocol.
  */
@@ -390,4 +391,11 @@ export interface EventsMessage {
      */
     count?: number;
   }[];
+}
+/**
+ * The desk's view button was pressed (S1, ADR 0020): the scene steps to its next view, as a key or click does. Sent by the server only to the desk's own kiosk (a client on the device itself), never to a phone, which steers its own view.
+ */
+export interface ViewMessage {
+  type: "view";
+  protocol: Protocol;
 }

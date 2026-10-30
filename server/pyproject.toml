@@ -3,7 +3,10 @@ name = "lineage-server"
 version = "0.0.0"
 description = "Runs the Lineage sim in real time on the device: persistence, state stream, API."
 requires-python = ">=3.11,<3.12"
-dependencies = ["lineage-sim"]
+dependencies = [
+    "lineage-sim",
+    "websockets>=13",
+]
 
 [tool.uv.sources]
 lineage-sim = { workspace = true }

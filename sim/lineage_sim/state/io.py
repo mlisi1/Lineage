@@ -27,6 +27,10 @@ from lineage_sim.state.migrations import migrate
 from lineage_sim.state.schema import StateError, Tree, WorldState
 
 MAGIC = b"LNGSAVE\x01"  # last byte is the container format version
+# xz's lightest preset: a world's save is as small as at the default (6) but made in under
+# half the time with a few MB of memory instead of about 35 (S1, ADR 0023: on the board
+# the save had the least margin of the device's budgets). Any preset loads the same way.
+XZ_PRESET = 0
 _ARRAY_KEY = "__ndarray__"
 _LEN = struct.Struct("<I")
 
@@ -103,7 +107,8 @@ def decode(data: bytes) -> Tree:
 
 def dumps(state: WorldState) -> bytes:
     """Compressed save bytes of ``state``."""
-    return lzma.compress(encode(state.to_tree()), format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64)
+    raw = encode(state.to_tree())
+    return lzma.compress(raw, format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=XZ_PRESET)
 
 
 def loads(data: bytes) -> WorldState:

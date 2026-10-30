@@ -497,7 +497,13 @@ async function start(): Promise<void> {
   // `?season=autumn:0.8` (staging, R5): the clock says that season, so far into it.
   const [seasonAsked, seasonShare] = (KIOSK ? "" : (params.get("season") ?? "")).split(":");
   const seasonNamed = ["spring", "summer", "autumn", "winter"].find((one) => one === seasonAsked);
+  // The desk's view button, sent by the server (S1); the button's handler comes later.
+  let viewPressed = (): void => undefined;
   source.listen((message) => {
+    if (message.type === "view") {
+      viewPressed();
+      return;
+    }
     if (quiet && message.type === "chronicle") return;
     if (seasonNamed !== undefined && message.type === "clock") {
       const progress = Number(seasonShare ?? 0.5);
@@ -534,6 +540,7 @@ async function start(): Promise<void> {
   const press = (): void => {
     if (pinned === null && !atmosphere.ending) director.press();
   };
+  viewPressed = press;
   window.addEventListener("keydown", (event) => {
     if (event.repeat) return;
     if (event.key === "v" || event.key === " " || event.key === "Enter") press();

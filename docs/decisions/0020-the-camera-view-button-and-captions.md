@@ -112,7 +112,8 @@ does that (the local view now carries every animal's motion, about 200 in the v9
 
 - **S2** builds a second button (`view`), debounced like the god-power one; the device
   layer hands presses to the page (`__press`, or a message on a reverse channel when S1
-  has one).
+  has one). (S1, ADR 0023: the device tells the server, which sends `{"type": "view"}` to
+  the desk's kiosk only; the page presses its button on it.)
 - **S3**: the phone's renderer has its own camera; a tap is its button.
 - **R4** draws the light; the dip's dark is a plain plum overlay until then. The
   apocalypse sequence (`WorldEnded`) is still to be put on the wire.
