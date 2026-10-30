@@ -213,7 +213,9 @@ repository's root, with the board on the network:
    ```
    This needs `python3-venv` on the board (`sudo apt install python3-venv`) and the
    network: `uv` goes into `~/.lineage-uv` (from PyPI), and brings the project's Python
-   3.11 (the board's own is Debian's 3.13), numpy and websockets.
+   3.11 (the board's own is Debian's 3.13), numpy and websockets. The kiosk's unit hides
+   the pointer with the theme `blank-cursor.py` writes (above; once per board). Run it
+   from a terminal: the units' `sudo` needs one to ask for the password.
 3. Start the server, then the kiosk on the screen:
    ```sh
    deploy/s1-board.sh start lineage@<board>
@@ -228,7 +230,8 @@ repository's root, with the board on the network:
    ```
    It ends with each budget's verdict: the sim's share of one core (≤ 0.25), the longest
    save (≤ 2 s), the server's memory (≤ 300 MB); `runs/s1-board/status.summary.json` holds
-   the numbers for ADR 0023.
+   the numbers for ADR 0023. Measured 2026-10-29 and 2026-10-30 (ADR 0023, Results and
+   Consequences): every budget met; the save, the closest, 0.88 s with the kiosk drawing.
 5. Stop (a save):
    ```sh
    deploy/s1-board.sh stop lineage@<board>

@@ -15,7 +15,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | M8 | Presence, calendar, god powers | **done** 2026-10-19, merged into `main` (`ab0165b`): M8.2 3-week absence survived in 100 % of seeds PASS; M8.3 August holiday 100 % PASS (added by the owner); M7.2 95 % PASS in office light; M8.1 night-trait selection p = 0.15 FAIL, deferred to M11 by the owner (ADR 0016). Light from presence (plants follow a week's light), a god-power button drawing by need, schema v8 | [reports/M8-presence](../reports/M8-presence/README.md) |
 | M9 | Chronicle and bestiary | **done** 2026-10-19, merged into `main` (`1a1513c`): M9.1 3.5 notable entries / month PASS (19/20 seeds in band); M9.2 largest type extinction 18.9 % PASS (ADR 0017). Importance 1–5 (notable ≥ 3, major ≥ 4), English templates, history and bestiary in the save (schema v9), observer hook in `World` | [reports/M9-chronicle](../reports/M9-chronicle/README.md) |
 | M10 | Apocalypse and worlds | **done** 2026-10-20, merged into `main` (`af98573`): archives load and render (an ended real world drawn by `replay --still`), ending a world and starting the next 73 ms median (budget 0.3 s on the PC). The last creature's death ends a world once life is established (the owner); the World archives itself and starts the next at once; every archive kept; schema v10 (ADR 0018) | — (not statistical) |
-| M11 | Long-run tuning and stability | **done** 2026-10-27, merged into `main`: every criterion passes (50/50) on tuning and held-out seeds; nine mechanisms (food at sea and wading, reach, cover, nutrients, seeds in guts, hunters from the herd, soft caps, resting hunters); closed island; hunters beside grazers in 23 of 30 ten-year seeds; M6.1 band 3–16, M8.1 light traits, D1–D3 set by the owner (ADR 0019). Recordings re-recorded by R5 (merging second); the Pi measurement left to S1/S7 | [reports/M11-long-run](../reports/M11-long-run/README.md) |
+| M11 | Long-run tuning and stability | **done** 2026-10-27, merged into `main`: every criterion passes (50/50) on tuning and held-out seeds; nine mechanisms (food at sea and wading, reach, cover, nutrients, seeds in guts, hunters from the herd, soft caps, resting hunters); closed island; hunters beside grazers in 23 of 30 ten-year seeds; M6.1 band 3–16, M8.1 light traits, D1–D3 set by the owner (ADR 0019). Recordings re-recorded by R5 (merging second); the Pi measurement left to S1/S7, made by S1 (6.1 s of CPU a sim-day on the board, ADR 0023) | [reports/M11-long-run](../reports/M11-long-run/README.md) |
 | R0 | Renderer spike on the device | **done** 2026-10-18: on the board with a 2560×1440 monitor standing in for the screen (ADR 0008), best profile `gpu-gles` on the GPU (Panfrost): map-view 59.5, mid-view 59.5, mid-crowd 30.0, local-view 59.9 fps median, all ≥ 30 (ADR 0010). A sprite in every cell (`spec-1x`) hangs the GPU: recorded, not judged | [reports/R0-renderer-spike](../reports/R0-renderer-spike/README.md); look: [reports/R0-look-sheet](../reports/R0-look-sheet/README.md) |
 | R1 | Terrain and plants from the state stream | **done** 2026-10-19, merged into `main` (`8e51666`) after M7: everything in §8 delivered and tested on the PC (wire schema and generated types, the scene from recordings in the three views, grounds painted in a worker and faded in daily, plants by form, season and two genes), plus the cosy look after Stardew (ADR 0014), seasons turning over weeks, snow from the simulation, a moving sea, a winter recording, a leak test. Device measurements belong to R5 (owner); handoff below | look and films: [reports/R1-land-sheet](../reports/R1-land-sheet/README.md) |
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
@@ -96,8 +96,10 @@ Branches `m11-tuning` and `m11-reach` and the worktree `../Lineage-m11-reach` ar
   the winter recording; commands in CLAUDE.md §5), look at the scene diffs, then
   `npx playwright test --update-snapshots`. R5's `test_last_death_is_an_extinction`
   expectation meets M11's `test_fauna.py` changes there.
-- **S1/S7** (the owner, 2026-10-27): measure the sim on the Orange Pi when the server runs
-  it in real time. On the PC the whole world takes about 0.4 s of CPU per sim-day.
+- ~~**S1/S7** (the owner, 2026-10-27): measure the sim on the Orange Pi when the server runs
+  it in real time.~~ Done by S1 (2026-10-29, ADR 0023): 6.1 s of CPU a sim-day on the
+  board (0.4 s on the PC), the sim 0.1 % of a core in real time. S7's soak follows it over
+  a week.
 
 The report opens with the island's story in figures (`tools/milestones/m11_story.py`,
 the owner's request: an animated island, the lives of six islands, hunters island by
@@ -270,7 +272,7 @@ Runs behind the report stay in `runs/` (gitignored): `m11-report-*`, `m11-tuned-
   R5.3, R5.4 pass; R5.2 5.1 % against 5 %, the local view's animal chosen ahead and so
   not the same scene from run to run; accepted by the owner, ADR 0022 "Loading the
   views"); `r5-final` merged into `main`. The showcase (R6) went with it: it is only on
-  `?showcase`, and the desk's page is unchanged by it. S1 merges after. For a later device
+  `?showcase`, and the desk's page is unchanged by it. S1 merged after, the same day. For a later device
   milestone (S7): pin the local scenario to fixed animals, as `middle-crowd` is.
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;
   `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V

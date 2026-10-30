@@ -544,7 +544,8 @@ needs a note in `docs/decisions/`.
   traits. The report `reports/M11-long-run` (e08aece and after): every criterion passes
   on tuning and held-out seeds; merged into `main` 2026-10-27; the nightly criteria test
   (`pytest -m criteria`) guards it. R5, merging second,
-  re-records the stream recordings; the sim's Orange Pi measurement is left to S1/S7.)
+  re-records the stream recordings; the sim's Orange Pi measurement is left to S1/S7; S1 made it, 6.1 s of CPU a sim-day,
+  ADR 0023.)
 
 ### R0 — Renderer spike on the device (gates R1+)
 - **Deliver**: PixiJS scene with 50 animated chain-of-circles creatures, a terrain bitmap,
