@@ -689,7 +689,7 @@ needs a note in `docs/decisions/`.
 - **Deliver**: run the sim in real time, daily atomic saves (write temp → fsync → rename),
   keep last N saves, WebSocket state stream, recovery on start.
 - **Tests**: integration with fake device; kill -9 during save leaves a loadable save.
-- (As built so far, ADR 0023: one process and port for the kiosk's pages, `/stream` and
+- (As built, ADR 0023: one process and port for the kiosk's pages, `/stream` and
   `/status`; the time the device was off is caught up on start with the owner away, a
   save at each midnight on the way and one at the end (the owner, 2026-10-28); saves kept:
   the newest of each of the last 7 days and the oldest of each month, archives forever; a
@@ -699,7 +699,7 @@ needs a note in `docs/decisions/`.
   2026-10-29: the sim 0.1 % of a core with the kiosk drawing, 6.1 s CPU a sim-day, saves
   1.2–1.6 s, 89 MB: every budget of §4.8 met. The save had the least margin, so saves use
   xz preset 0 since (the owner, 2026-10-30): as small, 2.3× faster, 3 MB of memory
-  instead of 35.)
+  instead of 35. Merged into `main` 2026-10-30, after R5.)
 
 ### S2 — Device layer
 - **Deliver**: PIR with configurable hold, god-power and view buttons with debounce, LED, backlight
