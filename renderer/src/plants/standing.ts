@@ -351,6 +351,13 @@ const SHEET_HEIGHT = 2048;
 export interface PackedSheet {
   pages: Pixels[];
   places: { page: number; left: number; top: number }[];
+  /**
+   * The pages made into bitmaps where they were packed (a worker with `OffscreenCanvas`):
+   * the page's thread then does not draw them (R5: 0.15 s on the board for the local
+   * view's). The pages' pixels are left out then. Drawings are clear or solid, alpha 0
+   * or 255, so a bitmap holds the same pixels a canvas would.
+   */
+  bitmaps?: ImageBitmap[];
 }
 
 /** Colour `arts` and pack them into pages, in rows, a clear pixel between them. */

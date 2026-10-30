@@ -16,7 +16,15 @@
  */
 import { NO_ART_CACHE, contentKey, type ArtCache } from "./artcache";
 import { PROBE } from "../frameprobe";
-import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import {
+  CanvasSource,
+  Container,
+  ImageSource,
+  Rectangle,
+  Sprite,
+  Texture,
+  type TextureSource,
+} from "pixi.js";
 import { DEFAULT_LOOK, LOOKS, type PlantInks } from "../looks";
 import { valueNoise, type Shadow } from "../terrain/ground";
 import type { CellRect, Land } from "../terrain/land";
@@ -790,14 +798,19 @@ const LEAN_PAGE_HEIGHT = 1024;
 
 /**
  * Put `arts`, packed into pages as `packed` says (`packSheet`, here or in a worker), into
- * textures: a page drawn to a canvas at once, each drawing a frame of it.
+ * textures: a page drawn to a canvas at once (or the worker's bitmap of it), each drawing a
+ * frame of it.
  */
 function strip(
   arts: readonly StandingArt[],
   inks: PlantInks,
   packed: PackedSheet = packSheet(arts, inks),
-): { drawings: Map<string, Drawing>; sources: CanvasSource[] } {
-  const sources = packed.pages.map((page) => {
+): { drawings: Map<string, Drawing>; sources: TextureSource[] } {
+  // Pages the worker made into bitmaps itself (`standing.worker.ts`) are taken as they are.
+  const { bitmaps } = packed;
+  const sources = packed.pages.map((page, index) => {
+    const bitmap = bitmaps?.[index];
+    if (bitmap !== undefined) return new ImageSource({ resource: bitmap, scaleMode: "nearest" });
     const canvas = document.createElement("canvas");
     canvas.width = page.width;
     canvas.height = page.height;
@@ -1013,7 +1026,7 @@ interface Sheet {
 }
 interface SharedSheet {
   drawings: Map<string, Drawing>;
-  sources: CanvasSource[];
+  sources: TextureSource[];
   lean: LeanSheet;
   tall: number;
   users: number;
@@ -1079,7 +1092,11 @@ function sharedSheet(
 
 /** Let `shared`, kept under `key` among `sheets`, go: its textures destroyed. */
 function dropSheet(sheets: Map<string, SharedSheet>, key: string, shared: SharedSheet): void {
-  for (const source of shared.sources) source.destroy();
+  for (const source of shared.sources) {
+    const { resource } = source as { resource: unknown };
+    source.destroy();
+    if (typeof ImageBitmap !== "undefined" && resource instanceof ImageBitmap) resource.close();
+  }
   shared.lean.destroy();
   sheets.delete(key);
 }
