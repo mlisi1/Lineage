@@ -146,6 +146,8 @@ export class Director {
   looksAhead = false;
   private upcomingId: number | null = null;
   private upcomingAt: Point | null = null;
+  /** Where the middle view will come down next, chosen ahead as the animal is (`lookAhead`). */
+  private upcomingPlace: Point | null = null;
   /** Frames drawn fully dark so far before the cut (`DARK_FRAMES`). */
   private darkFrames = 0;
   /** The view a press during a dip leads on from: the one the dip is going to. */
@@ -255,7 +257,8 @@ export class Director {
       } else if (view === "middle") {
         this.subject = null;
         this.spring.options = DRIFTING;
-        this.spring.snap(this.landPlace(scene, null));
+        this.spring.snap(this.upcomingPlace ?? this.landPlace(scene, null));
+        this.upcomingPlace = null;
         this.startDrift(scene);
       } else {
         this.spring.options = FOLLOWING;
@@ -367,11 +370,17 @@ export class Director {
    * be, and not `current` while there is anyone else.
    */
   /**
-   * Choose the animal the local view will follow next, ahead of time (R5, the optimization
-   * plan: its ground is painted while the camera is elsewhere, `upcoming`, so that the
-   * local view finds it painted).
+   * Choose the animal the local view will follow next, and the place the middle view will
+   * come down on, ahead of time (R5, the optimization plan: their ground is painted while
+   * the camera is elsewhere, `upcoming` and `upcomingMiddle`, so that a view finds it
+   * painted).
    */
   private lookAhead(scene: Scene): void {
+    // The middle view's place too, once the land is there to choose it on.
+    if (this.upcomingPlace === null && this.view !== "middle" && this.going !== "middle") {
+      const place = this.landPlace(scene, null);
+      if (scene.isLand(place.x, place.y)) this.upcomingPlace = place;
+    }
     const current = this.view === "local" ? this.subject : null;
     const known =
       this.upcomingId === null ? undefined : scene.subjects.find((s) => s.id === this.upcomingId);
@@ -397,6 +406,11 @@ export class Director {
   /** Where the animal the local view will follow next is now (`lookAhead`); null if none chosen. */
   get upcoming(): Point | null {
     return this.upcomingAt;
+  }
+
+  /** Where the middle view will come down next (`lookAhead`); null if not chosen yet. */
+  get upcomingMiddle(): Point | null {
+    return this.upcomingPlace;
   }
 
   private choose(scene: Scene, current: number | null): Subject | null {

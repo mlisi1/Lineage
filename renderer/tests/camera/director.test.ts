@@ -321,4 +321,21 @@ describe("the next animal to follow chosen ahead (R5, the optimization plan)", (
     expect(shot.view).toBe("local");
     expect(shot.subject).toBe(chosen?.id);
   });
+
+  it("knows where the middle view will come down before it comes, and comes down there", () => {
+    const director = new Director(SIZES, mulberry32(7));
+    director.looksAhead = true;
+    const scene = sceneWith(herd());
+    run(director, scene, 0.1);
+    const place = director.upcomingMiddle;
+    expect(place).not.toBeNull();
+    expect(scene.isLand(place?.x ?? -1, place?.y ?? -1)).toBe(true);
+    director.press();
+    const shot = run(director, scene, DIP_OUT_S + 0.1);
+    expect(shot.view).toBe("middle");
+    expect(shot.centre.x).toBeCloseTo(place?.x ?? -1, 0);
+    expect(shot.centre.y).toBeCloseTo(place?.y ?? -1, 0);
+    // Chosen anew for the next time, once the view has left the middle.
+    expect(director.upcomingMiddle).toBeNull();
+  });
 });

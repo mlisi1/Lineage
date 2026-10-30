@@ -476,6 +476,18 @@ export class Landscape {
     return ground?.ready(this.cells) ?? false;
   }
 
+  /**
+   * Whether the view's ground in sight is painted from the latest land and its plants are
+   * not fading, whatever else is being painted (R5: a view the button brings on is shown
+   * then, not held while the ring of pieces round it, out of sight, is painted).
+   */
+  get inSight(): boolean {
+    if (!this.groundShown) return false;
+    if (this.view === "map") return true;
+    const shown = this.view === "middle" ? this.built.middle : this.built.local;
+    return !(shown?.plants.fading ?? true);
+  }
+
   /** Whether everything the view shows is painted from the latest land, and nothing is fading. */
   get settled(): boolean {
     if (this.stale || this.land === null || this.painter.busy > 0) return false;

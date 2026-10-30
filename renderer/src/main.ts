@@ -75,7 +75,15 @@ import { demoMessages, showsOf, type Timed } from "./atmosphere/demo";
 import { sight, within, type Point } from "./camera";
 import { Captions, lantern } from "./captions";
 import { NameCard, type CardPhase } from "./card";
-import { Director, TIMINGS, type Motion, type Scene, type Shot, type Visit } from "./director";
+import {
+  Director,
+  NEXT,
+  TIMINGS,
+  type Motion,
+  type Scene,
+  type Shot,
+  type Visit,
+} from "./director";
 import { Herd } from "./herd";
 import { useArtCache, type PlantLayer } from "./plants/plants";
 import { Landscape, PAINTER_CODE, TILES, VIEWS, type ViewName } from "./landscape";
@@ -702,7 +710,9 @@ async function start(): Promise<void> {
     } else if (pinned === null) {
       scene.width = size.width;
       scene.height = size.height;
-      scene.ready = landscape.settled;
+      // Live, a view is shown once its ground in sight is in (`inSight`); films and stills
+      // keep waiting for all of it, as they were made.
+      scene.ready = director.looksAhead ? landscape.inSight : landscape.settled;
       scene.place = scroll.phase === "roll-up" || atmosphere.ending ? null : entry;
       shot = director.update(dtS, scene);
     } else {
@@ -728,16 +738,18 @@ async function start(): Promise<void> {
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
     // Ahead of the view button (R5, the optimization plan): the views not shown are laid
     // out in the background (their plants drawn in a worker), and every so often the
-    // ground round the animal the local view will follow next is painted and kept, so
-    // that a view comes already painted.
+    // ground the next view will open on (where the middle view will come down, round the
+    // animal the local view will follow) is painted and kept, so that it comes painted.
     if (director.looksAhead) {
       landscape.prepareAhead();
       aheadS += deltaMS / 1000;
-      const upcoming = director.upcoming;
-      if (aheadS >= AHEAD_EVERY_S && upcoming !== null) {
+      // Only the view the button leads to next: the others' pieces would hold it up.
+      const coming = NEXT[shot.view];
+      const at = coming === "local" ? director.upcoming : director.upcomingMiddle;
+      if (aheadS >= AHEAD_EVERY_S && coming !== "map" && at !== null) {
         aheadS = 0;
-        const localTile = TILES.local;
-        landscape.prefetch("local", sight(upcoming, WIDTH / localTile, HEIGHT / localTile));
+        const tile = TILES[coming];
+        landscape.prefetch(coming, sight(at, WIDTH / tile, HEIGHT / tile));
       }
     }
     PROBE.enter("landscape");
