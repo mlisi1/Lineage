@@ -387,7 +387,8 @@ export class Landscape {
    * `after`: the view after the next one, behind the next one's ground.
    */
   prefetch(view: ViewName, cells: CellRect, after = false): void {
-    if (this.land === null || view === "map" || this.behind(view)) return;
+    // As the island's painting ahead does: only while the frames come on time.
+    if (this.land === null || view === "map" || this.behind(view) || !this.framesOnTime) return;
     const ground = view === "middle" ? this.built.middle?.ground : this.built.local?.ground;
     ground?.prefetch(cells, after);
   }

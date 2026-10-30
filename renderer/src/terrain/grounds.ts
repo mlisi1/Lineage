@@ -294,6 +294,8 @@ export class PieceGround extends Layers {
   private stamp = "";
   /** Pieces asked for ahead of the camera (`prefetch`), for the stamp they were asked for. */
   private readonly prefetched = new Set<number>();
+  /** Whether a piece asked for ahead (`prefetch`) is being painted. */
+  private prefetching = false;
   private prefetchedFor = "";
   /**
    * Pieces come and waiting to be put on the screen, a few a frame (`PLACED_PER_FRAME`),
@@ -406,32 +408,48 @@ export class PieceGround extends Layers {
       this.prefetchedFor = stamp;
       this.prefetched.clear();
     }
+    // One piece at a time, the nearest the view's middle first (R5, the board: asked all at
+    // once they kept both painters busy, and the frames late, while another view was shown).
+    if (this.prefetching) return;
     const centre = { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 };
-    for (const key of this.keys(view, this.cut.ahead === Infinity ? 0 : this.cut.ahead)) {
-      if (this.prefetched.has(key)) continue;
-      const shown = this.pieces.get(key);
-      if (shown !== undefined && [shown.asked, shown.painted].includes(this.landVersion)) continue;
-      this.prefetched.add(key);
-      const { cells, padded } = this.extent(key);
-      const x = ((key % 1024) + 0.5) * this.cut.cells;
-      const y = (Math.floor(key / 1024) + 0.5) * this.cut.cells;
-      this.painter
-        .paint(
-          {
-            ...request,
-            tile: this.tile,
-            cells: padded,
-            shown: cells,
-            keep: { key: this.keyOf(key), stamp, ahead: true },
-          },
-          BACKGROUND + (after ? AFTER_NEXT : 0) + Math.hypot(x - centre.x, y - centre.y),
-          () => shadowsFor(shadowsOf, padded),
-        )
-        .catch((error: unknown) => {
-          if (!(error instanceof Dropped)) throw error;
-          this.prefetched.delete(key);
-        });
-    }
+    const middleOf = (key: number): { x: number; y: number } => ({
+      x: ((key % 1024) + 0.5) * this.cut.cells,
+      y: (Math.floor(key / 1024) + 0.5) * this.cut.cells,
+    });
+    const away = (key: number): number => {
+      const { x, y } = middleOf(key);
+      return Math.hypot(x - centre.x, y - centre.y);
+    };
+    const key = this.keys(view, this.cut.ahead === Infinity ? 0 : this.cut.ahead)
+      .filter((each) => {
+        if (this.prefetched.has(each)) return false;
+        const shown = this.pieces.get(each);
+        return shown === undefined || ![shown.asked, shown.painted].includes(this.landVersion);
+      })
+      .sort((a, b) => away(a) - away(b))[0];
+    if (key === undefined) return;
+    this.prefetched.add(key);
+    this.prefetching = true;
+    const { cells, padded } = this.extent(key);
+    this.painter
+      .paint(
+        {
+          ...request,
+          tile: this.tile,
+          cells: padded,
+          shown: cells,
+          keep: { key: this.keyOf(key), stamp, ahead: true },
+        },
+        BACKGROUND + (after ? AFTER_NEXT : 0) + away(key),
+        () => shadowsFor(shadowsOf, padded),
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof Dropped)) throw error;
+        this.prefetched.delete(key);
+      })
+      .finally(() => {
+        this.prefetching = false;
+      });
   }
 
   /**
