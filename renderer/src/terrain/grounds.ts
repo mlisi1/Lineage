@@ -29,6 +29,11 @@ const PIECES_KEPT = 60;
 const PIECE_MARGIN = 1;
 /** Pieces this many cells beyond the view are painted too, so that the camera finds them ready. */
 const AHEAD_CELLS = 4;
+/**
+ * Added to the priority of pieces painted ahead for the view after the next one
+ * (`PieceGround.prefetch`): after the next view's own, and after the island painted ahead.
+ */
+const AFTER_NEXT = 1e6;
 
 /**
  * Seconds `PieceGround.prepaint` rests between two pieces: the island is painted ahead
@@ -391,9 +396,10 @@ export class PieceGround extends Layers {
   /**
    * Paint the pieces `view` will need, behind everything the view on the screen asks for,
    * and keep them without showing them: where the camera goes next (R5, the showcase),
-   * so that its ground is kept and comes at once when it gets there.
+   * so that its ground is kept and comes at once when it gets there. `after`: for the view
+   * after the next one, behind the next one's pieces.
    */
-  prefetch(view: CellRect): void {
+  prefetch(view: CellRect, after = false): void {
     const { stamp, request, shadowsOf } = this;
     if (stamp === "" || request === null || shadowsOf === null) return;
     if (this.prefetchedFor !== stamp) {
@@ -418,7 +424,7 @@ export class PieceGround extends Layers {
             shown: cells,
             keep: { key: this.keyOf(key), stamp, ahead: true },
           },
-          BACKGROUND + Math.hypot(x - centre.x, y - centre.y),
+          BACKGROUND + (after ? AFTER_NEXT : 0) + Math.hypot(x - centre.x, y - centre.y),
           () => shadowsFor(shadowsOf, padded),
         )
         .catch((error: unknown) => {

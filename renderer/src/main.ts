@@ -738,18 +738,22 @@ async function start(): Promise<void> {
     const cells = sight(shot.centre, WIDTH / tile, HEIGHT / tile);
     // Ahead of the view button (R5, the optimization plan): the views not shown are laid
     // out in the background (their plants drawn in a worker), and every so often the
-    // ground the next view will open on (where the middle view will come down, round the
-    // animal the local view will follow) is painted and kept, so that it comes painted.
+    // ground the next views will open on (where the middle view will come down, round the
+    // animal the local view will follow) is painted and kept, so that they come painted.
     if (director.looksAhead) {
       landscape.prepareAhead();
       aheadS += deltaMS / 1000;
-      // Only the view the button leads to next: the others' pieces would hold it up.
-      const coming = NEXT[shot.view];
-      const at = coming === "local" ? director.upcoming : director.upcomingMiddle;
-      if (aheadS >= AHEAD_EVERY_S && coming !== "map" && at !== null) {
+      // The view the button leads to next, and the one after it behind it (on the map,
+      // the middle view's place, then the local view's animal).
+      if (aheadS >= AHEAD_EVERY_S) {
         aheadS = 0;
-        const tile = TILES[coming];
-        landscape.prefetch(coming, sight(at, WIDTH / tile, HEIGHT / tile));
+        const coming = NEXT[shot.view];
+        for (const view of [coming, NEXT[coming]]) {
+          const at = view === "local" ? director.upcoming : director.upcomingMiddle;
+          if (view === "map" || at === null) continue;
+          const tile = TILES[view];
+          landscape.prefetch(view, sight(at, WIDTH / tile, HEIGHT / tile), view !== coming);
+        }
       }
     }
     PROBE.enter("landscape");
