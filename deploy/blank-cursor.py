@@ -3,10 +3,12 @@
 
 The kiosk's compositor (cage) draws the pointer itself until the page under it says
 otherwise, and the page says so only once the pointer has moved over it; cage has no
-option to hide it. A theme of see-through cursors, chosen in the kiosk's units
-(``Environment=XCURSOR_THEME=lineage-blank`` and ``XCURSOR_PATH``), hides it from the start.
+option to hide it, and it loads the theme named ``default`` (not ``XCURSOR_THEME``) from
+the folders in ``XCURSOR_PATH``. This writes a theme of see-through cursors under both
+names into a folder of its own, which the kiosk's units put in ``XCURSOR_PATH``, so that
+the pointer is hidden from the start and nothing else on the machine is touched.
 
-    python3 blank-cursor.py            # writes ~/.local/share/icons/lineage-blank
+    python3 blank-cursor.py   # ~/.local/share/lineage-cursors/{default,lineage-blank}
 
 Standard library only: run on the board as the kiosk's user.
 """
@@ -61,23 +63,24 @@ def cursor_file() -> bytes:
     return out
 
 
-def write_theme(root: Path) -> Path:
-    theme = root / THEME
+def write_theme(root: Path, name: str = THEME) -> Path:
+    theme = root / name
     cursors = theme / "cursors"
     cursors.mkdir(parents=True, exist_ok=True)
     data = cursor_file()
-    for name in NAMES:
-        (cursors / name).write_bytes(data)
+    for cursor in NAMES:
+        (cursors / cursor).write_bytes(data)
     (theme / "index.theme").write_text(
-        f"[Icon Theme]\nName={THEME}\nComment=Every cursor see-through (the Lineage kiosk)\n",
+        f"[Icon Theme]\nName={name}\nComment=Every cursor see-through (the Lineage kiosk)\n",
         encoding="utf-8",
     )
     return theme
 
 
 def main(argv: list[str]) -> int:
-    root = Path(argv[1]) if len(argv) > 1 else Path.home() / ".local/share/icons"
-    print(f"wrote {write_theme(root)}")
+    root = Path(argv[1]) if len(argv) > 1 else Path.home() / ".local/share/lineage-cursors"
+    for name in (THEME, "default"):
+        print(f"wrote {write_theme(root, name)}")
     return 0
 
 
