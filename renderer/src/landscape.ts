@@ -531,11 +531,11 @@ export class Landscape {
     const stamp = this.stampOf();
     if (name === "map") {
       if (this.built.map === null) {
-        this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS);
+        this.built.map = new WholeGround(this.painter, TILES.map, this.fadeS, this.cache);
         const { container, surf } = this.built.map;
         this.layers.map.addChild(container, ...[...surf].reverse(), this.seas.map.glints);
       }
-      void this.built.map.repaint(request, 5);
+      void this.built.map.repaint(request, 5, stamp);
       return;
     }
     performance.mark(`lineage:plants:${name}`);

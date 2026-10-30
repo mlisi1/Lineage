@@ -198,6 +198,7 @@ export class WholeGround extends Layers {
     private readonly painter: Painter,
     readonly tile: number,
     private readonly fadeS = FADE_S,
+    private readonly cache: GroundCache = NO_CACHE,
   ) {
     super();
   }
@@ -207,14 +208,36 @@ export class WholeGround extends Layers {
     return this.current !== null && this.fade === null && this.waiting === 0;
   }
 
-  /** Paint `request` (at this ground's tile, the whole world) and fade it in when it comes. */
-  async repaint(request: Omit<PaintRequest, "tile" | "cells">, priority = 10): Promise<void> {
+  /**
+   * Paint `request` (at this ground's tile, the whole world) and fade it in when it comes;
+   * kept for `stamp` ("" keeps none), as the pieces are (R5, the optimization plan: the
+   * map was painted afresh at every start). With nothing on the screen yet, the latest kept
+   * of any stamp is shown if this one has not come after `PLACEHOLDER_AFTER_S`.
+   */
+  async repaint(
+    request: Omit<PaintRequest, "tile" | "cells">,
+    priority = 10,
+    stamp = "",
+  ): Promise<void> {
     const mine = ++this.asked;
     // A painting asked for before and not yet started is not wanted any more.
     this.painter.drop((queued) => queued.tile === this.tile && queued.cells === undefined);
     this.waiting += 1;
+    const key = `map/${this.tile}`;
+    if (this.current === null && stamp !== "") {
+      setTimeout(() => {
+        if (mine !== this.asked || this.current !== null) return;
+        void this.cache.latest(key).then((older) => {
+          if (older === undefined || mine !== this.asked || this.current !== null) return;
+          this.current = show(older.pixels, this.tile, this.layers, { x: 0, y: 0 });
+        });
+      }, PLACEHOLDER_AFTER_S * 1000);
+    }
     try {
-      const { pixels } = await this.painter.paint({ ...request, tile: this.tile }, priority);
+      const { pixels } = await this.painter.paint(
+        { ...request, tile: this.tile, ...(stamp === "" ? {} : { keep: { key, stamp } }) },
+        priority,
+      );
       if (mine !== this.asked) return;
       const painting = show(pixels, this.tile, this.layers, { x: 0, y: 0 });
       this.fade?.finish();
