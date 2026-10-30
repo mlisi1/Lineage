@@ -581,6 +581,18 @@ the dip let the scene before it show through.
   Left as it is (the owner, satisfied with the performance): a few long frames (0.45–0.7
   s) on the map while the hidden views are made in the background; what could be done
   later is in `docs/renderer-optimization-plan.md`, "For later".
+- **The pieces painted ahead held back.** The first full run of this build had 10–11 % of
+  the map's and the middle view's frames late: the next views' ground was asked for all at
+  once. It is now painted one piece at a time, while frames come on time and the view
+  shown has nothing of its own waiting (map 3.4 %, middle 3.0–4.8 % after).
+- **The last run** (`reports/R5-device/`, build 7d9c34c, a fresh browser profile): the four
+  judged views hold the cap (29.9 fps); R5.2 5.1 % in the local view against its 5 %
+  band (FAIL by a tenth); Chromium's peak 735 MB (R5.3, ≤ 800). The local scenario follows
+  whichever animal the camera chose, now chosen ahead: with 4 animals in sight it had
+  2.2–5.1 % of frames late over the day's runs, with 13–18 in sight 6.2–6.6 %. The owner
+  (2026-10-30): "the performances are fine as it is now, so you can close R5". R5.2 is
+  accepted as measured; pinning the local scenario to fixed animals, as `middle-crowd`
+  is, is the step for a later device milestone (S7).
 
 ## Consequences
 

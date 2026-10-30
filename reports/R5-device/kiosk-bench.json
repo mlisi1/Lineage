@@ -1,7 +1,7 @@
 {
  "tool": "lineage-kiosk-bench",
  "version": 1,
- "started_at": "2026-10-27T14:32:30+00:00",
+ "started_at": "2026-10-30T12:53:50+00:00",
  "host": {
   "hostname": "orangepizero2w",
   "model": "OrangePi Zero 2W",
@@ -22,7 +22,7 @@
  "settings": {
   "seconds": 20.0,
   "warmup": 2.0,
-  "only": null,
+  "only": "map,middle,middle-crowd,local,night,rain,fire,apocalypse,shore,day-turn,switches",
   "fps_cap": 30.0,
   "window": [
    1024,
@@ -52,23 +52,23 @@
     "--disable-backgrounding-occluded-windows",
     "--enable-precise-memory-info",
     "--ozone-platform-hint=auto",
-    "--user-data-dir=/tmp/lineage-kiosk-r7jqfvzx",
+    "--user-data-dir=/tmp/lineage-kiosk-6b1w4yhv",
     "--window-size=1024,600",
     "--kiosk",
     "--window-position=0,0"
    ],
-   "url": "http://127.0.0.1:8137/index.html?bench=1&seconds=20&warmup=2&post=%2Fresults&label=default&cap=30",
+   "url": "http://127.0.0.1:8137/index.html?bench=1&seconds=20&warmup=2&post=%2Fresults&label=default&only=map%2Cmiddle%2Cmiddle-crowd%2Clocal%2Cnight%2Crain%2Cfire%2Capocalypse%2Cshore%2Cday-turn%2Cswitches&cap=30",
    "status": "ok",
    "detail": "",
-   "duration_s": 413.0,
+   "duration_s": 347.5,
    "results": {
     "tool": "lineage-renderer-bench",
     "version": 1,
     "page": "scene",
-    "build_commit": "8e70f55cc882",
+    "build_commit": "7d9c34cdced5",
     "build_mode": "kiosk",
     "label": "default",
-    "started_at": "2026-10-27T14:32:34.486Z",
+    "started_at": "2026-10-30T12:53:54.923Z",
     "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
     "hardware_concurrency": 4,
     "device_memory_gb": 2,
@@ -110,8 +110,8 @@
     },
     "plan": {
      "crowd": {
-      "x": 176,
-      "y": 43
+      "x": 184,
+      "y": 46
      },
      "fuel": {
       "x": 171,
@@ -4133,166 +4133,6 @@
         0.888227
        ],
        "slots": 0
-      },
-      {
-       "id": 2294,
-       "genome": [
-        0.382053,
-        0.129133,
-        0.382889,
-        0.305557,
-        0.240732,
-        0.83954,
-        0.276206,
-        0.314439,
-        0.751799,
-        1,
-        0.119542,
-        0.829819,
-        0.210187,
-        0.907037
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2295,
-       "genome": [
-        0.309449,
-        0.121945,
-        0.380951,
-        0.202021,
-        0.244423,
-        0.783734,
-        0.174773,
-        0.259233,
-        0.778621,
-        0.972688,
-        0.130134,
-        0.819453,
-        0.239348,
-        0.872824
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2296,
-       "genome": [
-        0.341925,
-        0.096025,
-        0.407176,
-        0.304708,
-        0.294346,
-        0.836174,
-        0.177625,
-        0.280464,
-        0.755657,
-        0.984609,
-        0.102267,
-        0.866863,
-        0.205424,
-        0.900779
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2297,
-       "genome": [
-        0.400194,
-        0.148878,
-        0.414208,
-        0.226616,
-        0.316664,
-        0.698199,
-        0.14955,
-        0.212062,
-        0.858006,
-        0.938807,
-        0.207781,
-        0.924008,
-        0.170358,
-        0.944385
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2298,
-       "genome": [
-        0.385623,
-        0.080648,
-        0.439605,
-        0.219567,
-        0.271297,
-        0.682838,
-        0.196486,
-        0.205379,
-        0.920338,
-        0.968968,
-        0.196501,
-        0.914523,
-        0.188797,
-        0.964405
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2299,
-       "genome": [
-        0.3919,
-        0.195387,
-        0.373365,
-        0.300189,
-        0.252193,
-        0.752703,
-        0.130957,
-        0.18516,
-        0.876321,
-        0.958701,
-        0.134139,
-        0.879274,
-        0.196457,
-        0.917091
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2300,
-       "genome": [
-        0.410964,
-        0.152383,
-        0.426341,
-        0.241677,
-        0.353831,
-        0.728578,
-        0.209954,
-        0.213841,
-        0.956833,
-        0.996215,
-        0.219065,
-        0.89268,
-        0.177687,
-        0.918396
-       ],
-       "slots": 0
-      },
-      {
-       "id": 2301,
-       "genome": [
-        0.29751,
-        0.117063,
-        0.425743,
-        0.254766,
-        0.211704,
-        0.810985,
-        0.20874,
-        0.151051,
-        0.993664,
-        0.99126,
-        0.285183,
-        0.8824,
-        0.145574,
-        0.881463
-       ],
-       "slots": 0
       }
      ]
     },
@@ -4309,33 +4149,186 @@
       "show": "",
       "pinned": false,
       "presses": 0,
-      "creatures": 200,
-      "animals_in_sight": 200,
+      "creatures": 193,
+      "animals_in_sight": 193,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 8,
-      "creature_sprites": 400,
-      "sprites": 411,
+      "plant_sprites": 9,
+      "creature_sprites": 386,
+      "sprites": 398,
       "draws_median": 8,
       "draws_max": 8,
-      "textures": 6,
-      "frames": 581,
-      "duration_s": 20.016,
-      "fps_mean": 29.02677857713829,
+      "textures": 7,
+      "frames": 560,
+      "duration_s": 20.015999999999995,
+      "fps_mean": 27.977617905675466,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 7.483162883512138,
+      "fps_1pct_low": 5.057742560903653,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 43.580000000002556,
-      "frame_ms_max": 233.89999999999964,
+      "frame_ms_p99": 90.40600000000106,
+      "frame_ms_max": 434.3999999999978,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 1.0327022375215147,
-      "headroom_ms_median": 26.73333333184322,
-      "headroom_ms_p99": 16.55333333437633,
-      "js_ms_median": 6.600000001490116,
-      "js_ms_p99": 16.779999998957006,
-      "js_heap_mb": 39.35230255126953,
+      "over_budget_pct": 3.392857142857143,
+      "headroom_ms_median": 25.633333334078394,
+      "headroom_ms_p99": 13.264333332826723,
+      "js_ms_median": 7.699999999254942,
+      "js_ms_p99": 20.069000000506612,
+      "js_heap_mb": 49.73361778259277,
+      "ground_made": {
+       "gpu": 9,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 9,
+       "median": {
+        "total": 527.6,
+        "gpu_upload": 44.4,
+        "gpu_draw": 144.5,
+        "gpu_unpack": 21,
+        "cpu": 362.1,
+        "queue": 28.8,
+        "run": 531.5
+       },
+       "max": {
+        "total": 3965,
+        "gpu_upload": 230.1,
+        "gpu_draw": 558.4,
+        "gpu_unpack": 46.9,
+        "cpu": 3702.3,
+        "queue": 724.3,
+        "run": 4162.5
+       },
+       "compile_ms": [
+        2710.7,
+        218.8
+       ],
+       "steps_median": {
+        "burnt": 0.1,
+        "colour": 265.5,
+        "detail": 0.1,
+        "lip": 0,
+        "setup": 30.5,
+        "shadows": 12.3,
+        "shore": 106.4,
+        "shore data": 39,
+        "cache read": 0.1,
+        "cache write": 1.9
+       }
+      },
+      "boot": {
+       "script": 588.9000000003725,
+       "land": 1714,
+       "laidOut": 1968.1000000014901,
+       "painted": 6055.700000001118
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.5,
+        "landscape": 0.2,
+        "herd": 3,
+        "atmosphere": 0.5,
+        "overlays": 0.1,
+        "render": 2.9
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 1.3,
+        "landscape": 1,
+        "herd": 8.6,
+        "atmosphere": 1.4,
+        "overlays": 0.3,
+        "render": 7.6
+       },
+       "late_by_phase": {
+        "messages": 4,
+        "outside": 15
+       },
+       "late_notes": {
+        "clock": 5,
+        "creatures": 5,
+        "shadows": 1
+       },
+       "worst": [
+        {
+         "frame_ms": 434.4,
+         "phases": {
+          "messages": 134.4,
+          "director": 0.6,
+          "landscape": 0.2,
+          "herd": 8.2,
+          "atmosphere": 0.7,
+          "overlays": 0.1,
+          "render": 7.5
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        },
+        {
+         "frame_ms": 233.9,
+         "phases": {
+          "messages": 128.3,
+          "director": 0.6,
+          "landscape": 0.3,
+          "herd": 14.6,
+          "atmosphere": 0.9,
+          "overlays": 0.2,
+          "render": 6.9
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        },
+        {
+         "frame_ms": 167,
+         "phases": {
+          "messages": 0,
+          "director": 0.6,
+          "landscape": 0.3,
+          "herd": 3.9,
+          "atmosphere": 0.5,
+          "overlays": 0.1,
+          "render": 3.5
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 150.5,
+         "phases": {
+          "messages": 0,
+          "director": 2.2,
+          "landscape": 0.4,
+          "herd": 5.1,
+          "atmosphere": 1.2,
+          "overlays": 0.2,
+          "render": 4.4
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 94.8,
+          "director": 0.6,
+          "landscape": 0.2,
+          "herd": 5.2,
+          "atmosphere": 0.5,
+          "overlays": 0.1,
+          "render": 8.9
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4353,11 +4346,11 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 6.2795,
+      "ready_s": 6.222,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111563625,
-      "ended_epoch_ms": 1793111583637,
+      "started_epoch_ms": 1793364844029,
+      "ended_epoch_ms": 1793364864041,
       "stalled": false
      },
      {
@@ -4372,33 +4365,184 @@
       "show": "",
       "pinned": false,
       "presses": 1,
-      "creatures": 199,
+      "creatures": 193,
       "animals_in_sight": 19,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 1345,
-      "creature_sprites": 3,
-      "sprites": 1353,
+      "plant_sprites": 1269,
+      "creature_sprites": 1,
+      "sprites": 1281,
       "draws_median": 23,
-      "draws_max": 26,
-      "textures": 89,
-      "frames": 572,
-      "duration_s": 19.865699999999997,
-      "fps_mean": 28.793347327302843,
+      "draws_max": 24,
+      "textures": 72,
+      "frames": 564,
+      "duration_s": 19.9994,
+      "fps_mean": 28.20084602538076,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 7.806401249024141,
+      "fps_1pct_low": 5.700171005130182,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 105.04299999999775,
-      "frame_ms_max": 150.40000000000146,
+      "frame_ms_p99": 73.07900000000045,
+      "frame_ms_max": 467.90000000000146,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 2.097902097902098,
-      "headroom_ms_median": 22.433333334823452,
-      "headroom_ms_p99": -3.6396666660406822,
-      "js_ms_median": 10.899999998509884,
-      "js_ms_p99": 36.97299999937402,
-      "js_heap_mb": 46.85960865020752,
+      "over_budget_pct": 3.368794326241135,
+      "headroom_ms_median": 21.633333334078394,
+      "headroom_ms_p99": -6.76166666623827,
+      "js_ms_median": 11.699999999254942,
+      "js_ms_p99": 40.094999999571606,
+      "js_heap_mb": 68.69604110717773,
+      "ground_made": {
+       "gpu": 25,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 25,
+       "median": {
+        "total": 398.3,
+        "gpu_upload": 8.7,
+        "gpu_draw": 185.2,
+        "gpu_unpack": 7.6,
+        "cpu": 178.8,
+        "queue": 2510.5,
+        "run": 441.7
+       },
+       "max": {
+        "total": 1241.6,
+        "gpu_upload": 226.4,
+        "gpu_draw": 324.3,
+        "gpu_unpack": 64.2,
+        "cpu": 874.5,
+        "queue": 5800.2,
+        "run": 1329
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 0.1,
+        "colour": 232.1,
+        "detail": 0,
+        "lip": 0,
+        "setup": 15.9,
+        "shadows": 11.5,
+        "shore": 54.3,
+        "shore data": 31.8,
+        "cache read": 0.1,
+        "cache write": 2
+       }
+      },
+      "boot": {
+       "script": 478.69999999925494,
+       "land": 1181.5,
+       "laidOut": 1390.4000000003725,
+       "painted": 2660.699999999255
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.6,
+        "landscape": 1.3,
+        "herd": 4,
+        "atmosphere": 0.7,
+        "overlays": 0.1,
+        "render": 4.7
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 4.8,
+        "landscape": 7.7,
+        "herd": 18.6,
+        "atmosphere": 2.8,
+        "overlays": 0.2,
+        "render": 15.4
+       },
+       "late_by_phase": {
+        "messages": 2,
+        "outside": 12,
+        "render": 4,
+        "herd": 1
+       },
+       "late_notes": {
+        "clock": 2,
+        "creatures": 2,
+        "plants-built": 1,
+        "ground-piece": 3,
+        "shadows": 1
+       },
+       "worst": [
+        {
+         "frame_ms": 467.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 1.6,
+          "herd": 10.4,
+          "atmosphere": 1.3,
+          "overlays": 0.1,
+          "render": 5.6
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 167.1,
+         "phases": {
+          "messages": 0,
+          "director": 0.6,
+          "landscape": 7.6,
+          "herd": 11.9,
+          "atmosphere": 6.7,
+          "overlays": 0.1,
+          "render": 11.8
+         },
+         "notes": {
+          "shadows": 1,
+          "ground-piece": 1
+         }
+        },
+        {
+         "frame_ms": 133.6,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 7.4,
+          "herd": 16.1,
+          "atmosphere": 0.7,
+          "overlays": 0.2,
+          "render": 5.7
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 73.7,
+          "director": 0.6,
+          "landscape": 1.4,
+          "herd": 18.6,
+          "atmosphere": 0.6,
+          "overlays": 0.1,
+          "render": 7.7
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        },
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.6,
+          "landscape": 1.9,
+          "herd": 4.2,
+          "atmosphere": 1.6,
+          "overlays": 0.1,
+          "render": 7
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4416,11 +4560,11 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 27.626399999998508,
+      "ready_s": 9.926800000000744,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111613552,
-      "ended_epoch_ms": 1793111633300,
+      "started_epoch_ms": 1793364876042,
+      "ended_epoch_ms": 1793364896041,
       "stalled": false
      },
      {
@@ -4435,33 +4579,179 @@
       "show": "",
       "pinned": true,
       "presses": 0,
-      "creatures": 200,
-      "animals_in_sight": 72,
+      "creatures": 193,
+      "animals_in_sight": 69,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 4072,
-      "creature_sprites": 8,
-      "sprites": 4092,
-      "draws_median": 24,
-      "draws_max": 36,
-      "textures": 72,
-      "frames": 560,
-      "duration_s": 19.982599999999998,
-      "fps_mean": 28.02438121165414,
+      "plant_sprites": 3963,
+      "creature_sprites": 4,
+      "sprites": 3976,
+      "draws_median": 23,
+      "draws_max": 24,
+      "textures": 71,
+      "frames": 577,
+      "duration_s": 20.01599999999999,
+      "fps_mean": 28.826938449240618,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 5.886970172684434,
+      "fps_1pct_low": 9.20951650038373,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 83.54100000000089,
-      "frame_ms_max": 250.59999999999854,
+      "frame_ms_p99": 83.5,
+      "frame_ms_max": 150.29999999999927,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 4.642857142857143,
-      "headroom_ms_median": 10.73333333184322,
-      "headroom_ms_p99": -29.78066666829072,
-      "js_ms_median": 22.600000001490116,
-      "js_ms_p99": 63.114000001624056,
-      "js_heap_mb": 49.534292221069336,
+      "over_budget_pct": 3.292894280762565,
+      "headroom_ms_median": 11.733333333705865,
+      "headroom_ms_p99": -8.506666666666696,
+      "js_ms_median": 21.59999999962747,
+      "js_ms_p99": 41.84000000000003,
+      "js_heap_mb": 67.57858371734619,
+      "ground_made": {
+       "gpu": 8,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 8,
+       "median": {
+        "total": 421.6,
+        "gpu_upload": 14.3,
+        "gpu_draw": 164.5,
+        "gpu_unpack": 11.5,
+        "cpu": 232.4,
+        "queue": 4205,
+        "run": 505.6
+       },
+       "max": {
+        "total": 929.1,
+        "gpu_upload": 208.3,
+        "gpu_draw": 175,
+        "gpu_unpack": 51,
+        "cpu": 697.3,
+        "queue": 5726.4,
+        "run": 989.2
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 0.6,
+        "colour": 192.1,
+        "detail": 0,
+        "lip": 0,
+        "setup": 44.5,
+        "shadows": 0.3,
+        "shore": 101,
+        "shore data": 69.4,
+        "cache read": 0.1,
+        "cache write": 2.2
+       }
+      },
+      "boot": {
+       "script": 474.90000000037253,
+       "land": 1189.199999999255,
+       "laidOut": 2295.2999999988824,
+       "painted": 8658.699999999255
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 1.4,
+        "herd": 9.3,
+        "atmosphere": 0.7,
+        "overlays": 0.1,
+        "render": 9.6
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 0.3,
+        "landscape": 3.5,
+        "herd": 20.7,
+        "atmosphere": 1.5,
+        "overlays": 0.2,
+        "render": 20.9
+       },
+       "late_by_phase": {
+        "messages": 2,
+        "herd": 5,
+        "outside": 11,
+        "render": 1
+       },
+       "late_notes": {
+        "clock": 2,
+        "creatures": 2,
+        "shadows": 2
+       },
+       "worst": [
+        {
+         "frame_ms": 150.3,
+         "phases": {
+          "messages": 114.5,
+          "director": 0.2,
+          "landscape": 1.4,
+          "herd": 54.2,
+          "atmosphere": 0.8,
+          "overlays": 0.1,
+          "render": 30.9
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        },
+        {
+         "frame_ms": 116.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 1.6,
+          "herd": 19.5,
+          "atmosphere": 0.8,
+          "overlays": 0.5,
+          "render": 11.4
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 1.4,
+          "herd": 10.4,
+          "atmosphere": 0.8,
+          "overlays": 0.1,
+          "render": 10.8
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1.6,
+          "herd": 16.4,
+          "atmosphere": 1.1,
+          "overlays": 0.1,
+          "render": 14.8
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 0,
+          "landscape": 1.3,
+          "herd": 18.1,
+          "atmosphere": 0.6,
+          "overlays": 0.1,
+          "render": 13.2
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4479,11 +4769,11 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 10.81379999999702,
+      "ready_s": 8.712299999998882,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111646172,
-      "ended_epoch_ms": 1793111666158,
+      "started_epoch_ms": 1793364906797,
+      "ended_epoch_ms": 1793364926816,
       "stalled": false
      },
      {
@@ -4498,33 +4788,180 @@
       "show": "",
       "pinned": false,
       "presses": 2,
-      "creatures": 199,
-      "animals_in_sight": 3,
+      "creatures": 193,
+      "animals_in_sight": 4,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 1209,
-      "creature_sprites": 1,
-      "sprites": 1219,
-      "draws_median": 14,
-      "draws_max": 18,
-      "textures": 138,
-      "frames": 587,
-      "duration_s": 20.032700000000006,
-      "fps_mean": 29.302091081082423,
+      "plant_sprites": 1249,
+      "creature_sprites": 0,
+      "sprites": 1258,
+      "draws_median": 13,
+      "draws_max": 15,
+      "textures": 88,
+      "frames": 568,
+      "duration_s": 20.015999999999984,
+      "fps_mean": 28.377298161470843,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 9.70559689420904,
+      "fps_1pct_low": 9.208103130755136,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 40.513999999999115,
-      "frame_ms_max": 133.6999999999971,
+      "frame_ms_p99": 83.5,
+      "frame_ms_max": 183.79999999999927,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 1.0221465076660987,
-      "headroom_ms_median": 22.73333333184322,
-      "headroom_ms_p99": 5.821333334719153,
-      "js_ms_median": 10.600000001490116,
-      "js_ms_p99": 27.511999998614183,
-      "js_heap_mb": 57.006818771362305,
+      "over_budget_pct": 5.105633802816901,
+      "headroom_ms_median": 22.433333332960807,
+      "headroom_ms_p99": -23.998666666044556,
+      "js_ms_median": 10.900000000372529,
+      "js_ms_p99": 57.33199999937789,
+      "js_heap_mb": 79.24919319152832,
+      "ground_made": {
+       "gpu": 14,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 14,
+       "median": {
+        "total": 626.9,
+        "gpu_upload": 4.3,
+        "gpu_draw": 147.3,
+        "gpu_unpack": 15.6,
+        "cpu": 362.6,
+        "queue": 33.2,
+        "run": 654.1
+       },
+       "max": {
+        "total": 1210.2,
+        "gpu_upload": 111.9,
+        "gpu_draw": 244.6,
+        "gpu_unpack": 48.8,
+        "cpu": 955.7,
+        "queue": 3187.5,
+        "run": 1666
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 0.2,
+        "colour": 227.9,
+        "detail": 36.4,
+        "lip": 19.5,
+        "setup": 25.7,
+        "shadows": 15.9,
+        "shore": 92.2,
+        "shore data": 43.2,
+        "cache read": 0.1,
+        "cache write": 2.7
+       }
+      },
+      "boot": {
+       "script": 517.7999999988824,
+       "land": 1217.7999999988824,
+       "laidOut": 1526.3999999985099,
+       "painted": 2640.5999999996275
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.7,
+        "landscape": 1.7,
+        "herd": 3.4,
+        "atmosphere": 0.7,
+        "overlays": 0.4,
+        "render": 3.7
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 5.3,
+        "landscape": 23,
+        "herd": 19.5,
+        "atmosphere": 6.3,
+        "overlays": 2.6,
+        "render": 15.5
+       },
+       "late_by_phase": {
+        "outside": 14,
+        "herd": 4,
+        "render": 3,
+        "landscape": 7,
+        "atmosphere": 1
+       },
+       "late_notes": {
+        "ground-piece": 3,
+        "shadows": 2
+       },
+       "worst": [
+        {
+         "frame_ms": 183.8,
+         "phases": {
+          "messages": 0,
+          "director": 0.8,
+          "landscape": 13.4,
+          "herd": 14.7,
+          "atmosphere": 6.7,
+          "overlays": 0.5,
+          "render": 8.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 15.8,
+          "herd": 10.4,
+          "atmosphere": 1.4,
+          "overlays": 0.7,
+          "render": 16.1
+         },
+         "notes": {
+          "ground-piece": 1
+         }
+        },
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 8.3,
+          "herd": 8.1,
+          "atmosphere": 1.1,
+          "overlays": 0.7,
+          "render": 8.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.9,
+          "landscape": 1.9,
+          "herd": 5,
+          "atmosphere": 1,
+          "overlays": 0.5,
+          "render": 4.3
+         },
+         "notes": {
+          "shadows": 1
+         }
+        },
+        {
+         "frame_ms": 83.6,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 2.1,
+          "herd": 10,
+          "atmosphere": 1.2,
+          "overlays": 0.6,
+          "render": 14
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4542,11 +4979,11 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 35.73270000000298,
+      "ready_s": 10.668,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111703931,
-      "ended_epoch_ms": 1793111723955,
+      "started_epoch_ms": 1793364939532,
+      "ended_epoch_ms": 1793364959550,
       "stalled": false
      },
      {
@@ -4561,33 +4998,140 @@
       "show": "night",
       "pinned": true,
       "presses": 0,
-      "creatures": 200,
-      "animals_in_sight": 74,
+      "creatures": 193,
+      "animals_in_sight": 69,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 4330,
-      "creature_sprites": 4,
-      "sprites": 4480,
+      "plant_sprites": 4099,
+      "creature_sprites": 3,
+      "sprites": 4252,
       "draws_median": 23,
-      "draws_max": 36,
-      "textures": 73,
-      "frames": 554,
-      "duration_s": 20.01609999999998,
-      "fps_mean": 27.677719435854165,
+      "draws_max": 24,
+      "textures": 70,
+      "frames": 572,
+      "duration_s": 20.04939999999999,
+      "fps_mean": 28.529532055822134,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 5.280760429501845,
+      "fps_1pct_low": 9.20527769254371,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 83.5,
-      "frame_ms_max": 250.70000000000073,
+      "frame_ms_p99": 88.27200000000063,
+      "frame_ms_max": 133.70000000000073,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 5.956678700361011,
-      "headroom_ms_median": 8.183333334823452,
-      "headroom_ms_p99": -34.70066666631654,
-      "js_ms_median": 25.149999998509884,
-      "js_ms_p99": 68.03399999964988,
-      "js_heap_mb": 52.967098236083984,
+      "over_budget_pct": 5.244755244755245,
+      "headroom_ms_median": 9.483333333705865,
+      "headroom_ms_p99": -16.611666667411704,
+      "js_ms_median": 23.84999999962747,
+      "js_ms_p99": 49.94500000074504,
+      "js_heap_mb": 69.96075630187988,
+      "ground_made": {
+       "gpu": 0,
+       "cpu": 0
+      },
+      "ground_timing": null,
+      "boot": {
+       "script": 531.2000000011176,
+       "land": 1393.9000000003725,
+       "laidOut": 2769.2000000011176,
+       "painted": 8337.60000000149
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 1.3,
+        "herd": 9.5,
+        "atmosphere": 1.5,
+        "overlays": 0.1,
+        "render": 10.5
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 0.3,
+        "landscape": 7,
+        "herd": 29.6,
+        "atmosphere": 3.2,
+        "overlays": 0.3,
+        "render": 21.8
+       },
+       "late_by_phase": {
+        "herd": 15,
+        "outside": 7,
+        "render": 8
+       },
+       "late_notes": {
+        "shadows": 1
+       },
+       "worst": [
+        {
+         "frame_ms": 133.7,
+         "phases": {
+          "messages": 0,
+          "director": 0,
+          "landscape": 3.2,
+          "herd": 10.4,
+          "atmosphere": 2.4,
+          "overlays": 0.1,
+          "render": 10.6
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 117,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1.4,
+          "herd": 12.3,
+          "atmosphere": 1.9,
+          "overlays": 0.1,
+          "render": 12
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1.5,
+          "herd": 12.8,
+          "atmosphere": 2,
+          "overlays": 0.1,
+          "render": 14.2
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 1.4,
+          "herd": 13.1,
+          "atmosphere": 2.1,
+          "overlays": 0.1,
+          "render": 15.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0,
+          "landscape": 8.3,
+          "herd": 11.6,
+          "atmosphere": 1.6,
+          "overlays": 0.1,
+          "render": 11.7
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 0.05,
        "tint": 5071272,
@@ -4598,18 +5142,18 @@
        "graded": false,
        "snowfall": 0,
        "sown": 0,
-       "lights": 135,
+       "lights": 138,
        "ground": 0,
        "weather": 0,
        "flames": 0,
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 6.976699999999255,
+      "ready_s": 8.402200000001118,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111732985,
-      "ended_epoch_ms": 1793111752987,
+      "started_epoch_ms": 1793364970013,
+      "ended_epoch_ms": 1793364990017,
       "stalled": false
      },
      {
@@ -4624,33 +5168,143 @@
       "show": "rain",
       "pinned": true,
       "presses": 0,
-      "creatures": 200,
-      "animals_in_sight": 74,
+      "creatures": 193,
+      "animals_in_sight": 69,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 4166,
-      "creature_sprites": 34,
-      "sprites": 4430,
+      "plant_sprites": 3917,
+      "creature_sprites": 1,
+      "sprites": 4162,
       "draws_median": 24,
-      "draws_max": 37,
-      "textures": 71,
-      "frames": 545,
-      "duration_s": 20.016099999999994,
-      "fps_mean": 27.228081394477453,
+      "draws_max": 24,
+      "textures": 70,
+      "frames": 563,
+      "duration_s": 19.999299999999995,
+      "fps_mean": 28.150985284484964,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 5.611672278338969,
+      "fps_1pct_low": 7.804370447450544,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 100.29999999999927,
-      "frame_ms_max": 317.3999999999978,
+      "frame_ms_p99": 83.59999999999992,
+      "frame_ms_max": 250.59999999999854,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 6.422018348623853,
-      "headroom_ms_median": 8.333333333333336,
-      "headroom_ms_p99": -40.87866666773953,
-      "js_ms_median": 25,
-      "js_ms_p99": 74.21200000107287,
-      "js_heap_mb": 47.070481300354004,
+      "over_budget_pct": 5.683836589698046,
+      "headroom_ms_median": 10.533333332588278,
+      "headroom_ms_p99": -22.74266666709135,
+      "js_ms_median": 22.800000000745058,
+      "js_ms_p99": 56.076000000424685,
+      "js_heap_mb": 67.34497833251953,
+      "ground_made": {
+       "gpu": 0,
+       "cpu": 0
+      },
+      "ground_timing": null,
+      "boot": {
+       "script": 474.19999999925494,
+       "land": 1188.699999999255,
+       "laidOut": 2168.9000000003725,
+       "painted": 7181.799999998882
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 1.3,
+        "herd": 9.1,
+        "atmosphere": 1.4,
+        "overlays": 0.1,
+        "render": 10.1
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 0.2,
+        "landscape": 7,
+        "herd": 31.1,
+        "atmosphere": 5.1,
+        "overlays": 0.3,
+        "render": 20.5
+       },
+       "late_by_phase": {
+        "herd": 14,
+        "messages": 1,
+        "outside": 9,
+        "render": 8
+       },
+       "late_notes": {
+        "clock": 1,
+        "creatures": 1,
+        "shadows": 2
+       },
+       "worst": [
+        {
+         "frame_ms": 250.6,
+         "phases": {
+          "messages": 0,
+          "director": 0,
+          "landscape": 2.1,
+          "herd": 12.5,
+          "atmosphere": 2.3,
+          "overlays": 0.1,
+          "render": 19.7
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 133.7,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 7.1,
+          "herd": 28.1,
+          "atmosphere": 7.6,
+          "overlays": 0,
+          "render": 16.5
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 117,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 2.2,
+          "herd": 13,
+          "atmosphere": 1.4,
+          "overlays": 0.1,
+          "render": 12.8
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 6.4,
+          "herd": 13.9,
+          "atmosphere": 1.8,
+          "overlays": 0.2,
+          "render": 17.9
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 83.6,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1.4,
+          "herd": 10.6,
+          "atmosphere": 1.2,
+          "overlays": 0.1,
+          "render": 14.8
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 12764875,
@@ -4663,16 +5317,16 @@
        "sown": 0,
        "lights": 0,
        "ground": 0,
-       "weather": 206,
+       "weather": 204,
        "flames": 0,
-       "ripples": 21,
+       "ripples": 24,
        "bolts": 0
       },
-      "ready_s": 7.372,
+      "ready_s": 7.240799999998883,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111762394,
-      "ended_epoch_ms": 1793111782397,
+      "started_epoch_ms": 1793364999348,
+      "ended_epoch_ms": 1793365019313,
       "stalled": false
      },
      {
@@ -4687,33 +5341,143 @@
       "show": "",
       "pinned": true,
       "presses": 0,
-      "creatures": 200,
-      "animals_in_sight": 39,
+      "creatures": 193,
+      "animals_in_sight": 38,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 3375,
-      "creature_sprites": 6,
-      "sprites": 5239,
+      "plant_sprites": 3470,
+      "creature_sprites": 1,
+      "sprites": 5359,
       "draws_median": 26,
-      "draws_max": 30,
-      "textures": 115,
-      "frames": 390,
-      "duration_s": 19.999300000000012,
-      "fps_mean": 19.500682523888322,
-      "fps_median": 19.960079840319217,
-      "fps_1pct_low": 4.275788348476734,
-      "frame_ms_median": 50.100000000000364,
-      "frame_ms_p99": 168.8370000000003,
-      "frame_ms_max": 267.2999999999993,
+      "draws_max": 27,
+      "textures": 104,
+      "frames": 452,
+      "duration_s": 19.99930000000001,
+      "fps_mean": 22.600791027685958,
+      "fps_median": 29.850746268656717,
+      "fps_1pct_low": 5.344164172723394,
+      "frame_ms_median": 33.5,
+      "frame_ms_p99": 133.64900000000148,
+      "frame_ms_max": 217.1999999999989,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 84.61538461538461,
-      "headroom_ms_median": -12.26666666443149,
-      "headroom_ms_p99": -43.56266666683063,
-      "js_ms_median": 45.599999997764826,
-      "js_ms_p99": 76.89600000016397,
-      "js_heap_mb": 52.54895782470703,
+      "over_budget_pct": 46.902654867256636,
+      "headroom_ms_median": -4.566666667039193,
+      "headroom_ms_p99": -44.48066666611168,
+      "js_ms_median": 37.90000000037253,
+      "js_ms_p99": 77.81399999944502,
+      "js_heap_mb": 74.41651630401611,
+      "ground_made": {
+       "gpu": 0,
+       "cpu": 0
+      },
+      "ground_timing": null,
+      "boot": {
+       "script": 547.5,
+       "land": 1225.7999999988824,
+       "laidOut": 2351.5999999996275,
+       "painted": 6503.699999999255
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 2,
+        "herd": 8.9,
+        "atmosphere": 10,
+        "overlays": 0.1,
+        "render": 15.8
+       },
+       "phases_ms_p99": {
+        "messages": 41.8,
+        "director": 0.3,
+        "landscape": 7.1,
+        "herd": 35.1,
+        "atmosphere": 17.1,
+        "overlays": 0.2,
+        "render": 30.6
+       },
+       "late_by_phase": {
+        "herd": 26,
+        "messages": 3,
+        "render": 177,
+        "outside": 4,
+        "atmosphere": 2
+       },
+       "late_notes": {
+        "clock": 3,
+        "creatures": 3
+       },
+       "worst": [
+        {
+         "frame_ms": 217.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 2.2,
+          "herd": 22,
+          "atmosphere": 12.6,
+          "overlays": 0.1,
+          "render": 26.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 200.5,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 2.1,
+          "herd": 10.8,
+          "atmosphere": 140.6,
+          "overlays": 0,
+          "render": 17.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 200.4,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 25.1,
+          "herd": 28.7,
+          "atmosphere": 22,
+          "overlays": 0.1,
+          "render": 53.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 183.8,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 1.7,
+          "herd": 10.2,
+          "atmosphere": 11.1,
+          "overlays": 0.1,
+          "render": 19.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 133.7,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 24.3,
+          "herd": 137.5,
+          "atmosphere": 16,
+          "overlays": 0.1,
+          "render": 24.9
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 7042711,
@@ -4724,18 +5488,18 @@
        "graded": true,
        "snowfall": 0,
        "sown": 0,
-       "lights": 1336,
-       "ground": 72,
-       "weather": 404,
+       "lights": 1335,
+       "ground": 71,
+       "weather": 403,
        "flames": 454,
-       "ripples": 43,
+       "ripples": 41,
        "bolts": 0
       },
-      "ready_s": 8.728199999999255,
+      "ready_s": 6.5758999999985095,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111793168,
-      "ended_epoch_ms": 1793111813176,
+      "started_epoch_ms": 1793365027996,
+      "ended_epoch_ms": 1793365047972,
       "stalled": false
      },
      {
@@ -4756,27 +5520,165 @@
        514,
        302
       ],
-      "plant_sprites": 9,
+      "plant_sprites": 14,
       "creature_sprites": 0,
-      "sprites": 127,
+      "sprites": 149,
       "draws_median": 11,
       "draws_max": 11,
-      "textures": 8,
-      "frames": 598,
-      "duration_s": 20.016,
-      "fps_mean": 29.876099120703437,
-      "fps_median": 29.94011976047774,
-      "fps_1pct_low": 25.597269624573418,
-      "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 33.5,
-      "frame_ms_max": 66.80000000000109,
+      "textures": 9,
+      "frames": 592,
+      "duration_s": 19.99920000000002,
+      "fps_mean": 29.601184047361865,
+      "fps_median": 29.940119760478552,
+      "fps_1pct_low": 15.612802498048577,
+      "frame_ms_median": 33.400000000000546,
+      "frame_ms_p99": 50.099999999998545,
+      "frame_ms_max": 100.19999999999891,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 0.16722408026755853,
-      "headroom_ms_median": 27.333333333333336,
-      "headroom_ms_p99": 21.530333332543577,
-      "js_ms_median": 6,
-      "js_ms_p99": 11.803000000789758,
-      "js_heap_mb": 18.138111114501953,
+      "over_budget_pct": 1.3513513513513513,
+      "headroom_ms_median": 26.233333333705865,
+      "headroom_ms_p99": 9.271333332893693,
+      "js_ms_median": 7.099999999627471,
+      "js_ms_p99": 24.062000000439642,
+      "js_heap_mb": 23.86228084564209,
+      "ground_made": {
+       "gpu": 2,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 2,
+       "median": {
+        "total": 646,
+        "gpu_upload": 42.7,
+        "gpu_draw": 102.4,
+        "gpu_unpack": 30.6,
+        "cpu": 489.1,
+        "queue": 25.5,
+        "run": 649
+       },
+       "max": {
+        "total": 646,
+        "gpu_upload": 42.7,
+        "gpu_draw": 102.4,
+        "gpu_unpack": 30.6,
+        "cpu": 489.1,
+        "queue": 25.5,
+        "run": 649
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 1.3,
+        "colour": 167.6,
+        "detail": 21,
+        "lip": 29.6,
+        "setup": 119.9,
+        "shadows": 10.4,
+        "shore": 248.6,
+        "shore data": 112.7,
+        "cache read": 0.1,
+        "cache write": 3.3
+       }
+      },
+      "boot": {
+       "script": 524.2000000011176,
+       "land": 1259.9000000003725,
+       "laidOut": 1563.800000000745,
+       "painted": 2729.2000000011176
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 0.3,
+        "herd": 0.1,
+        "atmosphere": 3.2,
+        "overlays": 0.1,
+        "render": 2.8
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 15.1,
+        "landscape": 0.5,
+        "herd": 0.2,
+        "atmosphere": 13.2,
+        "overlays": 0.3,
+        "render": 6.3
+       },
+       "late_by_phase": {
+        "outside": 8
+       },
+       "late_notes": {
+        "shadows": 2
+       },
+       "worst": [
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 0.4,
+          "herd": 0.1,
+          "atmosphere": 9.6,
+          "overlays": 0.1,
+          "render": 4.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 83.6,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 0.3,
+          "herd": 0.1,
+          "atmosphere": 6.9,
+          "overlays": 0.1,
+          "render": 5.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 50.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 0.4,
+          "herd": 0.1,
+          "atmosphere": 7.5,
+          "overlays": 0.2,
+          "render": 4.5
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 50.1,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 0.5,
+          "herd": 0,
+          "atmosphere": 7.7,
+          "overlays": 0.2,
+          "render": 4.3
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 50.1,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 0.3,
+          "herd": 0.1,
+          "atmosphere": 6.7,
+          "overlays": 0.1,
+          "render": 3.8
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16745834,
@@ -4787,18 +5689,18 @@
        "graded": false,
        "snowfall": 0,
        "sown": 0,
-       "lights": 52,
-       "ground": 13,
-       "weather": 49,
+       "lights": 56,
+       "ground": 15,
+       "weather": 50,
        "flames": 0,
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 6.7975,
+      "ready_s": 2.9417000000011178,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111822029,
-      "ended_epoch_ms": 1793111842040,
+      "started_epoch_ms": 1793365052990,
+      "ended_epoch_ms": 1793365072996,
       "stalled": false
      },
      {
@@ -4813,33 +5715,181 @@
       "show": "",
       "pinned": true,
       "presses": 0,
-      "creatures": 199,
+      "creatures": 193,
       "animals_in_sight": 0,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 225,
+      "plant_sprites": 223,
       "creature_sprites": 0,
-      "sprites": 234,
+      "sprites": 232,
       "draws_median": 15,
-      "draws_max": 16,
-      "textures": 89,
+      "draws_max": 15,
+      "textures": 40,
       "frames": 583,
       "duration_s": 19.9827,
       "fps_mean": 29.17523657964139,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 8.54822624305446,
+      "fps_1pct_low": 9.206690194874957,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 39.5939999999974,
-      "frame_ms_max": 233.90000000000146,
+      "frame_ms_p99": 53.2059999999997,
+      "frame_ms_max": 200.5,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 1.0291595197255574,
-      "headroom_ms_median": 27.133333334078394,
-      "headroom_ms_p99": 20.19733333197734,
-      "js_ms_median": 6.199999999254942,
-      "js_ms_p99": 13.136000001355995,
-      "js_heap_mb": 50.66137218475342,
+      "over_budget_pct": 1.5437392795883362,
+      "headroom_ms_median": 26.933333332960807,
+      "headroom_ms_p99": 11.479333334316827,
+      "js_ms_median": 6.400000000372529,
+      "js_ms_p99": 21.85399999901651,
+      "js_heap_mb": 75.8895959854126,
+      "ground_made": {
+       "gpu": 8,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 8,
+       "median": {
+        "total": 671.7,
+        "gpu_upload": 9.5,
+        "gpu_draw": 148.9,
+        "gpu_unpack": 20.2,
+        "cpu": 528.7,
+        "queue": 3193.3,
+        "run": 727.1
+       },
+       "max": {
+        "total": 1357.8,
+        "gpu_upload": 86.6,
+        "gpu_draw": 310.7,
+        "gpu_unpack": 52.3,
+        "cpu": 1053.6,
+        "queue": 4288.7,
+        "run": 3419.5
+       },
+       "compile_ms": [
+        2458.4
+       ],
+       "steps_median": {
+        "burnt": 0.2,
+        "colour": 265.6,
+        "detail": 45.6,
+        "lip": 58,
+        "setup": 24.2,
+        "shadows": 0.9,
+        "shore": 286,
+        "shore data": 85.8,
+        "cache read": 0.1,
+        "cache write": 2.4
+       }
+      },
+      "boot": {
+       "script": 570.6999999992549,
+       "land": 1221.9000000003725,
+       "laidOut": 6209.4000000003725,
+       "painted": 11067.900000000373
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 0.9,
+        "herd": 1.8,
+        "atmosphere": 0.6,
+        "overlays": 0.1,
+        "render": 2.7
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 0.2,
+        "landscape": 3.2,
+        "herd": 10.6,
+        "atmosphere": 2.9,
+        "overlays": 0.2,
+        "render": 9.3
+       },
+       "late_by_phase": {
+        "messages": 3,
+        "outside": 6
+       },
+       "late_notes": {
+        "clock": 3,
+        "creatures": 3,
+        "shadows": 3
+       },
+       "worst": [
+        {
+         "frame_ms": 200.5,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1.2,
+          "herd": 2.7,
+          "atmosphere": 0.7,
+          "overlays": 0.1,
+          "render": 4.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 116.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 1.1,
+          "herd": 3.3,
+          "atmosphere": 1.2,
+          "overlays": 0.1,
+          "render": 3.3
+         },
+         "notes": {
+          "shadows": 2
+         }
+        },
+        {
+         "frame_ms": 100.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 3.2,
+          "herd": 8,
+          "atmosphere": 0.8,
+          "overlays": 0.2,
+          "render": 9.6
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 83.6,
+         "phases": {
+          "messages": 76.1,
+          "director": 0.1,
+          "landscape": 1,
+          "herd": 18.5,
+          "atmosphere": 0.7,
+          "overlays": 0.1,
+          "render": 8.9
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        },
+        {
+         "frame_ms": 83.5,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 1,
+          "herd": 3.1,
+          "atmosphere": 0.6,
+          "overlays": 0.1,
+          "render": 4.2
+         },
+         "notes": {}
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4857,16 +5907,16 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 28.283300000000747,
+      "ready_s": 11.091400000000373,
       "settled": true,
       "day": "held",
-      "started_epoch_ms": 1793111872368,
-      "ended_epoch_ms": 1793111892348,
+      "started_epoch_ms": 1793365086155,
+      "ended_epoch_ms": 1793365106137,
       "stalled": false
      },
      {
       "name": "day-turn",
-      "about": "The crowded middle view as a sim-day turns: the plants and ground of the new day laid out and faded in over the old, the island painted ahead again (once a day on the desk; reported, not judged).",
+      "about": "The crowded middle view as a day brings a new land: the plants and ground of it laid out and faded in over the old, the island painted ahead again (on the desk as often as the server sends a land; reported, not judged).",
       "view": "middle",
       "shot": "middle",
       "art_scale": 2,
@@ -4876,33 +5926,186 @@
       "show": "",
       "pinned": true,
       "presses": 0,
-      "creatures": 198,
-      "animals_in_sight": 67,
+      "creatures": 193,
+      "animals_in_sight": 69,
       "internal": [
        514,
        302
       ],
-      "plant_sprites": 3963,
-      "creature_sprites": 7,
-      "sprites": 3974,
-      "draws_median": 21,
-      "draws_max": 33,
-      "textures": 76,
-      "frames": 505,
-      "duration_s": 20.01599999999999,
-      "fps_mean": 25.229816147082342,
+      "plant_sprites": 3917,
+      "creature_sprites": 8,
+      "sprites": 3934,
+      "draws_median": 23,
+      "draws_max": 34,
+      "textures": 71,
+      "frames": 474,
+      "duration_s": 20.0328,
+      "fps_mean": 23.66119563915179,
       "fps_median": 29.94011976047774,
-      "fps_1pct_low": 4.7240374773640195,
+      "fps_1pct_low": 2.877697841726616,
       "frame_ms_median": 33.400000000001455,
-      "frame_ms_p99": 133.03200000000385,
-      "frame_ms_max": 300.8000000000029,
+      "frame_ms_p99": 188.30899999999917,
+      "frame_ms_max": 551.3000000000011,
       "frame_budget_ms": 33.333333333333336,
-      "over_budget_pct": 20.396039603960396,
-      "headroom_ms_median": 7.033333332588278,
-      "headroom_ms_p99": -39.438666666696356,
-      "js_ms_median": 26.300000000745058,
-      "js_ms_p99": 72.77200000002969,
-      "js_heap_mb": 51.40243053436279,
+      "over_budget_pct": 12.869198312236287,
+      "headroom_ms_median": 10.133333332215749,
+      "headroom_ms_p99": -90.17166666703898,
+      "js_ms_median": 23.200000001117587,
+      "js_ms_p99": 123.50500000037232,
+      "js_heap_mb": 83.6104564666748,
+      "ground_made": {
+       "gpu": 28,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 28,
+       "median": {
+        "total": 387.7,
+        "gpu_upload": 17.6,
+        "gpu_draw": 185.9,
+        "gpu_unpack": 5.7,
+        "cpu": 162.1,
+        "queue": 4651.8,
+        "run": 436
+       },
+       "max": {
+        "total": 1342.9,
+        "gpu_upload": 99,
+        "gpu_draw": 368.1,
+        "gpu_unpack": 25.3,
+        "cpu": 1046.1,
+        "queue": 7488.8,
+        "run": 1466.2
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 0.1,
+        "colour": 237,
+        "detail": 0,
+        "lip": 0,
+        "setup": 22.3,
+        "shadows": 8.2,
+        "shore": 40,
+        "shore data": 46.9,
+        "cache read": 0.1,
+        "cache write": 1.7
+       }
+      },
+      "boot": {
+       "script": 462.90000000037253,
+       "land": 1177.9000000003725,
+       "laidOut": 2182.7999999988824,
+       "painted": 7117.699999999255
+      },
+      "switches": [],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.1,
+        "landscape": 1.5,
+        "herd": 9.8,
+        "atmosphere": 0.8,
+        "overlays": 0.1,
+        "render": 10.3
+       },
+       "phases_ms_p99": {
+        "messages": 59.6,
+        "director": 0.3,
+        "landscape": 14.7,
+        "herd": 60.3,
+        "atmosphere": 2.8,
+        "overlays": 0.2,
+        "render": 44.1
+       },
+       "late_by_phase": {
+        "herd": 34,
+        "messages": 2,
+        "outside": 15,
+        "render": 10
+       },
+       "late_notes": {
+        "clock": 3,
+        "creatures": 3,
+        "ground-piece": 16,
+        "shadows": 16
+       },
+       "worst": [
+        {
+         "frame_ms": 551.3,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 6.6,
+          "herd": 28,
+          "atmosphere": 2.1,
+          "overlays": 0.1,
+          "render": 36.8
+         },
+         "notes": {
+          "shadows": 2,
+          "ground-piece": 2
+         }
+        },
+        {
+         "frame_ms": 534.6,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 13.2,
+          "herd": 56.9,
+          "atmosphere": 1.6,
+          "overlays": 0.1,
+          "render": 61.4
+         },
+         "notes": {
+          "shadows": 2,
+          "ground-piece": 2
+         }
+        },
+        {
+         "frame_ms": 233.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.1,
+          "landscape": 8,
+          "herd": 51.2,
+          "atmosphere": 0.8,
+          "overlays": 0.1,
+          "render": 19.2
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 217.2,
+         "phases": {
+          "messages": 0,
+          "director": 0.2,
+          "landscape": 13.2,
+          "herd": 26.2,
+          "atmosphere": 6.8,
+          "overlays": 0.1,
+          "render": 24
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 200.5,
+         "phases": {
+          "messages": 387.9,
+          "director": 0.1,
+          "landscape": 13.4,
+          "herd": 77,
+          "atmosphere": 1.7,
+          "overlays": 0.2,
+          "render": 39.2
+         },
+         "notes": {
+          "clock": 1,
+          "creatures": 1
+         }
+        }
+       ]
+      },
       "atmosphere": {
        "light": 1,
        "tint": 16776434,
@@ -4920,11 +6123,257 @@
        "ripples": 0,
        "bolts": 0
       },
-      "ready_s": 49.48459999999776,
+      "ready_s": 7.181900000000373,
       "settled": true,
       "day": "turned",
-      "started_epoch_ms": 1793111943883,
-      "ended_epoch_ms": 1793111963872,
+      "started_epoch_ms": 1793365115449,
+      "ended_epoch_ms": 1793365135372,
+      "stalled": false
+     },
+     {
+      "name": "switches",
+      "about": "The view button pressed round the views twice from the map, each press timed until its view has come and its ground is painted: the first round may paint, the second finds the ground kept, as on the desk (reported, not judged).",
+      "view": "map",
+      "shot": "map",
+      "art_scale": 2,
+      "plants": "painted",
+      "tint": true,
+      "recording": "stream/life.json",
+      "show": "",
+      "pinned": false,
+      "presses": 0,
+      "creatures": 193,
+      "animals_in_sight": 193,
+      "internal": [
+       514,
+       302
+      ],
+      "plant_sprites": 8,
+      "creature_sprites": 386,
+      "sprites": 397,
+      "draws_median": 9,
+      "draws_max": 9,
+      "textures": 130,
+      "frames": 590,
+      "duration_s": 20.0161,
+      "fps_mean": 29.476271601360903,
+      "fps_median": 29.94011976047774,
+      "fps_1pct_low": 13.297872340425616,
+      "frame_ms_median": 33.400000000001455,
+      "frame_ms_p99": 52.026000000003634,
+      "frame_ms_max": 100.20000000000073,
+      "frame_budget_ms": 33.333333333333336,
+      "over_budget_pct": 1.5254237288135593,
+      "headroom_ms_median": 25.233333332774542,
+      "headroom_ms_p99": 10.633333333873502,
+      "js_ms_median": 8.100000000558794,
+      "js_ms_p99": 22.699999999459834,
+      "js_heap_mb": 110.6671257019043,
+      "ground_made": {
+       "gpu": 31,
+       "cpu": 0
+      },
+      "ground_timing": {
+       "pieces": 31,
+       "median": {
+        "total": 413.6,
+        "gpu_upload": 1.5,
+        "gpu_draw": 216,
+        "gpu_unpack": 18.9,
+        "cpu": 174.9,
+        "queue": 1711.2,
+        "run": 441.8
+       },
+       "max": {
+        "total": 1508.3,
+        "gpu_upload": 162.1,
+        "gpu_draw": 338.6,
+        "gpu_unpack": 74.4,
+        "cpu": 1085.9,
+        "queue": 4316.8,
+        "run": 1748.9
+       },
+       "compile_ms": [],
+       "steps_median": {
+        "burnt": 0.1,
+        "colour": 244.4,
+        "detail": 13.7,
+        "lip": 14.4,
+        "setup": 16.2,
+        "shadows": 5.5,
+        "shore": 58.8,
+        "shore data": 9.9,
+        "cache read": 0.1,
+        "cache write": 2.2
+       }
+      },
+      "boot": {
+       "script": 482.59999999962747,
+       "land": 1238.800000000745,
+       "laidOut": 1446.9000000003725,
+       "painted": 2802.4000000003725
+      },
+      "switches": [
+       {
+        "round": 0,
+        "view": "middle",
+        "arrived_s": 3.095,
+        "painted_s": 3.49,
+        "painted": true
+       },
+       {
+        "round": 0,
+        "view": "local",
+        "arrived_s": 5.91,
+        "painted_s": 7.236,
+        "painted": true
+       },
+       {
+        "round": 0,
+        "view": "map",
+        "arrived_s": 1.141,
+        "painted_s": 1.141,
+        "painted": true
+       },
+       {
+        "round": 1,
+        "view": "middle",
+        "arrived_s": 1.498,
+        "painted_s": 1.498,
+        "painted": true
+       },
+       {
+        "round": 1,
+        "view": "local",
+        "arrived_s": 2.624,
+        "painted_s": 3.855,
+        "painted": true
+       },
+       {
+        "round": 1,
+        "view": "map",
+        "arrived_s": 1.094,
+        "painted_s": 1.094,
+        "painted": true
+       }
+      ],
+      "probe": {
+       "phases_ms_median": {
+        "messages": 0,
+        "director": 0.6,
+        "landscape": 0.2,
+        "herd": 3.8,
+        "atmosphere": 0.5,
+        "overlays": 0.1,
+        "render": 2.7
+       },
+       "phases_ms_p99": {
+        "messages": 0,
+        "director": 2.1,
+        "landscape": 0.4,
+        "herd": 10,
+        "atmosphere": 1.4,
+        "overlays": 0.2,
+        "render": 6.5
+       },
+       "late_by_phase": {
+        "outside": 8,
+        "messages": 1
+       },
+       "late_notes": {
+        "clock": 1,
+        "creatures": 1
+       },
+       "worst": [
+        {
+         "frame_ms": 100.2,
+         "phases": {
+          "messages": 0,
+          "director": 1.2,
+          "landscape": 0.6,
+          "herd": 4.9,
+          "atmosphere": 0.7,
+          "overlays": 0,
+          "render": 4.5
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 83.5,
+         "phases": {
+          "messages": 0,
+          "director": 0.6,
+          "landscape": 0.3,
+          "herd": 4.5,
+          "atmosphere": 0.7,
+          "overlays": 0.1,
+          "render": 5.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 66.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.7,
+          "landscape": 0.4,
+          "herd": 5.2,
+          "atmosphere": 0.7,
+          "overlays": 0.2,
+          "render": 3.7
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 66.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.6,
+          "landscape": 0.3,
+          "herd": 4.6,
+          "atmosphere": 0.6,
+          "overlays": 0.1,
+          "render": 4.1
+         },
+         "notes": {}
+        },
+        {
+         "frame_ms": 66.9,
+         "phases": {
+          "messages": 0,
+          "director": 0.8,
+          "landscape": 0.2,
+          "herd": 5,
+          "atmosphere": 0.9,
+          "overlays": 0.1,
+          "render": 3.1
+         },
+         "notes": {}
+        }
+       ]
+      },
+      "atmosphere": {
+       "light": 1,
+       "tint": 16776434,
+       "rain": "none",
+       "burning": 0,
+       "effects": [],
+       "act": null,
+       "graded": false,
+       "snowfall": 0,
+       "sown": 0,
+       "lights": 0,
+       "ground": 0,
+       "weather": 0,
+       "flames": 0,
+       "ripples": 0,
+       "bolts": 0
+      },
+      "ready_s": 21.23020000000112,
+      "settled": true,
+      "day": "held",
+      "started_epoch_ms": 1793365158660,
+      "ended_epoch_ms": 1793365178669,
       "stalled": false
      }
     ],
@@ -4938,173 +6387,188 @@
      "target_fps": 30,
      "slack_fps": 0.5,
      "fps_median": 29.94011976047774,
-     "over_budget_pct": 4.642857142857143,
+     "over_budget_pct": 5.105633802816901,
      "pass": true
     },
     "error": null
    },
    "usage": {
     "map": {
-     "samples": 20,
-     "cpu_pct": 96.5,
+     "samples": 19,
+     "cpu_pct": 142.9,
      "cpu_pct_by_kind": {
-      "browser": 6.7,
-      "gpu": 25.1,
-      "renderer": 64.4,
-      "utility": 0.3,
+      "browser": 7.3,
+      "gpu": 31.7,
+      "renderer": 103.9,
+      "utility": 0.0,
       "zygote": 0.0
      },
-     "system_cpu_pct": 29.2,
-     "pss_mb": 518.3,
-     "rss_sum_mb": 1161.0,
-     "temperature_c": 65.6
+     "system_cpu_pct": 40.8,
+     "pss_mb": 609.5,
+     "rss_sum_mb": 1231.5,
+     "temperature_c": 63.6
     },
     "middle": {
      "samples": 19,
-     "cpu_pct": 150.2,
+     "cpu_pct": 157.9,
      "cpu_pct_by_kind": {
-      "browser": 5.1,
-      "gpu": 39.0,
-      "renderer": 105.8,
-      "utility": 0.2,
+      "browser": 6.2,
+      "gpu": 43.4,
+      "renderer": 108.2,
+      "utility": 0.1,
       "zygote": 0.0
      },
-     "system_cpu_pct": 43.0,
-     "pss_mb": 552.6,
-     "rss_sum_mb": 1167.1,
-     "temperature_c": 72.2
+     "system_cpu_pct": 44.5,
+     "pss_mb": 651.5,
+     "rss_sum_mb": 1280.3,
+     "temperature_c": 66.7
     },
     "middle-crowd": {
      "samples": 20,
-     "cpu_pct": 179.6,
+     "cpu_pct": 183.9,
      "cpu_pct_by_kind": {
-      "browser": 5.5,
+      "browser": 6.4,
       "gpu": 54.3,
-      "renderer": 119.7,
-      "utility": 0.1,
-      "zygote": 0.0
-     },
-     "system_cpu_pct": 50.8,
-     "pss_mb": 526.2,
-     "rss_sum_mb": 1132.2,
-     "temperature_c": 69.9
-    },
-    "local": {
-     "samples": 20,
-     "cpu_pct": 133.4,
-     "cpu_pct_by_kind": {
-      "browser": 5.2,
-      "gpu": 37.0,
-      "renderer": 91.2,
+      "renderer": 123.2,
       "utility": 0.0,
       "zygote": 0.0
      },
-     "system_cpu_pct": 40.1,
-     "pss_mb": 566.1,
-     "rss_sum_mb": 1174.3,
-     "temperature_c": 72.0
+     "system_cpu_pct": 51.6,
+     "pss_mb": 619.2,
+     "rss_sum_mb": 1242.0,
+     "temperature_c": 66.6
+    },
+    "local": {
+     "samples": 19,
+     "cpu_pct": 146.4,
+     "cpu_pct_by_kind": {
+      "browser": 7.0,
+      "gpu": 37.7,
+      "renderer": 101.7,
+      "utility": 0.1,
+      "zygote": 0.0
+     },
+     "system_cpu_pct": 41.9,
+     "pss_mb": 662.0,
+     "rss_sum_mb": 1285.8,
+     "temperature_c": 69.4
     },
     "night": {
      "samples": 19,
-     "cpu_pct": 191.7,
+     "cpu_pct": 187.3,
      "cpu_pct_by_kind": {
-      "broker": 0.0,
-      "browser": 5.7,
-      "gpu": 56.7,
-      "renderer": 129.1,
-      "utility": 0.2,
-      "zygote": 0.0
-     },
-     "system_cpu_pct": 54.2,
-     "pss_mb": 530.4,
-     "rss_sum_mb": 1198.7,
-     "temperature_c": 70.5
-    },
-    "rain": {
-     "samples": 19,
-     "cpu_pct": 199.5,
-     "cpu_pct_by_kind": {
-      "broker": 0.0,
-      "browser": 5.7,
-      "gpu": 58.8,
-      "renderer": 134.8,
-      "utility": 0.2,
-      "zygote": 0.0
-     },
-     "system_cpu_pct": 56.1,
-     "pss_mb": 531.1,
-     "rss_sum_mb": 1201.1,
-     "temperature_c": 72.0
-    },
-    "fire": {
-     "samples": 20,
-     "cpu_pct": 189.8,
-     "cpu_pct_by_kind": {
-      "broker": 0.0,
-      "browser": 4.8,
-      "gpu": 46.1,
-      "renderer": 138.8,
+      "browser": 6.1,
+      "gpu": 56.0,
+      "renderer": 125.2,
       "utility": 0.1,
       "zygote": 0.0
      },
-     "system_cpu_pct": 52.7,
-     "pss_mb": 533.4,
-     "rss_sum_mb": 1202.4,
-     "temperature_c": 72.1
+     "system_cpu_pct": 53.0,
+     "pss_mb": 599.5,
+     "rss_sum_mb": 1224.6,
+     "temperature_c": 68.8
     },
-    "apocalypse": {
-     "samples": 20,
-     "cpu_pct": 89.4,
+    "rain": {
+     "samples": 19,
+     "cpu_pct": 193.0,
      "cpu_pct_by_kind": {
       "broker": 0.0,
-      "browser": 4.7,
-      "gpu": 29.2,
-      "renderer": 55.4,
+      "browser": 7.9,
+      "gpu": 60.3,
+      "renderer": 123.7,
+      "utility": 1.0,
+      "zygote": 0.1
+     },
+     "system_cpu_pct": 54.8,
+     "pss_mb": 611.4,
+     "rss_sum_mb": 1289.0,
+     "temperature_c": 71.1
+    },
+    "fire": {
+     "samples": 20,
+     "cpu_pct": 205.1,
+     "cpu_pct_by_kind": {
+      "broker": 0.0,
+      "browser": 5.3,
+      "gpu": 55.1,
+      "renderer": 144.6,
+      "utility": 0.1,
+      "zygote": 0.0
+     },
+     "system_cpu_pct": 56.5,
+     "pss_mb": 610.0,
+     "rss_sum_mb": 1291.7,
+     "temperature_c": 71.0
+    },
+    "apocalypse": {
+     "samples": 19,
+     "cpu_pct": 116.6,
+     "cpu_pct_by_kind": {
+      "broker": 0.0,
+      "browser": 7.5,
+      "gpu": 32.2,
+      "renderer": 77.0,
       "utility": 0.0,
       "zygote": 0.0
      },
-     "system_cpu_pct": 27.4,
-     "pss_mb": 502.8,
-     "rss_sum_mb": 1172.5,
-     "temperature_c": 70.6
+     "system_cpu_pct": 32.9,
+     "pss_mb": 574.9,
+     "rss_sum_mb": 1272.8,
+     "temperature_c": 72.4
     },
     "shore": {
      "samples": 19,
-     "cpu_pct": 102.3,
+     "cpu_pct": 122.2,
      "cpu_pct_by_kind": {
       "broker": 0.0,
-      "browser": 4.9,
-      "gpu": 29.7,
-      "renderer": 67.8,
-      "utility": 0.0,
+      "browser": 7.7,
+      "gpu": 31.4,
+      "renderer": 83.0,
+      "utility": 0.1,
       "zygote": 0.0
      },
-     "system_cpu_pct": 30.6,
-     "pss_mb": 549.1,
-     "rss_sum_mb": 1219.6,
-     "temperature_c": 72.0
+     "system_cpu_pct": 35.8,
+     "pss_mb": 625.7,
+     "rss_sum_mb": 1320.0,
+     "temperature_c": 70.9
     },
     "day-turn": {
      "samples": 19,
-     "cpu_pct": 311.6,
+     "cpu_pct": 217.7,
+     "cpu_pct_by_kind": {
+      "broker": 0.0,
+      "browser": 7.8,
+      "gpu": 51.6,
+      "renderer": 158.2,
+      "utility": 0.1,
+      "zygote": 0.0
+     },
+     "system_cpu_pct": 60.1,
+     "pss_mb": 690.1,
+     "rss_sum_mb": 1388.8,
+     "temperature_c": 74.7
+    },
+    "switches": {
+     "samples": 19,
+     "cpu_pct": 122.3,
      "cpu_pct_by_kind": {
       "broker": 0.0,
       "browser": 7.3,
-      "gpu": 54.1,
-      "renderer": 250.1,
-      "utility": 0.0,
+      "gpu": 30.8,
+      "renderer": 84.1,
+      "utility": 0.1,
       "zygote": 0.0
      },
-     "system_cpu_pct": 84.4,
-     "pss_mb": 581.7,
-     "rss_sum_mb": 1257.7,
-     "temperature_c": 74.0
+     "system_cpu_pct": 35.7,
+     "pss_mb": 735.3,
+     "rss_sum_mb": 1439.1,
+     "temperature_c": 71.8
     }
    },
    "peak": {
-    "pss_mb": 581.7,
-    "rss_sum_mb": 1260.7,
-    "temperature_c": 74.0,
+    "pss_mb": 735.3,
+    "rss_sum_mb": 1439.1,
+    "temperature_c": 75.6,
     "processes": 12
    },
    "gpu_timeouts": 0,

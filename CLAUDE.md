@@ -638,10 +638,11 @@ needs a note in `docs/decisions/`.
   between loads and drawn in a worker for the views not shown, the next views' ground
   painted ahead where they will open; the pointer hidden, the dip drawn on the canvas;
   live, an iris with a loading ring between views masks what is left (the owner: "we
-  just have to mask the load times"). The owner is satisfied with the performance; what
-  could be done later is in `docs/renderer-optimization-plan.md`. Left: the merge into
-  `main`. Checklist and handoff in `docs/milestones.md`; reports `reports/R5-final/`,
-  `reports/R5-device/`.)
+  just have to mask the load times"). The last board run (2026-10-30): the four views
+  hold the cap, Chromium 735 MB; R5.2 5.1 % late in the local view against 5 %, accepted
+  by the owner ("the performances are fine as it is now"); what could be done later is in
+  `docs/renderer-optimization-plan.md`. Merged into `main` 2026-10-30. Checklist and
+  handoff in `docs/milestones.md`; reports `reports/R5-final/`, `reports/R5-device/`.)
 - **Tests**: Playwright snapshots of the final look; the benchmark runs on the board
   (`tools/kiosk_bench.py`, procedure in `deploy/README.md`).
 - **Accept**: ≥ 30 fps median in each of the three views and the crowded middle one, as R0
