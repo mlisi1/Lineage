@@ -120,3 +120,18 @@ kept: each claimed win is measured there against the board's own noise.
   At the board's speed on the PC (`--throttle` 20, which matches the board's crowd), every
   scenario but the big fire holds the cap with ≤ 2.5 % late; the big fire ~30 %, held by
   its ~2 400 sprites and the animals' posing.
+- 2026-10-30, the ground's loading (the owner: "the loading time max 3 s on every view",
+  the map "really fast"). Each painting now tells where its time went (`paintSteps`, the
+  cache's read and write); `renderer/scripts/slow-bench.mjs` runs the benchmark on a PC
+  with the page's CPU slowed to the board's (it does not slow the painters' workers). The
+  cache's lookup was the largest part of a piece's worker time after the GPU's (30–50 ms
+  on the PC, waiting behind other pieces' writes): a piece not kept is now known at once
+  from a list of the names kept, shared by the painters (`BroadcastChannel`), and the
+  store is written without a flush per piece. A piece no burnt cell reaches skips the burnt
+  ground's pass (608 pieces, with and without burns, byte for byte the same). The map's
+  painting is kept as the pieces are, and at a start the latest kept shows while today's
+  comes. The painters make their shader when the land comes. The benchmark's `switches`
+  scenario presses round the views twice, timing each press until its ground is painted,
+  and every page says when it got going (`boot`). On the PC: a middle piece 74 → 47 ms, a
+  local one 122 → 62 ms in the worker; the map from the cache at 0.3 s; each switch 1.1–2.1
+  s, a second of it the dip. The board's numbers are next.
