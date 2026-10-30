@@ -130,8 +130,47 @@ kept: each claimed win is measured there against the board's own noise.
   store is written without a flush per piece. A piece no burnt cell reaches skips the burnt
   ground's pass (608 pieces, with and without burns, byte for byte the same). The map's
   painting is kept as the pieces are, and at a start the latest kept shows while today's
-  comes. The painters make their shader when the land comes. The benchmark's `switches`
+  comes. The painters make their shader when first needed or when idle (made as the land
+  came, it held the cache's answers up). The benchmark's `switches`
   scenario presses round the views twice, timing each press until its ground is painted,
   and every page says when it got going (`boot`). On the PC: a middle piece 74 → 47 ms, a
   local one 122 → 62 ms in the worker; the map from the cache at 0.3 s; each switch 1.1–2.1
   s, a second of it the dip. The board's numbers are next.
+  On the board (build c2ead0f, with what earlier runs kept): the map painted 2.6–3.0 s
+  after the page starts; the first switch to the middle view 5.4 s, to the local 3.9 s;
+  later ones 1.1–1.8 s.
+- 2026-10-30, later (the owner: the 3 s "was more of a goal"; "we just have to mask the
+  load times"). The views not shown are laid out in the background, their plants' sheets
+  drawn and packed in a worker and handed back as bitmaps (the same pixels); the middle
+  view's place is chosen ahead as the local view's animal is, and the ground is painted
+  ahead for the view the button leads to next and, behind it, the one after; a piece's
+  shadows are worked out when a painter takes it up. Live, an iris masks the rest
+  (`src/iris.ts`, ADR 0022 "Loading the views"). On the board, warm: switches after the
+  first round 1.1–1.5 s, the first round 3–5 s behind the iris, the worst frame during
+  switches 100 ms. The owner is satisfied with the performance for now.
+
+## For later
+
+What could still be done, should the board need it (none of it started; each to be
+measured on the board first, as everything here was):
+
+- **The map's long frames while the hidden views are made** (0.45–0.7 s, "outside" the
+  frame's phases, a few in the first seconds after a start). Profile them on the board
+  (the probe service and `scripts/board-trace.mjs`, or a CPU profile through its DevTools
+  port). Suspects: the plants' drawings cloned between the page and the worker (thousands
+  of small arrays each way: the drawings kept are sent to the worker, the ones drawn come
+  back), which keeping the art cache in the worker and sending the page only what it uses
+  would avoid; and laying a hidden view out in one task, which could be spread over frames.
+- **The first switches straight after a start.** Paint ahead round a few animals the
+  local view might follow, not one; or let the board warm its caches once after a new
+  build is installed (one quiet pass round the views), so that the first start of a build
+  is not the cold one.
+- **The big fire** (about 30 % of frames late at the board's speed): its ~2 400 sprites and
+  the animals' posing. Each animal as one batch (§2 of the review: some 7–10 % of the
+  crowd's script, a large rewrite) and the fire's particles on one texture.
+- **Garbage collection** in the crowd's late frames (a quarter of them on the board): find
+  what is still made per frame (the frame probe and a heap profile).
+- **The ground's last quarter on the CPU** (shore distances, the detail's drawings): only
+  if pieces are again what a view waits for.
+- **How many painters**: two on the board now; once the simulation and the server run
+  beside the kiosk (S1, S7), check whether two still fit the CPU budget (§4.8).

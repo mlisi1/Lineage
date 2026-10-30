@@ -21,7 +21,7 @@ Mirrors CLAUDE.md §8. Update in the same commit that changes a milestone's stat
 | R2 | Procedural creatures | **done** 2026-10-19, merged into `main` (`0168618`) after R1: everything in §8 delivered and tested on the PC: the phenotype ported to TypeScript and held to the sim's 15 specimens (largest difference 2e-7), bodies from genes in the cosy look after Stardew (ADR 0013), chain, leg IK and fins, all eight rare-gene overlays and torpid animals curled up, one body plan per species, life between sim ticks, swimmers seen through the water (murk), 15 specimen snapshots. Device measurements belong to R5; drawing creatures in the real scene from the stream is R3's (handoff below) | [reports/R2-creature-sheet](../reports/R2-creature-sheet/README.md) |
 | R3 | Documentary camera and captions | **done** 2026-10-20, merged into `main`: the owner's view button steps map → middle (drifting over the island) → local (following an animal of a random species, about five minutes each, glided or cut to) → map, and the map comes back after 15 minutes; springs, not locks; dips to dark between views; notable chronicle entries on a parchment scroll in a pixel font; the stream's animals drawn in the scene; a `chronicle` message on the wire. Dawn shots and the Monday recap dropped by the owner (ADR 0020). Device measurements belong to R5 | — |
 | R4 | Atmosphere | **done** 2026-10-21, merged into `main` (`d9770d3`) after seven rounds of the owner's look tuning: moonlit-blue nights, rose dusks and lilac dawns eased between the sim's light steps, the day graded by the season and greyed under cloud; an additive glow pass; the island's own weather in the sim (rain spells, thunder, storms whose lightning alone starts fires, overcast; schema v12 on M11's v11 algae), fire and new cones and craters kill animals; rain, snow, flames, charred woods, terraced cones with lava, lit craters, quake shake, meteor streak and flash, the seed's sprouts and the ark's newcomers; tides by a shader and the open sea's swell; the three-minute apocalypse on the map; `sky` and `events` on the wire (ADR 0021). Films at 1024×600, 30 fps, are not in git; the report keeps stills. Device measurements belong to R5 | [reports/R4-atmosphere](../reports/R4-atmosphere/README.md) |
-| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); measured on the board 2026-10-27, R5.1–R5.4 pass (items 17–19, `reports/R5-device/`); `main` (M11) merged in 2026-10-27, streams re-recorded; the showcase begun here moved to R6 by the owner (2026-10-27); left: a last board run (the probe, the ground on the GPU against the CPU), the owner's calls after it, the merge into `main`; checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
+| R5 | Final rendering pass and device benchmark | **in progress** from 2026-10-21 on `r5-final` (worktree `../Lineage-r5`): the owner's look rounds and checklist items 1–16, 20–23 in (gene colours, map dots, ground, grass, the young, water, bushes, bodies and legs, deaths, the name card and scroll, eating, hunting, births, wind, sleep, small life; ADR 0022); the owner called the look final on 2026-10-25; tests in (item 20, 2026-10-25); measured on the board 2026-10-27, R5.1–R5.4 pass (items 17–19, `reports/R5-device/`); `main` (M11) merged in 2026-10-27, streams re-recorded; the showcase begun here moved to R6 by the owner (2026-10-27); then the board again (2026-10-29) and the views' loading (2026-10-30: work done ahead off the page's thread, an iris with a loading ring masks the rest; the owner satisfied with the performance); left: the merge into `main` (ask the owner); checklist under "R5 checklist"; added 2026-10-18 (owner): every device benchmark of R1–R4 is taken here, on the final look | — |
 | R6 | Showcase and trailer | **in progress** (added by the owner 2026-10-27, from R5): a first version on `r5-final` (`?showcase`, `src/showcase/`, `tools/showcase.py`, `deploy/lineage-showcase@.service`); its trailer filmed on the PC awaits the owner's verdict; then tuned on the board; handoff under "R6 in progress" | — |
 | S1 | Server: real-time loop and persistence | not started | — |
 | S2 | Device layer | not started | — |
@@ -209,14 +209,26 @@ Runs behind the report stay in `runs/` (gitignored): `m11-report-*`, `m11-tuned-
   shows the probe's late frames and the ground's paintings on the GPU (`ground_made`);
   `npm run lint` clean again (old throwaway scripts in `renderer/` removed); the final
   report regenerated.
-- **Next, in order**:
-  1. A last full board run of the final build (the owner, the evening of 2026-10-28),
-     `reports/R5-device/` taken again from it (`tools.report R5`); also a run with
-     `?painter=cpu` to tell the GPU's share of the ground's time. Read the probe's late
-     frames there, then the owner decides: each animal one batch (§2 of the review), the
-     plan's [owner's call] items, a budget per frame for the work that can wait.
-  3. Merge `r5-final` into `main` (ask the owner). The showcase (R6) goes with it: it is
-     only on `?showcase`, and the desk's page is unchanged by it.
+- **Since** (2026-10-29 and 2026-10-30): the board again, then the views' loading (ADR
+  0022, "The board again" and "Loading the views"; `renderer.md`, "Loading the views";
+  status and what could be done later in `docs/renderer-optimization-plan.md`): the
+  ground's cache answered at once, the map's painting kept, the plants' sheets kept
+  between loads and drawn for the views not shown in a worker (`plants/standing.ts`), the
+  next views' ground painted ahead where they will open, a piece's shadows worked out
+  when it is painted, the first animals placed over frames; the pointer hidden (a
+  see-through cursor theme, `deploy/blank-cursor.py`), the dip drawn on the canvas; live,
+  an iris with a loading ring between views (`src/iris.ts`). The benchmark's `switches`
+  scenario and `boot` marks; `renderer/scripts/slow-bench.mjs` runs it on a PC at about
+  the board's speed. The owner (2026-10-30): satisfied with the performance; the map's few
+  long frames while the hidden views are made are left for later. `reports/R5-final/`
+  regenerated; `reports/R5-device/` waits for the owner's call on the local scenario
+  (below).
+- **Next**: the owner's call on how the local view is judged: the benchmark's `local`
+  follows whichever animal the camera chose, now chosen ahead, and with 13–18 animals in
+  sight it has 6.4–6.6 % of frames late (R5.2's band 5 %), with 4 in sight 2.2–2.9 %; then
+  the last full board run into `reports/R5-device/`. Then merge `r5-final` into `main`
+  (ask the owner). The showcase (R6) goes with it:
+  it is only on `?showcase`, and the desk's page is unchanged by it. S1 merges after.
 - **How a round goes**: change, look at the scene (`npm run dev -- --force`;
   `?view=local&seed=3&still&quiet` for the upland grass, `?seed=9&follow=60` then press V
   twice to follow an animal), stage by hand what is to be seen (below), regenerate the

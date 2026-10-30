@@ -6,7 +6,7 @@ an animal. `report.html` is one self-contained file but for its films, in `films
 (VP9, about 60 MB, not in git: `npm run final` makes them again; the page shows each
 film's poster without them).
 
-- Branch `r5-final` at `bd70095`; before: `80e4a4c`
+- Branch `r5-final` at `cb7250d`; before: `80e4a4c`
 - Rounds 1–4 (the owner's checklist items 1–7): grass see-through round the animal
   followed, no tuft popping over it; colours from six genes ranked among species, no
   olive; round map dots; a calmer ground; grass as small unoutlined tufts after

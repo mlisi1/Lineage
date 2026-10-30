@@ -812,8 +812,16 @@ demo's clicks for another animal and back to the map). `src/director.ts` decides
 - **Changes of view dip to dark** (0.4 s), wait in the dark until the new view is
   painted (at most 3 s) and come back (0.6 s). The camera never zooms between views. The
   dark (a deep purple, `#10081c`) is drawn last on the canvas itself (R5, the owner on the
-  board: an element laid over the canvas let what was drawn before show through). The
-  desk's build hides the pointer.
+  board: an element laid over the canvas let what was drawn before show through), held
+  two frames fully dark before the cut. The desk's build hides the pointer (a see-through
+  cursor theme for the compositor, `deploy/blank-cursor.py`). Live, the dip is an **iris**
+  (R5, `src/iris.ts`, the owner: "we just have to mask the load times"): a circle in the
+  same purple, in steps of two art pixels, closes on the middle of the screen; while it is
+  shut a ring of eight dots in the scrolls' paper colour turns once a second, its head
+  brightest; it opens from the middle of the new view only as far as that view's ground
+  is painted out from its middle (`Landscape.openTo`), which is the order the pieces are
+  painted in, at the dip's pace or catching up behind it. Films and stills keep the plain
+  dip.
 - **Following** (`src/camera.ts`): a spring a little under critical damping (period
   3 s, damping 0.9), so that the camera eases after an animal that turns and settles with
   hardly a swing; it aims 1 s ahead of the animal's walk (smoothed over 1.5 s) and lets it potter within
@@ -1272,7 +1280,7 @@ Round 1, items 1–7:
 The R0 spike's role passes to the real page. `index.html?bench` (`src/bench.ts`,
 scenarios in `src/benchplan.ts`) plays the committed creatures' recording
 (`stream/life.json`, 1800 sim-seconds a wall second, seed 2026), there being no server yet,
-and measures ten scenarios, each on a fresh page load (the first load plans where the
+and measures eleven scenarios, each on a fresh page load (the first load plans where the
 pinned scenarios look and keeps the run in session storage). Frames are the browser's own,
 never `?film`'s. A scenario is measured only once the view it measures is painted, for
 20 s, with the sim-day held as on the desk (`Landscape.holdDay`; the recording is played
@@ -1332,6 +1340,8 @@ the benchmark counts the paintings made each way (`ground_made`).
 | `fire` | middle, most fuel | 300 burning cells under the thunderstorm that lit them |
 | `apocalypse` | map | the world's end moved into the flood, repainted 10 times a second |
 | `shore` | local, pinned | the most coast a local view shows: the tide's shader |
+| `day-turn` | middle, crowd | a new land coming while it is measured (reported, not judged) |
+| `switches` | map, then the button | two rounds of the views, each press timed until its ground is in (reported) |
 
 The first four are judged (ADR 0010): 30 fps median with 0.5 fps of slack. On the board
 the kiosk is capped at 30 fps (ADR 0022) and Chromium has no flag for that, so the page
@@ -1346,6 +1356,37 @@ alive and in sight, and the atmosphere's counts. `tools/kiosk_bench.py` runs it 
 default, and keeps `?bench` as its one way off the server, so the board is measured on the
 build it runs. On this PC (SwiftShader, loaded) the four judged views hold the cap: 30.0
 fps median, 29.9 at the 1 % low, no frame over budget, 0.8–2 ms of script a frame.
+
+**Loading the views** (R5, 2026-10-30; the owner: the map "really fast", each view in
+about 3 s, a goal rather than a requirement, then "we just have to mask the load times").
+What a change of view waited for, and what now happens ahead of it, live only (films and
+stills draw their choices when they always did):
+
+- *The ground kept.* Each painting tells where its time went (`paintSteps`, the cache's
+  read and write; the benchmark's `ground_timing.steps_median`). A piece not kept is known
+  at once from a list of the names kept, shared by the painters (`BroadcastChannel`), and
+  the store is written without a flush per piece; a piece no burnt cell reaches skips the
+  burnt ground's pass. The map's painting is kept as the pieces are, and at a start the
+  latest kept shows while today's comes. A painter makes its shader when it first needs it
+  or when idle, not before answering from the cache.
+- *The plants' sheets.* Drawn once per build and palette and kept between page loads
+  (`plants/artcache.ts`). The views not shown are laid out in the background: their sheet
+  drawn, coloured and packed into pages in a worker (`plants/standing.ts`,
+  `standing.worker.ts`; the pure drawing code is there, `plants.ts` keeps Pixi's side),
+  handed back as bitmaps, then the view laid out (`Landscape.prepareAhead`).
+- *Where the next view opens.* The middle view's place and the local view's animal are
+  chosen ahead (`Director.upcomingMiddle`, `upcoming`), and the ground there is painted
+  and kept for the view the button leads to next and, behind it, the one after. A piece's
+  shadows are worked out when a painter takes it up (`Painter.paint`'s `later`), not for
+  every piece asked at once.
+- *The animals.* The first creatures message (about 200 animals in two layers) is placed
+  a little each frame (`Herd.spreadPlacing`), the rest of a layer when its view comes on.
+
+The benchmark's `switches` scenario presses round the views twice from the moment the
+map is painted, timing each press until its ground is in, and each page notes when it got
+going (`boot`). On the board, with what earlier runs kept: the map painted 2.0–3.3 s after
+the page starts; every switch after the first round 1.1–1.5 s, a second of it the iris;
+the first round, pressed straight after a start, 3–5 s, spent behind the iris's ring.
 
 The file the board writes becomes `reports/R5-device/` through `tools.report R5`
 (`tools/milestones/r5.py`), the evidence file kept in the report as R0's is. The report

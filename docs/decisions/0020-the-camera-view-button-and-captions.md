@@ -1,6 +1,7 @@
 # 0020 — The camera: a view button, following, and captions on a scroll
 
-- **Status**: accepted
+- **Status**: accepted; on the desk the dip between views became an iris in R5 (ADR 0022,
+  "Loading the views")
 - **Date**: 2026-10-20
 
 ## Context
